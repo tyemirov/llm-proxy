@@ -83,7 +83,12 @@ func TestHostedAssignmentExplicitChoiceIsolationAndRestart(t *testing.T) {
 		t.Fatalf("invalid assignment representation: %s", listing.body)
 	}
 	secret := generateManagementTenantSecret(t, router, owner, tenant)
-	response, err := server.Client().Get(server.URL + "/?key=" + secret + "&provider=openai&model=gpt-6-astra&prompt=test")
+	request, err := http.NewRequest(http.MethodGet, server.URL+"/?key="+secret+"&provider=openai&model=gpt-6-astra&prompt=test", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Idempotency-Key", "disabled-hosted-execution")
+	response, err := server.Client().Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +97,7 @@ func TestHostedAssignmentExplicitChoiceIsolationAndRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if response.StatusCode != http.StatusConflict || dispatches.Load() != 0 {
+	if response.StatusCode != http.StatusForbidden || dispatches.Load() != 0 {
 		t.Fatalf("hosted execution bypassed admission: status=%d body=%s calls=%d", response.StatusCode, body, dispatches.Load())
 	}
 	server.Close()

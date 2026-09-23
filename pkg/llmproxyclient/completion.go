@@ -67,6 +67,9 @@ func (client Client) PostMessagesCompletion(ctx context.Context, request Message
 	httpRequest.Header.Set(headerAccept, formatQueryValueJSON)
 	httpRequest.Header.Set(headerContentType, jsonContentType)
 	httpRequest.Header.Set("Authorization", "Bearer "+client.config.secret)
+	if request.idempotencyKey != "" {
+		httpRequest.Header.Set(llmproxycontract.HeaderIdempotencyKey, request.idempotencyKey)
+	}
 	if request.requestTimeoutSeconds != nil {
 		httpRequest.Header.Set(llmproxycontract.HeaderRequestTimeoutSeconds, strconv.Itoa(*request.requestTimeoutSeconds))
 	}

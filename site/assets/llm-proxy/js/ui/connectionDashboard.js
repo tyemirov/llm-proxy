@@ -2,6 +2,7 @@
 
 import * as backend from '../core/backendClient.js?v=20260903f037';
 import {profileFailureMessage} from '../core/managementProfile.js?v=20260903f037';
+import './usageJournal.js?v=20260903f037';
 
 import {COPY, PROVIDER_CAPABILITY_LABELS, PROVIDER_RESOURCE_LABELS, CAPABILITY_DOMAINS} from '../constants.js?v=20260903f037';
 
@@ -172,6 +173,7 @@ export class ConnectionDashboard extends HTMLElement {
       <p class="cw-notice" role="status" aria-live="polite" data-notice></p>
       <section class="cw-details" aria-label="Selection details" data-details></section>
       <section class="cw-details" aria-label="Hosted access" data-hosted-access></section>
+      ${this.billingAccount?`<usage-journal billing-account-id="${escapeHTML(this.billingAccount.id)}"></usage-journal>`:''}
     </section>`;
     this.renderMap(); this.renderDetails(); this.renderHostedAccess(); this.updateNotice();
   }
@@ -249,7 +251,7 @@ export class ConnectionDashboard extends HTMLElement {
         const assigned=assignment?.kind==='hosted_access_grant' && assignment.resource_id===grant.id;
         const state={active:'Active',suspended:'Suspended',revoked:'Revoked'}[grant.state];
         return `<article class="cw-node" data-hosted-grant="${escapeHTML(grant.id)}"><header class="cw-row"><strong>${escapeHTML(this.providers.find(provider=>provider.id===grant.provider)?.label || grant.provider)}</strong><span>${state}</span>${assigned?'<span>Assigned</span>':''}</header>
-          <ul>${grant.offerings.map(offering=>`<li><code>${escapeHTML(offering.model)}</code> · ${escapeHTML(offering.operations.join(', '))}</li>`).join('')}</ul>
+          <ul>${grant.offerings.map(offering=>`<li><code>${escapeHTML(offering.model === undefined ? 'Provider services' : offering.model)}</code> · ${escapeHTML(offering.operations.join(', '))}</li>`).join('')}</ul>
           ${assigned?`<button data-detach-hosted="${escapeHTML(grant.id)}" ${disabled}>Detach hosted access</button>`:assignment?'<p>Detach the current provider assignment to use this grant.</p>':grant.state==='active'?`<button data-use-hosted="${escapeHTML(grant.id)}" ${disabled}>Use hosted access</button>`:''}</article>`;
       }).join('') || '<p>No hosted grants for this tenant.</p>'}`;
   }

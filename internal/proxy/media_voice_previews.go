@@ -16,27 +16,33 @@ import (
 
 const mediaVoicePreviewMaximumBytes = 8 << 20
 
-func (service *mediaOperationService) currentMediaVoice(ctx context.Context, tenant, id string) (mediaVoiceRecord, error) {
+func (service *mediaOperationService) currentMediaVoice(ctx context.Context, requestTenant tenant, id string) (context.Context, mediaVoiceRecord, error) {
+	tenant := requestTenant.identifier.string()
 	record, err := service.store.providerMediaVoice(ctx, tenant, id)
 	if err != nil {
-		return mediaVoiceRecord{}, err
+		return ctx, mediaVoiceRecord{}, err
+	}
+	ctx, err = service.voiceReadContext(ctx, requestTenant, record.Provider)
+	if err != nil {
+		return ctx, mediaVoiceRecord{}, errors.New(llmproxycontract.ErrorCodeMediaVoiceNotFound)
 	}
 	provider := service.voiceProviders[record.Provider]
 	if provider == nil {
-		return mediaVoiceRecord{}, errors.New(llmproxycontract.ErrorCodeMediaVoiceNotFound)
+		return ctx, mediaVoiceRecord{}, errors.New(llmproxycontract.ErrorCodeMediaVoiceNotFound)
 	}
 	authority, err := provider.MediaVoiceAuthority(ctx, tenant)
-	if err != nil || authority != record.Authority {
-		return mediaVoiceRecord{}, errors.New(llmproxycontract.ErrorCodeMediaVoiceNotFound)
+	if err != nil || authority != record.Authority || authorizeVoiceRead(ctx) != nil {
+		return ctx, mediaVoiceRecord{}, errors.New(llmproxycontract.ErrorCodeMediaVoiceNotFound)
 	}
-	return record, nil
+	return ctx, record, nil
 }
 
 func (service *mediaOperationService) mediaVoicePreviewHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store")
-		tenant := authenticatedTenantFromContext(c).identifier.string()
-		record, err := service.currentMediaVoice(c.Request.Context(), tenant, c.Param("voice_id"))
+		requestTenant := authenticatedTenantFromContext(c)
+		tenant := requestTenant.identifier.string()
+		readContext, record, err := service.currentMediaVoice(c.Request.Context(), requestTenant, c.Param("voice_id"))
 		if err != nil {
 			writeMediaVoiceError(c, err)
 			return
@@ -62,15 +68,19 @@ func (service *mediaOperationService) mediaVoicePreviewHandler() gin.HandlerFunc
 			writeMediaVoiceError(c, errors.New(llmproxycontract.ErrorCodeMediaVoiceProvider))
 			return
 		}
-		reference, err := service.store.credentialReference(c.Request.Context(), tenant, providerID(record.Provider))
+		reference, err := service.store.credentialReference(readContext, tenant, providerID(record.Provider))
 		if err != nil {
 			writeMediaVoiceError(c, errors.New(llmproxycontract.ErrorCodeMediaVoiceNotFound))
 			return
 		}
 		account, _, _ := strings.Cut(reference, ":v")
 		client := scopedUpstreamHTTPDoer{next: service.httpClient, scope: upstreamRequestScope{tenant: tenant, account: account, class: upstreamTransfer}}
-		ctx, cancel := context.WithTimeout(c.Request.Context(), providerMetadataTimeout)
+		ctx, cancel := context.WithTimeout(readContext, providerMetadataTimeout)
 		defer cancel()
+		if err := authorizeVoiceRead(ctx); err != nil {
+			writeMediaVoiceError(c, errors.New(llmproxycontract.ErrorCodeMediaVoiceNotFound))
+			return
+		}
 		request, _ := http.NewRequestWithContext(ctx, http.MethodGet, previews[index], nil)
 		response, err := client.Do(request)
 		if err != nil {
@@ -82,6 +92,10 @@ func (service *mediaOperationService) mediaVoicePreviewHandler() gin.HandlerFunc
 		body, err := io.ReadAll(io.LimitReader(response.Body, mediaVoicePreviewMaximumBytes+1))
 		if err != nil || response.StatusCode != http.StatusOK || mimeErr != nil || !strings.HasPrefix(mediaType, "audio/") || len(body) == 0 || len(body) > mediaVoicePreviewMaximumBytes {
 			writeMediaVoiceError(c, errors.New(llmproxycontract.ErrorCodeMediaVoiceProvider))
+			return
+		}
+		if err := authorizeVoiceRead(ctx); err != nil {
+			writeMediaVoiceError(c, errors.New(llmproxycontract.ErrorCodeMediaVoiceNotFound))
 			return
 		}
 		c.Header("X-Content-Type-Options", "nosniff")

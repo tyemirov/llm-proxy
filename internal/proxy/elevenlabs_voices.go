@@ -29,6 +29,13 @@ type elevenLabsVoiceReference struct {
 }
 
 func (adapter *elevenLabsVoiceProvider) DiscoverMediaVoices(ctx context.Context, tenant string, query MediaVoiceQuery) (MediaVoiceDiscovery, error) {
+	access, hosted := ctx.Value(hostedVoiceReadContextKey{}).(hostedVoiceRead)
+	if hosted {
+		if (query.VoiceType != "" && query.VoiceType != "default") || (query.Category != "" && query.Category != "premade") {
+			return MediaVoiceDiscovery{}, errors.New(llmproxycontract.ErrorCodeMediaVoiceInvalid)
+		}
+		query.VoiceType, query.Category = "default", "premade"
+	}
 	credential, err := adapter.store.credentialReference(ctx, tenant, adapter.provider.identifier)
 	if err != nil {
 		return MediaVoiceDiscovery{}, err
@@ -59,7 +66,11 @@ func (adapter *elevenLabsVoiceProvider) DiscoverMediaVoices(ctx context.Context,
 	defer cancel()
 	request, _ := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
 	request.Header.Set("Accept", "application/json")
-	response, err := newProviderTransportHTTPDoer(adapter.client, provider, provider.credentialFor(endpointKindText)).Do(request)
+	client := adapter.client
+	if hosted {
+		client = &hostedMediaHTTPDoer{next: client, authorize: access.authorize, role: hostedProviderMetadata}
+	}
+	response, err := newProviderTransportHTTPDoer(client, provider, provider.credentialFor(endpointKindText)).Do(request)
 	if err != nil {
 		return MediaVoiceDiscovery{}, err
 	}
@@ -68,7 +79,18 @@ func (adapter *elevenLabsVoiceProvider) DiscoverMediaVoices(ctx context.Context,
 	if err != nil || response.StatusCode != http.StatusOK || len(body) > providerMetadataMaximumBytes {
 		return MediaVoiceDiscovery{}, errors.New(llmproxycontract.ErrorCodeMediaVoiceProvider)
 	}
-	return decodeElevenLabsVoices(body, provider.identifier.string(), credential+":"+adapter.revision, provider.activeTransport.artifactOrigins)
+	discovery, err := decodeElevenLabsVoices(body, provider.identifier.string(), credential+":"+adapter.revision, provider.activeTransport.artifactOrigins)
+	if err != nil {
+		return MediaVoiceDiscovery{}, err
+	}
+	if hosted {
+		for _, voice := range discovery.Voices {
+			if voice.Metadata.Category == nil || *voice.Metadata.Category != "premade" {
+				return MediaVoiceDiscovery{}, errors.New(llmproxycontract.ErrorCodeMediaVoiceProvider)
+			}
+		}
+	}
+	return discovery, nil
 }
 
 func decodeElevenLabsVoices(body []byte, provider, authority string, origins []string) (MediaVoiceDiscovery, error) {

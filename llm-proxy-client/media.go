@@ -34,7 +34,7 @@ func newMediaCommand(stdin io.Reader, stdout io.Writer, factory httpClientFactor
 		execute           func(context.Context, llmproxyclient.Client) (any, error)
 	}{
 		{"submit", "Accept a media request from stdin and return its durable operation ID", func(command *cobra.Command) {
-			command.Flags().StringVar(&options.idempotencyKey, "idempotency-key", "", "Stable key for this complete request")
+			command.Flags().StringVar(&options.idempotencyKey, flagIdempotencyKey, "", "Stable key for this complete request")
 		}, func(ctx context.Context, client llmproxyclient.Client) (any, error) {
 			var wire struct {
 				llmproxyclient.MediaOperationInput

@@ -2048,3 +2048,11 @@ connection-dashboard button:focus-visible,connection-dashboard input:focus-visib
 @media(prefers-reduced-motion:reduce){connection-dashboard *{transition:none!important;animation:none!important}}
 connection-dashboard *,connection-dashboard *::before,connection-dashboard *::after{box-sizing:border-box}
 .cw-list>.cw-node{min-width:0}
+
+usage-journal{display:block;min-width:0}
+.usage-journal .journal-list{list-style:none;display:grid;gap:10px;padding:0;margin:12px 0}
+.usage-journal .journal-list>li{display:grid;gap:6px;min-width:0;border:1px solid var(--cw-line);border-radius:8px;padding:12px}
+.usage-journal p{margin:6px 0}.usage-journal code,.usage-journal time{overflow-wrap:anywhere;white-space:normal}
+.usage-journal button{justify-self:start}.usage-journal dl{display:grid;gap:4px;margin:6px 0}
+.usage-journal dt{font-weight:600}.usage-journal dd{margin:0 0 8px;overflow-wrap:anywhere}
+.usage-journal .journal-evidence{border-top:1px solid var(--cw-line);padding-top:12px;margin-top:14px;min-width:0}

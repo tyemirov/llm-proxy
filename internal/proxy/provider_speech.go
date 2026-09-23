@@ -13,6 +13,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 )
 
 // CatalogProtocolElevenLabsConversion selects the native voice conversion protocol.
@@ -187,14 +189,19 @@ func (adapter *providerConversionAdapter) Execute(ctx context.Context, request M
 		return imageSubmissionFailure(err)
 	}
 	defer response.Body.Close()
+	if response.StatusCode == http.StatusOK {
+		receipt, _ := json.Marshal(providerSpeechReceipt{RequestID: response.Header.Get("request-id"), HistoryItemID: response.Header.Get("history-item-id")})
+		if err := request.PersistProviderReceipt(MediaOperationProviderReceipt{Handle: string(receipt), RequestID: response.Header.Get("request-id")}); err != nil {
+			return imageGenerationUncertain()
+		}
+	}
+	if err := request.recordSpeechUsage(response.Header, CatalogProtocolElevenLabsConversion); err != nil {
+		return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ErrorCode: llmproxycontract.ErrorCodeUsageJournalUnavailable}
+	}
 	if response.StatusCode >= 400 && response.StatusCode < 500 && response.StatusCode != http.StatusRequestTimeout {
 		return MediaOperationExecutionResult{State: MediaOperationStateFailed, ErrorCode: "provider_error"}
 	}
 	if response.StatusCode != http.StatusOK {
-		return imageGenerationUncertain()
-	}
-	receipt, _ := json.Marshal(providerSpeechReceipt{RequestID: response.Header.Get("request-id"), HistoryItemID: response.Header.Get("history-item-id")})
-	if err := request.PersistProviderHandle(string(receipt)); err != nil {
 		return imageGenerationUncertain()
 	}
 	contentType, _, contentTypeError := mime.ParseMediaType(response.Header.Get("Content-Type"))

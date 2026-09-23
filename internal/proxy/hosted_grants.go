@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -38,8 +39,26 @@ const (
 )
 
 type hostedGrantOffering struct {
-	Model      string   `json:"model"`
+	Model      string   `json:"model,omitempty"`
 	Operations []string `json:"operations"`
+}
+
+func (offering *hostedGrantOffering) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		Model      json.RawMessage `json:"model"`
+		Operations []string        `json:"operations"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&wire); err != nil {
+		return err
+	}
+	var model string
+	if len(wire.Model) != 0 && (json.Unmarshal(wire.Model, &model) != nil || model == "" || model != strings.TrimSpace(model)) {
+		return errHostedAccessInvalid
+	}
+	*offering = hostedGrantOffering{Model: model, Operations: wire.Operations}
+	return nil
 }
 
 type managedHostedGrantRecord struct {
@@ -139,7 +158,7 @@ func normalizeHostedGrantOfferings(request *managementHostedGrantRequest) error 
 	seen := make(map[string]bool, len(request.Offerings))
 	for index := range request.Offerings {
 		offering := &request.Offerings[index]
-		if offering.Model == "" || seen[offering.Model] || len(offering.Operations) == 0 {
+		if seen[offering.Model] || len(offering.Operations) == 0 {
 			return errHostedAccessInvalid
 		}
 		seen[offering.Model] = true
@@ -163,6 +182,13 @@ func (service *managementService) validateHostedGrantOfferings(request managemen
 	for _, offering := range catalog.Offerings {
 		if offering.Provider == provider {
 			available[offering.Model] = offering.Operations
+		}
+	}
+	for _, definition := range catalog.Providers {
+		if definition.ID == provider {
+			for _, service := range definition.Services {
+				available[""] = append(available[""], service.Operation)
+			}
 		}
 	}
 	for _, offering := range request.Offerings {

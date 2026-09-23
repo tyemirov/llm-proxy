@@ -9,9 +9,10 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Protocol, Sequence, cast
+from types import MappingProxyType
+from typing import Any, Mapping, Protocol, Sequence, cast
 
 ACCEPT_HEADER = "Accept"
 CONTENT_TYPE_HEADER = "Content-Type"
@@ -21,6 +22,7 @@ JSON_CONTENT_TYPE = "application/json; charset=utf-8"
 KEY_QUERY_KEY = "key"
 REQUEST_TIMEOUT_HEADER = "X-LLM-Proxy-Request-Timeout-Seconds"
 IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
+TEXT_REQUEST_STATE_HEADER = "X-LLM-Proxy-Structured-Request-State"
 ASSET_ENDPOINT_PATH = "/model/v1/assets"
 MEDIA_CAPABILITIES_ENDPOINT_PATH = "/model/v1/capabilities"
 MEDIA_OPERATIONS_ENDPOINT_PATH = "/model/v1/operations"
@@ -82,17 +84,65 @@ class LLMProxyHTTPError(RuntimeError):
         self.body = body
         self.reason = reason
         self.request_context = request_context
+        self.proxy_error_code = _proxy_error_code(body)
 
 
 class LLMProxyTransportError(RuntimeError):
     """Raised when the HTTP transport cannot complete the request."""
 
 
+@dataclass(frozen=True)
+class ClientHTTPResponse:
+    """One HTTP response with its status, decoded body, and immutable headers."""
+
+    status_code: int
+    body: str
+    headers: Mapping[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if type(self.status_code) is not int or not 100 <= self.status_code <= 599 or not isinstance(self.body, str):
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid HTTP response")
+        if not isinstance(self.headers, Mapping) or any(not isinstance(key, str) or not isinstance(value, str) for key, value in self.headers.items()):
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid HTTP response headers")
+        object.__setattr__(self, "headers", MappingProxyType({key.lower(): value for key, value in self.headers.items()}))
+
+
+@dataclass(frozen=True)
+class ClientTextRequestResult:
+    """One saved result or pending execution receipt from the text request resource."""
+
+    state: str
+    proxy_request_id: str = ""
+    started_at: str = ""
+    updated_at: str = ""
+    elapsed_seconds: int = 0
+    output: str = ""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.state, str) or self.state not in {"not_dispatched", "dispatched", "succeeded"}:
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid text request state")
+        if self.state == "succeeded":
+            try:
+                json.loads(self.output)
+            except (json.JSONDecodeError, TypeError) as error:
+                raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid text request result") from error
+        elif any(not isinstance(value, str) or not value.strip() for value in (self.proxy_request_id, self.started_at, self.updated_at)) or type(self.elapsed_seconds) is not int or self.elapsed_seconds < 0:
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid text request receipt")
+
+
+class LLMProxyRequestPendingError(RuntimeError):
+    """Raised when a text request is accepted and has no terminal result yet."""
+
+    def __init__(self, snapshot: ClientTextRequestResult) -> None:
+        self.snapshot = snapshot
+        super().__init__(f"llm_proxy_client_request_pending: state={snapshot.state} request_id={snapshot.proxy_request_id}")
+
+
 class ResponseOpener(Protocol):
     """Callable that executes a prepared urllib request."""
 
-    def __call__(self, request: urllib.request.Request, *, timeout: float | None = None) -> str:
-        """Return decoded response text for the prepared request."""
+    def __call__(self, request: urllib.request.Request, *, timeout: float | None = None) -> ClientHTTPResponse:
+        """Return status, decoded body, and headers for the prepared request."""
 
 
 class ModelProfileReader(Protocol):
@@ -538,10 +588,9 @@ class ClientMessage:
 
 @dataclass(frozen=True)
 class ClientStructuredOutput:
-    """One caller JSON Schema and its durable request identity."""
+    """One caller JSON Schema for provider-enforced output."""
 
     schema: dict[str, Any]
-    idempotency_key: str
 
     def __post_init__(self) -> None:
         if not isinstance(self.schema, dict):
@@ -552,8 +601,6 @@ class ClientStructuredOutput:
             raise LLMProxyClientError(
                 "llm_proxy_client_invalid_request: structured output schema must be valid JSON"
             ) from error
-        if not IDEMPOTENCY_KEY_PATTERN.fullmatch(self.idempotency_key):
-            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid idempotency key")
 
     def body(self) -> dict[str, Any]:
         """Return the canonical structured-output body object."""
@@ -571,6 +618,7 @@ class ClientMessagesRequest:
     max_tokens: int | None = None
     reasoning_effort: str | None = None
     structured_output: ClientStructuredOutput | None = None
+    idempotency_key: str = ""
     request_timeout_seconds: int | None = None
     tools: Sequence[ClientFunction] = ()
     tool_choice: ClientToolChoice | None = None
@@ -597,6 +645,10 @@ class ClientMessagesRequest:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: reasoning_effort must be nonblank")
         if self.structured_output is not None and not isinstance(self.structured_output, ClientStructuredOutput):
             raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid structured output")
+        if not isinstance(self.idempotency_key, str) or (
+            self.idempotency_key and not IDEMPOTENCY_KEY_PATTERN.fullmatch(self.idempotency_key)
+        ) or (self.structured_output is not None and not self.idempotency_key):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid or missing idempotency key")
         if self.structured_output is not None and self.web_search:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: structured output conflicts with web_search")
         if self.request_timeout_seconds is not None and (
@@ -1022,14 +1074,32 @@ class Client:
                 request._body_with_model(model_profile.model),
                 self.config._messages_post_url_for_provider(model_profile.provider),
                 request.request_timeout_seconds,
-                request.structured_output.idempotency_key if request.structured_output is not None else "",
+                request.idempotency_key,
             )
         return self._post_json(
             request.body(),
             self.config.messages_post_url(),
             request.request_timeout_seconds,
-            request.structured_output.idempotency_key if request.structured_output is not None else "",
+            request.idempotency_key,
         )
+
+    def get_text_request(self, idempotency_key: str) -> ClientTextRequestResult:
+        """Read a hosted or structured text request without provider dispatch."""
+
+        if not isinstance(idempotency_key, str) or not IDEMPOTENCY_KEY_PATTERN.fullmatch(idempotency_key):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid idempotency key")
+        source = urllib.parse.urlsplit(self.config.messages_post_url())
+        query = urllib.parse.parse_qs(source.query, keep_blank_values=True)
+        query.pop(PROVIDER_QUERY_KEY, None)
+        query.pop(FORMAT_QUERY_KEY, None)
+        address = urllib.parse.urlunsplit((source.scheme, source.netloc, source.path.rstrip("/") + "/requests", urllib.parse.urlencode(query, doseq=True), ""))
+        request = urllib.request.Request(address, headers={ACCEPT_HEADER: "application/json", IDEMPOTENCY_KEY_HEADER: idempotency_key}, method="GET")
+        response = _open_response(self.opener or default_response_opener, request, "operation=text_request")
+        if response.status_code == 202:
+            return _decode_text_request_pending(response.body)
+        if response.status_code != 200 or response.headers.get(TEXT_REQUEST_STATE_HEADER.lower()) != "succeeded":
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid text request result")
+        return ClientTextRequestResult(state="succeeded", output=response.body)
 
     def upload_asset(self, data: bytes, mime_type: str) -> ClientAsset:
         """Upload exact tenant media bytes and return their asset record."""
@@ -1045,14 +1115,7 @@ class Client:
             headers={CONTENT_TYPE_HEADER: normalized_mime_type, "Authorization": f"Bearer {self.config.secret.strip()}"},
             method="POST",
         )
-        opener = self.opener or default_response_opener
-        try:
-            response_text = opener(prepared_request)
-        except urllib.error.HTTPError as error:
-            body = error.read().decode("utf-8", errors="replace")
-            raise LLMProxyHTTPError(error.code, body, str(error.reason), "operation=asset_upload") from error
-        except (urllib.error.URLError, TimeoutError, OSError) as error:
-            raise LLMProxyTransportError("llm_proxy_client_transport_failure: operation=asset_upload") from error
+        response_text = _open_response(self.opener or default_response_opener, prepared_request, "operation=asset_upload").body
         if not isinstance(response_text, str) or len(response_text.encode("utf-8")) > 64 * 1024:
             raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid asset response")
         try:
@@ -1257,18 +1320,7 @@ class Client:
             headers=request_headers,
             method=method,
         )
-        opener = self.opener or default_response_opener
-        try:
-            response_text = opener(prepared_request, timeout=timeout_seconds)
-        except urllib.error.HTTPError as error:
-            response_body = error.read().decode("utf-8", errors="replace")
-            raise LLMProxyHTTPError(
-                error.code, response_body, str(error.reason), f"operation=media_resource method={method}"
-            ) from error
-        except (urllib.error.URLError, TimeoutError, OSError) as error:
-            raise LLMProxyTransportError(
-                f"llm_proxy_client_transport_failure: operation=media_resource method={method}"
-            ) from error
+        response_text = _open_response(self.opener or default_response_opener, prepared_request, f"operation=media_resource method={method}", timeout_seconds).body
         if not isinstance(response_text, str) or len(response_text.encode("utf-8")) > 8 * 1024 * 1024:
             raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media response")
         try:
@@ -1303,25 +1355,11 @@ class Client:
             headers=request_headers,
             method="POST",
         )
-        opener = self.opener or default_response_opener
         failure_context = request_failure_context(request_payload, request_url, request_timeout_seconds)
-        try:
-            return opener(prepared_request)
-        except urllib.error.HTTPError as error:
-            body = error.read().decode("utf-8", errors="replace")
-            raise LLMProxyHTTPError(error.code, body, str(error.reason), failure_context) from error
-        except urllib.error.URLError as error:
-            raise LLMProxyTransportError(
-                f"llm_proxy_client_transport_failure: {failure_context} reason={error.reason}"
-            ) from error
-        except TimeoutError as error:
-            raise LLMProxyTransportError(
-                f"llm_proxy_client_transport_failure: {failure_context} reason={error}"
-            ) from error
-        except OSError as error:
-            raise LLMProxyTransportError(
-                f"llm_proxy_client_transport_failure: {failure_context} reason={error}"
-            ) from error
+        response = _open_response(self.opener or default_response_opener, prepared_request, failure_context)
+        if response.status_code == 202:
+            raise LLMProxyRequestPendingError(_decode_text_request_pending(response.body))
+        return response.body
 
 
 def _decode_media_operation(response: dict[str, Any]) -> ClientMediaOperation:
@@ -1653,12 +1691,56 @@ def first_query_value(query_values: dict[str, list[str]], key: str, default: str
     return value
 
 
-def default_response_opener(request: urllib.request.Request, *, timeout: float | None = None) -> str:
-    """Execute a prepared urllib request and return decoded text."""
+def default_response_opener(request: urllib.request.Request, *, timeout: float | None = None) -> ClientHTTPResponse:
+    """Execute a prepared request and retain its HTTP status and headers."""
 
     with urllib.request.urlopen(request, timeout=timeout) as response:
         response_body = cast(bytes, response.read())
-        return response_body.decode("utf-8")
+        return ClientHTTPResponse(status_code=response.status, body=response_body.decode("utf-8"), headers=dict(response.headers.items()))
+
+
+def _open_response(opener: ResponseOpener, request: urllib.request.Request, failure_context: str, timeout: float | None = None) -> ClientHTTPResponse:
+    try:
+        response = opener(request, timeout=timeout)
+    except urllib.error.HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        raise LLMProxyHTTPError(error.code, body, str(error.reason), failure_context) from error
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        reason = error.reason if isinstance(error, urllib.error.URLError) else str(error)
+        raise LLMProxyTransportError(f"llm_proxy_client_transport_failure: {failure_context} reason={reason}") from error
+    if not isinstance(response, ClientHTTPResponse):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid HTTP transport response")
+    if response.status_code < 200 or response.status_code >= 300:
+        raise LLMProxyHTTPError(response.status_code, response.body, "", failure_context)
+    return response
+
+
+def _decode_text_request_pending(body: str) -> ClientTextRequestResult:
+    try:
+        value = json.loads(body)
+    except json.JSONDecodeError as error:
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid text request receipt") from error
+    fields = {"state", "proxy_request_id", "started_at", "updated_at", "elapsed_seconds"}
+    if not isinstance(value, dict) or set(value) != fields or value["state"] not in ("not_dispatched", "dispatched"):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid text request receipt")
+    return ClientTextRequestResult(**value)
+
+
+def _proxy_error_code(body: str) -> str:
+    try:
+        envelope = json.loads(body)
+    except json.JSONDecodeError:
+        return ""
+    if not isinstance(envelope, dict) or not isinstance(envelope.get("error"), dict):
+        return ""
+    code = envelope["error"].get("code")
+    recognized = {
+        "hosted_authority_denied", "hosted_result_expired", "usage_journal_conflict", "usage_journal_claim_lost",
+        "invalid_idempotency_key", "structured_request_failed", "structured_request_intent_conflict",
+        "structured_request_invalid", "structured_request_not_found", "structured_request_outcome_unknown",
+        "structured_request_store_error", "provider_error", "provider_rate_limited", "request_timeout",
+    }
+    return code if isinstance(code, str) and code in recognized else ""
 
 
 def _provider_optional_integer(value: Any) -> bool:

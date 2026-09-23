@@ -132,6 +132,9 @@ The REST account endpoint retains TAuth session authentication and account setup
 ```
 
 Optional controls are `provider`, `model`, `web_search`, `max_tokens`, `reasoning_effort`, and `request_timeout_seconds`.
+Hosted text also requires `idempotency_key`.
+The key has the same format and tenant scope as the native `Idempotency-Key` header.
+Customer-owned text does not accept this field.
 Use the canonical ordered image and audio attachment fields on user messages.
 The selected route must support the requested media and controls.
 Omitted route controls use the selected tenant's defaults.
@@ -144,6 +147,37 @@ An accepted call that fails returns `isError: true` and a structured `code`.
 Codes include `not_found`, `invalid_request`, `invalid_request_timeout`, `provider_not_configured`,
 `rate_limited`, `service_unavailable`, `request_timeout`, `upstream_error`, and `proxy_error`.
 The error contains no upstream response body or prompt.
+
+### Hosted Text Identity
+
+Hosted MCP and native requests use the same journal admission and text executor.
+An identical request with the same tenant and key returns the accepted execution without another provider call.
+Its `request_id` remains the original execution identifier across protocols and retries.
+Changed intent returns `isError: true` with `usage_journal_conflict`.
+Missing or invalid keys return `invalid_request` before journal admission.
+
+A concurrent duplicate returns a successful tool result with this structured shape:
+
+```json
+{
+  "state": "dispatched",
+  "request_id": "original-execution-identifier",
+  "provider": "openai",
+  "model": "gpt-4.1",
+  "request_timeout_seconds": 60
+}
+```
+
+This result contains no generated text because execution remains in progress.
+Repeat the same complete request and key to read the result.
+An uncertain outcome returns `structured_request_outcome_unknown`, `state: uncertain`, and the retained `request_id` with `isError: true`.
+A failed execution returns `structured_request_failed`, `state: failed`, and the retained `request_id`.
+Neither state starts another provider call.
+After response expiry, `hosted_result_expired` reports that the result is no longer available.
+Grant revocation prevents new work and preserves access to saved results.
+Hosted execution remains disabled in production until financial admission and complete service acceptance pass.
+
+### Route Resources
 
 Read `llm-proxy://tenants/{tenant_id}/routes` to obtain `tenant_id`, `defaults`, and `routes`.
 Defaults contain `provider`, `model`, and `reasoning_effort`.

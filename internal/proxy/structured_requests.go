@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 const (
@@ -68,6 +70,8 @@ type structuredRequestRecord struct {
 }
 
 type structuredRequestStore struct {
+	hosted    *hostedTextRequests
+	journal   *gormManagedTenantDatabase
 	mu        sync.Mutex
 	root      string
 	retention time.Duration
@@ -76,10 +80,11 @@ type structuredRequestStore struct {
 	read      func(string) (structuredRequestRecord, error)
 }
 
-func newStructuredRequestStore(assetStorePath string, retentionSeconds int) (*structuredRequestStore, error) {
+func newStructuredRequestStore(assetStorePath string, retentionSeconds int, journal *gormManagedTenantDatabase) (*structuredRequestStore, error) {
 	root := filepath.Join(assetStorePath, structuredRequestDirectoryName)
 	store := &structuredRequestStore{
-		root: root, retention: time.Duration(retentionSeconds) * time.Second,
+		journal: journal,
+		root:    root, retention: time.Duration(retentionSeconds) * time.Second,
 		now:     func() time.Time { return time.Now().UTC() },
 		publish: publishStructuredRequestRecord,
 		read:    readStructuredRequestRecord,
@@ -114,6 +119,20 @@ func ensurePrivateDirectory(path string) error {
 }
 
 func (store *structuredRequestStore) recoverInterrupted() error {
+	if store.journal == nil {
+		return store.recoverInterruptedRecords(nil)
+	}
+	return store.journal.database.Transaction(func(transaction *gorm.DB) error {
+		// Response publication takes this writer lock before touching files.
+		// Startup must not remove its temporary file or overwrite its result.
+		if err := transaction.Model(&managedJournalRequestRecord{}).Where("execution_kind = ?", journalExecutionText).UpdateColumn("state", gorm.Expr("state")).Error; err != nil {
+			return fmt.Errorf("lock hosted response recovery: %w", err)
+		}
+		return store.recoverInterruptedRecords(transaction)
+	})
+}
+
+func (store *structuredRequestStore) recoverInterruptedRecords(transaction *gorm.DB) error {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	now := store.now().UTC()
@@ -139,6 +158,23 @@ func (store *structuredRequestStore) recoverInterrupted() error {
 		record, readError := store.read(path)
 		if readError != nil {
 			return readError
+		}
+		if transaction != nil {
+			var request managedJournalRequestRecord
+			err := transaction.Where("execution_kind = ? AND execution_id = ?", journalExecutionText, record.ProxyRequestID).First(&request).Error
+			if err == nil {
+				if err := matchHostedResult(request, record); err != nil {
+					return err
+				}
+				if request.ResultPublishedAt != nil || (request.State == journalRequestFailed && !request.ClaimExpiresAt.After(now)) {
+					_, err := store.expireTerminal(path, record)
+					return err
+				}
+				return nil
+			}
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("read hosted result authority: %w", err)
+			}
 		}
 		updatedAt, timeError := time.Parse(time.RFC3339Nano, record.UpdatedAt)
 		if timeError != nil {

@@ -18,6 +18,7 @@ const (
 )
 
 type providerRouter struct {
+	hostedText      *hostedTextRequests
 	openAIClient    *OpenAIClient
 	chatClient      *openAICompatibleChatClient
 	geminiClient    *geminiInteractionsClient
@@ -55,7 +56,16 @@ func newProviderRouter(openAIClient *OpenAIClient, chatClient *openAICompatibleC
 	}
 }
 
-func (router *providerRouter) generateText(requestContext context.Context, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (completionResult, error) {
+func (router *providerRouter) generateText(requestContext context.Context, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (completion completionResult, executionError error) {
+	if request.provider.hostedGrantID != "" {
+		return completionResult{}, errHostedAuthorityDenied
+	}
+	if execution := hostedTextExecutionFromContext(requestContext); execution != nil {
+		if execution.request.Provider != request.provider.identifier.string() || execution.request.Model != request.model.string() || execution.request.Operation != ModelOperationText {
+			return completionResult{}, errHostedAuthorityDenied
+		}
+		defer func() { executionError = errors.Join(executionError, execution.finish(requestContext, executionError)) }()
+	}
 	originalMessages := request.messages
 	accumulatedText := strings.Builder{}
 	var accumulatedUsage *tokenUsage
@@ -100,6 +110,7 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 }
 
 func (router *providerRouter) generateTextAttempt(requestContext context.Context, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	requestContext = contextWithHostedProviderRole(requestContext, hostedProviderGeneration)
 	return request.model.routeAdapter.generateText(requestContext, router, request, structuredLogger)
 }
 
@@ -245,7 +256,17 @@ func continuationMaxTokens(currentMaxTokens *int, model textModelDefinition, lat
 	return &nextMaxTokens
 }
 
-func (router *providerRouter) transcribeAudio(requestContext context.Context, request dictationRequestParameters, structuredLogger *zap.SugaredLogger) (string, error) {
+func (router *providerRouter) transcribeAudio(requestContext context.Context, request dictationRequestParameters, structuredLogger *zap.SugaredLogger) (text string, executionError error) {
+	if request.provider.hostedGrantID != "" {
+		return "", errHostedAuthorityDenied
+	}
+	if execution := hostedTextExecutionFromContext(requestContext); execution != nil {
+		if execution.request.Provider != request.provider.identifier.string() || execution.request.Model != request.model.string() || execution.request.Operation != ModelOperationDictation {
+			return "", errHostedAuthorityDenied
+		}
+		defer func() { executionError = errors.Join(executionError, execution.finish(requestContext, executionError)) }()
+		requestContext = contextWithHostedProviderRole(requestContext, hostedProviderGeneration)
+	}
 	if request.provider.activeTransport.requestCodec == CatalogProtocolVertexGenerateContent {
 		return transcribeVertexAudio(requestContext, router.openAIClient.httpClient, request)
 	}

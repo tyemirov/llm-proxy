@@ -60,11 +60,11 @@ const (
 	MediaCancellationUnsupported = "unsupported"
 	// HeaderRequestID carries the proxy-owned identifier used to correlate one public request with structured logs.
 	HeaderRequestID = "X-LLM-Proxy-Request-ID"
-	// HeaderIdempotencyKey binds one structured request intent to one durable provider submission.
+	// HeaderIdempotencyKey binds one hosted or structured request intent to one execution.
 	HeaderIdempotencyKey = "Idempotency-Key"
 	// HeaderStructuredRequestState reports the durable state of a structured request.
 	HeaderStructuredRequestState = "X-LLM-Proxy-Structured-Request-State"
-	// StructuredRequestPath is the authenticated reconciliation endpoint for structured v2 requests.
+	// StructuredRequestPath reads retained hosted or structured text requests.
 	StructuredRequestPath = "/v2/requests"
 	// TenantIdentityPath is the authenticated tenant identity endpoint.
 	TenantIdentityPath = "/v2/identity"
@@ -82,6 +82,16 @@ const (
 	ErrorCodeRequestTimeout = "request_timeout"
 	// ErrorCodeInvalidIdempotencyKey identifies a missing or malformed idempotency key.
 	ErrorCodeInvalidIdempotencyKey = "invalid_idempotency_key"
+	// ErrorCodeHostedAuthorityDenied identifies unavailable hosted execution authority.
+	ErrorCodeHostedAuthorityDenied = "hosted_authority_denied"
+	// ErrorCodeHostedResultExpired identifies an expired result with retained request identity.
+	ErrorCodeHostedResultExpired = "hosted_result_expired"
+	// ErrorCodeUsageJournalConflict identifies conflicting hosted request intent or state.
+	ErrorCodeUsageJournalConflict = "usage_journal_conflict"
+	// ErrorCodeUsageJournalClaimLost identifies an obsolete execution worker.
+	ErrorCodeUsageJournalClaimLost = "usage_journal_claim_lost"
+	// ErrorCodeUsageJournalUnavailable identifies a failed durable usage write.
+	ErrorCodeUsageJournalUnavailable = "usage_journal_unavailable"
 	// ErrorCodeStructuredRequestNotFound identifies a missing tenant-bound durable request.
 	ErrorCodeStructuredRequestNotFound = "structured_request_not_found"
 	// ErrorCodeStructuredRequestIntentConflict identifies reuse of one key for a different request intent.

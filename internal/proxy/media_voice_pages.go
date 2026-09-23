@@ -33,9 +33,15 @@ func (service *mediaOperationService) mediaVoiceCollectionHandler() gin.HandlerF
 			writeMediaVoiceError(c, errors.New(llmproxycontract.ErrorCodeMediaVoiceInvalid))
 			return
 		}
-		tenant := authenticatedTenantFromContext(c).identifier.string()
+		requestTenant := authenticatedTenantFromContext(c)
+		tenant := requestTenant.identifier.string()
+		readContext, err := service.voiceReadContext(c.Request.Context(), requestTenant, query.Provider)
+		if err != nil {
+			writeMediaVoiceError(c, err)
+			return
+		}
 		nativeQuery := MediaVoiceQuery{MediaVoiceQuery: query}
-		authority, authorityError := service.voiceProviders[query.Provider].MediaVoiceAuthority(c.Request.Context(), tenant)
+		authority, authorityError := service.voiceProviders[query.Provider].MediaVoiceAuthority(readContext, tenant)
 		if authorityError != nil {
 			writeMediaVoiceError(c, errors.New(llmproxycontract.ErrorCodeMediaVoiceProvider))
 			return
@@ -43,18 +49,25 @@ func (service *mediaOperationService) mediaVoiceCollectionHandler() gin.HandlerF
 		if query.Cursor != "" {
 			raw, decodeErr := service.voiceCursorCipher.decryptConnectionValue(tenant, query.Provider, voiceCursorPurpose, query.Cursor)
 			var cursor mediaVoiceCursor
-			if decodeErr != nil || json.Unmarshal([]byte(raw), &cursor) != nil || cursor.Authority != authority || cursor.Revision != service.catalog.Revision() || !service.store.now().Before(cursor.Expires) {
+			if decodeErr != nil || json.Unmarshal([]byte(raw), &cursor) != nil || cursor.Authority != voiceCursorAuthority(readContext, authority) || cursor.Revision != service.catalog.Revision() || !service.store.now().Before(cursor.Expires) {
 				writeMediaVoiceError(c, errors.New(llmproxycontract.ErrorCodeMediaVoiceInvalid))
 				return
 			}
 			nativeQuery = MediaVoiceQuery{MediaVoiceQuery: cursor.Query, PageToken: cursor.Token}
 		}
-		discovery, err := service.voiceProviders[query.Provider].DiscoverMediaVoices(c.Request.Context(), tenant, nativeQuery)
+		discovery, err := service.voiceProviders[query.Provider].DiscoverMediaVoices(readContext, tenant, nativeQuery)
 		if err != nil {
-			writeMediaVoiceError(c, errors.New(llmproxycontract.ErrorCodeMediaVoiceProvider))
+			if !errors.Is(err, errHostedAuthorityDenied) && err.Error() != llmproxycontract.ErrorCodeMediaVoiceInvalid {
+				err = errors.New(llmproxycontract.ErrorCodeMediaVoiceProvider)
+			}
+			writeMediaVoiceError(c, err)
 			return
 		}
-		currentAuthority, currentError := service.voiceProviders[query.Provider].MediaVoiceAuthority(c.Request.Context(), tenant)
+		if err := authorizeVoiceRead(readContext); err != nil {
+			writeMediaVoiceError(c, err)
+			return
+		}
+		currentAuthority, currentError := service.voiceProviders[query.Provider].MediaVoiceAuthority(readContext, tenant)
 		if currentError != nil || currentAuthority != authority || discovery.Authority != authority {
 			writeMediaVoiceError(c, errors.New(llmproxycontract.ErrorCodeMediaVoiceProvider))
 			return
@@ -94,7 +107,7 @@ func (service *mediaOperationService) mediaVoiceCollectionHandler() gin.HandlerF
 		result := mediaVoiceCollectionResponse{Voices: voices, HasMore: discovery.NextPageToken != "", TotalCount: discovery.TotalCount}
 		if result.HasMore {
 
-			raw, _ := json.Marshal(mediaVoiceCursor{Query: nativeQuery.MediaVoiceQuery, Token: discovery.NextPageToken, Authority: authority, Revision: service.catalog.Revision(), Expires: service.store.now().Add(voicePageLifetime)})
+			raw, _ := json.Marshal(mediaVoiceCursor{Query: nativeQuery.MediaVoiceQuery, Token: discovery.NextPageToken, Authority: voiceCursorAuthority(readContext, authority), Revision: service.catalog.Revision(), Expires: service.store.now().Add(voicePageLifetime)})
 			cursor, err := service.voiceCursorCipher.encryptConnection(service.voiceCursorRandom, tenant, query.Provider, voiceCursorPurpose, string(raw))
 			if err != nil {
 				writeMediaVoiceError(c, errors.New(llmproxycontract.ErrorCodeMediaVoiceStore))

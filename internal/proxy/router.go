@@ -128,11 +128,12 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	}
 	tenantAuthenticator := newTenantAuthenticator(managedTenants)
 	assetStore := newTenantAssetStore(configuration.AssetStorePath, configuration.MaxAssetBytes, configuration.AssetRetentionSeconds)
-	mediaOperations, mediaOperationError := newMediaOperationService(configuration, managedTenants, assetStore, providers, upstreamHTTPClient)
+	mediaOperations, mediaOperationError := newMediaOperationService(configuration, managedTenants, assetStore, providers, upstreamHTTPClient, structuredLogger)
 	if mediaOperationError != nil {
 		return nil, mediaOperationError
 	}
-	structuredRequests, structuredStoreError := newStructuredRequestStore(configuration.AssetStorePath, configuration.AssetRetentionSeconds)
+	journalDatabase, _ := managedTenants.database.(*gormManagedTenantDatabase)
+	structuredRequests, structuredStoreError := newStructuredRequestStore(configuration.AssetStorePath, configuration.AssetRetentionSeconds, journalDatabase)
 	if structuredStoreError != nil {
 		return nil, structuredStoreError
 	}
@@ -285,7 +286,7 @@ func chatV2JSONHandler(upstreamProviders *providerRouter, providers *providerReg
 			return
 		}
 		defer chatRequest.messages.closeMedia()
-		if chatRequest.structuredOutput == nil {
+		if chatRequest.structuredOutput == nil || chatRequest.provider.hostedGrantID != "" {
 			submitChatRequest(ginContext, upstreamProviders, chatRequest, requestTenant, usageEndpointV2, managedTenants, structuredLogger, nativeCompletionEncoder)
 			return
 		}
@@ -541,7 +542,23 @@ func requestReasoningEffortForResolvedTextRoute(provider providerDefinition, mod
 
 func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRouter, chatRequest chatRequestParameters, requestTenant tenant, usageEndpoint string, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, encoder completionEncoder) {
 	requestStart := time.Now()
+	if chatRequest.provider.hostedGrantID != "" {
+		ginContext.Header(headerCacheControl, cacheControlNoStore)
+		key, err := hostedTextKeyValues(ginContext.Request.Header.Values(llmproxycontract.HeaderIdempotencyKey))
+		if err != nil {
+			writeStructuredRequestError(ginContext, http.StatusBadRequest, llmproxycontract.ErrorCodeInvalidIdempotencyKey, "", "", "")
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, requestStart)
+			return
+		}
+		identity := hostedTextIdentity{tenant: requestTenant, key: key, executionID: requestIDFromContext(ginContext)}
+		ginContext.Request = ginContext.Request.WithContext(context.WithValue(ginContext.Request.Context(), hostedTextIdentityContextKey{}, identity))
+	}
 	generation, requestError := executeText(ginContext.Request.Context(), upstreamProviders, chatRequest, structuredLogger)
+	var replay *hostedRequestReplay
+	if errors.As(requestError, &replay) {
+		writeStructuredRequestRecord(ginContext, replay.record, time.Now().UTC())
+		return
+	}
 	if requestError != nil {
 		if requestContextEnded(ginContext) {
 			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, ginContext.Writer.Status(), generation.usage, requestStart)
@@ -572,6 +589,9 @@ func completeChatRequest(ginContext *gin.Context, chatRequest chatRequestParamet
 	markRequestOutcome(ginContext, requestOutcomeSuccess, managedUsageOutcomeSuccess)
 	formattingStartedAt = time.Now()
 	writeTokenUsageHeaders(ginContext.Writer.Header(), generation.usage)
+	if generation.receipt != nil {
+		ginContext.Header(llmproxycontract.HeaderStructuredRequestState, structuredRequestStateSucceeded)
+	}
 	encoder(ginContext, chatRequest, generation)
 	addRequestTelemetryPhase(ginContext.Request.Context(), requestTelemetryPhaseResponseFormatting, formattingStartedAt)
 	recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, http.StatusOK, generation.usage, requestStart)
@@ -658,7 +678,35 @@ func dictateHandler(upstreamProviders *providerRouter, providers *providerRegist
 }
 
 func submitDictationRequest(ginContext *gin.Context, upstreamProviders *providerRouter, dictationRequest dictationRequestParameters, requestTenant tenant, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, requestStart time.Time) {
-	transcribedText, requestError := upstreamProviders.transcribeAudio(ginContext.Request.Context(), dictationRequest, structuredLogger)
+	var transcribedText string
+	var requestError error
+	if dictationRequest.provider.hostedGrantID != "" {
+		ginContext.Header(headerCacheControl, cacheControlNoStore)
+		key, err := hostedTextKeyValues(ginContext.Request.Header.Values(llmproxycontract.HeaderIdempotencyKey))
+		if err != nil {
+			writeStructuredRequestError(ginContext, http.StatusBadRequest, llmproxycontract.ErrorCodeInvalidIdempotencyKey, "", "", "")
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, requestStart)
+			return
+		}
+		if upstreamProviders.hostedText == nil {
+			requestError = errHostedAuthorityDenied
+		} else {
+			identity := hostedTextIdentity{tenant: requestTenant, key: key, executionID: requestIDFromContext(ginContext)}
+			var completion completionResult
+			completion, requestError = upstreamProviders.hostedText.executeDictation(ginContext.Request.Context(), upstreamProviders, dictationRequest, identity, structuredLogger)
+			if requestError == nil {
+				transcribedText = completion.content.text()
+				ginContext.Header(llmproxycontract.HeaderStructuredRequestState, structuredRequestStateSucceeded)
+			}
+		}
+	} else {
+		transcribedText, requestError = upstreamProviders.transcribeAudio(ginContext.Request.Context(), dictationRequest, structuredLogger)
+	}
+	var replay *hostedRequestReplay
+	if errors.As(requestError, &replay) {
+		writeStructuredRequestRecord(ginContext, replay.record, time.Now().UTC())
+		return
+	}
 	if requestError != nil {
 		if requestContextEnded(ginContext) {
 			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, ginContext.Writer.Status(), nil, requestStart)
@@ -793,6 +841,12 @@ func statusCodeForError(requestError error) int {
 		return http.StatusRequestEntityTooLarge
 	case errors.Is(requestError, ErrProviderNotConfigured):
 		return http.StatusConflict
+	case errors.Is(requestError, errUsageJournalConflict), errors.Is(requestError, errJournalClaimLost):
+		return http.StatusConflict
+	case errors.Is(requestError, errHostedAuthorityDenied):
+		return http.StatusForbidden
+	case errors.Is(requestError, errHostedResultExpired):
+		return http.StatusGone
 	case errors.Is(requestError, errQueueFull):
 		return http.StatusServiceUnavailable
 	case errors.Is(requestError, ErrProviderRateLimited):

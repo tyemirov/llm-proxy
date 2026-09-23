@@ -156,7 +156,7 @@ func TestDictatorAdapterPersistsPrivateHandleAndRecovers(t *testing.T) {
 	var persistedHandle string
 	result := adapter.Execute(context.Background(), MediaOperationExecutionRequest{
 		TenantID: fixture.tenant.identifier.string(), DispatchToken: "dispatch", Capability: llmproxycontract.MediaCapabilityAudioTranscribe,
-		Input: validated.Input, Controls: validated.Controls, PersistProviderHandle: func(value string) error { persistedHandle = value; return nil },
+		Input: validated.Input, Controls: validated.Controls, PersistProviderReceipt: func(receipt MediaOperationProviderReceipt) error { persistedHandle = receipt.Handle; return nil },
 	})
 	if result.State != MediaOperationStateSucceeded || persistedHandle == "" || !reflect.DeepEqual(protocol.submitRequest.Assets[0].Data, []byte("audio")) || protocol.submitRequest.DispatchToken != "dispatch" {
 		t.Fatalf("result=%+v persisted=%q request=%+v", result, persistedHandle, protocol.submitRequest)
@@ -281,7 +281,7 @@ func TestDictatorAdapterFailureAndPrivacyEdges(t *testing.T) {
 	if result := adapter.Execute(context.Background(), validRequest); result.State != MediaOperationStateUncertain || result.ProviderHandle == "" {
 		t.Fatalf("missing persistence result=%+v", result)
 	}
-	validRequest.PersistProviderHandle = func(string) error { return io.ErrUnexpectedEOF }
+	validRequest.PersistProviderReceipt = func(MediaOperationProviderReceipt) error { return io.ErrUnexpectedEOF }
 	if result := adapter.Execute(context.Background(), validRequest); result.State != MediaOperationStateUncertain || result.ProviderHandle == "" {
 		t.Fatalf("persistence failure result=%+v", result)
 	}

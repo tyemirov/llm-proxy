@@ -18,7 +18,7 @@ func TestStructuredRequestDirectoryAndRecoveryFailures(testingInstance *testing.
 	testingInstance.Cleanup(reset)
 
 	structuredRequestLstat = func(string) (os.FileInfo, error) { return nil, errStructuredRequestTestIO }
-	if _, storeError := newStructuredRequestStore(testingInstance.TempDir(), 10); !errors.Is(storeError, errStructuredRequestTestIO) {
+	if _, storeError := newStructuredRequestStore(testingInstance.TempDir(), 10, nil); !errors.Is(storeError, errStructuredRequestTestIO) {
 		testingInstance.Fatalf("store lstat error=%v", storeError)
 	}
 	if directoryError := ensurePrivateDirectory("ignored"); !errors.Is(directoryError, errStructuredRequestTestIO) {
@@ -55,7 +55,7 @@ func TestStructuredRequestDirectoryAndRecoveryFailures(testingInstance *testing.
 	if symlinkError := os.Symlink(symlinkRoot, filepath.Join(structuredRoot, "unsafe")); symlinkError != nil {
 		testingInstance.Fatal(symlinkError)
 	}
-	if _, storeError := newStructuredRequestStore(symlinkRoot, 10); storeError == nil {
+	if _, storeError := newStructuredRequestStore(symlinkRoot, 10, nil); storeError == nil {
 		testingInstance.Fatal("recovery symlink must fail")
 	}
 
@@ -67,7 +67,7 @@ func TestStructuredRequestDirectoryAndRecoveryFailures(testingInstance *testing.
 	if writeError := os.WriteFile(filepath.Join(invalidStructuredRoot, "invalid.json"), []byte(`{`), 0o600); writeError != nil {
 		testingInstance.Fatal(writeError)
 	}
-	if _, storeError := newStructuredRequestStore(invalidRoot, 10); storeError == nil {
+	if _, storeError := newStructuredRequestStore(invalidRoot, 10, nil); storeError == nil {
 		testingInstance.Fatal("invalid recovery record must fail")
 	}
 
@@ -126,7 +126,7 @@ func TestStructuredRequestPathAndReadFailures(testingInstance *testing.T) {
 	}
 	reset()
 
-	store, _ = newStructuredRequestStore(testingInstance.TempDir(), 10)
+	store, _ = newStructuredRequestStore(testingInstance.TempDir(), 10, nil)
 	_, _, _ = store.begin(requestTenant, "conflict", intent, "openai", "gpt", "proxy")
 	if _, transitionError := store.transition(requestTenant, "conflict", strings.Repeat("f", 64), func(*structuredRequestRecord, time.Time) {}); !errors.Is(transitionError, errStructuredRequestConflict) {
 		testingInstance.Fatalf("transition conflict=%v", transitionError)

@@ -52,10 +52,10 @@ func TestHostedAuthorityDisabledAcrossPublicInterfaces(t *testing.T) {
 				path, body string
 				status     int
 			}{
-				{"/?key=" + secret + "&provider=openai&model=gpt-6-astra", `{"prompt":"Hosted request"}`, http.StatusConflict},
-				{"/v2?key=" + secret + "&provider=openai&model=gpt-6-astra", `{"messages":[{"role":"user","content":"Hosted request"}]}`, http.StatusConflict},
-				{"/v1/chat/completions", `{"model":"openai/gpt-6-astra","messages":[{"role":"user","content":"Hosted request"}]}`, http.StatusBadRequest},
-				{"/v1/responses", `{"model":"openai/gpt-6-astra","input":"Hosted request"}`, http.StatusBadRequest},
+				{"/?key=" + secret + "&provider=openai&model=gpt-6-astra", `{"prompt":"Hosted request"}`, http.StatusForbidden},
+				{"/v2?key=" + secret + "&provider=openai&model=gpt-6-astra", `{"messages":[{"role":"user","content":"Hosted request"}]}`, http.StatusForbidden},
+				{"/v1/chat/completions", `{"model":"openai/gpt-6-astra","messages":[{"role":"user","content":"Hosted request"}]}`, http.StatusForbidden},
+				{"/v1/responses", `{"model":"openai/gpt-6-astra","input":"Hosted request"}`, http.StatusForbidden},
 				{llmproxycontract.MediaOperationsPath, `{"capability":"image.generate","provider":"openai","model":"gpt-image-2","input":{"prompt":"Hosted image"},"controls":{}}`, http.StatusUnprocessableEntity},
 			} {
 				request, err := http.NewRequest(http.MethodPost, server.URL+scenario.path, strings.NewReader(scenario.body))
@@ -84,10 +84,9 @@ func TestHostedAuthorityDisabledAcrossPublicInterfaces(t *testing.T) {
 				var body bytes.Buffer
 				writer := multipart.NewWriter(&body)
 				field, path := "audio", "/dictate?key="+secret+"&provider=openai&model=gpt-transcribe"
-				status := http.StatusConflict
+				status := http.StatusForbidden
 				if protocol == "client" {
 					field, path = "file", "/v1/audio/transcriptions"
-					status = http.StatusBadRequest
 					if err := writer.WriteField("model", "openai/gpt-transcribe"); err != nil {
 						t.Fatal(err)
 					}
@@ -107,6 +106,7 @@ func TestHostedAuthorityDisabledAcrossPublicInterfaces(t *testing.T) {
 					t.Fatal(err)
 				}
 				request.Header.Set("Content-Type", writer.FormDataContentType())
+				request.Header.Set(llmproxycontract.HeaderIdempotencyKey, "dictation-authority-"+state)
 				if protocol == "client" {
 					request.Header.Set("Authorization", "Bearer "+secret)
 				}

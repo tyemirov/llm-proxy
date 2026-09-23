@@ -56,7 +56,7 @@ func imageBoundaryFixture(t *testing.T) (mediaOperationInternalFixture, *imageGe
 	}
 	f.service.assets.maxAssetBytes = 1 << 20
 	adapter := newImageGenerationAdapter(offering, f.service.providers.definitions[providerID("openai")], store, f.service.store, f.service.assets, catalog)
-	request := MediaOperationExecutionRequest{TenantID: f.tenant.identifier.string(), CredentialReference: "connection-internal:v3", Capability: llmproxycontract.MediaCapabilityImageGenerate, Provider: "openai", Model: "gpt-image-2", Input: json.RawMessage(`{"prompt":"boundary test"}`), Controls: json.RawMessage(`{"surface":"responses","responses_model":"gpt-5","quality":"low","size":"auto","background":"opaque","output_format":"png","output_count":1}`), ProviderHandle: "resp_boundary", PersistProviderHandle: func(string) error { return nil }, PublishPartial: func(MediaOperationPartialOutput) error { return nil }}
+	request := MediaOperationExecutionRequest{TenantID: f.tenant.identifier.string(), CredentialReference: "connection-internal:v3", Capability: llmproxycontract.MediaCapabilityImageGenerate, Provider: "openai", Model: "gpt-image-2", Input: json.RawMessage(`{"prompt":"boundary test"}`), Controls: json.RawMessage(`{"surface":"responses","responses_model":"gpt-5","quality":"low","size":"auto","background":"opaque","output_format":"png","output_count":1}`), ProviderHandle: "resp_boundary", PersistProviderReceipt: func(MediaOperationProviderReceipt) error { return nil }, PublishPartial: func(MediaOperationPartialOutput) error { return nil }}
 	request.ExecutionBinding = adapter.responsesExecutionBinding("gpt-5")
 	return f, adapter, request
 }
@@ -137,7 +137,7 @@ func TestImageGenerationResponsesTransportAndPersistenceFailures(t *testing.T) {
 				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body))}, nil
 			})
 			if strings.Contains(name, "handle persistence") {
-				request.PersistProviderHandle = func(string) error { return errInternalTestDatabase }
+				request.PersistProviderReceipt = func(MediaOperationProviderReceipt) error { return errInternalTestDatabase }
 			}
 			if name == "stream handle persistence" {
 				request.Controls = bytes.Replace(request.Controls, []byte(`"output_count":1`), []byte(`"output_count":1,"stream":true`), 1)

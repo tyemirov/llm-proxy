@@ -62,6 +62,10 @@ func recognizedProxyErrorCode(responseBody []byte) string {
 	}
 	switch envelope.Error.Code {
 	case llmproxycontract.ErrorCodeInvalidRequestTimeout,
+		llmproxycontract.ErrorCodeHostedAuthorityDenied,
+		llmproxycontract.ErrorCodeHostedResultExpired,
+		llmproxycontract.ErrorCodeUsageJournalConflict,
+		llmproxycontract.ErrorCodeUsageJournalClaimLost,
 		llmproxycontract.ErrorCodeInvalidIdempotencyKey,
 		llmproxycontract.ErrorCodeProviderError,
 		llmproxycontract.ErrorCodeProviderMediaLimitExceeded,
