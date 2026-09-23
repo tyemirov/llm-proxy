@@ -134,14 +134,36 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 	}
 	completed := completedPaymentFixture(t, checkoutProcessor)
 	sendPaymentEventFixture(t, database, completed, paymentTransactionCompleted, 1)
+	// Retain the exact event bytes while later processor reads change in place.
+	completedJSON, err := json.Marshal(completed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed = nil
+	if err := json.Unmarshal(completedJSON, &completed); err != nil {
+		t.Fatal(err)
+	}
 	if err := paymentProcessorFixture(t, checkoutWorker, database).reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	adjustment := paymentAdjustmentFixture(checkoutProcessor, "approved", 200, 1)
+	sendPaymentEventFixture(t, database, adjustment, "adjustment.created", 2)
+	if err := paymentProcessorFixture(t, checkoutWorker, database).reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	var expectedAdjustment managedPaymentAdjustmentRecord
+	if err := database.database.First(&expectedAdjustment).Error; err != nil {
+		t.Fatal(err)
+	}
+	var expectedRevisions []managedPaymentAdjustmentRevisionRecord
+	if err := database.database.Order("revision").Find(&expectedRevisions).Error; err != nil {
 		t.Fatal(err)
 	}
 	var expectedReceipt managedPaymentReceiptRecord
 	if err := database.database.First(&expectedReceipt).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := database.database.Order("id").Find(&expectedEvents).Error; err != nil || len(expectedEvents) != 2 {
+	if err := database.database.Order("id").Find(&expectedEvents).Error; err != nil || len(expectedEvents) != 3 {
 		t.Fatalf("funded inbox=%v error=%v", expectedEvents, err)
 	}
 	for _, path := range paths {
@@ -164,7 +186,7 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 	if err := applyFundsFixtureCredit(t, database, fundsCreditCommand(t, charges[1], "after-backup-credit")); err != nil {
 		t.Fatal(err)
 	}
-	assertHostedFundsBalance(t, database, 504, 501)
+	assertHostedFundsBalance(t, database, 304, 301)
 	copyFundsDatabase(t, backup, restoredPath)
 	restored, err := newGORMManagedTenantDatabase(ManagementConfiguration{DatabasePath: restoredPath}, internalManagedProviderKeyCipher(), internalManagementProviderRegistry())
 	if err != nil {
@@ -191,7 +213,7 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 			t.Fatalf("restored %s differs: before=%v after=%v", path, before[path], actual)
 		}
 	}
-	assertHostedFundsBalance(t, restored, 503, 500)
+	assertHostedFundsBalance(t, restored, 303, 300)
 	assertFundsCreditRemainder(t, restored, "109", "50000")
 	restoredProcessor := paymentInboxTestServer(t, restored, "sandbox", "backup-processor")
 	paymentInboxHTTP(t, restoredProcessor, event, paymentInboxSignature(event, paymentInboxTestSecret, time.Now()), http.StatusOK)
@@ -220,11 +242,20 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 	if err := restored.database.First(&restoredReceipt).Error; err != nil || !reflect.DeepEqual(expectedReceipt, restoredReceipt) {
 		t.Fatalf("restored payment receipt differs: %+v error=%v", restoredReceipt, err)
 	}
+	var restoredAdjustment managedPaymentAdjustmentRecord
+	if err := restored.database.First(&restoredAdjustment).Error; err != nil || !reflect.DeepEqual(expectedAdjustment, restoredAdjustment) {
+		t.Fatalf("restored adjustment differs: %+v error=%v", restoredAdjustment, err)
+	}
+	var restoredRevisions []managedPaymentAdjustmentRevisionRecord
+	if err := restored.database.Order("revision").Find(&restoredRevisions).Error; err != nil || !reflect.DeepEqual(expectedRevisions, restoredRevisions) {
+		t.Fatalf("restored adjustment revisions differ: %+v error=%v", restoredRevisions, err)
+	}
 	sendPaymentEventFixture(t, restored, completed, paymentTransactionCompleted, 1)
+	sendPaymentEventFixture(t, restored, adjustment, "adjustment.created", 2)
 	if err := paymentProcessorFixture(t, checkoutWorker, restored).reconcile(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	assertHostedFundsBalance(t, restored, 503, 500)
+	assertHostedFundsBalance(t, restored, 303, 300)
 	var exposure managedFundsExposureRecord
 	if err := restored.database.First(&exposure).Error; err != nil {
 		t.Fatal(err)

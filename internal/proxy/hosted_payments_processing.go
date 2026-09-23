@@ -54,6 +54,7 @@ type managedPaymentReceiptRecord struct {
 
 type paddleTransactionReader interface {
 	GetTransaction(context.Context, string) (billing.PaddleTransactionCompletedWebhookData, error)
+	ListTransactionAdjustments(context.Context, string) ([]billing.PaddleAdjustment, error)
 }
 
 type paddlePaymentProcessor struct {
@@ -93,11 +94,21 @@ func (worker *paddlePaymentProcessor) deferEvent(ctx context.Context, event mana
 }
 
 func (worker *paddlePaymentProcessor) process(ctx context.Context, event managedPaymentInboxRecord) error {
-	if !strings.HasPrefix(event.EventType, "transaction.") {
+	transactionID := event.EntityID
+	isAdjustment := event.EventType == "adjustment.created" || event.EventType == "adjustment.updated"
+	if isAdjustment {
+		var envelope struct {
+			Data billing.PaddleAdjustment `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(event.Payload), &envelope); err != nil || envelope.Data.TransactionID == "" {
+			return worker.deferEvent(ctx, event, "adjustment_event_invalid")
+		}
+		transactionID = envelope.Data.TransactionID
+	} else if !strings.HasPrefix(event.EventType, "transaction.") {
 		return worker.deferEvent(ctx, event, "event_processing_required")
 	}
 	var checkout managedPaymentCheckoutRecord
-	err := worker.database.database.WithContext(ctx).Where("environment = ? AND processor_account_id = ? AND transaction_id = ?", event.Environment, event.ProcessorAccountID, event.EntityID).First(&checkout).Error
+	err := worker.database.database.WithContext(ctx).Where("environment = ? AND processor_account_id = ? AND transaction_id = ?", event.Environment, event.ProcessorAccountID, transactionID).First(&checkout).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return worker.deferEvent(ctx, event, "checkout_unresolved")
 	}
@@ -110,6 +121,9 @@ func (worker *paddlePaymentProcessor) process(ctx context.Context, event managed
 	}
 	if order.SupplierID != worker.catalog.supplierID {
 		return worker.deferEvent(ctx, event, "supplier_mismatch")
+	}
+	if isAdjustment {
+		return worker.processAdjustment(ctx, event, order, checkout)
 	}
 	if event.EventType != paymentTransactionCompleted {
 		// Informational events cannot grant funds or move a verified paid order
@@ -139,7 +153,11 @@ func (worker *paddlePaymentProcessor) process(ctx context.Context, event managed
 	if eventEvidence.digest != verified.digest {
 		return worker.deferEvent(ctx, event, "transaction_evidence_changed")
 	}
-	return worker.credit(ctx, event, order, checkout, verified)
+	adjustments, err := worker.readAdjustments(ctx, verified, order, checkout)
+	if err != nil {
+		return worker.deferEvent(ctx, event, "adjustment_evidence_unavailable")
+	}
+	return worker.credit(ctx, event, order, checkout, verified, adjustments)
 }
 
 type verifiedCompletedPayment struct {
@@ -233,7 +251,7 @@ func validPaymentTotals(totals *billing.PaddleTransactionTotals) bool {
 	return true
 }
 
-func (worker *paddlePaymentProcessor) credit(ctx context.Context, event managedPaymentInboxRecord, order managedFundingOrderRecord, checkout managedPaymentCheckoutRecord, evidence verifiedCompletedPayment) error {
+func (worker *paddlePaymentProcessor) credit(ctx context.Context, event managedPaymentInboxRecord, order managedFundingOrderRecord, checkout managedPaymentCheckoutRecord, evidence verifiedCompletedPayment, adjustments verifiedPaymentAdjustments) error {
 	now := worker.now().UTC()
 	totals := evidence.transaction.Details.Totals
 	receipt := managedPaymentReceiptRecord{OrderID: order.ID, BillingAccountID: order.BillingAccountID, Environment: order.Environment, ProcessorAccountID: order.ProcessorAccountID, TransactionID: checkout.TransactionID, CustomerID: checkout.CustomerID, InboxID: event.ID, LedgerKey: "payment-funding:" + order.ID, Currency: order.Currency, CreditCents: order.FundingCents, GrossCents: totals.Total, TaxCents: totals.Tax, FeeCents: totals.Fee, EarningsCents: totals.Earnings, InvoiceNumber: evidence.transaction.InvoiceNumber, FinancialEvidence: evidence.encoded, EvidenceDigest: evidence.digest, CompletedAt: evidence.completedAt, CreatedAt: now}
@@ -241,7 +259,7 @@ func (worker *paddlePaymentProcessor) credit(ctx context.Context, event managedP
 		receipt.PayoutCurrency, receipt.PayoutEarningsCents = payout.CurrencyCode, payout.Earnings
 	}
 	privateQuery := worker.database.database.Session(&gorm.Session{Logger: paymentInboxLogger{worker.database.database.Logger}})
-	return privateQuery.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := privateQuery.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		lock := tx.Model(&managedBillingAccountRecord{}).Where("id = ?", order.BillingAccountID).UpdateColumn("id", gorm.Expr("id"))
 		if lock.Error != nil {
 			return fmt.Errorf("lock payment account: %w", lock.Error)
@@ -276,9 +294,19 @@ func (worker *paddlePaymentProcessor) credit(ctx context.Context, event managedP
 		} else {
 			return fmt.Errorf("read funding receipt: %w", err)
 		}
+		if err := applyPaymentAdjustments(tx, order, adjustments, now); err != nil {
+			return err
+		}
+		if err := refreshPaymentHolds(tx, order.BillingAccountID, now); err != nil {
+			return err
+		}
 		if err := tx.Model(&managedPaymentInboxRecord{}).Where("id = ?", event.ID).Updates(map[string]any{"state": paymentInboxApplied, "reason": ""}).Error; err != nil {
 			return fmt.Errorf("complete payment event: %w", err)
 		}
 		return nil
 	})
+	if errors.Is(err, errFundingConflict) {
+		return worker.deferEvent(ctx, event, "financial_state_conflict")
+	}
+	return err
 }

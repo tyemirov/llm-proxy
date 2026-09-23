@@ -16,12 +16,14 @@ func completedPaymentFixture(t *testing.T, processor *checkoutProtocolFixture) m
 	transaction := processor.transactions[0]
 	transaction["status"] = "completed"
 	transaction["completed_at"] = "2026-09-23T12:00:00Z"
+	transaction["updated_at"] = "2026-09-23T12:00:01Z"
 	transaction["invoice_number"] = "INV-FIXTURE-1"
 	transaction["payments"] = []any{map[string]any{"payment_attempt_id": "pay-fixture-1", "amount": "550", "status": "captured", "captured_at": "2026-09-23T12:00:00Z"}}
 	transaction["details"] = map[string]any{
-		"totals":        map[string]any{"subtotal": "500", "discount": "0", "tax": "50", "total": "550", "credit": "0", "credit_to_balance": "0", "balance": "0", "grand_total": "550", "grand_total_tax": "50", "fee": "30", "earnings": "470", "currency_code": "USD"},
-		"payout_totals": map[string]any{"subtotal": "450", "discount": "0", "tax": "45", "total": "495", "credit": "0", "credit_to_balance": "0", "balance": "0", "grand_total": "495", "grand_total_tax": "45", "fee": "27", "earnings": "423", "currency_code": "EUR"},
-		"line_items":    []any{map[string]any{"id": "txnit_01hv8x2axb33yr5y238zfwcn5p", "price_id": "pri_01hv8x2axb33yr5y238zfwcn5p", "quantity": 1, "totals": map[string]any{"subtotal": "500", "discount": "0", "tax": "50", "total": "550"}}},
+		"adjusted_totals": map[string]any{"subtotal": "500", "tax": "50", "total": "550", "grand_total": "550", "grand_total_tax": "50", "fee": "30", "retained_fee": "0", "earnings": "470", "currency_code": "USD"},
+		"totals":          map[string]any{"subtotal": "500", "discount": "0", "tax": "50", "total": "550", "credit": "0", "credit_to_balance": "0", "balance": "0", "grand_total": "550", "grand_total_tax": "50", "fee": "30", "earnings": "470", "currency_code": "USD"},
+		"payout_totals":   map[string]any{"subtotal": "450", "discount": "0", "tax": "45", "total": "495", "credit": "0", "credit_to_balance": "0", "balance": "0", "grand_total": "495", "grand_total_tax": "45", "fee": "27", "earnings": "423", "currency_code": "EUR"},
+		"line_items":      []any{map[string]any{"id": "txnitm_01hv8x2axb33yr5y238zfwcn5p", "price_id": "pri_01hv8x2axb33yr5y238zfwcn5p", "quantity": 1, "totals": map[string]any{"subtotal": "500", "discount": "0", "tax": "50", "total": "550"}}},
 	}
 	return transaction
 }

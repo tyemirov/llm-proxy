@@ -142,6 +142,16 @@ func reserveHostedFunds(transaction *gorm.DB, request managedJournalRequestRecor
 	if financial.State != fundsAccountActive {
 		return errFinancialAccountSuspended
 	}
+	if err := refreshPaymentHolds(transaction, request.BillingAccountID, request.CreatedAt); err != nil {
+		return err
+	}
+	restricted, err := paymentFundsRestricted(transaction, request.BillingAccountID, request.CreatedAt)
+	if err != nil {
+		return err
+	}
+	if restricted {
+		return errFinancialAccountSuspended
+	}
 	var retained managedPriceSnapshotRecord
 	if err := transaction.Where("request_id = ? AND billing_account_id = ?", request.ID, request.BillingAccountID).First(&retained).Error; err != nil {
 		return fmt.Errorf("read reserved price for request %s: %w", request.ID, err)

@@ -73,6 +73,13 @@ func (database *gormManagedTenantDatabase) billingFundsBalance(ctx context.Conte
 		}
 		response.SpentCents = strconv.FormatInt(spent, 10)
 		response.PendingCents = strconv.FormatInt(pending, 10)
+		restricted, err := paymentFundsRestricted(tx, accountID, now)
+		if err != nil {
+			return err
+		}
+		if restricted && response.State == fundsAccountActive {
+			response.State = "suspended"
+		}
 		return nil
 	})
 	if err != nil {

@@ -16,7 +16,7 @@ require (
 	github.com/subosito/gotenv v1.6.0
 	github.com/tyemirov/dictator/sdk/go/dictatorspeechv1 v1.11.0
 	github.com/tyemirov/tauth v1.2.7
-	github.com/tyemirov/utils v0.18.0
+	github.com/tyemirov/utils v0.19.0
 	go.uber.org/zap v1.28.0
 	golang.org/x/image v0.46.0
 	golang.org/x/sync v0.23.0

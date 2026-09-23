@@ -2737,7 +2737,16 @@ retain satisfied historical dependencies.
   The complete backup fixture retains payment receipts and verifies replay without another credit after restoration.
   Receipt restoration passes in 5.012 seconds. Payment race checks pass in 103.389 seconds.
   Go and frontend lint pass.
-  Runtime configuration, adjustments, receipt resources, reconciliation, and browser acceptance remain open.
+  Utils PR 47 is merged and published as v0.19.0 with matching remote artifact hashes.
+  The application uses the released shared adjustment client without a local dependency replacement.
+  Current processor evidence controls pending holds, cumulative reversals, and restored funds.
+  Adjustment revisions and Ledger effects commit together, including adjustments before initial funding.
+  Derived payment restrictions reject new work after a deficit without changing an operator suspension.
+  Controlled tests cover approval, rejection, chargeback replay, concurrent workers, restart, and failed financial writes.
+  Payment and funds checks pass in 8.213 and 23.260 seconds against released utils v0.19.0.
+  The complete backup test restores adjustment evidence and Ledger effects without another deduction after replay.
+  The payment race check, Go lint, and format checks pass.
+  Runtime configuration, receipt resources, full reconciliation, and browser acceptance remain open.
   Goal:
   Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
   Requirements:

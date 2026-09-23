@@ -1010,12 +1010,39 @@ The receipt retains gross payment, tax, processor fees, earnings, customer credi
 Unknown processor fees remain null. Payout amounts retain their own currency.
 Controlled fixtures use the retained offer amount as the customer credit and keep processor fees separate.
 These fixtures do not decide the production fee allocation or tax policy.
-Financial adjustments, customer receipt resources, and normal runtime configuration remain open under F069.
+Customer receipt resources and normal runtime configuration remain open under F069.
+
+### Payment Adjustments
+
+F069 reads current transaction totals and all transaction adjustments through the shared Paddle client in utils v0.19.0.
+Each adjustment must match the retained transaction, customer, currency, and funding item.
+The worker checks approved amounts against the current adjusted totals before a financial change.
+Separate [Paddle adjustment records](https://developer.paddle.com/api-reference/adjustments/list-adjustments/) retain refund status, tax, fees, and payout evidence.
+
+Pending refunds reserve affected funds through Ledger. Rejected refunds release the hold.
+Approved refunds produce cumulative compensating entries. Replayed events cannot repeat the same deduction.
+Chargeback warnings and chargebacks cannot deduct more than the original customer credit for one order.
+Reversed original adjustments and separate reversal records cannot restore the same funds twice.
+The worker retains exact evidence and each applied revision in the same transaction as the Ledger effects.
+Funding credits and current adjustments commit together, including refunds that precede the initial funding event.
+
+Development fixtures allocate customer credit in proportion to the original payment subtotal.
+The cumulative debit rounds down to whole cents. Pending holds round up to whole cents.
+Each revision retains the exact fraction. Full reversal removes the complete original credit.
+Taxes and processor fees remain separate from the customer debit.
+This development calculation does not select the production tax or fee policy.
+
+A mandatory reversal can produce a negative account balance.
+The service rejects new hosted work when available funds are negative or a pending refund lacks its complete hold.
+This payment restriction does not replace an operator suspension.
+New funding and admission checks use available funds to complete retained refund holds.
+Controlled tests cover refund approval, rejection, concurrent processing, chargeback replay, reversal, and failed financial writes.
+Full reconciliation, browser acceptance, and processor sandbox qualification remain open under F069.
 
 ### Payment Event Inbox
 
 F069 adds `POST /api/payments/paddle/events` through the shared Paddle signature verifier from `github.com/tyemirov/utils/billing`.
-The package resolves from `@latest` to v0.18.0.
+The package resolves from `@latest` to v0.19.0.
 The receiver verifies `Paddle-Signature` against the raw body before JSON parsing.
 The configured secret binds each receiver to one processor account and environment.
 The receiver rejects duplicate signature headers and bodies above one MiB.
@@ -1036,7 +1063,7 @@ See [Paddle transaction completion](https://developer.paddle.com/webhooks/transa
 
 `make test-hosted-payments` tests the real HTTP receiver with the shared verifier and SQLite storage.
 The current component has controlled development integration only.
-Runtime configuration, financial adjustments, payment history, and processor sandbox qualification remain open under F069.
+Runtime configuration, payment history, full reconciliation, and processor sandbox qualification remain open under F069.
 Production payments remain disabled.
 
 ### Issue Responsibilities

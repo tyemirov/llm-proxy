@@ -17,6 +17,7 @@ type checkoutProtocolFixture struct {
 	server       *httptest.Server
 	mutex        sync.Mutex
 	transactions []map[string]any
+	adjustments  []map[string]any
 	creates      atomic.Int64
 	dropResponse atomic.Bool
 	wrongAccount atomic.Bool
@@ -38,6 +39,11 @@ func newCheckoutProtocolFixture(t *testing.T) *checkoutProtocolFixture {
 			}
 		}
 		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/adjustments":
+			if request.URL.Query().Get("transaction_id") != "txn_00000000000000000000000001" {
+				t.Error("unscoped adjustment read")
+			}
+			encode(map[string]any{"data": fixture.adjustments, "meta": map[string]any{"pagination": map[string]any{"has_more": false}}})
 		case request.Method == http.MethodGet && request.URL.Path == "/customers":
 			if request.URL.Query().Get("email") == "" {
 				t.Error("customer lookup lacks owner email")
