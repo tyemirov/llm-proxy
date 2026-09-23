@@ -241,10 +241,18 @@ func TestHostedQueueUsageRecoveryRetainsSingleAttempt(t *testing.T) {
 	}))
 	t.Cleanup(upstream.Close)
 	first, firstService, intent := newHostedQueueUsageFixture(t, database, upstream.URL)
+	settings := hostedQueueFinancialSettings(t)
+	firstService.catalog = settings.catalog
+	firstService.hostedAdmission = settings.mediaAdmission(firstService.providers)
+	configureHostedQueueUsage(t, firstService, upstream.URL)
+	seedHostedFunds(t, database, 500)
 	second, secondService := newHostedMediaAdmissionHTTPServer(t, openJournalTransactionInstance(t, database))
 	secondService.assets = firstService.assets
+	secondService.catalog = settings.catalog
+	secondService.hostedAdmission = settings.mediaAdmission(secondService.providers)
 	configureHostedQueueUsage(t, secondService, upstream.URL)
 	id := hostedSpeechHTTP(t, first, "recovered-queue", intent, http.StatusAccepted)["operation_id"].(string)
+	assertHostedFundsBalance(t, database, 500, 474)
 	go func() { defer close(done); firstService.runOperation("first-queue-worker", id) }()
 	t.Cleanup(func() { once.Do(func() { close(release) }); waitHostedMediaWorker(t, done) })
 	select {
@@ -276,5 +284,16 @@ func TestHostedQueueUsageRecoveryRetainsSingleAttempt(t *testing.T) {
 	entry := read("")["requests"].([]any)[0].(map[string]any)
 	if entry["state"] != string(journalRequestCompleted) || entry["usage_state"] != string(journalUsageComplete) {
 		t.Fatalf("recovery journal=%v", entry)
+	}
+	for range 2 {
+		if err := database.reconcileHostedFunds(t.Context(), time.Now().UTC()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertHostedFundsBalance(t, database, 495, 495)
+	assertFundsCreditRemainder(t, database, "21", "4000")
+	var settlements int64
+	if err := database.database.Model(&managedFundsSettlementRecord{}).Count(&settlements).Error; err != nil || settlements != 1 {
+		t.Fatalf("recovered queue settlements=%d error=%v", settlements, err)
 	}
 }

@@ -769,6 +769,27 @@ Failed, incomplete, and cancelled responses retain reported quantities without e
 Controlled HTTP tests verify retained quantities, separate cost layers, missing usage, inconsistent totals, replay, and evidence write failures.
 Complete image cost measurement and live Responses qualification remain open.
 
+### Image Financial Acceptance
+
+Controlled HTTP tests cover OpenAI image generation and editing through JSON and completed stream events.
+The tests use the current adapters, runtime financial admission, journal delivery, and Ledger settlement.
+A controlled set of modality rates produces a USD 0.016 provider cost and a USD 0.0208 customer charge.
+Settlement debits two cents, releases the reservation, and keeps the exact USD 0.0008 remainder.
+Zero usage releases funds without a debit. Missing usage keeps funds for reconciliation.
+An invalid output image keeps the known provider cost but has no final customer charge.
+
+The Responses surface has no qualified image-tool meter.
+Its response-model totals do not replace the missing image measurements.
+Financial tests keep the reservation and expose an unresolved charge summary for this surface.
+Complete Responses image pricing and provider qualification remain open.
+
+The FAL queue tests use a controlled price of USD 0.02 per reported provider unit.
+A response with 2.125 units produces a USD 0.0425 provider cost and a USD 0.05525 customer charge.
+The tests check zero and missing units, excess cost, submission errors, result errors, and artifact transfer errors.
+Unresolved outcomes keep the reservation and the known provider cost.
+Unfunded requests cause no provider work. Replay does not submit, retrieve, or download the same result again.
+Worker replacement and grant revocation preserve one submission and one settlement through the accepted queue receipt.
+
 ### Hosted Dictation
 
 Hosted dictation reuses the completion admission, pinned credentials, response store, and recovery code used by hosted text.

@@ -2969,6 +2969,10 @@ retain satisfied historical dependencies.
   - Dictation financial acceptance passed every enabled offering through both public HTTP interfaces.
   - It checks native model selection, duration and token rates, exact settlement, account remainders, and replay across interfaces.
   - Missing usage keeps the funds reservation and has no customer charge. Related dictation tests and Go lint passed.
+  - Image financial checks passed generation, editing, JSON, stream events, exact charges, and account remainders.
+  - FAL queue checks passed settlement, unresolved outcomes, excess cost, and recovery without duplicate provider work.
+  - Funded queue recovery preserves one settlement after worker replacement and grant revocation.
+  - Responses images keep funds for reconciliation because the image-tool meter remains unqualified.
   - Complete provider-operation qualification, final CI, and the F069 PR remain open.
   - The remaining commercial decisions and F065 through F069 implementation remain open.
   Goal:
