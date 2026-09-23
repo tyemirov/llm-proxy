@@ -63,6 +63,13 @@ func TestHostedAssignmentExplicitChoiceIsolationAndRestart(t *testing.T) {
 	profile := `{"text_model":"gpt-6-astra","system_prompt":"Customer instructions"}`
 	requireHostedHTTP(t, server, other, http.MethodPut, profilePath, profile, "", http.StatusNotFound)
 	requireHostedHTTP(t, server, owner, http.MethodPut, profilePath, profile, "", http.StatusOK)
+	defaultsPath := "/tenants/" + tenant + "/defaults"
+	defaults := `{"provider":"openai","model":"gpt-6-astra","transcription_provider":"","transcription_model":"","speech_provider":"","speech_model":"","system_prompt":"Hosted default","reasoning_effort":""}`
+	requireHostedHTTP(t, server, other, http.MethodPut, defaultsPath, defaults, "", http.StatusNotFound)
+	requireHostedHTTP(t, server, owner, http.MethodPut, defaultsPath, defaults, "", http.StatusOK)
+	requireHostedHTTP(t, server, owner, http.MethodPut, defaultsPath, strings.Replace(defaults, "gpt-6-astra", "gpt-4.1", 1), "", http.StatusBadRequest)
+	outsideOperation := strings.Replace(defaults, `"transcription_provider":"","transcription_model":""`, `"transcription_provider":"openai","transcription_model":"gpt-transcribe"`, 1)
+	requireHostedHTTP(t, server, owner, http.MethodPut, defaultsPath, outsideOperation, "", http.StatusBadRequest)
 	requireHostedHTTP(t, server, owner, http.MethodPut, path, owned, "", http.StatusConflict)
 	listing := requireHostedHTTP(t, server, owner, http.MethodGet, collection, "", "", http.StatusOK)
 	database := openManagedFixtureDatabase(t, databasePath)
@@ -107,11 +114,16 @@ func TestHostedAssignmentExplicitChoiceIsolationAndRestart(t *testing.T) {
 	if string(after.body) != string(listing.body) {
 		t.Fatal("restart changed the assignment")
 	}
+	restored := requireHostedHTTP(t, restarted, owner, http.MethodGet, "/tenants/"+tenant, "", "", http.StatusOK)
+	if !strings.Contains(string(restored.body), `"provider":"openai","model":"gpt-6-astra"`) {
+		t.Fatalf("restart lost hosted default: %s", restored.body)
+	}
 	retained := requireHostedHTTP(t, restarted, owner, http.MethodGet, "/tenants/"+tenant, "", "", http.StatusOK)
 	if !strings.Contains(string(retained.body), "Customer instructions") {
 		t.Fatalf("restart lost the hosted provider profile: %s", retained.body)
 	}
-	requireHostedHTTP(t, restarted, owner, http.MethodDelete, path, "", "", http.StatusNoContent)
+	requireHostedHTTP(t, restarted, owner, http.MethodDelete, path, "", "", http.StatusConflict)
+	requireHostedHTTP(t, restarted, owner, http.MethodDelete, path+"?clear_defaults=true", "", "", http.StatusNoContent)
 	requireHostedHTTP(t, restarted, owner, http.MethodPut, path, owned, "", http.StatusOK)
 	if err := database.Exec("INSERT INTO managed_hosted_tenant_assignment_records (tenant_id,provider_id,grant_id) VALUES (?,?,?)", tenant, "openai", grant).Error; err == nil {
 		t.Fatal("database allowed a hosted grant beside account credentials")

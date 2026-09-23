@@ -46,7 +46,7 @@ export const localManagementProfile = Object.freeze({
   operatorPassword,
 });
 
-export async function startLocalManagementStack(authRouting = "frontend", {adminEmails = [], payments} = {}) {
+export async function startLocalManagementStack(authRouting = "frontend", {adminEmails = [], payments, hosted, configureCatalog, responses} = {}) {
   if (!["frontend", "direct"].includes(authRouting)) throw new Error(`auth_routing_invalid:${authRouting}`);
   const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "llm-proxy-management-blackbox-"));
   const tAuthBinaryPath = path.join(temporaryDirectory, "tauth");
@@ -58,7 +58,7 @@ export async function startLocalManagementStack(authRouting = "frontend", {admin
     await buildTAuthBinary(tAuthBinaryPath, temporaryDirectory);
     await buildBinary(llmProxyBinaryPath, "./cmd/cli");
 
-    const frontend = await startFrontendServer();
+    const frontend = await startFrontendServer(responses);
     frontendServer = frontend.server;
     const tAuthPort = await reserveLocalPort();
     const llmProxyPort = await reserveLocalPort();
@@ -78,7 +78,9 @@ export async function startLocalManagementStack(authRouting = "frontend", {admin
       throw new Error("llm_proxy_blackbox_port_contract_missing");
     }
     const capacityConfig = yaml.load(llmProxyConfig);
+    capacityConfig.server.asset_store_path = path.join(temporaryDirectory, "assets");
     if (payments) capacityConfig.payments = payments;
+    if (hosted) capacityConfig.hosted = hosted;
     capacityConfig.server.upstream_capacity.origins = capacityConfig.server.upstream_capacity.origins.filter(rule => rule.origin !== "https://api.fal.ai");
     capacityConfig.server.upstream_capacity.origins.push({origin: frontendOrigin, active: 4, queued: 24});
     llmProxyConfig = yaml.dump(capacityConfig);
@@ -137,6 +139,7 @@ export async function startLocalManagementStack(authRouting = "frontend", {admin
     });
     mediaProvider.verification = {transport: "account"};
     speechCatalog.providers.push(mediaProvider);
+    if (configureCatalog) configureCatalog(speechCatalog);
     const llmProxyConfigPath = path.join(temporaryDirectory, "llm-proxy-config.yml");
     await writeFile(llmProxyConfigPath, llmProxyConfig, { mode: 0o600 });
     await writeFile(path.join(temporaryDirectory, "providers.yml"), yaml.dump(speechCatalog), { mode: 0o600 });
@@ -160,8 +163,10 @@ export async function startLocalManagementStack(authRouting = "frontend", {admin
 
     return {
       frontendOrigin,
+      providerRequests: frontend.providerRequests,
       tAuthOrigin: authRouting === "frontend" ? frontendOrigin : tAuthOrigin,
       llmProxyOrigin,
+      serviceOutput: () => llmProxyProcess.output.value(),
       async stop() {
         await stopStack(frontendServer, serviceProcesses, temporaryDirectory);
       },
@@ -274,11 +279,12 @@ async function reserveLocalPort() {
   return port;
 }
 
-async function startFrontendServer() {
+async function startFrontendServer(responses) {
   let managementAPIOrigin = "";
   let tAuthOrigin = "";
+  const providerRequests = [];
   const server = http.createServer((request, response) => {
-    void handleFrontendRequest(request, response, managementAPIOrigin, tAuthOrigin);
+    void handleFrontendRequest(request, response, managementAPIOrigin, tAuthOrigin, responses, providerRequests);
   });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -290,6 +296,7 @@ async function startFrontendServer() {
   }
   return {
     server,
+    providerRequests,
     port: address.port,
     setManagementAPIOrigin(origin) {
       managementAPIOrigin = origin;
@@ -300,7 +307,7 @@ async function startFrontendServer() {
   };
 }
 
-async function handleFrontendRequest(request, response, managementAPIOrigin, tAuthOrigin) {
+async function handleFrontendRequest(request, response, managementAPIOrigin, tAuthOrigin, responses, providerRequests) {
   try {
     const requestURL = new URL(request.url || "/", "http://localhost");
     if (requestURL.pathname === "/assets/llm-proxy/js/brandIconManifest.js") {
@@ -345,8 +352,11 @@ async function handleFrontendRequest(request, response, managementAPIOrigin, tAu
       return;
     }
     if (request.method === "POST" && requestURL.pathname === "/v1/responses") {
+      const chunks=[];
+      for await (const chunk of request) chunks.push(chunk);
+      providerRequests.push({authorization:request.headers.authorization,body:JSON.parse(Buffer.concat(chunks).toString('utf8'))});
       response.writeHead(200, { "content-type": mimeTypes[".json"] });
-      response.end(JSON.stringify({ id: "resp_local_provider_key_verification", status: "completed", output_text: "Local MCP answer", usage: { input_tokens: 2, output_tokens: 3, total_tokens: 5 } }));
+      response.end(JSON.stringify(responses || { id: "resp_local_provider_key_verification", status: "completed", output_text: "Local MCP answer", usage: { input_tokens: 2, output_tokens: 3, total_tokens: 5 } }));
       return;
     }
 

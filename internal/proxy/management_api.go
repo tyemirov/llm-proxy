@@ -844,7 +844,7 @@ func (service *managementService) providerResponses(providerSettings map[provide
 			Resources:                 providerResourceKinds(summary.resources),
 			Services:                  cloneProviderServices(summary.services),
 			ModelFamilies:             modelFamilies,
-			Configured:                configured && settings.hasRequiredConnectionFields(definition),
+			Configured:                configured && (settings.hostedGrantID != "" || settings.hasRequiredConnectionFields(definition)),
 			Fields:                    make([]managementProviderFieldResponse, 0, len(definition.fieldOrder)),
 			TextModel:                 summary.textDefaultModel,
 			SystemPrompt:              constants.EmptyString,

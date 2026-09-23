@@ -54,7 +54,7 @@ type managedHostedTenantAssignmentRecord struct {
 }
 
 func readHostedTenantAssignments(database *gorm.DB, record *managedTenantRecord) error {
-	if err := database.Where("tenant_id = ?", record.TenantID).Find(&record.HostedAssignments).Error; err != nil {
+	if err := database.Preload("Grant").Where("tenant_id = ?", record.TenantID).Find(&record.HostedAssignments).Error; err != nil {
 		return fmt.Errorf("read hosted assignments for tenant %s: %w", record.TenantID, err)
 	}
 	return nil

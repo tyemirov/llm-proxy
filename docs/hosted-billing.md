@@ -290,6 +290,9 @@ The customer must detach the current resource before selecting another resource.
 Hosted profiles retain customer model and prompt settings without platform credentials.
 The browser shows grant state, permitted offerings, and the saved assignment.
 Suspension and revocation do not erase the assignment or its history.
+Customers can save text, transcription, and speech defaults within the assigned grant scope.
+The server validates each model and operation against that scope without exposing platform credentials.
+The same validation runs at startup. Suspension preserves the saved selection but prevents new execution.
 
 ### F066 Journal State
 
@@ -1619,7 +1622,13 @@ Complete each child issue before F070 acceptance.
 Use controlled provider and processor protocols for repeatable development tests.
 Run `make test-hosted-billing` for the complete controlled acceptance target.
 This target runs hosted HTTP, exact rating, payments, official clients, database restoration, and authenticated browser checks.
-It includes the combined funding, usage, approved correction, and refund workflow.
+The funded browser test uses the normal server, authentication, database, and Ledger with controlled Paddle and provider HTTP responses.
+It verifies login, hosted model selection, a USD 5 credit, one provider call, and idempotent replay.
+The browser shows a USD 0.01 provider cost and a USD 0.013 customer charge.
+The account retains USD 4.99 and an exact USD 0.003 unsettled charge remainder.
+The test also verifies the payment receipt, account isolation, suspension, and layouts at 1440, 390, and 320 pixels.
+This scenario does not prove actual Paddle connectivity or acceptance for every provider operation.
+The target also includes the combined funding, usage, approved correction, and refund workflow.
 Final stack validation also requires `make ci`.
 Record processor sandbox qualification separately from local protocol tests.
 Use real HTTP entry points and automated browsers at desktop and mobile widths.

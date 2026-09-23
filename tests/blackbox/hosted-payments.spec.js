@@ -1,7 +1,6 @@
 // @ts-check
 import {expect,test} from '@playwright/test';
-import path from 'node:path';
-import {assets,directory} from './sharedUIAssets.mjs';
+import {prepareManagementPage} from './authenticatedManagementPage.mjs';
 import {localManagementProfile,startLocalManagementStack} from './localManagementStack.mjs';
 import {startPaddleProtocolFixture} from './paddleProtocolFixture.mjs';
 
@@ -13,7 +12,7 @@ test.beforeAll(async()=>{
 test.afterAll(async()=>{try{if(stack)await stack.stop();}finally{if(processor)await processor.stop();}});
 
 test('funding history and receipts follow verified payments and refund holds through the normal runtime',async({page,context})=>{
-  const headers=await preparePaymentPage(page,context);
+  const headers=await prepareManagementPage(page,context,stack);
   await page.goto(stack.frontendOrigin);
   await page.getByRole('button',{name:'Sign in with Google',exact:true}).click();
   await page.getByRole('button',{name:'Create billing account',exact:true}).click();
@@ -128,26 +127,9 @@ test('funding history and receipts follow verified payments and refund holds thr
   expect(processor.failures).toEqual([]);
 });
 
-async function preparePaymentPage(page,context,email=localManagementProfile.operatorEmail) {
-  for(const name of Object.keys(assets)) {
-    await page.route(`https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/${name}*`,route=>route.fulfill({path:path.join(directory,name),contentType:name.endsWith('.css')?'text/css':'application/javascript'}));
-  }
-  for(const [pattern,file] of [
-    ['**/alpinejs@3.17.1/dist/module.esm.js','node_modules/alpinejs/dist/module.esm.js'],
-    ['**/js-yaml@5.4.1/dist/browser/js-yaml.umd.min.js','node_modules/js-yaml/dist/browser/js-yaml.umd.min.js'],
-    ['https://accounts.google.com/gsi/client','tests/blackbox/googleIdentityFixture.js'],
-  ])await page.route(pattern,route=>route.fulfill({path:file,contentType:'application/javascript'}));
-  await page.route('https://loopaware.mprlab.com/**',route=>route.fulfill({body:'',contentType:'application/javascript'}));
-  const headers={Origin:stack.frontendOrigin,'X-Requested-With':'XMLHttpRequest','X-TAuth-Tenant':localManagementProfile.tenantID};
-  await page.route(`${stack.tAuthOrigin}/auth/google`,async route=>{
-    const login=await context.request.post(`${stack.tAuthOrigin}/auth/password/login`,{headers,data:{email:email,password:localManagementProfile.operatorPassword}});
-    expect(login.ok()).toBeTruthy();await route.fulfill({status:login.status(),contentType:'application/json',body:await login.body()});
-  });
-  return headers;
-}
 
 test('browser checkout retries one order and waits for verified funding after Paddle completion',async({page,context})=>{
-  await preparePaymentPage(page,context,localManagementProfile.secondOperatorEmail);
+  await prepareManagementPage(page,context,stack,localManagementProfile.secondOperatorEmail);
   let blockSDK=false;
   await page.route('https://cdn.paddle.com/paddle/v2/paddle.js',route=>blockSDK?route.abort('failed'):route.fulfill({path:'tests/blackbox/paddleBrowserFixture.js',contentType:'application/javascript'}));
   await page.goto(stack.frontendOrigin);

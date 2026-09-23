@@ -248,15 +248,35 @@ export class ConnectionDashboard extends HTMLElement {
     section.innerHTML=`<header class="cw-row"><h3>Hosted access</h3><button data-action="refresh-hosted" ${disabled}>Refresh hosted access</button></header>
       <p>Use provider access supplied by LLM Proxy. No provider API key is required.</p>
       ${this.billingAccount ? '<p>USD billing account</p>' : `<button data-action="create-billing" ${disabled}>Create billing account</button>`}
-      <p>Hosted execution is not available yet.</p>
+      <p>Hosted requests use your prepaid balance. Availability depends on the selected offering.</p>
       ${grants.map(grant=>{
         const assignment=this.assignments.find(assignment=>assignment.provider===grant.provider);
         const assigned=assignment?.kind==='hosted_access_grant' && assignment.resource_id===grant.id;
         const state={active:'Active',suspended:'Suspended',revoked:'Revoked'}[grant.state];
         return `<article class="cw-node" data-hosted-grant="${escapeHTML(grant.id)}"><header class="cw-row"><strong>${escapeHTML(this.providers.find(provider=>provider.id===grant.provider)?.label || grant.provider)}</strong><span>${state}</span>${assigned?'<span>Assigned</span>':''}</header>
           <ul>${grant.offerings.map(offering=>`<li><code>${escapeHTML(offering.model === undefined ? 'Provider services' : offering.model)}</code> · ${escapeHTML(offering.operations.join(', '))}</li>`).join('')}</ul>
-          ${assigned?`<button data-detach-hosted="${escapeHTML(grant.id)}" ${disabled}>Detach hosted access</button>`:assignment?'<p>Detach the current provider assignment to use this grant.</p>':grant.state==='active'?`<button data-use-hosted="${escapeHTML(grant.id)}" ${disabled}>Use hosted access</button>`:''}</article>`;
+          ${assigned?`<button data-detach-hosted="${escapeHTML(grant.id)}" ${disabled}>Detach hosted access</button>`:assignment?'<p>Detach the current provider assignment to use this grant.</p>':grant.state==='active'?`<button data-use-hosted="${escapeHTML(grant.id)}" ${disabled}>Use hosted access</button>`:''}
+          ${assigned&&grant.state==='active'?this.hostedDefaultForms(grant):''}</article>`;
       }).join('') || '<p>No hosted grants for this tenant.</p>'}`;
+  }
+  /** @param {import('../types.d.js').HostedAccessGrant} grant */
+  hostedDefaultForms(grant) {
+    const provider=this.profile?.providers.find(provider=>provider.id===grant.provider);
+    const defaults=this.profile?.tenant.defaults;
+    if (!provider || !defaults) return '';
+    const selections=[
+      {domain:CAPABILITY_DOMAINS.TEXT,operation:'text',models:provider.text_models.map(model=>model.id),savedProvider:defaults.provider,savedModel:defaults.model},
+      {domain:CAPABILITY_DOMAINS.TRANSCRIPTION,operation:'dictation',models:provider.transcription_models,savedProvider:defaults.transcription_provider,savedModel:defaults.transcription_model},
+      {domain:CAPABILITY_DOMAINS.SPEECH,operation:'speech_generation',models:provider.speech_models,savedProvider:defaults.speech_provider,savedModel:defaults.speech_model},
+    ];
+    return selections.map(selection=>{
+      const models=selection.models.filter(model=>grant.offerings.some(offering=>offering.model===model&&offering.operations.includes(selection.operation)));
+      if(!models.length)return '';
+      const saved=selection.savedProvider===grant.provider&&models.includes(selection.savedModel)?selection.savedModel:'';
+      return `<form data-hosted-default="${escapeHTML(grant.id)}"><label>Hosted ${selection.domain} model<select name="model" aria-label="Hosted ${selection.domain} model"><option value="">Choose a model</option>${models.map(model=>`<option value="${escapeHTML(model)}" ${model===saved?'selected':''}>${escapeHTML(model)}</option>`).join('')}</select></label>
+        ${saved?`<p>Saved ${selection.domain} default: ${escapeHTML(saved)}</p>`:''}
+        <button type="button" data-save-hosted-default="${selection.domain}" ${this.busy?'disabled':''}>Save hosted ${selection.domain} default</button></form>`;
+    }).join('');
   }
   modelDetails() {
     const offering=this.offerings.find(o=>o.provider===this.connection?.provider && o.model===this.modelID);
@@ -298,6 +318,15 @@ export class ConnectionDashboard extends HTMLElement {
     }
     const button = event.target.closest('button');
     if (!button) return;
+    if(button.dataset.saveHostedDefault) {
+      const form=button.closest('form[data-hosted-default]');
+      if(form instanceof HTMLFormElement) {
+        const grant=this.hostedGrants.find(grant=>grant.id===form.dataset.hostedDefault);
+        const values=new FormData(form),model=String(values.get('model')||'');
+        if(grant&&model)void this.run(()=>this.saveRoutingDefault(grant.provider,model,/** @type {import('../types.d.js').CapabilityDomain} */(button.dataset.saveHostedDefault),values));
+      }
+      return;
+    }
     const hostedID=button.dataset.useHosted || button.dataset.detachHosted;
     if(hostedID) {
       const grant=this.hostedGrants.find(grant=>grant.id===hostedID);
@@ -350,11 +379,20 @@ export class ConnectionDashboard extends HTMLElement {
   async saveDefault() {
     if(!this.profile || !this.connection || !this.attached || !this.canSaveDefault)return;
     const form=this.querySelector('[data-default-form]');if(!(form instanceof HTMLFormElement))return;
-    const values=new FormData(form);const defaults={...this.profile.tenant.defaults};
-    if(this.capability==='text') {defaults.provider=this.connection.provider;defaults.model=this.modelID;defaults.reasoning_effort=String(values.get('reasoning_effort')||'');defaults.system_prompt=String(values.get('system_prompt')||'');}
-    else if(this.capability===CAPABILITY_DOMAINS.TRANSCRIPTION) {defaults.transcription_provider=this.connection.provider;defaults.transcription_model=this.modelID;}
-    else {defaults.speech_provider=this.connection.provider;defaults.speech_model=this.modelID;}
-    await backend.updateDefaults(this.tenantID,defaults,this.controller.signal);await this.reload();this.message='Default saved.';this.modelID='';
+    await this.saveRoutingDefault(this.connection.provider,this.modelID,/** @type {import('../types.d.js').CapabilityDomain} */(this.capability),new FormData(form));
+    this.modelID='';
+  }
+  /** @param {string} provider @param {string} model @param {import('../types.d.js').CapabilityDomain} domain @param {FormData} values */
+  async saveRoutingDefault(provider,model,domain,values) {
+    if(!this.profile)return;
+    const defaults={...this.profile.tenant.defaults};
+    if(domain===CAPABILITY_DOMAINS.TEXT) {
+      defaults.provider=provider;defaults.model=model;defaults.reasoning_effort=String(values.get('reasoning_effort')||'');
+      if(values.has('system_prompt'))defaults.system_prompt=String(values.get('system_prompt'));
+    } else if(domain===CAPABILITY_DOMAINS.TRANSCRIPTION) {defaults.transcription_provider=provider;defaults.transcription_model=model;}
+    else if(domain===CAPABILITY_DOMAINS.SPEECH) {defaults.speech_provider=provider;defaults.speech_model=model;}
+    else throw new Error(COPY.appIntegrityError);
+    await backend.updateDefaults(this.tenantID,defaults,this.controller.signal);await this.reload();this.message='Default saved.';
   }
   /** @param {string} title @param {string} body @param {(form: HTMLFormElement)=>Promise<void>} [submit] */
   dialog(title,body,submit) {
@@ -434,7 +472,8 @@ export class ConnectionDashboard extends HTMLElement {
       const url=new URL(profile.proxy.v2_path,config.proxyOrigin);
       url.searchParams.set('key','<generated-secret>');url.searchParams.set('provider',defaults.provider);
       const body=JSON.stringify({model:defaults.model,messages:[{role:'user',content:'Hello'}]});
-      this.requestExample=`curl '${url}' -H 'Content-Type: application/json' -d '${body}'`;
+      const hosted=this.assignments.some(assignment=>assignment.provider===defaults.provider&&assignment.kind==='hosted_access_grant');
+      this.requestExample=`curl '${url}' -H 'Content-Type: application/json'${hosted?" -H 'Idempotency-Key: <unique-request-id>'":''} -d '${body}'`;
     } else this.requestExample='';
     this.dialog('Save your tenant API key',`<p>This key is shown once. Copy it before closing.</p><input readonly aria-label="Tenant API key"><button type="button" data-action="copy-secret">Copy API key</button>${this.requestExample?`<pre>${escapeHTML(this.requestExample)}</pre><button type="button" data-action="copy-example">Copy request example</button>`:'<p>Save a text default to get a request example for this tenant.</p>'}`);
     const keyInput=this.querySelector('input[aria-label="Tenant API key"]');

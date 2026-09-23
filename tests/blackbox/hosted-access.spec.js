@@ -102,7 +102,7 @@ test('hosted onboarding creates tenant access without provider credentials at de
     await expect(card).toContainText('gpt-4.1');
     await card.getByRole('button',{name:'Use hosted access'}).click();
     await expect(card).toContainText('Assigned');
-    await expect(hosted).toContainText('Hosted execution is not available yet.');
+    await expect(hosted).toContainText('Hosted requests use your prepaid balance.');
     await dashboard.getByRole('button',{name:'API access',exact:true}).click();
     await page.getByRole('dialog').getByRole('button',{name:'Create API key',exact:true}).click();
     await expect(page.getByRole('dialog').getByLabel('Tenant API key')).toHaveValue(/^llmp_/);

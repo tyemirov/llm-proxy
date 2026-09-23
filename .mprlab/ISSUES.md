@@ -27,6 +27,28 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B260] (P1) Accept explicit routing defaults within assigned hosted grants.
+  Goal:
+  Let a customer select a model from an assigned hosted grant without customer-owned provider credentials.
+  Evidence:
+  The funded browser test assigned an active OpenAI grant and selected `gpt-4.1`.
+  The defaults resource returned HTTP 400 with `managed_routing_defaults_invalid: reason=provider_key_ineligible`.
+  Requirements:
+  - Validate hosted defaults against the assigned grant model and operation scope.
+  - Preserve explicit model selection through reload and restart.
+  - Keep provider credentials private and enforce execution authority at admission.
+  - Reject defaults outside the grant scope without a default route substitution.
+  Validation:
+  - Save and read an allowed default through authenticated HTTP and the browser.
+  - Reject another model, another operation, and another account.
+  - Verify suspended grants retain the saved selection but cannot execute.
+  Resolution:
+  The server validates hosted defaults against the assigned grant scope at request time and startup.
+  Browser profiles identify assigned hosted providers without exposing credentials.
+  Authenticated HTTP checks passed for allowed defaults, rejected scope, account isolation, restart, and connection conflicts.
+  The funded browser test passed saved selection, suspension, and zero dispatch after suspension.
+  Routing, startup, account connection, hosted browser, Go lint, and frontend lint checks passed.
+
 - [x] [B259] (P1) Reject recurring Paddle prices before prepaid checkout.
   Goal:
   Enforce the F069 one-time funding contract before the service creates or exposes a checkout.
@@ -2889,7 +2911,9 @@ retain satisfied historical dependencies.
   - After runtime integration, `make test-hosted-billing` passed the billing, client, backup, and three browser tests. Go lint also passed.
   - The usage journal now shows request totals, itemized charges, and customer credits through the existing APIs.
   - Frontend lint and browser checks passed for exact amounts, pending and unresolved states, pagination, invalid responses, and narrow layouts.
-  - The rendered funded usage flow, complete provider-operation qualification, operational signals, final CI, and F069 PR remain open.
+  - The funded browser flow passed model selection, USD 5 funding, exact charges, replay, receipts, isolation, and grant suspension.
+  - Four hosted browser tests passed at desktop and narrow widths with controlled Paddle and provider responses.
+  - Complete provider-operation qualification, operational signals, final CI, and the F069 PR remain open.
   - The remaining commercial decisions and F065 through F069 implementation remain open.
   Goal:
   Give a customer one account, one funded balance, and immediate access to approved services without provider account setup.

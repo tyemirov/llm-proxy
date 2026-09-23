@@ -684,6 +684,9 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 		if err := initializeHostedSchema(transaction); err != nil {
 			return err
 		}
+		if err := validateAssignedRoutingDefaults(transaction, providerKeyCipher, providers); err != nil {
+			return err
+		}
 		if err := initializeHostedJournalSchema(transaction); err != nil {
 			return err
 		}
