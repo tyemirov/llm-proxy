@@ -2973,6 +2973,11 @@ retain satisfied historical dependencies.
   - FAL queue checks passed settlement, unresolved outcomes, excess cost, and recovery without duplicate provider work.
   - Funded queue recovery preserves one settlement after worker replacement and grant revocation.
   - Responses images keep funds for reconciliation because the image-tool meter remains unqualified.
+  - Dictator synthesis tests passed real funds admission, exact duration charges, and Ledger settlement for both current synthesis models.
+  - Cancellation, invalid durations, artifact loss, and usage write errors keep funds for reconciliation.
+  - Related Dictator and speech regression checks passed. Go lint passed.
+  - Actual Paddle sandbox inputs are absent from the process environment and all six repository private environment files.
+  - The operator was asked for the sandbox configuration path and selected account and supplier identity.
   - Complete provider-operation qualification, final CI, and the F069 PR remain open.
   - The remaining commercial decisions and F065 through F069 implementation remain open.
   Goal:

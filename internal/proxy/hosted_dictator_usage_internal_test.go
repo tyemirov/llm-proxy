@@ -7,9 +7,12 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	dictator "github.com/tyemirov/dictator/sdk/go/dictatorspeechv1"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
@@ -60,7 +63,7 @@ func TestHostedDictatorUsagePrecedesArtifactTransfer(t *testing.T) {
 		{"artifact_loss", 1.125, "1.125", ""}, {"observation_failure", 1.125, "", ""}, {"delivery_failure", 1.125, "", ""},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
-			database, _, read := newJournalTransactionFixture(t)
+			database, _, management, _ := newHostedRatingFixture(t)
 			model := ModelNameDictatorQwen3TTS
 			if scenario.name == "silero" {
 				model = "silero-ru"
@@ -84,6 +87,9 @@ func TestHostedDictatorUsagePrecedesArtifactTransfer(t *testing.T) {
 			}()
 			t.Cleanup(grpcServer.Stop)
 			server, service := newHostedVoiceHTTPFixture(t, database, ProviderNameDictator, model, map[string]string{dictatorAddressField: listener.Addr().String(), dictatorTokenField: "hosted-duration-secret", dictatorTLSField: "false"})
+			settings := hostedDictatorFinancialSettings(t, model)
+			service.catalog = settings.catalog
+			service.hostedAdmission = settings.mediaAdmission(service.providers)
 			if err := database.database.Create(&managedHostedGrantRevisionRecord{GrantID: "grant-voices", Revision: 1, State: hostedGrantActive, ActorUserID: "operator", Reason: "Duration acceptance", CreatedAt: service.store.now()}).Error; err != nil {
 				t.Fatal(err)
 			}
@@ -101,7 +107,14 @@ func TestHostedDictatorUsagePrecedesArtifactTransfer(t *testing.T) {
 				t.Fatal(err)
 			}
 			intent := fmt.Sprintf(`{"capability":"audio.speech.generate","provider":"dictator","model":%q,"input":{"text":"A short message.","voice_id":%q},"controls":{"language":"en","text_format":"plain","sample_rate_hz":24000}}`, model, voice.VoiceID)
+
+			hostedSpeechHTTP(t, server, "unfunded-duration", intent, http.StatusPaymentRequired)
+			if upstream.submissions.Load() != 0 {
+				t.Fatal("unfunded Dictator request dispatched")
+			}
+			seedHostedFunds(t, database, 500)
 			id := hostedSpeechHTTP(t, server, "duration", intent, http.StatusAccepted)["operation_id"].(string)
+			assertHostedFundsBalance(t, database, 500, 448)
 			failureTable := ""
 			switch scenario.name {
 			case "observation_failure":
@@ -150,6 +163,7 @@ func TestHostedDictatorUsagePrecedesArtifactTransfer(t *testing.T) {
 				if len(pending) != 0 {
 					t.Fatal("partial duration evidence")
 				}
+				assertDictatorFinancialOutcome(t, database, management, scenario.name)
 				return
 			}
 			if len(pending) != 1 {
@@ -169,10 +183,88 @@ func TestHostedDictatorUsagePrecedesArtifactTransfer(t *testing.T) {
 			if scenario.reason != "" {
 				usage = journalUsageUnknown
 			}
-			entry := read("")["requests"].([]any)[0].(map[string]any)
+			entry := accountConnectionHTTPExchange(t, management, http.MethodGet, "/billing-accounts/billing-journal/requests", "", http.StatusOK)["requests"].([]any)[0].(map[string]any)
 			if entry["usage_state"] != string(usage) {
 				t.Fatalf("duration journal=%v", entry)
 			}
+			assertDictatorFinancialOutcome(t, database, management, scenario.name)
 		})
+	}
+}
+
+func hostedDictatorFinancialSettings(t *testing.T, model string) *hostedRuntimeSettings {
+	t.Helper()
+	catalog := internalCanonicalProviderCatalog().ModelCatalog()
+	for index := range catalog.Offerings {
+		offering := &catalog.Offerings[index]
+		if offering.Provider == ProviderNameDictator && offering.Model == model {
+			maximum := 10
+			offering.Limits = append(offering.Limits, CatalogLimit{ID: "output_audio_seconds", Unit: "seconds", Value: &maximum})
+		}
+	}
+	for index := range catalog.Prices {
+		price := &catalog.Prices[index]
+		if price.Provider == ProviderNameDictator && price.Model == model && price.Operation == ModelOperationSpeechGeneration {
+			*price = CatalogPriceDescriptor{Provider: price.Provider, Model: price.Model, Operation: price.Operation, Available: true, Source: "https://example.com/controlled-duration-prices", LastVerified: "2026-09-23", Rates: []CatalogPriceRate{{Component: "output_audio", Currency: "USD", Rate: "0.04", Unit: "USD/second", Conditions: CatalogPriceConditions{EffectiveFrom: "2026-09-01T00:00:00Z"}}}}
+		}
+	}
+	settings, err := newHostedRuntimeSettings(&HostedConfiguration{Offerings: []HostedOfferingConfiguration{{Provider: ProviderNameDictator, Model: model, Operation: ModelOperationSpeechGeneration, MaximumAttempts: 1}}}, catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return settings
+}
+
+func assertDictatorFinancialOutcome(t *testing.T, database *gormManagedTenantDatabase, management *httptest.Server, name string) {
+	t.Helper()
+	for range 2 {
+		if err := database.reconcileHostedFunds(t.Context(), time.Now().UTC()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	balance := ratingHTTPExchange(t, management, http.MethodGet, fundsBalanceTestPath, "", http.StatusOK)
+	charges := ratingHTTPExchange(t, management, http.MethodGet, "/billing-accounts/billing-journal/charges", "", http.StatusOK)["charges"].([]any)
+	if name == "observation_failure" || name == "delivery_failure" {
+		if len(charges) != 0 || balance["pending_cents"] != "52" {
+			t.Fatalf("failed evidence financial outcome: charges=%v balance=%v", charges, balance)
+		}
+		assertHostedFundsBalance(t, database, 500, 448)
+		return
+	}
+	if len(charges) != 1 {
+		t.Fatalf("Dictator charges=%v", charges)
+	}
+	charge := charges[0].(map[string]any)
+	summary := ratingHTTPExchange(t, management, http.MethodGet, "/billing-accounts/billing-journal/requests/"+charge["request_id"].(string)+"/charge-summary", "", http.StatusOK)
+	var providerCost any = map[string]any{"numerator": "9", "denominator": "200"}
+	switch name {
+	case "exact", "silero", "running":
+		assertHostedFundsBalance(t, database, 495, 495)
+		assertFundsCreditRemainder(t, database, "17", "2000")
+		if summary["state"] != string(requestChargeRated) || !reflect.DeepEqual(summary["customer_charge"], map[string]any{"numerator": "117", "denominator": "2000"}) {
+			t.Fatalf("Dictator settlement=%v", summary)
+		}
+	case "precision":
+		providerCost = map[string]any{"numerator": "6172839450617283", "denominator": "1250000000000000000"}
+		assertHostedFundsBalance(t, database, 500, 500)
+		assertFundsCreditRemainder(t, database, "80246912858024679", "12500000000000000000")
+		if summary["state"] != string(requestChargeRated) || !reflect.DeepEqual(summary["customer_charge"], map[string]any{"numerator": "80246912858024679", "denominator": "12500000000000000000"}) {
+			t.Fatalf("Dictator precision lost: %v", summary)
+		}
+	default:
+		assertHostedFundsBalance(t, database, 500, 448)
+		assertFundsCreditRemainder(t, database, "0", "1")
+		if summary["state"] != string(requestChargeUnresolved) || summary["customer_charge"] != nil || balance["pending_cents"] != "52" {
+			t.Fatalf("Dictator unresolved funds lost: summary=%v balance=%v", summary, balance)
+		}
+		if name == "absent" || name == "negative" || name == "nan" || name == "infinity" {
+			providerCost = nil
+			if charge["state"] != chargeUsageUnresolved {
+				t.Fatalf("unknown duration charge=%v", charge)
+			}
+		}
+	}
+	if !reflect.DeepEqual(summary["provider_cost"], providerCost) {
+		t.Fatalf("Dictator provider cost=%v", summary)
 	}
 }

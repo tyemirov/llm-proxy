@@ -719,6 +719,22 @@ Controlled HTTP tests cover all current Dictator audio input offerings.
 These tests verify explicit unknown usage, reported sample duration, terminal states, invalid results, failed writes, and replay.
 No duration measurement establishes a provider price or customer charge.
 
+### Dictator Financial Acceptance
+
+The synthesis duration tests use real gRPC responses, runtime financial admission, and Ledger settlement.
+They cover Qwen3-TTS and Silero through the existing HTTP media interface.
+Unfunded requests cause no synthesis submission.
+A controlled rate of USD 0.04 per output second requires a 52-cent reservation for a ten-second bound.
+A 1.125-second response produces a USD 0.045 provider cost and a USD 0.0585 customer charge.
+Settlement debits five cents and keeps the exact USD 0.0085 remainder.
+
+The precision case checks the exact decimal value represented by the native duration field.
+A default zero duration remains unknown and keeps the reservation.
+Invalid durations, cancellation, provider errors, and artifact loss keep funds for reconciliation.
+Usage write errors cannot produce a charge or release the reservation.
+The tests check charge summaries, balances, account remainders, and replay without another synthesis submission.
+These checks do not resolve the missing input-duration contract for other Dictator operations.
+
 ### FAL Queue Usage Evidence
 
 The existing queue image adapter records `X-Fal-Billable-Units` before result decoding or artifact download.
