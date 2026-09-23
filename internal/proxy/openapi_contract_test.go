@@ -537,7 +537,7 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	if err := json.Unmarshal(providerKeyResponse.Body.Bytes(), &connection); err != nil {
 		t.Fatal(err)
 	}
-	assignmentBody := []byte(`{"connection_id":"` + connection.ID + `"}`)
+	assignmentBody := []byte(`{"kind":"account_connection","resource_id":"` + connection.ID + `"}`)
 	assignmentRequest := authenticatedJSONRequest(http.MethodPut, tenantPath+"/connections/deepseek", string(assignmentBody), sessionCookie)
 	assertOpenAPIRequest(t, contract, "/api/management/tenants/{tenant_id}/connections/{provider}", assignmentRequest, assignmentBody)
 	assignmentResponse := httptest.NewRecorder()

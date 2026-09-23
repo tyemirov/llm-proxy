@@ -707,6 +707,9 @@ func (service *mediaOperationService) create(requestContext context.Context, req
 }
 
 func (service *mediaOperationService) mediaOperationCredentialAvailable(requestTenant tenant, provider providerDefinition, adapter MediaOperationAdapter) bool {
+	if requestTenant.providerSettings[provider.identifier].hostedGrantID != "" {
+		return false
+	}
 	if credential, deploymentOwned := adapter.(MediaOperationDeploymentCredential); deploymentOwned {
 		return strings.TrimSpace(credential.MediaOperationCredentialReference()) != ""
 	}
@@ -715,6 +718,9 @@ func (service *mediaOperationService) mediaOperationCredentialAvailable(requestT
 }
 
 func (service *mediaOperationService) mediaOperationCredentialReference(requestContext context.Context, requestTenant tenant, provider providerDefinition, adapter MediaOperationAdapter) (string, error) {
+	if requestTenant.providerSettings[provider.identifier].hostedGrantID != "" {
+		return "", errMediaOperationUnavailable
+	}
 	if credential, deploymentOwned := adapter.(MediaOperationDeploymentCredential); deploymentOwned {
 		reference := strings.TrimSpace(credential.MediaOperationCredentialReference())
 		if reference == "" {

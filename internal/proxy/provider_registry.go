@@ -10,6 +10,7 @@ import (
 )
 
 type providerRegistry struct {
+	catalog         *ProviderCatalog
 	definitions     map[providerID]providerDefinition
 	order           []providerID
 	aliases         map[string]providerID
@@ -213,6 +214,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 	applyDefaultEndpointOverrides(configuration.ProviderCatalog.runtimeSchema, definitions, configuration.Endpoints)
 
 	registry := &providerRegistry{
+		catalog:         configuration.ProviderCatalog,
 		definitions:     definitions,
 		order:           order,
 		aliases:         map[string]providerID{},
@@ -283,6 +285,7 @@ func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegis
 	for identifier, definition := range registry.definitions {
 		definition.connectionValues = cloneStringMap(definition.connectionValues)
 		definition.upstreamScope.tenant = requestTenant.identifier.string()
+		definition.hostedGrantID = requestTenant.providerSettings[identifier].hostedGrantID
 		if providerSettings, configured := requestTenant.providerSettings[identifier]; configured && definition.connectionOwnership == CatalogProviderConnectionTenant {
 			definition.upstreamScope.account = providerSettings.connectionID
 			for fieldIdentifier, value := range providerSettings.connectionValues {
@@ -292,6 +295,7 @@ func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegis
 		definitions[identifier] = definition
 	}
 	return &providerRegistry{
+		catalog:         registry.catalog,
 		definitions:     definitions,
 		order:           registry.order,
 		aliases:         registry.aliases,

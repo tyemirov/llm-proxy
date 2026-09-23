@@ -91,6 +91,10 @@ test-management-persistence: frontend-dependencies
 test-account-connections:
 	$(GO) test ./internal/proxy -run '^TestAccountConnection' -count=1
 
+.PHONY: test-hosted-access
+test-hosted-access:
+	$(GO) test ./internal/proxy -run '$(if $(HOSTED_TEST_PATTERN),$(HOSTED_TEST_PATTERN),^TestHosted)' -count=1
+
 .PHONY: test-management-contracts
 test-management-contracts:
 	$(GO) test ./internal/proxy -run '$(if $(MANAGEMENT_TEST_PATTERN),$(MANAGEMENT_TEST_PATTERN),^TestManagement)' -timeout=2m -count=1

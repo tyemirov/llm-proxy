@@ -4288,11 +4288,20 @@ async function installUsageRejectionsResponse(page, response) {
  * @returns {Promise<void>}
  */
 async function installConnectionInventoryRoute(page, profiles, transform = (body) => body) {
+  await page.route(`${baseURL}/api/management/billing-accounts`, route=>route.fulfill({json:{billing_accounts:[]}}));
+  await page.route(`${baseURL}/api/management/hosted-access-grants?*`, route=>route.fulfill({json:{hosted_access_grants:[],next_cursor:''}}));
+  await page.route(`${baseURL}/api/management/tenants/*/connections`, async route=>{
+    const tenantID=new URL(route.request().url()).pathname.split('/')[4];
+    const profile=profiles().find(profile=>profile.tenant.id===tenantID);
+    if(!profile){await route.fulfill({status:404});return;}
+    const assignments=profile.providers.filter(provider=>provider.configured).map(provider=>({provider:provider.id,kind:'account_connection',resource_id:fixtureConnectionID(profile,provider.id)}));
+    await route.fulfill({json:{assignments}});
+  });
   await page.route(`${baseURL}/api/management/connections`, async (route) => {
     if (route.request().method() !== "GET") { await route.fulfill({status:405}); return; }
     const tenants = profiles();
     const connections = tenants.flatMap((profile) => profile.providers.filter((provider) => provider.configured).map((provider) => ({
-      id: `connection-${createHash("sha256").update(`${profile.tenant.id}/${provider.id}`).digest("hex").slice(0, 32)}`,
+      id: fixtureConnectionID(profile,provider.id),
       name: `${profile.tenant.name} ${provider.label}`,
       provider: provider.id,
       version: 1,
@@ -4303,6 +4312,10 @@ async function installConnectionInventoryRoute(page, profiles, transform = (body
     })));
     await route.fulfill({json: transform({connections, providers: tenants[0].providers, next_cursor: ""})});
   });
+}
+
+function fixtureConnectionID(profile,providerID) {
+  return `connection-${createHash("sha256").update(`${profile.tenant.id}/${providerID}`).digest("hex").slice(0,32)}`;
 }
 
 /**
@@ -4335,6 +4348,7 @@ async function installMultiTenantRoutes(page, options = {}) {
     state.requests.push({ method: request.method(), path });
     const relativePath = path.slice("/api/management/tenants/".length);
     const [tenantID, resource, providerID] = relativePath.split("/");
+    if(resource==='connections' && !providerID) {await route.fallback();return;}
     const profile = state.profiles.get(tenantID);
     if (!profile) {
       await route.fulfill({ status: 404 });

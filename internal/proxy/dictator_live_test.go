@@ -76,7 +76,7 @@ func newDictatorGatewayAcceptanceClient(t *testing.T, address, token, tls string
 		"name": "Live acceptance", "provider": proxy.ProviderNameDictator, "fields": fields,
 	}, http.StatusCreated)
 	accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+account.Tenants[0].ID+"/connections/"+proxy.ProviderNameDictator,
-		map[string]string{"connection_id": connection["id"].(string)}, http.StatusOK)
+		map[string]string{"kind": "account_connection", "resource_id": connection["id"].(string)}, http.StatusOK)
 	secret := generateManagementTenantSecret(t, router, owner, account.Tenants[0].ID)
 	config, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: server.URL, Secret: secret})
 	if err != nil {

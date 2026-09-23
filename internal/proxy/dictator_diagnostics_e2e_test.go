@@ -97,7 +97,7 @@ func TestDictatorDiagnosticsUseAssignedConnection(t *testing.T) {
 	account := requestManagementAccount(t, router, owner)
 	connection := accountConnectionExchange(t, router, owner, http.MethodPost, "/connections", map[string]any{"name": "Diagnostics", "provider": "dictator", "fields": map[string]string{"grpc_address": address, "grpc_auth_token": fixture.token, "grpc_tls": "false"}}, http.StatusCreated)
 	tenantID := account.Tenants[0].ID
-	accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+tenantID+"/connections/dictator", map[string]string{"connection_id": connection["id"].(string)}, http.StatusOK)
+	accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+tenantID+"/connections/dictator", map[string]string{"kind": "account_connection", "resource_id": connection["id"].(string)}, http.StatusOK)
 	secret := generateManagementTenantSecret(t, router, owner, tenantID)
 	request, err := http.NewRequest(http.MethodGet, server.URL+"/model/v1/provider-diagnostics/dictator", nil)
 	if err != nil {
@@ -205,13 +205,13 @@ func TestDictatorDiagnosticsUseAssignedConnection(t *testing.T) {
 	exchange(http.MethodGet, path, otherSecret, 404, "")
 	otherFixture, otherAddress := startDictatorDiagnosticsFixture(t, 64)
 	otherConnection := accountConnectionExchange(t, router, otherOwner, http.MethodPost, "/connections", map[string]any{"name": "Other diagnostics", "provider": "dictator", "fields": map[string]string{"grpc_address": otherAddress, "grpc_auth_token": otherFixture.token, "grpc_tls": "false"}}, http.StatusCreated)
-	accountConnectionExchange(t, router, otherOwner, http.MethodPut, "/tenants/"+otherAccount.Tenants[0].ID+"/connections/dictator", map[string]string{"connection_id": otherConnection["id"].(string)}, http.StatusOK)
+	accountConnectionExchange(t, router, otherOwner, http.MethodPut, "/tenants/"+otherAccount.Tenants[0].ID+"/connections/dictator", map[string]string{"kind": "account_connection", "resource_id": otherConnection["id"].(string)}, http.StatusOK)
 	if body := exchange(http.MethodGet, path, otherSecret, 200, ""); !strings.Contains(string(body), `"operations_total":0`) {
 		t.Fatalf("wrong account server: %s", body)
 	}
 	sharedTenant := accountConnectionExchange(t, router, owner, http.MethodPost, "/tenants", map[string]string{"name": "Shared metrics"}, http.StatusCreated)
 	sharedID := sharedTenant["tenant"].(map[string]any)["id"].(string)
-	accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+sharedID+"/connections/dictator", map[string]string{"connection_id": connection["id"].(string)}, http.StatusOK)
+	accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+sharedID+"/connections/dictator", map[string]string{"kind": "account_connection", "resource_id": connection["id"].(string)}, http.StatusOK)
 	sharedSecret := generateManagementTenantSecret(t, router, owner, sharedID)
 	if body := exchange(http.MethodGet, path, sharedSecret, 200, ""); !strings.Contains(string(body), `"operations_total":0`) {
 		t.Fatalf("shared tenant received foreign totals: %s", body)
@@ -273,7 +273,7 @@ func TestDictatorDiagnosticsUseAssignedConnection(t *testing.T) {
 	}
 	exchange(http.MethodGet, path, sharedSecret, 200, "")
 	replacement := accountConnectionExchange(t, router, owner, http.MethodPost, "/connections", map[string]any{"name": "Replacement diagnostics", "provider": "dictator", "fields": map[string]string{"grpc_address": otherAddress, "grpc_auth_token": otherFixture.token, "grpc_tls": "false"}}, http.StatusCreated)
-	accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+tenantID+"/connections/dictator", map[string]string{"connection_id": replacement["id"].(string)}, http.StatusOK)
+	accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+tenantID+"/connections/dictator", map[string]string{"kind": "account_connection", "resource_id": replacement["id"].(string)}, http.StatusOK)
 	if body := exchange(http.MethodGet, path, secret, 200, ""); !strings.Contains(string(body), `"operations_total":4`) {
 		t.Fatalf("changed assignment lost tenant history: %s", body)
 	}

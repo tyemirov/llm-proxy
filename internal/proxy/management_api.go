@@ -323,6 +323,18 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	managementGroup.Use(service.sessionMiddleware())
 	managementGroup.Use(service.managementMutationMiddleware())
 	managementGroup.GET(managementAccountPath, service.accountHandler())
+	managementGroup.GET(managementBillingAccountsPath, service.listBillingAccountsHandler())
+	managementGroup.POST(managementBillingAccountsPath, service.createBillingAccountHandler())
+	managementGroup.GET(managementBillingAccountPath, service.getBillingAccountHandler())
+	managementGroup.GET(managementPlatformConnectionsPath, service.listPlatformConnectionsHandler())
+	managementGroup.POST(managementPlatformConnectionsPath, service.createPlatformConnectionHandler())
+	managementGroup.GET(managementPlatformConnectionPath, service.getPlatformConnectionHandler())
+	managementGroup.PUT(managementPlatformConnectionPath, service.rotatePlatformConnectionHandler())
+	managementGroup.GET(managementHostedGrantsPath, service.listHostedGrantsHandler())
+	managementGroup.POST(managementHostedGrantsPath, service.createHostedGrantHandler())
+	managementGroup.GET(managementHostedGrantPath, service.getHostedGrantHandler())
+	managementGroup.PATCH(managementHostedGrantPath, service.changeHostedGrantHandler())
+	managementGroup.GET(managementHostedGrantRevisionsPath, service.listHostedGrantRevisionsHandler())
 	managementGroup.GET(managementUsagePath, service.accountUsageHandler())
 	managementGroup.GET(managementUsageFailuresPath, service.accountUsageDetailsHandler(managedUsageDispositionFailed))
 	managementGroup.GET(managementUsageRejectionsPath, service.accountUsageDetailsHandler(managedUsageDispositionRejected))
@@ -342,6 +354,7 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	tenantGroup.GET(managementUsageFailuresPath, service.usageDetailsHandler(managedUsageDispositionFailed))
 	tenantGroup.GET(managementUsageRejectionsPath, service.usageDetailsHandler(managedUsageDispositionRejected))
 	tenantGroup.PUT("/provider-profiles/:provider", service.saveTenantProviderProfileHandler())
+	tenantGroup.GET(managementConnectionsPath, service.listProviderAssignmentsHandler())
 	tenantGroup.PUT(managementTenantConnectionPath, service.assignConnectionHandler())
 	tenantGroup.DELETE(managementTenantConnectionPath, service.detachConnectionHandler())
 	tenantGroup.PUT(managementDefaultsPath, service.updateDefaultsHandler())
@@ -413,7 +426,7 @@ func (service *managementService) applyCORSHeaders(ginContext *gin.Context) {
 	ginContext.Header(headerAccessControlAllowOrigin, requestOrigin)
 	ginContext.Header(headerAccessControlAllowCredentials, "true")
 	ginContext.Header(headerAccessControlAllowHeaders, headerContentType+", "+managementIdempotencyHeader)
-	ginContext.Header(headerAccessControlAllowMethods, "GET, PUT, POST, DELETE, OPTIONS")
+	ginContext.Header(headerAccessControlAllowMethods, "GET, PUT, PATCH, POST, DELETE, OPTIONS")
 	ginContext.Header(headerVary, headerOrigin)
 }
 
@@ -745,7 +758,7 @@ func writeManagementStoreError(ginContext *gin.Context, storeError error) {
 	switch {
 	case errors.Is(storeError, errManagedTenantNotFound):
 		ginContext.AbortWithStatus(http.StatusNotFound)
-	case errors.Is(storeError, errManagedTenantNameConflict), errors.Is(storeError, errManagedFinalTenantDeletion), errors.Is(storeError, errManagedProviderKeyConflict):
+	case errors.Is(storeError, errManagedTenantNameConflict), errors.Is(storeError, errManagedFinalTenantDeletion), errors.Is(storeError, errManagedProviderKeyConflict), errors.Is(storeError, errManagedTenantHostedHistory):
 		ginContext.String(http.StatusConflict, storeError.Error())
 	case errors.Is(storeError, errManagedTenantNameInvalid), errors.Is(storeError, errManagedProviderKeyInvalid), errors.Is(storeError, errManagedProviderBaseURLInvalid), errors.Is(storeError, errManagementDefaults):
 		ginContext.String(http.StatusBadRequest, storeError.Error())
