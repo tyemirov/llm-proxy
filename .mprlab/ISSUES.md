@@ -2962,6 +2962,10 @@ retain satisfied historical dependencies.
   - The text acceptance matrix passed every enabled catalog offering through all four public HTTP interfaces.
   - It verified platform authority, native model selection, exact costs and charges, automatic settlement, and replay across interfaces.
   - `make test-hosted-runtime` and Go lint passed after the matrix change.
+  - Speech financial tests passed each current ElevenLabs generation and conversion offering, including timestamped speech.
+  - The tests check exact charges, account remainders, reservations, replay, and zero provider calls after unfunded rejection.
+  - Missing usage, provider errors, and uncertain results keep funds for reconciliation without an automatic debit.
+  - Related usage, rating, settlement, and exposure checks passed. Go lint passed after the test changes.
   - Complete provider-operation qualification, final CI, and the F069 PR remain open.
   - The remaining commercial decisions and F065 through F069 implementation remain open.
   Goal:

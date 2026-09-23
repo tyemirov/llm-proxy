@@ -678,6 +678,21 @@ Observation and delivery writes commit together. Failed writes prevent audio pub
 HTTP tests cover all current generation and conversion offerings, including multipart audio and timestamped generation responses.
 Tests also verify exact decimals, failures, duplicate requests, transaction rollback, and repeated worker execution.
 
+### Speech Financial Acceptance
+
+The financial tests cover each current ElevenLabs speech and conversion offering through the real HTTP and media worker interfaces.
+A controlled price of USD 0.004 per provider unit and a 100-unit bound require a 52-cent reservation.
+A response with 12.5 units produces a USD 0.05 provider cost and a USD 0.065 customer charge.
+Two settlements debit 13 cents without loss of the account remainder.
+The tests include timestamped speech, multipart conversion, unfunded rejection, and replay without another provider call.
+
+Zero usage releases the reservation without a debit.
+Missing, invalid, and duplicate usage values keep the reservation for reconciliation.
+Failed provider requests and uncertain results keep known provider costs but have no final customer total or automatic debit.
+Usage above the accepted bound keeps the reservation and reports the exact excess provider cost.
+The tests check balances, charge summaries, reconciliation cases, and exposure through management HTTP resources.
+Controlled prices and responses do not establish actual supplier rates or live provider acceptance.
+
 ### Dictator Duration Evidence
 
 The hosted gRPC boundary records terminal synthesis duration before the existing Dictator adapter transfers artifacts.

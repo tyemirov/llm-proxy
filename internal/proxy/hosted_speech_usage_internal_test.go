@@ -258,9 +258,12 @@ func TestHostedSpeechUsageWriteFailurePreventsPublication(t *testing.T) {
 	}
 }
 
-func newHostedSpeechUsageFixture(t *testing.T, database *gormManagedTenantDatabase, provider, model, endpoint string) (*httptest.Server, *mediaOperationService, string) {
+func newHostedSpeechUsageFixture(t *testing.T, database *gormManagedTenantDatabase, provider, model, endpoint string, configure ...func(*mediaOperationService)) (*httptest.Server, *mediaOperationService, string) {
 	t.Helper()
 	server, service := newHostedVoiceHTTPFixture(t, database, provider, model, map[string]string{CatalogCredentialAPIKey: "hosted-voice-secret"})
+	for _, apply := range configure {
+		apply(service)
+	}
 	if err := database.database.Create(&managedHostedGrantRevisionRecord{GrantID: "grant-voices", Revision: 1, State: hostedGrantActive, ActorUserID: "operator", Reason: "Speech acceptance", CreatedAt: service.store.now()}).Error; err != nil {
 		t.Fatal(err)
 	}
