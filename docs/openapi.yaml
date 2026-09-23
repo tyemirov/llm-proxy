@@ -217,6 +217,8 @@ paths:
       responses:
         '202':
           $ref: '#/components/responses/StructuredRequestPending'
+        '402':
+          $ref: '#/components/responses/HostedClientFailure'
         '403':
           $ref: '#/components/responses/HostedClientFailure'
         '409':
@@ -415,6 +417,8 @@ paths:
       responses:
         '202':
           $ref: '#/components/responses/StructuredRequestPending'
+        '402':
+          $ref: '#/components/responses/HostedClientFailure'
         '403':
           $ref: '#/components/responses/HostedClientFailure'
         '409':
@@ -613,6 +617,8 @@ paths:
       responses:
         '202':
           $ref: '#/components/responses/StructuredRequestPending'
+        '402':
+          $ref: '#/components/responses/HostedClientFailure'
         '403':
           $ref: '#/components/responses/HostedClientFailure'
         '409':
@@ -870,6 +876,8 @@ paths:
           $ref: '#/components/responses/TextSuccess'
         '400':
           $ref: '#/components/responses/ProxyBadRequest'
+        '402':
+          $ref: '#/components/responses/HostedFundsFailure'
         '403':
           $ref: '#/components/responses/ProxyForbidden'
         '409':
@@ -911,6 +919,8 @@ paths:
           $ref: '#/components/responses/TextSuccess'
         '400':
           $ref: '#/components/responses/ProxyBadRequest'
+        '402':
+          $ref: '#/components/responses/HostedFundsFailure'
         '403':
           $ref: '#/components/responses/ProxyForbidden'
         '409':
@@ -969,6 +979,8 @@ paths:
           $ref: '#/components/responses/V2StructuredRequestPending'
         '400':
           $ref: '#/components/responses/V2BadRequest'
+        '402':
+          $ref: '#/components/responses/HostedFundsFailure'
         '403':
           $ref: '#/components/responses/ProxyForbidden'
         '404':
@@ -1094,8 +1106,10 @@ paths:
           $ref: '#/components/responses/MediaOperation'
         '400':
           $ref: '#/components/responses/MediaOperationFailure'
+        '402':
+          $ref: '#/components/responses/MediaOperationFailure'
         '403':
-          $ref: '#/components/responses/ProxyForbidden'
+          $ref: '#/components/responses/MediaOperationForbidden'
         '409':
           $ref: '#/components/responses/MediaOperationFailure'
         '410':
@@ -1105,6 +1119,8 @@ paths:
         '429':
           $ref: '#/components/responses/MediaOperationFailure'
         '500':
+          $ref: '#/components/responses/MediaOperationFailure'
+        '503':
           $ref: '#/components/responses/MediaOperationFailure'
   /model/v1/operations/{operation_id}:
     get:
@@ -1535,6 +1551,8 @@ paths:
           $ref: '#/components/responses/DictationSuccess'
         '400':
           $ref: '#/components/responses/ProxyBadRequest'
+        '402':
+          $ref: '#/components/responses/HostedFundsFailure'
         '403':
           $ref: '#/components/responses/ProxyForbidden'
         '409':
@@ -2018,6 +2036,351 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RequestChargeSummary'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}/reservations/{request_id}:
+    get:
+      operationId: getFundsReservation
+      summary: Read a reservation and its exact authorization
+      description: Requires the account owner or an operator. The revision and exact maximum support an audited financial decision.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+        - $ref: '#/components/parameters/JournalRequestID'
+      responses:
+        '200':
+          description: The current reservation and immutable authorization.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostedFundsReservationDetail'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-resolution:
+    parameters:
+      - $ref: '#/components/parameters/BillingAccountID'
+      - $ref: '#/components/parameters/JournalRequestID'
+    get:
+      operationId: getFundsResolution
+      summary: Read an audited financial resolution
+      description: The account owner or an operator can read this receipt. Private operator identity and evidence references remain in the audit record.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      responses:
+        '200':
+          description: The retained financial decision. Provider evidence remains unchanged.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostedFundsResolution'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+    put:
+      operationId: createFundsResolution
+      summary: Record an operator decision for an uncertain hold
+      description: Requires an operator session and the current reservation revision. Authorization, known pricing, and prior credits bound the final net charge. An identical repeat has one financial effect.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision, customer_charge, reason, evidence_reference]
+              properties:
+                revision: {type: integer, minimum: 1}
+                customer_charge:
+                  $ref: '#/components/schemas/ExactMoney'
+                  description: Final net USD charge after prior credits. Zero waives the charge.
+                reason: {type: string, pattern: '^[a-z][a-z0-9_]{0,63}$'}
+                evidence_reference: {type: string, minLength: 1, maxLength: 256}
+      responses:
+        '200':
+          description: The immutable decision and settled amount.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostedFundsResolution'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '409':
+          $ref: '#/components/responses/HostedResourceError'
+        '415':
+          $ref: '#/components/responses/ManagementUnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-credits/{credit_id}:
+    parameters:
+      - $ref: '#/components/parameters/BillingAccountID'
+      - $ref: '#/components/parameters/JournalRequestID'
+      - name: credit_id
+        in: path
+        required: true
+        schema: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'}
+    get:
+      operationId: getFundsCredit
+      summary: Read an audited request credit
+      description: The account owner or an operator can read this receipt. Private operator identity and evidence references remain in the audit record.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      responses:
+        '200':
+          description: The retained credit. Provider evidence remains unchanged.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostedFundsCredit'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+    put:
+      operationId: createFundsCredit
+      summary: Record an operator credit for a settled request
+      description: Requires an operator session. Total credits cannot exceed the settled request charge. An identical repeat has one financial effect.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [credit, reason, evidence_reference]
+              properties:
+                credit:
+                  $ref: '#/components/schemas/ExactMoney'
+                  description: Positive exact USD credit. The account remainder controls the whole cents returned.
+                reason: {type: string, pattern: '^[a-z][a-z0-9_]{0,63}$'}
+                evidence_reference: {type: string, minLength: 1, maxLength: 256}
+      responses:
+        '200':
+          description: The immutable credit and returned whole cents.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostedFundsCredit'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '409':
+          $ref: '#/components/responses/HostedResourceError'
+        '415':
+          $ref: '#/components/responses/ManagementUnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}/tenant-limits/{tenant_id}:
+    parameters:
+      - $ref: '#/components/parameters/BillingAccountID'
+      - name: tenant_id
+        in: path
+        required: true
+        schema: {type: string, minLength: 1}
+    get:
+      operationId: getTenantFundsLimit
+      summary: Read the cumulative spending limit of an owned tenant
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      responses:
+        '200':
+          description: Exact net usage and active reservations under the optional limit. This read creates no records.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostedTenantFundsLimit'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+    put:
+      operationId: setTenantFundsLimit
+      summary: Set the cumulative spending limit of an owned tenant
+      description: The revision prevents concurrent replacement. A repeated identical last change returns the current resource. Existing reservations remain authorized.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [limit_cents, revision]
+              properties:
+                limit_cents:
+                  type: [string, 'null']
+                  pattern: '^(0|[1-9][0-9]*)$'
+                  description: Cumulative USD limit in cents, through the maximum signed 64-bit integer. Null removes the tenant limit.
+                revision: {type: integer, minimum: 0}
+      responses:
+        '200':
+          description: The retained limit and current usage.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostedTenantFundsLimit'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '409':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}/balance:
+    get:
+      operationId: getFundsBalance
+      summary: Read the funds of an owned billing account
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+      responses:
+        '200':
+          description: Funds from one database snapshot. This read creates no financial records.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostedFundsBalance'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}/reservations:
+    get:
+      operationId: listFundsReservations
+      summary: Read reservations of an owned billing account
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+        - $ref: '#/components/parameters/HostedPageLimit'
+        - name: cursor
+          in: query
+          schema: {type: string, pattern: '^request-[a-f0-9]{32}$'}
+      responses:
+        '200':
+          description: Reservations in ascending identifier order. The cursor is the last identifier of a nonfinal page.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FundsReservationPage'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}/ledger-entries:
+    get:
+      operationId: listFundsEntries
+      summary: Read Ledger entries of an owned billing account
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+        - $ref: '#/components/parameters/HostedPageLimit'
+        - name: cursor
+          in: query
+          schema: {type: string, minLength: 1, maxLength: 128}
+      responses:
+        '200':
+          description: Entries in ascending identifier order. The cursor is the last identifier of a nonfinal page.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FundsEntryPage'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
         '401':
           $ref: '#/components/responses/ManagementUnauthorized'
         '404':
@@ -3851,6 +4214,16 @@ components:
             oneOf:
               - $ref: '#/components/schemas/ProxyErrorEnvelope'
               - $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
+    MediaOperationForbidden:
+      description: The tenant key is unknown or the financial account is suspended.
+      content:
+        text/plain:
+          schema:
+            type: string
+            const: unknown client key
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MediaOperationErrorEnvelope'
     ProxyForbidden:
       description: The tenant client key is absent or unknown, or hosted admission is denied.
       content:
@@ -4173,12 +4546,21 @@ components:
             oneOf:
               - $ref: '#/components/schemas/ProviderErrorEnvelope'
               - $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
+    HostedFundsFailure:
+      description: The available funds cannot cover the accepted maximum cost.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProviderErrorEnvelope'
     ProxyUnavailable:
-      description: The bounded request queue is full.
+      description: The request queue is full or financial admission is unavailable.
       headers:
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: '#/components/headers/ResolvedRequestTimeout'
       content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProviderErrorEnvelope'
         text/plain:
           schema:
             type: string
@@ -6245,6 +6627,152 @@ components:
         unresolved_dimensions:
           type: array
           items: {type: string}
+    FundsReservationPage:
+      type: object
+      additionalProperties: false
+      required: [reservations, next_cursor]
+      properties:
+        reservations:
+          type: array
+          items:
+            $ref: '#/components/schemas/HostedFundsReservation'
+        next_cursor: {type: string}
+    HostedFundsReservation:
+      type: object
+      additionalProperties: false
+      required: [id, currency, maximum_cents, state, revision, created_at, updated_at]
+      properties:
+        id: {type: string, pattern: '^request-[a-f0-9]{32}$', description: The request identifier also identifies its reservation.}
+        currency: {type: string, enum: [USD]}
+        maximum_cents: {type: string, pattern: '^(0|[1-9][0-9]*)$'}
+        state: {type: string, enum: [held, settled, released, reconciliation_required]}
+        revision: {type: integer, minimum: 1}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    FundsEntryPage:
+      type: object
+      additionalProperties: false
+      required: [entries, next_cursor]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/HostedFundsEntry'
+        next_cursor: {type: string}
+    HostedFundsEntry:
+      type: object
+      additionalProperties: false
+      required: [id, currency, type, amount_cents, reservation_id, refund_of_entry_id, created_at]
+      properties:
+        id: {type: string}
+        currency: {type: string, enum: [USD]}
+        type: {type: string, enum: [grant, hold, reverse_hold, spend, refund]}
+        amount_cents: {type: string, pattern: '^(0|-?[1-9][0-9]*)$'}
+        reservation_id: {type: [string, 'null']}
+        refund_of_entry_id: {type: [string, 'null']}
+        created_at: {type: string, format: date-time}
+    HostedFundsReservationDetail:
+      type: object
+      additionalProperties: false
+      required: [id, currency, maximum_cents, state, revision, created_at, updated_at, authorized_maximum, resolution_charge_limit, known_provider_cost, known_platform_exposure, provider_cost_complete]
+      properties:
+        id: {type: string, pattern: '^request-[a-f0-9]{32}$'}
+        currency: {type: string, enum: [USD]}
+        maximum_cents: {type: string, pattern: '^(0|[1-9][0-9]*)$'}
+        state: {type: string, enum: [held, settled, released, reconciliation_required]}
+        revision: {type: integer, minimum: 1}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        authorized_maximum:
+          $ref: '#/components/schemas/ExactMoney'
+        resolution_charge_limit:
+          $ref: '#/components/schemas/ExactMoney'
+          description: Upper limit for an operator charge after known pricing and prior credits. The decision also requires a current reservation revision.
+        known_provider_cost:
+          $ref: '#/components/schemas/ExactMoney'
+          description: Sum of retained provider costs from fully rated attempts. Missing costs are excluded, not treated as known zero costs.
+        known_platform_exposure:
+          $ref: '#/components/schemas/ExactMoney'
+          description: Known provider costs above the exact request authorization. This lower bound does not change the customer charge.
+        provider_cost_complete:
+          type: boolean
+          description: True when execution is terminal and all attempts have retained known costs.
+    HostedFundsResolution:
+      type: object
+      additionalProperties: false
+      required: [request_id, currency, customer_charge, settled_cents, reason, created_at]
+      properties:
+        request_id: {type: string, pattern: '^request-[a-f0-9]{32}$'}
+        currency: {type: string, enum: [USD]}
+        customer_charge:
+          $ref: '#/components/schemas/ExactMoney'
+        settled_cents: {type: string, pattern: '^(0|[1-9][0-9]*)$'}
+        reason: {type: string, pattern: '^[a-z][a-z0-9_]{0,63}$'}
+        created_at: {type: string, format: date-time}
+    HostedFundsCredit:
+      type: object
+      additionalProperties: false
+      required: [id, request_id, currency, credit, credited_cents, reason, created_at]
+      properties:
+        id: {type: string, minLength: 1, maxLength: 128}
+        request_id: {type: string, pattern: '^request-[a-f0-9]{32}$'}
+        currency: {type: string, enum: [USD]}
+        credit:
+          $ref: '#/components/schemas/ExactMoney'
+        credited_cents: {type: string, pattern: '^(0|[1-9][0-9]*)$'}
+        reason: {type: string, pattern: '^[a-z][a-z0-9_]{0,63}$'}
+        created_at: {type: string, format: date-time}
+    HostedTenantFundsLimit:
+      type: object
+      additionalProperties: false
+      required: [tenant_id, currency, limit_cents, remaining_cents, reserved_cents, spent, revision]
+      properties:
+        tenant_id: {type: string}
+        currency: {type: string, enum: [USD]}
+        limit_cents: {type: [string, 'null'], pattern: '^(0|[1-9][0-9]*)$'}
+        remaining_cents:
+          type: [string, 'null']
+          pattern: '^(0|[1-9][0-9]*)$'
+          description: Whole cents permitted for new reservations, after net usage and active holds. Null means no tenant limit.
+        reserved_cents: {type: string, pattern: '^(0|[1-9][0-9]*)$'}
+        spent:
+          $ref: '#/components/schemas/ExactMoney'
+          description: Cumulative net settled usage in USD, including fractional cents and customer credits.
+        revision: {type: integer, minimum: 0}
+    HostedFundsBalance:
+      type: object
+      additionalProperties: false
+      required: [currency, state, posted_cents, available_cents, reserved_cents, spent_cents, pending_cents, unsettled_fraction]
+      properties:
+        currency:
+          type: string
+          enum: [USD]
+        state:
+          type: string
+          enum: [active, suspended, reconciliation_required]
+        posted_cents:
+          type: string
+          pattern: '^-?(0|[1-9][0-9]*)$'
+          description: Net posted credits and debits, before active reservations.
+        available_cents:
+          type: string
+          pattern: '^-?(0|[1-9][0-9]*)$'
+          description: Posted cents minus reserved cents.
+        reserved_cents:
+          type: string
+          pattern: '^(0|[1-9][0-9]*)$'
+          description: Total active Ledger holds, including pending reconciliation.
+        spent_cents:
+          type: string
+          pattern: '^(0|[1-9][0-9]*)$'
+          description: Cumulative settled usage debits before compensating credits.
+        pending_cents:
+          type: string
+          pattern: '^(0|[1-9][0-9]*)$'
+          description: Reserved cents awaiting financial reconciliation. This amount is part of reserved cents.
+        unsettled_fraction:
+          $ref: '#/components/schemas/ExactMoney'
+          description: Accumulated usage charge in USD below one cent, retained for later settlement.
     HostedCharge:
       type: object
       additionalProperties: false
@@ -7594,7 +8122,7 @@ components:
           properties:
             code:
               type: string
-              enum: [media_operation_invalid, media_operation_unavailable, media_operation_not_found, media_operation_intent_conflict, media_operation_capacity_exceeded, media_operation_store_error]
+              enum: [media_operation_invalid, media_operation_unavailable, media_operation_not_found, media_operation_intent_conflict, media_operation_capacity_exceeded, media_operation_store_error, insufficient_funds, financial_admission_unavailable, hosted_authority_denied]
     MediaOperationExpired:
       type: object
       additionalProperties: false
@@ -8187,6 +8715,8 @@ components:
             code:
               type: string
               enum:
+                - insufficient_funds
+                - financial_admission_unavailable
                 - hosted_authority_denied
                 - hosted_result_expired
                 - usage_journal_conflict
@@ -8421,7 +8951,7 @@ components:
           pattern: '^case-[a-f0-9]{32}$'
         reason:
           type: string
-          enum: [usage_unknown, dispatch_outcome_unknown, execution_outcome_unknown, execution_result_unknown]
+          enum: [usage_unknown, dispatch_outcome_unknown, execution_outcome_unknown, execution_result_unknown, usage_unresolved, policy_unresolved, limit_unresolved, platform_exposure]
         state:
           type: string
           enum: [open, resolved]

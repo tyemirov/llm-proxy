@@ -92,6 +92,10 @@ const (
 	ErrorCodeUsageJournalClaimLost = "usage_journal_claim_lost"
 	// ErrorCodeUsageJournalUnavailable identifies a failed durable usage write.
 	ErrorCodeUsageJournalUnavailable = "usage_journal_unavailable"
+	// ErrorCodeInsufficientFunds identifies a request rejected before paid dispatch.
+	ErrorCodeInsufficientFunds = "insufficient_funds"
+	// ErrorCodeFinancialAdmissionUnavailable identifies an unavailable financial transaction.
+	ErrorCodeFinancialAdmissionUnavailable = "financial_admission_unavailable"
 	// ErrorCodeStructuredRequestNotFound identifies a missing tenant-bound durable request.
 	ErrorCodeStructuredRequestNotFound = "structured_request_not_found"
 	// ErrorCodeStructuredRequestIntentConflict identifies reuse of one key for a different request intent.

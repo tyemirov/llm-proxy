@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="1d4fc3aaf9c3cca944f10727aa43d09791bf17a7280f3945d28d98428ca9d721">
+    <meta name="openapi-source-sha256" content="60f08cdff3cf96e1cc013b6936ed28e1dfb6885c16474ce02d556290d729fd39">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="1d4fc3aaf9c3cca944f10727aa43d09791bf17a7280f3945d28d98428ca9d721">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="60f08cdff3cf96e1cc013b6936ed28e1dfb6885c16474ce02d556290d729fd39">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>1d4fc3aaf9c3cca944f10727aa43d09791bf17a7280f3945d28d98428ca9d721</code></span>
+          <span>Source SHA-256 <code>60f08cdff3cf96e1cc013b6936ed28e1dfb6885c16474ce02d556290d729fd39</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -280,6 +280,8 @@ paths:
       responses:
         &#39;202&#39;:
           $ref: &#39;#/components/responses/StructuredRequestPending&#39;
+        &#39;402&#39;:
+          $ref: &#39;#/components/responses/HostedClientFailure&#39;
         &#39;403&#39;:
           $ref: &#39;#/components/responses/HostedClientFailure&#39;
         &#39;409&#39;:
@@ -478,6 +480,8 @@ paths:
       responses:
         &#39;202&#39;:
           $ref: &#39;#/components/responses/StructuredRequestPending&#39;
+        &#39;402&#39;:
+          $ref: &#39;#/components/responses/HostedClientFailure&#39;
         &#39;403&#39;:
           $ref: &#39;#/components/responses/HostedClientFailure&#39;
         &#39;409&#39;:
@@ -676,6 +680,8 @@ paths:
       responses:
         &#39;202&#39;:
           $ref: &#39;#/components/responses/StructuredRequestPending&#39;
+        &#39;402&#39;:
+          $ref: &#39;#/components/responses/HostedClientFailure&#39;
         &#39;403&#39;:
           $ref: &#39;#/components/responses/HostedClientFailure&#39;
         &#39;409&#39;:
@@ -933,6 +939,8 @@ paths:
           $ref: &#39;#/components/responses/TextSuccess&#39;
         &#39;400&#39;:
           $ref: &#39;#/components/responses/ProxyBadRequest&#39;
+        &#39;402&#39;:
+          $ref: &#39;#/components/responses/HostedFundsFailure&#39;
         &#39;403&#39;:
           $ref: &#39;#/components/responses/ProxyForbidden&#39;
         &#39;409&#39;:
@@ -974,6 +982,8 @@ paths:
           $ref: &#39;#/components/responses/TextSuccess&#39;
         &#39;400&#39;:
           $ref: &#39;#/components/responses/ProxyBadRequest&#39;
+        &#39;402&#39;:
+          $ref: &#39;#/components/responses/HostedFundsFailure&#39;
         &#39;403&#39;:
           $ref: &#39;#/components/responses/ProxyForbidden&#39;
         &#39;409&#39;:
@@ -1032,6 +1042,8 @@ paths:
           $ref: &#39;#/components/responses/V2StructuredRequestPending&#39;
         &#39;400&#39;:
           $ref: &#39;#/components/responses/V2BadRequest&#39;
+        &#39;402&#39;:
+          $ref: &#39;#/components/responses/HostedFundsFailure&#39;
         &#39;403&#39;:
           $ref: &#39;#/components/responses/ProxyForbidden&#39;
         &#39;404&#39;:
@@ -1157,8 +1169,10 @@ paths:
           $ref: &#39;#/components/responses/MediaOperation&#39;
         &#39;400&#39;:
           $ref: &#39;#/components/responses/MediaOperationFailure&#39;
+        &#39;402&#39;:
+          $ref: &#39;#/components/responses/MediaOperationFailure&#39;
         &#39;403&#39;:
-          $ref: &#39;#/components/responses/ProxyForbidden&#39;
+          $ref: &#39;#/components/responses/MediaOperationForbidden&#39;
         &#39;409&#39;:
           $ref: &#39;#/components/responses/MediaOperationFailure&#39;
         &#39;410&#39;:
@@ -1168,6 +1182,8 @@ paths:
         &#39;429&#39;:
           $ref: &#39;#/components/responses/MediaOperationFailure&#39;
         &#39;500&#39;:
+          $ref: &#39;#/components/responses/MediaOperationFailure&#39;
+        &#39;503&#39;:
           $ref: &#39;#/components/responses/MediaOperationFailure&#39;
   /model/v1/operations/{operation_id}:
     get:
@@ -1598,6 +1614,8 @@ paths:
           $ref: &#39;#/components/responses/DictationSuccess&#39;
         &#39;400&#39;:
           $ref: &#39;#/components/responses/ProxyBadRequest&#39;
+        &#39;402&#39;:
+          $ref: &#39;#/components/responses/HostedFundsFailure&#39;
         &#39;403&#39;:
           $ref: &#39;#/components/responses/ProxyForbidden&#39;
         &#39;409&#39;:
@@ -2081,6 +2099,351 @@ paths:
             application/json:
               schema:
                 $ref: &#39;#/components/schemas/RequestChargeSummary&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}/reservations/{request_id}:
+    get:
+      operationId: getFundsReservation
+      summary: Read a reservation and its exact authorization
+      description: Requires the account owner or an operator. The revision and exact maximum support an audited financial decision.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+        - $ref: &#39;#/components/parameters/JournalRequestID&#39;
+      responses:
+        &#39;200&#39;:
+          description: The current reservation and immutable authorization.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/HostedFundsReservationDetail&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-resolution:
+    parameters:
+      - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+      - $ref: &#39;#/components/parameters/JournalRequestID&#39;
+    get:
+      operationId: getFundsResolution
+      summary: Read an audited financial resolution
+      description: The account owner or an operator can read this receipt. Private operator identity and evidence references remain in the audit record.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      responses:
+        &#39;200&#39;:
+          description: The retained financial decision. Provider evidence remains unchanged.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/HostedFundsResolution&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+    put:
+      operationId: createFundsResolution
+      summary: Record an operator decision for an uncertain hold
+      description: Requires an operator session and the current reservation revision. Authorization, known pricing, and prior credits bound the final net charge. An identical repeat has one financial effect.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision, customer_charge, reason, evidence_reference]
+              properties:
+                revision: {type: integer, minimum: 1}
+                customer_charge:
+                  $ref: &#39;#/components/schemas/ExactMoney&#39;
+                  description: Final net USD charge after prior credits. Zero waives the charge.
+                reason: {type: string, pattern: &#39;^[a-z][a-z0-9_]{0,63}$&#39;}
+                evidence_reference: {type: string, minLength: 1, maxLength: 256}
+      responses:
+        &#39;200&#39;:
+          description: The immutable decision and settled amount.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/HostedFundsResolution&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-credits/{credit_id}:
+    parameters:
+      - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+      - $ref: &#39;#/components/parameters/JournalRequestID&#39;
+      - name: credit_id
+        in: path
+        required: true
+        schema: {type: string, pattern: &#39;^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$&#39;}
+    get:
+      operationId: getFundsCredit
+      summary: Read an audited request credit
+      description: The account owner or an operator can read this receipt. Private operator identity and evidence references remain in the audit record.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      responses:
+        &#39;200&#39;:
+          description: The retained credit. Provider evidence remains unchanged.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/HostedFundsCredit&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+    put:
+      operationId: createFundsCredit
+      summary: Record an operator credit for a settled request
+      description: Requires an operator session. Total credits cannot exceed the settled request charge. An identical repeat has one financial effect.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [credit, reason, evidence_reference]
+              properties:
+                credit:
+                  $ref: &#39;#/components/schemas/ExactMoney&#39;
+                  description: Positive exact USD credit. The account remainder controls the whole cents returned.
+                reason: {type: string, pattern: &#39;^[a-z][a-z0-9_]{0,63}$&#39;}
+                evidence_reference: {type: string, minLength: 1, maxLength: 256}
+      responses:
+        &#39;200&#39;:
+          description: The immutable credit and returned whole cents.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/HostedFundsCredit&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}/tenant-limits/{tenant_id}:
+    parameters:
+      - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+      - name: tenant_id
+        in: path
+        required: true
+        schema: {type: string, minLength: 1}
+    get:
+      operationId: getTenantFundsLimit
+      summary: Read the cumulative spending limit of an owned tenant
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      responses:
+        &#39;200&#39;:
+          description: Exact net usage and active reservations under the optional limit. This read creates no records.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/HostedTenantFundsLimit&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+    put:
+      operationId: setTenantFundsLimit
+      summary: Set the cumulative spending limit of an owned tenant
+      description: The revision prevents concurrent replacement. A repeated identical last change returns the current resource. Existing reservations remain authorized.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [limit_cents, revision]
+              properties:
+                limit_cents:
+                  type: [string, &#39;null&#39;]
+                  pattern: &#39;^(0|[1-9][0-9]*)$&#39;
+                  description: Cumulative USD limit in cents, through the maximum signed 64-bit integer. Null removes the tenant limit.
+                revision: {type: integer, minimum: 0}
+      responses:
+        &#39;200&#39;:
+          description: The retained limit and current usage.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/HostedTenantFundsLimit&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}/balance:
+    get:
+      operationId: getFundsBalance
+      summary: Read the funds of an owned billing account
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+      responses:
+        &#39;200&#39;:
+          description: Funds from one database snapshot. This read creates no financial records.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/HostedFundsBalance&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}/reservations:
+    get:
+      operationId: listFundsReservations
+      summary: Read reservations of an owned billing account
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+        - $ref: &#39;#/components/parameters/HostedPageLimit&#39;
+        - name: cursor
+          in: query
+          schema: {type: string, pattern: &#39;^request-[a-f0-9]{32}$&#39;}
+      responses:
+        &#39;200&#39;:
+          description: Reservations in ascending identifier order. The cursor is the last identifier of a nonfinal page.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FundsReservationPage&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}/ledger-entries:
+    get:
+      operationId: listFundsEntries
+      summary: Read Ledger entries of an owned billing account
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+        - $ref: &#39;#/components/parameters/HostedPageLimit&#39;
+        - name: cursor
+          in: query
+          schema: {type: string, minLength: 1, maxLength: 128}
+      responses:
+        &#39;200&#39;:
+          description: Entries in ascending identifier order. The cursor is the last identifier of a nonfinal page.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FundsEntryPage&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
         &#39;401&#39;:
           $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
         &#39;404&#39;:
@@ -3914,6 +4277,16 @@ components:
             oneOf:
               - $ref: &#39;#/components/schemas/ProxyErrorEnvelope&#39;
               - $ref: &#39;#/components/schemas/StructuredRequestErrorEnvelope&#39;
+    MediaOperationForbidden:
+      description: The tenant key is unknown or the financial account is suspended.
+      content:
+        text/plain:
+          schema:
+            type: string
+            const: unknown client key
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/MediaOperationErrorEnvelope&#39;
     ProxyForbidden:
       description: The tenant client key is absent or unknown, or hosted admission is denied.
       content:
@@ -4236,12 +4609,21 @@ components:
             oneOf:
               - $ref: &#39;#/components/schemas/ProviderErrorEnvelope&#39;
               - $ref: &#39;#/components/schemas/StructuredRequestErrorEnvelope&#39;
+    HostedFundsFailure:
+      description: The available funds cannot cover the accepted maximum cost.
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/ProviderErrorEnvelope&#39;
     ProxyUnavailable:
-      description: The bounded request queue is full.
+      description: The request queue is full or financial admission is unavailable.
       headers:
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: &#39;#/components/headers/ResolvedRequestTimeout&#39;
       content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/ProviderErrorEnvelope&#39;
         text/plain:
           schema:
             type: string
@@ -6308,6 +6690,152 @@ components:
         unresolved_dimensions:
           type: array
           items: {type: string}
+    FundsReservationPage:
+      type: object
+      additionalProperties: false
+      required: [reservations, next_cursor]
+      properties:
+        reservations:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/HostedFundsReservation&#39;
+        next_cursor: {type: string}
+    HostedFundsReservation:
+      type: object
+      additionalProperties: false
+      required: [id, currency, maximum_cents, state, revision, created_at, updated_at]
+      properties:
+        id: {type: string, pattern: &#39;^request-[a-f0-9]{32}$&#39;, description: The request identifier also identifies its reservation.}
+        currency: {type: string, enum: [USD]}
+        maximum_cents: {type: string, pattern: &#39;^(0|[1-9][0-9]*)$&#39;}
+        state: {type: string, enum: [held, settled, released, reconciliation_required]}
+        revision: {type: integer, minimum: 1}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    FundsEntryPage:
+      type: object
+      additionalProperties: false
+      required: [entries, next_cursor]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/HostedFundsEntry&#39;
+        next_cursor: {type: string}
+    HostedFundsEntry:
+      type: object
+      additionalProperties: false
+      required: [id, currency, type, amount_cents, reservation_id, refund_of_entry_id, created_at]
+      properties:
+        id: {type: string}
+        currency: {type: string, enum: [USD]}
+        type: {type: string, enum: [grant, hold, reverse_hold, spend, refund]}
+        amount_cents: {type: string, pattern: &#39;^(0|-?[1-9][0-9]*)$&#39;}
+        reservation_id: {type: [string, &#39;null&#39;]}
+        refund_of_entry_id: {type: [string, &#39;null&#39;]}
+        created_at: {type: string, format: date-time}
+    HostedFundsReservationDetail:
+      type: object
+      additionalProperties: false
+      required: [id, currency, maximum_cents, state, revision, created_at, updated_at, authorized_maximum, resolution_charge_limit, known_provider_cost, known_platform_exposure, provider_cost_complete]
+      properties:
+        id: {type: string, pattern: &#39;^request-[a-f0-9]{32}$&#39;}
+        currency: {type: string, enum: [USD]}
+        maximum_cents: {type: string, pattern: &#39;^(0|[1-9][0-9]*)$&#39;}
+        state: {type: string, enum: [held, settled, released, reconciliation_required]}
+        revision: {type: integer, minimum: 1}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        authorized_maximum:
+          $ref: &#39;#/components/schemas/ExactMoney&#39;
+        resolution_charge_limit:
+          $ref: &#39;#/components/schemas/ExactMoney&#39;
+          description: Upper limit for an operator charge after known pricing and prior credits. The decision also requires a current reservation revision.
+        known_provider_cost:
+          $ref: &#39;#/components/schemas/ExactMoney&#39;
+          description: Sum of retained provider costs from fully rated attempts. Missing costs are excluded, not treated as known zero costs.
+        known_platform_exposure:
+          $ref: &#39;#/components/schemas/ExactMoney&#39;
+          description: Known provider costs above the exact request authorization. This lower bound does not change the customer charge.
+        provider_cost_complete:
+          type: boolean
+          description: True when execution is terminal and all attempts have retained known costs.
+    HostedFundsResolution:
+      type: object
+      additionalProperties: false
+      required: [request_id, currency, customer_charge, settled_cents, reason, created_at]
+      properties:
+        request_id: {type: string, pattern: &#39;^request-[a-f0-9]{32}$&#39;}
+        currency: {type: string, enum: [USD]}
+        customer_charge:
+          $ref: &#39;#/components/schemas/ExactMoney&#39;
+        settled_cents: {type: string, pattern: &#39;^(0|[1-9][0-9]*)$&#39;}
+        reason: {type: string, pattern: &#39;^[a-z][a-z0-9_]{0,63}$&#39;}
+        created_at: {type: string, format: date-time}
+    HostedFundsCredit:
+      type: object
+      additionalProperties: false
+      required: [id, request_id, currency, credit, credited_cents, reason, created_at]
+      properties:
+        id: {type: string, minLength: 1, maxLength: 128}
+        request_id: {type: string, pattern: &#39;^request-[a-f0-9]{32}$&#39;}
+        currency: {type: string, enum: [USD]}
+        credit:
+          $ref: &#39;#/components/schemas/ExactMoney&#39;
+        credited_cents: {type: string, pattern: &#39;^(0|[1-9][0-9]*)$&#39;}
+        reason: {type: string, pattern: &#39;^[a-z][a-z0-9_]{0,63}$&#39;}
+        created_at: {type: string, format: date-time}
+    HostedTenantFundsLimit:
+      type: object
+      additionalProperties: false
+      required: [tenant_id, currency, limit_cents, remaining_cents, reserved_cents, spent, revision]
+      properties:
+        tenant_id: {type: string}
+        currency: {type: string, enum: [USD]}
+        limit_cents: {type: [string, &#39;null&#39;], pattern: &#39;^(0|[1-9][0-9]*)$&#39;}
+        remaining_cents:
+          type: [string, &#39;null&#39;]
+          pattern: &#39;^(0|[1-9][0-9]*)$&#39;
+          description: Whole cents permitted for new reservations, after net usage and active holds. Null means no tenant limit.
+        reserved_cents: {type: string, pattern: &#39;^(0|[1-9][0-9]*)$&#39;}
+        spent:
+          $ref: &#39;#/components/schemas/ExactMoney&#39;
+          description: Cumulative net settled usage in USD, including fractional cents and customer credits.
+        revision: {type: integer, minimum: 0}
+    HostedFundsBalance:
+      type: object
+      additionalProperties: false
+      required: [currency, state, posted_cents, available_cents, reserved_cents, spent_cents, pending_cents, unsettled_fraction]
+      properties:
+        currency:
+          type: string
+          enum: [USD]
+        state:
+          type: string
+          enum: [active, suspended, reconciliation_required]
+        posted_cents:
+          type: string
+          pattern: &#39;^-?(0|[1-9][0-9]*)$&#39;
+          description: Net posted credits and debits, before active reservations.
+        available_cents:
+          type: string
+          pattern: &#39;^-?(0|[1-9][0-9]*)$&#39;
+          description: Posted cents minus reserved cents.
+        reserved_cents:
+          type: string
+          pattern: &#39;^(0|[1-9][0-9]*)$&#39;
+          description: Total active Ledger holds, including pending reconciliation.
+        spent_cents:
+          type: string
+          pattern: &#39;^(0|[1-9][0-9]*)$&#39;
+          description: Cumulative settled usage debits before compensating credits.
+        pending_cents:
+          type: string
+          pattern: &#39;^(0|[1-9][0-9]*)$&#39;
+          description: Reserved cents awaiting financial reconciliation. This amount is part of reserved cents.
+        unsettled_fraction:
+          $ref: &#39;#/components/schemas/ExactMoney&#39;
+          description: Accumulated usage charge in USD below one cent, retained for later settlement.
     HostedCharge:
       type: object
       additionalProperties: false
@@ -7657,7 +8185,7 @@ components:
           properties:
             code:
               type: string
-              enum: [media_operation_invalid, media_operation_unavailable, media_operation_not_found, media_operation_intent_conflict, media_operation_capacity_exceeded, media_operation_store_error]
+              enum: [media_operation_invalid, media_operation_unavailable, media_operation_not_found, media_operation_intent_conflict, media_operation_capacity_exceeded, media_operation_store_error, insufficient_funds, financial_admission_unavailable, hosted_authority_denied]
     MediaOperationExpired:
       type: object
       additionalProperties: false
@@ -8250,6 +8778,8 @@ components:
             code:
               type: string
               enum:
+                - insufficient_funds
+                - financial_admission_unavailable
                 - hosted_authority_denied
                 - hosted_result_expired
                 - usage_journal_conflict
@@ -8484,7 +9014,7 @@ components:
           pattern: &#39;^case-[a-f0-9]{32}$&#39;
         reason:
           type: string
-          enum: [usage_unknown, dispatch_outcome_unknown, execution_outcome_unknown, execution_result_unknown]
+          enum: [usage_unknown, dispatch_outcome_unknown, execution_outcome_unknown, execution_result_unknown, usage_unresolved, policy_unresolved, limit_unresolved, platform_exposure]
         state:
           type: string
           enum: [open, resolved]
@@ -10016,15 +10546,25 @@ components:
 <a href="#operation-listBillingAccounts"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts</code><span>Read the authenticated owner&#39;s billing account</span></a>
 <a href="#operation-createBillingAccount"><span class="api-method api-method-post">POST</span><code>/api/management/billing-accounts</code><span>Create one USD billing account for the authenticated owner</span></a>
 <a href="#operation-getBillingAccount"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}</code><span>Read an owned billing account</span></a>
+<a href="#operation-getFundsBalance"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/balance</code><span>Read the funds of an owned billing account</span></a>
 <a href="#operation-listCharges"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/charges</code><span>Read charges for an owned billing account</span></a>
 <a href="#operation-getCharge"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/charges/{charge_id}</code><span>Read one charge from an owned billing account</span></a>
+<a href="#operation-listFundsEntries"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/ledger-entries</code><span>Read Ledger entries of an owned billing account</span></a>
 <a href="#operation-getPriceSnapshot"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/price-snapshots/{price_snapshot_id}</code><span>Read the prices retained for an accepted request</span></a>
 <a href="#operation-listJournalRequests"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests</code><span>Read the usage journal for an owned billing account</span></a>
 <a href="#operation-getJournalRequest"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}</code><span>Read one request from an owned usage journal</span></a>
 <a href="#operation-listJournalAttempts"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/attempts</code><span>Read attempts for an owned journal request</span></a>
 <a href="#operation-getRequestChargeSummary"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/charge-summary</code><span>Read the charge totals for an owned request</span></a>
+<a href="#operation-getFundsCredit"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-credits/{credit_id}</code><span>Read an audited request credit</span></a>
+<a href="#operation-createFundsCredit"><span class="api-method api-method-put">PUT</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-credits/{credit_id}</code><span>Record an operator credit for a settled request</span></a>
+<a href="#operation-getFundsResolution"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-resolution</code><span>Read an audited financial resolution</span></a>
+<a href="#operation-createFundsResolution"><span class="api-method api-method-put">PUT</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-resolution</code><span>Record an operator decision for an uncertain hold</span></a>
 <a href="#operation-listJournalObservations"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/observations</code><span>Read usage observations for an owned journal request</span></a>
 <a href="#operation-listJournalReconciliationCases"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/reconciliation-cases</code><span>Read reconciliation cases for an owned journal request</span></a>
+<a href="#operation-listFundsReservations"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/reservations</code><span>Read reservations of an owned billing account</span></a>
+<a href="#operation-getFundsReservation"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/reservations/{request_id}</code><span>Read a reservation and its exact authorization</span></a>
+<a href="#operation-getTenantFundsLimit"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/tenant-limits/{tenant_id}</code><span>Read the cumulative spending limit of an owned tenant</span></a>
+<a href="#operation-setTenantFundsLimit"><span class="api-method api-method-put">PUT</span><code>/api/management/billing-accounts/{billing_account_id}/tenant-limits/{tenant_id}</code><span>Set the cumulative spending limit of an owned tenant</span></a>
 <a href="#operation-listManagementConnections"><span class="api-method api-method-get">GET</span><code>/api/management/connections</code><span>List account connections and provider definitions</span></a>
 <a href="#operation-createManagementConnection"><span class="api-method api-method-post">POST</span><code>/api/management/connections</code><span>Verify credentials and create an account connection</span></a>
 <a href="#operation-deleteManagementConnection"><span class="api-method api-method-delete">DELETE</span><code>/api/management/connections/{connection_id}</code><span>Delete an unassigned connection</span></a>
@@ -10123,13 +10663,14 @@ components:
                 <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. Each provider offering publishes one validated wire contract and an execution lifecycle for text-only requests. A media-capable offering also publishes media_execution_lifecycle for requests that contain image or audio input. The proxy does not infer a lifecycle from an endpoint or an upstream identifier. The proxy observes queued and in_progress states only for a pollable lifecycle. Each public operation remains blocking. Gemini media requests use synchronous completion and do not poll an Interaction resource. Transports with continuation actions continue exact output-budget stops through new provider calls. These transports are OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, and Anthropic max_tokens. Gemini Interactions has no continuation actions. An incomplete result returns a provider error after cleanup. The adapter returns HTTP 200 only after the provider reports its complete signal. These signals are OpenAI or Gemini completed, Chat stop, or Anthropic end_turn or stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states do not return text as success.</td></tr>
 <tr><td><code>202</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Structured-Request-State</td><td>The durable request has not reached a terminal state. Reconcile the same key again.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
+<tr><td><code>402</code></td><td>application/json</td><td>none</td><td>The available funds cannot cover the accepted maximum cost.</td></tr>
 <tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>409</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The provider is not configured, or the key identifies a different intent or an uncertain provider outcome.</td></tr>
 <tr><td><code>410</code></td><td>application/json</td><td>none</td><td>The saved hosted result expired. The journal keeps the request identity and prevents another execution.</td></tr>
 <tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
 <tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The provider failed or returned an unusable response. A retained request failure uses the durable error representation. The proxy continues output-budget stops only when the execution contract permits another attempt. Errors exclude partial text, token-count headers, and raw provider errors. The journal can retain available usage after failure.</td></tr>
-<tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The bounded request queue is full.</td></tr>
+<tr><td><code>503</code></td><td>application/json, text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request queue is full or financial admission is unavailable.</td></tr>
 <tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
               </tbody>
             </table>
@@ -10189,6 +10730,7 @@ components:
                 <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. Each provider offering publishes one validated wire contract and an execution lifecycle for text-only requests. A media-capable offering also publishes media_execution_lifecycle for requests that contain image or audio input. The proxy does not infer a lifecycle from an endpoint or an upstream identifier. The proxy observes queued and in_progress states only for a pollable lifecycle. Each public operation remains blocking. Gemini media requests use synchronous completion and do not poll an Interaction resource. Transports with continuation actions continue exact output-budget stops through new provider calls. These transports are OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, and Anthropic max_tokens. Gemini Interactions has no continuation actions. An incomplete result returns a provider error after cleanup. The adapter returns HTTP 200 only after the provider reports its complete signal. These signals are OpenAI or Gemini completed, Chat stop, or Anthropic end_turn or stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states do not return text as success.</td></tr>
 <tr><td><code>202</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Structured-Request-State</td><td>The durable request has not reached a terminal state. Reconcile the same key again.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
+<tr><td><code>402</code></td><td>application/json</td><td>none</td><td>The available funds cannot cover the accepted maximum cost.</td></tr>
 <tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>409</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The provider is not configured, or the key identifies a different intent or an uncertain provider outcome.</td></tr>
 <tr><td><code>410</code></td><td>application/json</td><td>none</td><td>The saved hosted result expired. The journal keeps the request identity and prevents another execution.</td></tr>
@@ -10196,7 +10738,7 @@ components:
 <tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
 <tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The provider failed or returned an unusable response. A retained request failure uses the durable error representation. The proxy continues output-budget stops only when the execution contract permits another attempt. Errors exclude partial text, token-count headers, and raw provider errors. The journal can retain available usage after failure.</td></tr>
-<tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The bounded request queue is full.</td></tr>
+<tr><td><code>503</code></td><td>application/json, text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request queue is full or financial admission is unavailable.</td></tr>
 <tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
               </tbody>
             </table>
@@ -10403,6 +10945,42 @@ components:
           </div>
         </div>
       </section>
+<section class="api-operation" id="operation-getFundsBalance">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/balance</code>
+          <span class="api-operation-id">getFundsBalance</span>
+        </header>
+        <h2>Read the funds of an owned billing account</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Funds from one database snapshot. This read creates no financial records.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 <section class="api-operation" id="operation-listCharges">
         <header class="api-operation-heading">
           <span class="api-method api-method-get">GET</span>
@@ -10469,6 +11047,44 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The retained account resource.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-listFundsEntries">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/ledger-entries</code>
+          <span class="api-operation-id">listFundsEntries</span>
+        </header>
+        <h2>Read Ledger entries of an owned billing account</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>limit</code></td><td>query</td><td>No</td><td>integer</td><td></td></tr>
+<tr><td><code>cursor</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Entries in ascending identifier order. The cursor is the last identifier of a nonfinal page.</td></tr>
 <tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
 <tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
@@ -10667,6 +11283,145 @@ components:
           </div>
         </div>
       </section>
+<section class="api-operation" id="operation-getFundsCredit">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-credits/{credit_id}</code>
+          <span class="api-operation-id">getFundsCredit</span>
+        </header>
+        <h2>Read an audited request credit</h2>
+        <p>The account owner or an operator can read this receipt. Private operator identity and evidence references remain in the audit record.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block"><h3>Parameters</h3><p>None.</p></div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The retained credit. Provider evidence remains unchanged.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-createFundsCredit">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-put">PUT</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-credits/{credit_id}</code>
+          <span class="api-operation-id">createFundsCredit</span>
+        </header>
+        <h2>Record an operator credit for a settled request</h2>
+        <p>Requires an operator session. Total credits cannot exceed the settled request charge. An identical repeat has one financial effect.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block"><h3>Parameters</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>credit</code></td><td>Yes</td><td>object</td><td>An exact nonnegative USD amount expressed as a reduced fraction.</td></tr>
+<tr><td><code>reason</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>evidence_reference</code></td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The immutable credit and returned whole cents.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getFundsResolution">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-resolution</code>
+          <span class="api-operation-id">getFundsResolution</span>
+        </header>
+        <h2>Read an audited financial resolution</h2>
+        <p>The account owner or an operator can read this receipt. Private operator identity and evidence references remain in the audit record.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block"><h3>Parameters</h3><p>None.</p></div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The retained financial decision. Provider evidence remains unchanged.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-createFundsResolution">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-put">PUT</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-resolution</code>
+          <span class="api-operation-id">createFundsResolution</span>
+        </header>
+        <h2>Record an operator decision for an uncertain hold</h2>
+        <p>Requires an operator session and the current reservation revision. Authorization, known pricing, and prior credits bound the final net charge. An identical repeat has one financial effect.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block"><h3>Parameters</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>revision</code></td><td>Yes</td><td>integer</td><td></td></tr>
+<tr><td><code>customer_charge</code></td><td>Yes</td><td>object</td><td>An exact nonnegative USD amount expressed as a reduced fraction.</td></tr>
+<tr><td><code>reason</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>evidence_reference</code></td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The immutable decision and settled amount.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 <section class="api-operation" id="operation-listJournalObservations">
         <header class="api-operation-heading">
           <span class="api-method api-method-get">GET</span>
@@ -10741,6 +11496,148 @@ components:
 <tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
 <tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-listFundsReservations">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/reservations</code>
+          <span class="api-operation-id">listFundsReservations</span>
+        </header>
+        <h2>Read reservations of an owned billing account</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>limit</code></td><td>query</td><td>No</td><td>integer</td><td></td></tr>
+<tr><td><code>cursor</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Reservations in ascending identifier order. The cursor is the last identifier of a nonfinal page.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getFundsReservation">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/reservations/{request_id}</code>
+          <span class="api-operation-id">getFundsReservation</span>
+        </header>
+        <h2>Read a reservation and its exact authorization</h2>
+        <p>Requires the account owner or an operator. The revision and exact maximum support an audited financial decision.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>request_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The current reservation and immutable authorization.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getTenantFundsLimit">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/tenant-limits/{tenant_id}</code>
+          <span class="api-operation-id">getTenantFundsLimit</span>
+        </header>
+        <h2>Read the cumulative spending limit of an owned tenant</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block"><h3>Parameters</h3><p>None.</p></div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Exact net usage and active reservations under the optional limit. This read creates no records.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-setTenantFundsLimit">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-put">PUT</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/tenant-limits/{tenant_id}</code>
+          <span class="api-operation-id">setTenantFundsLimit</span>
+        </header>
+        <h2>Set the cumulative spending limit of an owned tenant</h2>
+        <p>The revision prevents concurrent replacement. A repeated identical last change returns the current resource. Existing reservations remain authorized.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block"><h3>Parameters</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>limit_cents</code></td><td>Yes</td><td>string,null</td><td>Cumulative USD limit in cents, through the maximum signed 64-bit integer. Null removes the tenant limit.</td></tr>
+<tr><td><code>revision</code></td><td>Yes</td><td>integer</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The retained limit and current usage.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
               </tbody>
             </table>
@@ -12190,6 +13087,7 @@ components:
                 <tr><td><code>200</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>Transcription result.</td></tr>
 <tr><td><code>202</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Structured-Request-State</td><td>The durable request has not reached a terminal state. Reconcile the same key again.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
+<tr><td><code>402</code></td><td>application/json</td><td>none</td><td>The available funds cannot cover the accepted maximum cost.</td></tr>
 <tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>409</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The provider is not configured, or the key identifies a different intent or an uncertain provider outcome.</td></tr>
 <tr><td><code>410</code></td><td>application/json</td><td>none</td><td>The saved hosted result expired. The journal keeps the request identity and prevents another execution.</td></tr>
@@ -12197,7 +13095,7 @@ components:
 <tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
 <tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The provider failed or returned an unusable response. A retained request failure uses the durable error representation. The proxy continues output-budget stops only when the execution contract permits another attempt. Errors exclude partial text, token-count headers, and raw provider errors. The journal can retain available usage after failure.</td></tr>
-<tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The bounded request queue is full.</td></tr>
+<tr><td><code>503</code></td><td>application/json, text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request queue is full or financial admission is unavailable.</td></tr>
 <tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
               </tbody>
             </table>
@@ -12484,12 +13382,14 @@ components:
                 <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>Current durable media operation state.</td></tr>
 <tr><td><code>202</code></td><td>application/json</td><td>none</td><td>Current durable media operation state.</td></tr>
 <tr><td><code>400</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
-<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
+<tr><td><code>402</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant key is unknown or the financial account is suspended.</td></tr>
 <tr><td><code>409</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
 <tr><td><code>410</code></td><td>application/json</td><td>none</td><td>Terminal operation detail expired. The tenant idempotency tombstone remains.</td></tr>
 <tr><td><code>422</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
 <tr><td><code>429</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
+<tr><td><code>503</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
               </tbody>
             </table>
           </div>
@@ -12836,6 +13736,7 @@ components:
 <tr><td><code>202</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Structured-Request-State</td><td>The durable request has not reached a terminal state. Reconcile the same key again.</td></tr>
 <tr><td><code>400</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds</td><td>Request failure.</td></tr>
 <tr><td><code>401</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control</td><td>Request failure.</td></tr>
+<tr><td><code>402</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
 <tr><td><code>403</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
 <tr><td><code>405</code></td><td>application/json</td><td>Allow</td><td>The HTTP method is unsupported.</td></tr>
 <tr><td><code>409</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
@@ -12905,6 +13806,7 @@ components:
 <tr><td><code>202</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Structured-Request-State</td><td>The durable request has not reached a terminal state. Reconcile the same key again.</td></tr>
 <tr><td><code>400</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds</td><td>Request failure.</td></tr>
 <tr><td><code>401</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control</td><td>Request failure.</td></tr>
+<tr><td><code>402</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
 <tr><td><code>403</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
 <tr><td><code>405</code></td><td>application/json</td><td>Allow</td><td>The HTTP method is unsupported.</td></tr>
 <tr><td><code>409</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
@@ -13001,6 +13903,7 @@ components:
 <tr><td><code>202</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Structured-Request-State</td><td>The durable request has not reached a terminal state. Reconcile the same key again.</td></tr>
 <tr><td><code>400</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds</td><td>Request failure.</td></tr>
 <tr><td><code>401</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control</td><td>Request failure.</td></tr>
+<tr><td><code>402</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
 <tr><td><code>403</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
 <tr><td><code>405</code></td><td>application/json</td><td>Allow</td><td>The HTTP method is unsupported.</td></tr>
 <tr><td><code>409</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
@@ -13070,6 +13973,7 @@ components:
                 <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens, X-LLM-Proxy-Structured-Request-State</td><td>Final text, caller-schema JSON, or caller function calls. Structured output includes durable request state. Function calls use NativeToolResult.</td></tr>
 <tr><td><code>202</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Structured-Request-State</td><td>The durable request is active. Reconcile the same key again.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The canonical message input or referenced asset is invalid.</td></tr>
+<tr><td><code>402</code></td><td>application/json</td><td>none</td><td>The available funds cannot cover the accepted maximum cost.</td></tr>
 <tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
 <tr><td><code>409</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The provider is not configured, or the key identifies a different intent or an uncertain provider outcome.</td></tr>
@@ -13079,7 +13983,7 @@ components:
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset store or structured request store failed.</td></tr>
 <tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The provider failed or returned an unusable response. A retained request failure uses the durable error representation. The proxy continues output-budget stops only when the execution contract permits another attempt. Errors exclude partial text, token-count headers, and raw provider errors. The journal can retain available usage after failure.</td></tr>
-<tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The bounded request queue is full.</td></tr>
+<tr><td><code>503</code></td><td>application/json, text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request queue is full or financial admission is unavailable.</td></tr>
 <tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
               </tbody>
             </table>

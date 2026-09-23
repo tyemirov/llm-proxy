@@ -89,6 +89,14 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 type managedTenantStoreOpener func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error)
 
 func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger, openManagedTenantStore managedTenantStoreOpener) (*gin.Engine, error) {
+	application, err := buildProxyApplication(configuration, structuredLogger, openManagedTenantStore)
+	if err != nil {
+		return nil, err
+	}
+	return application.router, nil
+}
+
+func buildProxyApplication(configuration Configuration, structuredLogger *zap.SugaredLogger, openManagedTenantStore managedTenantStoreOpener) (*proxyApplication, error) {
 	configuration, validationError := ensureValidatedConfiguration(configuration)
 	if validationError != nil {
 		return nil, validationError
@@ -180,16 +188,10 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	}}
 	adapters = append(adapters, openAIClientAdapters(configuration, tenantAuthenticator, providers, upstreamProviders, managedTenants, structuredLogger)...)
 	registerClientMethodErrors(router)
-	return router, RegisterClientProtocols(router, adapters)
-}
-
-// Serve builds the router from the supplied configuration and structuredLogger and starts the HTTP server on the configured port.
-func Serve(configuration Configuration, structuredLogger *zap.SugaredLogger) error {
-	router, buildError := BuildRouter(configuration, structuredLogger)
-	if buildError != nil {
-		return buildError
+	if err := RegisterClientProtocols(router, adapters); err != nil {
+		return nil, err
 	}
-	return router.Run(fmt.Sprintf(":%d", configuration.Port))
+	return &proxyApplication{router: router, database: managedTenants.database, address: fmt.Sprintf(":%d", configuration.Port), now: time.Now}, nil
 }
 
 // chatHandler returns a handler that forwards query-string requests to upstream providers.
@@ -845,6 +847,10 @@ func statusCodeForError(requestError error) int {
 		return http.StatusConflict
 	case errors.Is(requestError, errHostedAuthorityDenied):
 		return http.StatusForbidden
+	case errors.Is(requestError, errInsufficientFunds):
+		return http.StatusPaymentRequired
+	case errors.Is(requestError, errFinancialAdmissionUnavailable):
+		return http.StatusServiceUnavailable
 	case errors.Is(requestError, errHostedResultExpired):
 		return http.StatusGone
 	case errors.Is(requestError, errQueueFull):

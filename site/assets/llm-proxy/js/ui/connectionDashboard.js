@@ -3,6 +3,7 @@
 import * as backend from '../core/backendClient.js?v=20260903f037';
 import {profileFailureMessage} from '../core/managementProfile.js?v=20260903f037';
 import './usageJournal.js?v=20260903f037';
+import './prepaidBalance.js?v=20260903f037';
 
 import {COPY, PROVIDER_CAPABILITY_LABELS, PROVIDER_RESOURCE_LABELS, CAPABILITY_DOMAINS} from '../constants.js?v=20260903f037';
 
@@ -173,7 +174,7 @@ export class ConnectionDashboard extends HTMLElement {
       <p class="cw-notice" role="status" aria-live="polite" data-notice></p>
       <section class="cw-details" aria-label="Selection details" data-details></section>
       <section class="cw-details" aria-label="Hosted access" data-hosted-access></section>
-      ${this.billingAccount?`<usage-journal billing-account-id="${escapeHTML(this.billingAccount.id)}"></usage-journal>`:''}
+      ${this.billingAccount?`<prepaid-balance billing-account-id="${escapeHTML(this.billingAccount.id)}" tenant-id="${escapeHTML(this.tenantID)}" tenant-name="${escapeHTML(this.tenantName)}"></prepaid-balance><usage-journal billing-account-id="${escapeHTML(this.billingAccount.id)}"></usage-journal>`:''}
     </section>`;
     this.renderMap(); this.renderDetails(); this.renderHostedAccess(); this.updateNotice();
   }

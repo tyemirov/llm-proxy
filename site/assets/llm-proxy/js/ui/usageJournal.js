@@ -91,7 +91,7 @@ class UsageJournal extends HTMLElement {
   render() {
     this.innerHTML=`<section class="usage-journal cw-details" aria-label="Usage journal" aria-busy="${this.busy}">
       <header class="cw-row"><h3>Usage journal</h3><button data-journal-action="refresh" ${this.busy?'disabled':''}>${this.loaded?'Refresh':'Load'} usage journal</button></header>
-      <p>Hosted request history and measured usage. Charges are not available yet.</p>
+      <p>Hosted request history and measured usage.</p>
       ${this.failure?`<p role="alert">${escapeHTML(this.failure)}</p>`:''}
       ${this.busy?'<p role="status">Loading journal…</p>':''}
       ${this.loaded&&!this.page.requests.length?'<p>No hosted requests yet.</p>':''}

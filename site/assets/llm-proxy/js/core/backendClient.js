@@ -27,6 +27,9 @@ export class BackendClientError extends Error {
 }
 
 const MANAGEMENT_FAILURE_MESSAGES = new Map([
+  ['insufficient_funds', 'Available funds cannot cover this request. Add funds or reduce the request size.'],
+  ['financial_admission_unavailable', 'Funds verification is unavailable. Try again later.'],
+  ['billing_account_store_failed', 'Unable to load account funds. Try again.'],
   ['managed_tenant_name_conflict', 'A tenant already uses this name. Choose another name.'],
   ['managed_connection_conflict', 'The connection changed. Reload its details before saving.'],
   ['managed_connection_assigned', 'Detach this connection from its tenants before deleting it.'],
@@ -478,6 +481,95 @@ export async function createBillingAccount(idempotencyKey, signal) {
   return account;
 }
 
+/** @param {string} accountID @returns {string} */
+function billingAccountPath(accountID) {
+  if (!/^billing-[a-f0-9]{32}$/.test(accountID)) throw new Error(APP_INTEGRITY_ERROR);
+  return `${BILLING_ACCOUNTS_PATH}/${encodeURIComponent(accountID)}`;
+}
+
+/** @param {unknown} value */
+function signedCents(value) { return typeof value==='string' && /^(0|-?[1-9][0-9]*)$/.test(value); }
+/** @param {unknown} value */
+function unsignedCents(value) { return typeof value==='string' && /^(0|[1-9][0-9]*)$/.test(value); }
+
+/** @param {string} accountID @param {string} tenantID */
+function fundsTenantLimitPath(accountID,tenantID) {
+  managementTenantPath(tenantID);
+  return `${billingAccountPath(accountID)}/tenant-limits/${encodeURIComponent(tenantID)}`;
+}
+/** @param {import('../types.d.js').FundsTenantLimit} value @param {string} tenantID */
+function assertFundsTenantLimit(value,tenantID) {
+  if (!value || value.tenant_id!==tenantID || value.currency!=='USD' || !Number.isSafeInteger(value.revision) || value.revision<0 ||
+      !unsignedCents(value.reserved_cents) || !value.spent || !unsignedCents(value.spent.numerator) ||
+      typeof value.spent.denominator!=='string' || !/^[1-9][0-9]*$/.test(value.spent.denominator) ||
+      value.spent.numerator.length>512 || value.spent.denominator.length>512) throw new Error(APP_INTEGRITY_ERROR);
+  if (value.limit_cents===null) {
+    if (value.remaining_cents!==null) throw new Error(APP_INTEGRITY_ERROR);
+  } else {
+    if (!unsignedCents(value.limit_cents) || !unsignedCents(value.remaining_cents) || value.remaining_cents===null) throw new Error(APP_INTEGRITY_ERROR);
+    const denominator=BigInt(value.spent.denominator);
+    const spent=(BigInt(value.spent.numerator)*100n+denominator-1n)/denominator;
+    const remaining=BigInt(value.limit_cents)-spent-BigInt(value.reserved_cents);
+    if (BigInt(value.remaining_cents)!==(remaining<0n?0n:remaining)) throw new Error(APP_INTEGRITY_ERROR);
+  }
+}
+/** @param {string} accountID @param {string} tenantID @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').FundsTenantLimit>} */
+export async function fetchFundsTenantLimit(accountID,tenantID,signal) {
+  const value=await requestJSON(fundsTenantLimitPath(accountID,tenantID),{method:'GET',signal});
+  assertFundsTenantLimit(value,tenantID);
+  return value;
+}
+/** @param {string} accountID @param {string} tenantID @param {string|null} limit @param {number} revision @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').FundsTenantLimit>} */
+export async function saveFundsTenantLimit(accountID,tenantID,limit,revision,signal) {
+  const value=await requestJSON(fundsTenantLimitPath(accountID,tenantID),{method:'PUT',body:{limit_cents:limit,revision},signal});
+  assertFundsTenantLimit(value,tenantID);
+  return value;
+}
+
+/** @param {string} accountID @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').FundsBalance>} */
+export async function fetchFundsBalance(accountID, signal) {
+  const balance=await requestJSON(`${billingAccountPath(accountID)}/balance`,{method:'GET',signal});
+  if (!balance || balance.currency!=='USD' || !['active','suspended','reconciliation_required'].includes(balance.state) ||
+      !signedCents(balance.posted_cents) || !signedCents(balance.available_cents) ||
+      ![balance.reserved_cents,balance.spent_cents,balance.pending_cents].every(unsignedCents)) throw new Error(APP_INTEGRITY_ERROR);
+  const fraction=balance.unsettled_fraction;
+  if (!fraction || !unsignedCents(fraction.numerator) || typeof fraction.denominator!=='string' || !/^[1-9][0-9]*$/.test(fraction.denominator) ||
+      fraction.numerator.length>512 || fraction.denominator.length>512) throw new Error(APP_INTEGRITY_ERROR);
+  if (BigInt(balance.posted_cents)-BigInt(balance.reserved_cents)!==BigInt(balance.available_cents) ||
+      BigInt(balance.pending_cents)>BigInt(balance.reserved_cents) || BigInt(fraction.numerator)*100n>=BigInt(fraction.denominator)) throw new Error(APP_INTEGRITY_ERROR);
+  return balance;
+}
+
+/** @param {import('../types.d.js').FundsReservation} record */
+function assertFundsReservation(record) {
+  if (record.currency!=='USD' || !unsignedCents(record.maximum_cents) || !['held','settled','released','reconciliation_required'].includes(record.state) ||
+      !Number.isSafeInteger(record.revision) || record.revision<1 || !journalTimestamp(record.created_at) || !journalTimestamp(record.updated_at)) throw new Error(APP_INTEGRITY_ERROR);
+}
+/** @param {string} accountID @param {string} [cursor] @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').FundsReservationPage>} */
+export async function fetchFundsReservations(accountID,cursor='',signal) {
+  const pattern=/^request-[a-f0-9]{32}$/;
+  if (cursor && !pattern.test(cursor)) throw new Error(APP_INTEGRITY_ERROR);
+  const page=await requestJSON(`${billingAccountPath(accountID)}/reservations?limit=50${cursor?'&cursor='+encodeURIComponent(cursor):''}`,{method:'GET',signal});
+  if (!page) throw new Error(APP_INTEGRITY_ERROR);
+  assertHostedPage(page.reservations,page.next_cursor,cursor,pattern,assertFundsReservation);
+  return page;
+}
+/** @param {import('../types.d.js').FundsEntry} record */
+function assertFundsEntry(record) {
+  if (record.currency!=='USD' || !signedCents(record.amount_cents) || !['grant','hold','reverse_hold','spend','refund'].includes(record.type) ||
+      (record.reservation_id!==null && (typeof record.reservation_id!=='string' || !/^request-[a-f0-9]{32}$/.test(record.reservation_id))) ||
+      (record.refund_of_entry_id!==null && (typeof record.refund_of_entry_id!=='string' || !record.refund_of_entry_id)) || !journalTimestamp(record.created_at)) throw new Error(APP_INTEGRITY_ERROR);
+}
+/** @param {string} accountID @param {string} [cursor] @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').FundsEntryPage>} */
+export async function fetchFundsEntries(accountID,cursor='',signal) {
+  const pattern=/^\S.{0,126}\S$|^\S$/;
+  if (cursor && !pattern.test(cursor)) throw new Error(APP_INTEGRITY_ERROR);
+  const page=await requestJSON(`${billingAccountPath(accountID)}/ledger-entries?limit=50${cursor?'&cursor='+encodeURIComponent(cursor):''}`,{method:'GET',signal});
+  if (!page) throw new Error(APP_INTEGRITY_ERROR);
+  assertHostedPage(page.entries,page.next_cursor,cursor,pattern,assertFundsEntry);
+  return page;
+}
+
 /** @param {import('../types.d.js').JournalRequest} request */
 function assertJournalRequest(request) {
   if (!request || typeof request.id !== 'string' || !/^request-[a-f0-9]{32}$/.test(request.id) ||
@@ -494,8 +586,7 @@ function assertJournalRequest(request) {
 
 /** @param {string} accountID @returns {string} */
 function journalRequestsPath(accountID) {
-  if (!/^billing-[a-f0-9]{32}$/.test(accountID)) throw new Error(APP_INTEGRITY_ERROR);
-  return `${BILLING_ACCOUNTS_PATH}/${encodeURIComponent(accountID)}/requests`;
+  return `${billingAccountPath(accountID)}/requests`;
 }
 
 /** @param {string} accountID @param {string} [cursor] @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').JournalRequestPage>} */
@@ -615,7 +706,7 @@ function journalTimestamp(value) { return typeof value==='string' && Number.isFi
  * @template {{id:string}} T
  * @param {T[]} records @param {string} next @param {string} cursor @param {RegExp} pattern @param {(record:T)=>void} validate
  */
-function assertJournalPage(records, next, cursor, pattern, validate) {
+function assertHostedPage(records, next, cursor, pattern, validate) {
   if (!Array.isArray(records) || records.length>50 || typeof next!=='string') throw new Error(APP_INTEGRITY_ERROR);
   let previous=cursor;
   for (const record of records) {
@@ -655,7 +746,7 @@ function assertJournalObservation(record) {
 }
 /** @param {import('../types.d.js').JournalCase} record */
 function assertJournalCase(record) {
-  if (!['usage_unknown','dispatch_outcome_unknown','execution_outcome_unknown','execution_result_unknown'].includes(record.reason) || !['open','resolved'].includes(record.state) ||
+  if (!['usage_unknown','dispatch_outcome_unknown','execution_outcome_unknown','execution_result_unknown','usage_unresolved','policy_unresolved','limit_unresolved','platform_exposure'].includes(record.reason) || !['open','resolved'].includes(record.state) ||
       !journalTimestamp(record.created_at) || (record.state==='resolved' ? !journalTimestamp(record.resolved_at) : record.resolved_at!==undefined)) throw new Error(APP_INTEGRITY_ERROR);
 }
 /** @param {string} accountID @param {string} requestID @param {string} [cursor] @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').JournalAttemptPage>} */
@@ -664,7 +755,7 @@ export async function fetchJournalAttempts(accountID,requestID,cursor='',signal)
   if (cursor && !pattern.test(cursor)) throw new Error(APP_INTEGRITY_ERROR);
   const page=await requestJSON(`${journalEvidencePath(accountID,requestID)}/attempts?limit=50${cursor?'&cursor='+encodeURIComponent(cursor):''}`,{method:'GET',signal});
   if (!page) throw new Error(APP_INTEGRITY_ERROR);
-  assertJournalPage(page.attempts,page.next_cursor,cursor,pattern,assertJournalAttempt);
+  assertHostedPage(page.attempts,page.next_cursor,cursor,pattern,assertJournalAttempt);
   return page;
 }
 /** @param {string} accountID @param {string} requestID @param {string} [cursor] @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').JournalObservationPage>} */
@@ -673,7 +764,7 @@ export async function fetchJournalObservations(accountID,requestID,cursor='',sig
   if (cursor && !pattern.test(cursor)) throw new Error(APP_INTEGRITY_ERROR);
   const page=await requestJSON(`${journalEvidencePath(accountID,requestID)}/observations?limit=50${cursor?'&cursor='+encodeURIComponent(cursor):''}`,{method:'GET',signal});
   if (!page) throw new Error(APP_INTEGRITY_ERROR);
-  assertJournalPage(page.observations,page.next_cursor,cursor,pattern,assertJournalObservation);
+  assertHostedPage(page.observations,page.next_cursor,cursor,pattern,assertJournalObservation);
   return page;
 }
 /** @param {string} accountID @param {string} requestID @param {string} [cursor] @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').JournalCasePage>} */
@@ -682,6 +773,6 @@ export async function fetchJournalCases(accountID,requestID,cursor='',signal) {
   if (cursor && !pattern.test(cursor)) throw new Error(APP_INTEGRITY_ERROR);
   const page=await requestJSON(`${journalEvidencePath(accountID,requestID)}/reconciliation-cases?limit=50${cursor?'&cursor='+encodeURIComponent(cursor):''}`,{method:'GET',signal});
   if (!page) throw new Error(APP_INTEGRITY_ERROR);
-  assertJournalPage(page.cases,page.next_cursor,cursor,pattern,assertJournalCase);
+  assertHostedPage(page.cases,page.next_cursor,cursor,pattern,assertJournalCase);
   return page;
 }

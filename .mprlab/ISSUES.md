@@ -2637,6 +2637,28 @@ retain satisfied historical dependencies.
 - [ ] [F068] (P1) {F067} Enforce prepaid balances with atomic funds reservations.
   Goal:
   Bound hosted provider spending by each customer's available funds across concurrent requests and process restarts.
+  Evidence:
+  Ledger PR 102 is merged. Release CI and publication passed for Ledger v1.1.0 on 2026-09-23.
+  LLM Proxy uses the published public GORM adapter without a local module replacement.
+  Journal admission, accepted prices, Ledger reservations, and settlement effects share the application transaction.
+  Exact account remainders preserve fractional usage and credits. Uncertain work retains its funds reservation.
+  Native HTTP, Go and Python clients, MCP, dictation, and media tests cover financial admission.
+  Real service processes verify competing reservations and interruption before dispatch, after dispatch, and during settlement.
+  The service reconciles funded usage and retained holds at startup and during operation.
+  Account resources expose balances, reservations, Ledger entries, tenant limits, and audited financial decisions.
+  The browser shows exact amounts, financial history, and tenant limits at desktop and narrow widths.
+  Operator decisions preserve provider evidence and cannot exceed authorization, known pricing, or the remaining charge.
+  Audited request credits and usage credits share one settlement limit, account lock, and Ledger credit implementation.
+  Duplicate credits have one effect. A failed audit write rolls back the Ledger effect and exact remainder.
+  Usage delivery retains known platform exposure and reconciliation cases. Incomplete provider costs remain explicit.
+  Snapshot and restore tests preserve journal records, prices, charges, Ledger entries, holds, credits, decisions, and exposure.
+  The funds suite passes in 22.330 seconds. Credit race checks pass in 36.013 seconds. Go lint and formatting pass.
+  With the published dependency, hosted regression passes in 121.302 seconds and browser acceptance passes in 11.6 seconds.
+  Go lint and formatting pass. Final stack CI remains the F070 completion gate.
+  Remaining acceptance:
+  - Verify the per-transaction balanced-entry requirement beyond the current account-conservation tests.
+  - F069 must verify payment credits, reversals, and payment records in the restore fixture.
+  - F070 must complete service wiring, browser funding errors, commercial decisions, and complete acceptance.
   Requirements:
   - Use F070 as the shared hosted service contract.
   - Reuse the Ledger integration and domain code used by PoodleScanner and Hecate.

@@ -1735,6 +1735,7 @@ def _proxy_error_code(body: str) -> str:
         return ""
     code = envelope["error"].get("code")
     recognized = {
+        "insufficient_funds", "financial_admission_unavailable",
         "hosted_authority_denied", "hosted_result_expired", "usage_journal_conflict", "usage_journal_claim_lost",
         "invalid_idempotency_key", "structured_request_failed", "structured_request_intent_conflict",
         "structured_request_invalid", "structured_request_not_found", "structured_request_outcome_unknown",

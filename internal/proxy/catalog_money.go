@@ -47,6 +47,37 @@ func SettleUSDCents(charge, remainder ExactMoney) (int64, ExactMoney, error) {
 	return cents.Int64(), ratingMoney(residual), nil
 }
 
+// CreditUSDCents reverses an exact settled charge through integer Ledger cents
+// and the retained account remainder. The returned cents increase the balance.
+func CreditUSDCents(credit, remainder ExactMoney) (int64, ExactMoney, error) {
+	amount, err := parseExactMoney(credit)
+	if err != nil {
+		return 0, ExactMoney{}, err
+	}
+	carry, err := parseExactMoney(remainder)
+	if err != nil {
+		return 0, ExactMoney{}, err
+	}
+	if carry.Cmp(big.NewRat(1, usdCentsPerDollar)) >= 0 {
+		return 0, ExactMoney{}, fmt.Errorf("%w: remainder must be less than one cent", ErrCatalogRatingInvalid)
+	}
+	residual := new(big.Rat).Sub(carry, amount)
+	if residual.Sign() >= 0 {
+		return 0, ratingMoney(residual), nil
+	}
+	scaled := new(big.Rat).Mul(new(big.Rat).Neg(residual), big.NewRat(usdCentsPerDollar, 1))
+	cents, fraction := new(big.Int), new(big.Int)
+	cents.QuoRem(scaled.Num(), scaled.Denom(), fraction)
+	if fraction.Sign() != 0 {
+		cents.Add(cents, big.NewInt(1))
+	}
+	if !cents.IsInt64() {
+		return 0, ExactMoney{}, fmt.Errorf("%w: credit exceeds int64 cents", ErrCatalogRatingUnavailable)
+	}
+	residual.Add(residual, new(big.Rat).SetFrac(cents, big.NewInt(usdCentsPerDollar)))
+	return cents.Int64(), ratingMoney(residual), nil
+}
+
 // ReserveUSDCents rounds an authorization maximum upward to integer cents.
 // This amount is a reservation limit, not a customer charge.
 func ReserveUSDCents(maximum ExactMoney) (int64, error) {

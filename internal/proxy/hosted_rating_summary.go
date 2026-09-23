@@ -21,14 +21,18 @@ const (
 )
 
 type requestChargeSummary struct {
-	RequestID         string                    `json:"request_id"`
-	State             requestChargeSummaryState `json:"state"`
-	AttemptCount      int64                     `json:"attempt_count"`
-	ChargeCount       int64                     `json:"charge_count"`
-	ProviderCost      *ExactMoney               `json:"provider_cost"`
-	CustomerCharge    *ExactMoney               `json:"customer_charge"`
-	CustomerCredits   *ExactMoney               `json:"customer_credits"`
-	NetCustomerCharge *ExactMoney               `json:"net_customer_charge"`
+	knownProviderCost       ExactMoney
+	knownCustomerQuote      ExactMoney
+	retainedCustomerCredits ExactMoney
+	providerCostComplete    bool
+	RequestID               string                    `json:"request_id"`
+	State                   requestChargeSummaryState `json:"state"`
+	AttemptCount            int64                     `json:"attempt_count"`
+	ChargeCount             int64                     `json:"charge_count"`
+	ProviderCost            *ExactMoney               `json:"provider_cost"`
+	CustomerCharge          *ExactMoney               `json:"customer_charge"`
+	CustomerCredits         *ExactMoney               `json:"customer_credits"`
+	NetCustomerCharge       *ExactMoney               `json:"net_customer_charge"`
 }
 
 // One SQLite read transaction gives the request, attempts, charges, and credits
@@ -45,7 +49,7 @@ func (database *gormManagedTenantDatabase) billingRequestChargeSummary(ctx conte
 		if err := transaction.Model(&managedJournalAttemptRecord{}).Where("request_id = ?", request.ID).Count(&summary.AttemptCount).Error; err != nil {
 			return fmt.Errorf("count attempts for request %s: %w", request.ID, err)
 		}
-		provider, customer, net := new(big.Rat), new(big.Rat), new(big.Rat)
+		provider, customer, net, quoted := new(big.Rat), new(big.Rat), new(big.Rat), new(big.Rat)
 		providerComplete, customerComplete := true, true
 		const batchSize = 100
 		cursor := ""
@@ -74,7 +78,7 @@ func (database *gormManagedTenantDatabase) billingRequestChargeSummary(ctx conte
 				for _, amount := range []struct {
 					total *big.Rat
 					value *ExactMoney
-				}{{provider, charge.Rating.ProviderCost}, {customer, charge.CustomerCharge}, {net, charge.NetCustomerCharge}} {
+				}{{provider, charge.Rating.ProviderCost}, {customer, charge.CustomerCharge}, {net, charge.NetCustomerCharge}, {quoted, charge.Rating.CustomerCharge}} {
 					if amount.value == nil {
 						continue
 					}
@@ -96,6 +100,10 @@ func (database *gormManagedTenantDatabase) billingRequestChargeSummary(ctx conte
 		if summary.ChargeCount > summary.AttemptCount {
 			return fmt.Errorf("request %s has more charges than attempts", request.ID)
 		}
+		summary.knownProviderCost = ratingMoney(provider)
+		summary.knownCustomerQuote = ratingMoney(quoted)
+		summary.retainedCustomerCredits = ratingMoney(new(big.Rat).Sub(customer, net))
+		summary.providerCostComplete = request.State != journalRequestAccepted && request.State != journalRequestExecuting && summary.ChargeCount == summary.AttemptCount && providerComplete
 		switch request.State {
 		case journalRequestAccepted, journalRequestExecuting:
 			summary.State = requestChargePending

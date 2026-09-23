@@ -141,7 +141,7 @@ func (service *managementService) listJournalObservationsHandler() gin.HandlerFu
 func (service *managementService) listJournalCasesHandler() gin.HandlerFunc {
 	return journalCollectionHandler(service, "cases", journalCaseIDPrefix, service.store.database.journalCases, func(record managedJournalCaseRecord) (managementJournalCaseResponse, string, error) {
 		switch record.Reason {
-		case journalCaseUsageUnknown, journalCaseDispatchUnknown, journalCaseExecutionUnknown, journalCaseResultUnknown:
+		case journalCaseUsageUnknown, journalCaseDispatchUnknown, journalCaseExecutionUnknown, journalCaseResultUnknown, chargeUsageUnresolved, chargePolicyUnresolved, chargeLimitUnresolved, journalCasePlatformExposure:
 		default:
 			return managementJournalCaseResponse{}, "", fmt.Errorf("invalid retained reason for journal case %s", record.ID)
 		}
