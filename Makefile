@@ -114,6 +114,12 @@ test-hosted-funds:
 test-hosted-payments:
 	$(GO) test ./internal/proxy ./cmd/cli -run '^Test(HostedPayments|RootCommandRunsConfiguredProxyFromConfigFile)' -count=1
 
+export PADDLE_SANDBOX_CONFIG PADDLE_SANDBOX_RUN_ID PADDLE_SANDBOX_EXPECTATIONS
+.PHONY: qualify-paddle-sandbox
+qualify-paddle-sandbox:
+	@test -n "$$PADDLE_SANDBOX_CONFIG" -a -n "$$PADDLE_SANDBOX_RUN_ID" -a -n "$$PADDLE_SANDBOX_EXPECTATIONS" || { echo 'Set PADDLE_SANDBOX_CONFIG, PADDLE_SANDBOX_RUN_ID, and PADDLE_SANDBOX_EXPECTATIONS.' >&2; exit 1; }
+	$(GO) test ./cmd/cli -run '^TestPaddleSandboxQualification$$' -count=1 -v
+
 PAYMENT_RECONCILIATION_CONFIG ?= config.yml
 export PAYMENT_RECONCILIATION_CONFIG PAYMENT_RECONCILIATION_RUN_ID
 .PHONY: reconcile-payments

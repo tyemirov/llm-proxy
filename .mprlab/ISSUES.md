@@ -2785,7 +2785,9 @@ retain satisfied historical dependencies.
   The combined hosted billing target passed hosted HTTP, exact rating, payments, official clients, and database restoration.
   All three authenticated browser scenarios passed in 32.3 seconds. The approved correction race and Go lint checks passed.
   The separate Paddle sandbox procedure specifies isolated configuration, required scenarios, and retained evidence.
-  The native sandbox target, actual sandbox evidence, final requirement audit, and stack CI remain open.
+  The separate native sandbox target verifies expected order and receipt amounts against the existing Paddle and Ledger reconciliation.
+  It rejects production settings, protocol overrides, empty expectations, missing orders, and reused qualification reports.
+  Controlled input checks and payment tests pass. Actual sandbox evidence, final requirement audit, and stack CI remain open.
   Goal:
   Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
   Requirements:

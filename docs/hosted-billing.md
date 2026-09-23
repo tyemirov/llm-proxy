@@ -1325,7 +1325,7 @@ Production payments remain disabled.
 This procedure uses actual Paddle sandbox transactions through the normal application runtime.
 Controlled protocol tests and simulated notifications cannot establish actual checkout or refund acceptance.
 Obtain the operator authorization required by the development acceptance contract before this procedure.
-The separate native qualification target and actual sandbox receipts remain open under F069 and F070.
+The native target verifies financial checkpoints. Actual sandbox scenario receipts remain open under F069 and F070.
 
 #### Required Inputs
 
@@ -1362,6 +1362,55 @@ Use the current [Paddle sandbox test cards](https://developer.paddle.com/sdks/sa
 Paddle sandbox automatically approves refund adjustments every ten minutes.
 Record the observed pending and approved states instead of assuming immediate approval.
 Use Paddle notification replay for the original transaction. An unrelated simulated transaction cannot establish this financial chain.
+
+#### Native Financial Checkpoint
+
+After each stable financial transition, write the expected order state and exact receipt amounts to a private JSON file.
+Use actual account and order identifiers. Keep the expected amounts independent of the observed application response.
+The following example describes a USD 5 credit with USD 0.50 tax and no refund:
+
+```json
+{
+  "orders": [{
+    "order_id": "funding-REPLACE_WITH_ACTUAL_ORDER",
+    "billing_account_id": "billing-REPLACE_WITH_ACTUAL_ACCOUNT",
+    "state": "paid",
+    "receipt": {
+      "credit_cents": "500",
+      "gross_cents": "550",
+      "tax_cents": "50",
+      "reversed_cents": "0",
+      "pending_refund_cents": "0"
+    }
+  }]
+}
+```
+
+For an unpaid `created`, `pending`, or `failed` order, specify `"receipt": null`.
+For a pending refund, keep the current funding state and specify the expected `pending_refund_cents`.
+For an approved refund, specify `partially_refunded` or `refunded` and the expected cumulative `reversed_cents`.
+The original gross, tax, and credit amounts remain unchanged.
+
+```bash
+make qualify-paddle-sandbox \
+  PADDLE_SANDBOX_CONFIG=/private/path/config.yml \
+  PADDLE_SANDBOX_RUN_ID=sandbox-paid-2026-09-23T20 \
+  PADDLE_SANDBOX_EXPECTATIONS=/private/path/expected-paid.json
+```
+
+Use the normal environment interpolation for credentials in the selected configuration.
+The target requires the managed SQLite database and actual sandbox API selection without an origin override.
+It reads the selected orders and receipts before and after the existing payment reconciliation command logic.
+That logic uses the shared Paddle client and retains its normal durable report.
+Each selected order must have matching account ownership, state, amounts, processor evidence, and no reconciliation differences.
+The target rejects empty expectations and missing orders. It does not create payments or change customer funds.
+
+Use a new run identifier for each checkpoint so an earlier report cannot substitute for current processor reads.
+If reconciliation stops, resume its retained run with `make reconcile-payments` before a new qualification checkpoint.
+The successful target prints the safe report and retains its evidence through the existing database resources.
+Other orders in the report remain outside the selected checkpoint assertions.
+This target does not prove browser checkout, webhook delivery timing, or the complete scenario procedure by itself.
+Normal CI skips this actual sandbox lane. Controlled tests verify its input rejection separately.
 
 #### Evidence And Failure Handling
 
