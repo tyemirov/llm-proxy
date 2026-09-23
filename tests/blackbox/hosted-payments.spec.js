@@ -13,20 +13,7 @@ test.beforeAll(async()=>{
 test.afterAll(async()=>{try{if(stack)await stack.stop();}finally{if(processor)await processor.stop();}});
 
 test('funding history and receipts follow verified payments and refund holds through the normal runtime',async({page,context})=>{
-  for(const name of Object.keys(assets)) {
-    await page.route(`https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/${name}*`,route=>route.fulfill({path:path.join(directory,name),contentType:name.endsWith('.css')?'text/css':'application/javascript'}));
-  }
-  for(const [pattern,file] of [
-    ['**/alpinejs@3.17.1/dist/module.esm.js','node_modules/alpinejs/dist/module.esm.js'],
-    ['**/js-yaml@5.4.1/dist/browser/js-yaml.umd.min.js','node_modules/js-yaml/dist/browser/js-yaml.umd.min.js'],
-    ['https://accounts.google.com/gsi/client','tests/blackbox/googleIdentityFixture.js'],
-  ])await page.route(pattern,route=>route.fulfill({path:file,contentType:'application/javascript'}));
-  await page.route('https://loopaware.mprlab.com/**',route=>route.fulfill({body:'',contentType:'application/javascript'}));
-  const headers={Origin:stack.frontendOrigin,'X-Requested-With':'XMLHttpRequest','X-TAuth-Tenant':localManagementProfile.tenantID};
-  await page.route(`${stack.tAuthOrigin}/auth/google`,async route=>{
-    const login=await context.request.post(`${stack.tAuthOrigin}/auth/password/login`,{headers,data:{email:localManagementProfile.operatorEmail,password:localManagementProfile.operatorPassword}});
-    expect(login.ok()).toBeTruthy();await route.fulfill({status:login.status(),contentType:'application/json',body:await login.body()});
-  });
+  const headers=await preparePaymentPage(page,context);
   await page.goto(stack.frontendOrigin);
   await page.getByRole('button',{name:'Sign in with Google',exact:true}).click();
   await page.getByRole('button',{name:'Create billing account',exact:true}).click();
@@ -138,5 +125,109 @@ test('funding history and receipts follow verified payments and refund holds thr
   await page.unroute(root+'/funding-orders?*');
   await payments.getByRole('button',{name:'Refresh payments',exact:true}).click();
   await expect(payments.locator('[data-payment-order]')).toHaveCount(50);
+  expect(processor.failures).toEqual([]);
+});
+
+async function preparePaymentPage(page,context,email=localManagementProfile.operatorEmail) {
+  for(const name of Object.keys(assets)) {
+    await page.route(`https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/${name}*`,route=>route.fulfill({path:path.join(directory,name),contentType:name.endsWith('.css')?'text/css':'application/javascript'}));
+  }
+  for(const [pattern,file] of [
+    ['**/alpinejs@3.17.1/dist/module.esm.js','node_modules/alpinejs/dist/module.esm.js'],
+    ['**/js-yaml@5.4.1/dist/browser/js-yaml.umd.min.js','node_modules/js-yaml/dist/browser/js-yaml.umd.min.js'],
+    ['https://accounts.google.com/gsi/client','tests/blackbox/googleIdentityFixture.js'],
+  ])await page.route(pattern,route=>route.fulfill({path:file,contentType:'application/javascript'}));
+  await page.route('https://loopaware.mprlab.com/**',route=>route.fulfill({body:'',contentType:'application/javascript'}));
+  const headers={Origin:stack.frontendOrigin,'X-Requested-With':'XMLHttpRequest','X-TAuth-Tenant':localManagementProfile.tenantID};
+  await page.route(`${stack.tAuthOrigin}/auth/google`,async route=>{
+    const login=await context.request.post(`${stack.tAuthOrigin}/auth/password/login`,{headers,data:{email:email,password:localManagementProfile.operatorPassword}});
+    expect(login.ok()).toBeTruthy();await route.fulfill({status:login.status(),contentType:'application/json',body:await login.body()});
+  });
+  return headers;
+}
+
+test('browser checkout retries one order and waits for verified funding after Paddle completion',async({page,context})=>{
+  await preparePaymentPage(page,context,localManagementProfile.secondOperatorEmail);
+  let blockSDK=false;
+  await page.route('https://cdn.paddle.com/paddle/v2/paddle.js',route=>blockSDK?route.abort('failed'):route.fulfill({path:'tests/blackbox/paddleBrowserFixture.js',contentType:'application/javascript'}));
+  await page.goto(stack.frontendOrigin);
+  await page.getByRole('button',{name:'Sign in with Google',exact:true}).click();
+  await page.getByRole('button',{name:'Create billing account',exact:true}).click();
+  const funding=page.getByRole('region',{name:'Add funds',exact:true});
+  await expect(funding).toBeVisible();
+  await funding.getByRole('button',{name:'Choose funding amount',exact:true}).click();
+  await expect(funding).toContainText('Minimum funding: $5.00');
+  const headers={Origin:stack.frontendOrigin,'X-Requested-With':'XMLHttpRequest','X-TAuth-Tenant':localManagementProfile.tenantID};
+  const billing=await (await context.request.get(`${stack.llmProxyOrigin}/api/management/billing-accounts`,{headers})).json();
+  const root=`${stack.llmProxyOrigin}/api/management/billing-accounts/${billing.billing_accounts[0].id}`;
+  let creations=0;const keys=[];
+  await page.route(root+'/funding-orders',async route=>{
+    if(route.request().method()!=='POST')return route.continue();
+    keys.push(route.request().headers()['idempotency-key']);
+    expect(route.request().postDataJSON()).toEqual({offer_code:'five'});
+    const response=await route.fetch();
+    if(++creations===1)return route.abort('failed');
+    return route.fulfill({response});
+  });
+  await funding.getByRole('button',{name:'Add $5.00',exact:true}).click();
+  await expect(funding.getByRole('alert')).toBeVisible();
+  await page.reload();
+  await funding.getByRole('button',{name:'Retry funding request',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'Controlled Paddle checkout'})).toBeVisible();
+  expect(keys).toHaveLength(2);expect(keys[0]).toBe(keys[1]);
+  const orders=await (await context.request.get(root+'/funding-orders',{headers})).json();
+  expect(orders.orders).toHaveLength(1);
+  const order=orders.orders[0];
+  expect(await page.evaluate(()=>window.paddleFixture.opened[0])).toEqual({transactionId:processor.transactions.find(item=>item.custom_data.funding_order_id===order.id).id,settings:{displayMode:'overlay',allowLogout:false,showAddDiscounts:false}});
+  expect(await page.evaluate(()=>window.paddleFixture.token)).toBe('test_browserfixture');
+  expect(await page.evaluate(()=>window.paddleFixture.environment)).toBe('sandbox');
+  await expect(funding.getByRole('link',{name:'Paddle Refund Policy'})).toHaveAttribute('href','https://www.paddle.com/legal/refund-policy');
+  await page.evaluate(()=>window.paddleFixture.emit({name:'checkout.completed',data:{transaction_id:'txn_'+'0'.repeat(26)}}));
+  await expect(funding).not.toContainText('Waiting for verified payment');
+  await page.getByRole('button',{name:'Complete controlled checkout',exact:true}).click();
+  await page.evaluate(()=>window.paddleFixture.emit({name:'checkout.completed',data:{transaction_id:window.paddleFixture.opened[0].transactionId}}));
+  await expect(funding).toContainText('Waiting for verified payment');
+  await expect(page.locator('[data-funds-value="available_cents"]')).toHaveText('$0.00');
+  await processor.event(stack.llmProxyOrigin,'transaction.completed',processor.complete(order.id));
+  await expect(funding).toContainText('Payment verified');
+  await expect(page.locator('[data-funds-value="available_cents"]')).toHaveText('$5.00');
+  await expect(page.getByRole('region',{name:'Funding history',exact:true})).toContainText('Paid');
+  await expect(funding.getByRole('alert')).toHaveCount(0);
+  await processor.event(stack.llmProxyOrigin,'transaction.completed',processor.complete(order.id));
+  await expect(page.locator('[data-funds-value="available_cents"]')).toHaveText('$5.00');
+  await page.reload();
+  await funding.getByRole('button',{name:'Choose funding amount',exact:true}).click();
+  await funding.getByRole('button',{name:'Add $5.00',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'Controlled Paddle checkout'})).toBeVisible();
+  await page.getByRole('button',{name:'Close controlled checkout',exact:true}).click();
+  await expect(funding).toContainText('Checkout closed');
+  await funding.getByRole('button',{name:'Resume checkout',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'Controlled Paddle checkout'})).toBeVisible();
+  expect(await page.evaluate(()=>window.paddleFixture.initializations)).toBe(1);
+  const afterResume=await (await context.request.get(root+'/funding-orders',{headers})).json();
+  expect(afterResume.orders).toHaveLength(2);
+  await page.getByRole('button',{name:'Close controlled checkout',exact:true}).click();
+  for(const width of [1440,390,320]) {
+    await page.setViewportSize({width,height:1000});
+    await expect(funding.getByRole('button',{name:'Resume checkout',exact:true})).toBeVisible();
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+  }
+  blockSDK=true;
+  await page.reload();
+  await funding.getByRole('button',{name:'Resume checkout',exact:true}).click();
+  await expect(funding.getByRole('alert')).toBeVisible();
+  blockSDK=false;
+  await funding.getByRole('button',{name:'Resume checkout',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'Controlled Paddle checkout'})).toBeVisible();
+  await expect(funding.getByRole('alert')).toHaveCount(0);
+  await page.getByRole('button',{name:'Close controlled checkout',exact:true}).click();
+  await page.evaluate(accountID=>sessionStorage.removeItem('llm-proxy:funding-intent:'+accountID),billing.billing_accounts[0].id);
+  await page.reload();
+  const history=page.getByRole('region',{name:'Funding history',exact:true});
+  await history.getByRole('button',{name:'Refresh payments',exact:true}).click();
+  await history.getByRole('button',{name:'Continue payment',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'Controlled Paddle checkout'})).toBeVisible();
+  await page.getByRole('button',{name:'Close controlled checkout',exact:true}).click();
+  expect((await (await context.request.get(root+'/funding-orders',{headers})).json()).orders).toHaveLength(2);
   expect(processor.failures).toEqual([]);
 });

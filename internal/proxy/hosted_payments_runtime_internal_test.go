@@ -24,7 +24,7 @@ func TestHostedPaymentsRuntimeProcessesFundingThroughNormalService(t *testing.T)
 		t.Fatal(err)
 	}
 	configuration := withInternalUpstreamCapacity(t, Configuration{Management: service.configuration, ProviderCatalog: internalCanonicalProviderCatalog(), AssetStorePath: t.TempDir(), Payments: &PaymentConfiguration{
-		Environment: "sandbox", ProcessorAccountID: "processor-fixture", SupplierID: "supplier-fixture", APIKey: "checkout-fixture-key", APIBaseURL: processor.server.URL, WebhookSecret: paymentInboxTestSecret,
+		Environment: "sandbox", ClientToken: "test_browserfixture", ProcessorAccountID: "processor-fixture", SupplierID: "supplier-fixture", APIKey: "checkout-fixture-key", APIBaseURL: processor.server.URL, WebhookSecret: paymentInboxTestSecret,
 		Offers: []PaymentOfferConfiguration{{Code: "five", PriceID: "pri_01hv8x2axb33yr5y238zfwcn5p", FundingCents: 500}},
 	}})
 	configuration.Management.DatabasePath = source.File
@@ -52,6 +52,15 @@ func TestHostedPaymentsRuntimeProcessesFundingThroughNormalService(t *testing.T)
 	})
 	server := &httptest.Server{URL: "http://" + listener.Addr().String()}
 	order := paymentOrderHTTP(t, server, cookie("owner"), http.MethodPost, paymentOrdersTestPath, "runtime-funding", `{"offer_code":"five"}`, http.StatusCreated)
+	public := paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, "/billing-accounts/billing-journal/funding-offers", "", "", http.StatusOK)
+	if public["client_token"] != "test_browserfixture" || public["environment"] != "sandbox" {
+		t.Fatalf("runtime checkout configuration=%v", public)
+	}
+	for _, private := range []string{"api_key", "webhook_secret", "processor_account_id", "supplier_id"} {
+		if _, exposed := public[private]; exposed {
+			t.Fatalf("private payment field exposed: %s", private)
+		}
+	}
 	checkoutPath := paymentOrdersTestPath + "/" + order["id"].(string) + "/checkout"
 	waitPaymentRuntime(t, func() bool { return processor.creates.Load() == 1 })
 	waitPaymentRuntime(t, func() bool {
@@ -79,6 +88,7 @@ func TestHostedPaymentsRuntimeProcessesFundingThroughNormalService(t *testing.T)
 	// A production runtime cannot admit accounts funded by this sandbox database.
 	production := *configuration.Payments
 	production.Environment, production.APIBaseURL = "production", ""
+	production.ClientToken = "live_browserfixture"
 	configuration.Payments = &production
 	if _, err := buildProxyApplication(configuration, zap.NewNop().Sugar(), newManagedTenantStore); err == nil || !strings.Contains(err.Error(), "payment environment") {
 		t.Fatalf("sandbox database accepted production runtime: %v", err)
@@ -167,10 +177,16 @@ func TestHostedPaymentsRuntimeFinancialFailureStopsHTTPAndRecovers(t *testing.T)
 }
 
 func TestHostedPaymentsRuntimeRejectsInvalidConfigurationBeforeOpeningDatabase(t *testing.T) {
-	for _, scenario := range []string{"secret", "environment", "minimum", "price", "plaintext-remote"} {
+	for _, scenario := range []string{"secret", "client-token", "client-environment", "client-whitespace", "environment", "minimum", "price", "plaintext-remote"} {
 		t.Run(scenario, func(t *testing.T) {
-			input := &PaymentConfiguration{Environment: "sandbox", ProcessorAccountID: "processor", SupplierID: "supplier", APIKey: "fixture-key", WebhookSecret: "fixture-secret", Offers: []PaymentOfferConfiguration{{Code: "five", PriceID: "pri_01hv8x2axb33yr5y238zfwcn5p", FundingCents: 500}}}
+			input := &PaymentConfiguration{Environment: "sandbox", ClientToken: "test_browserfixture", ProcessorAccountID: "processor", SupplierID: "supplier", APIKey: "fixture-key", WebhookSecret: "fixture-secret", Offers: []PaymentOfferConfiguration{{Code: "five", PriceID: "pri_01hv8x2axb33yr5y238zfwcn5p", FundingCents: 500}}}
 			switch scenario {
+			case "client-token":
+				input.ClientToken = ""
+			case "client-environment":
+				input.ClientToken = "live_browserfixture"
+			case "client-whitespace":
+				input.ClientToken = "test_browser fixture"
 			case "secret":
 				input.WebhookSecret = ""
 			case "environment":

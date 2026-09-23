@@ -2757,7 +2757,12 @@ retain satisfied historical dependencies.
   Signed payment and adjustment events drive the normal runtime, database, and rendered financial records in browser tests.
   The checks cover delayed funding, pending holds, partial refunds, pagination, invalid responses, and failed portal requests.
   Payment and onboarding browser checks pass in 16.5 seconds at desktop and narrow widths.
-  Browser checkout and full reconciliation remain open.
+  Browser checkout uses the server transaction and an environment-specific public Paddle token.
+  Lost responses retain one creation key through reload. Checkout can resume from browser state or retained funding history.
+  Browser completion events cannot grant funds. Verified server state refreshes the balance and payment history.
+  Payment, CLI, format, Go lint, frontend lint, and generated API checks pass.
+  All three payment and onboarding browser checks pass in 23.5 seconds with controlled Paddle protocols.
+  Payment failure transitions and full reconciliation remain open.
   Goal:
   Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
   Requirements:

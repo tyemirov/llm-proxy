@@ -1,4 +1,5 @@
 // @ts-check
+import {FUNDING_CHANGED_EVENT,FUNDING_RESUME_EVENT} from '../constants.js?v=20260903f037';
 import * as backend from '../core/backendClient.js?v=20260903f037';
 import {profileFailureMessage} from '../core/managementProfile.js?v=20260903f037';
 
@@ -14,6 +15,7 @@ class PaymentHistory extends HTMLElement {
   controller=new AbortController();
   busy=false;
   loaded=false;
+  refreshRequested=false;
   failure='';
   /** @type {import('../types.d.js').FundingOrderPage} */ page={orders:[],next_cursor:''};
   /** @type {import('../types.d.js').PaymentReceipt|null} */ receipt=null;
@@ -22,10 +24,16 @@ class PaymentHistory extends HTMLElement {
   connectedCallback() {
     this.accountID=this.getAttribute('billing-account-id') || '';
     this.controller=new AbortController();
+    window.addEventListener(FUNDING_CHANGED_EVENT,event=>{
+      if (!(event instanceof CustomEvent) || event.detail.accountID!==this.accountID) return;
+      if (this.busy) this.refreshRequested=true;
+      else void this.run(()=>this.refresh());
+    },{signal:this.controller.signal});
     this.addEventListener('click',event=>{
       if (!(event.target instanceof Element) || this.busy) return;
       const button=event.target.closest('button');
       switch(button?.dataset.paymentAction) {
+        case 'resume':window.dispatchEvent(new CustomEvent(FUNDING_RESUME_EVENT,{detail:{accountID:this.accountID,orderID:button.dataset.orderId}}));break;
         case 'refresh':void this.run(()=>this.refresh());break;
         case 'more':void this.run(()=>this.more());break;
         case 'receipt':void this.run(()=>this.readReceipt(button.dataset.orderId || ''));break;
@@ -50,6 +58,7 @@ class PaymentHistory extends HTMLElement {
         this.busy=false;this.render();
         const button=focusAction?this.querySelector(`[data-payment-action="${CSS.escape(focusAction)}"]${focusOrder?`[data-order-id="${CSS.escape(focusOrder)}"]`:''}`):null;
         if (button instanceof HTMLButtonElement) button.focus();
+        if (this.refreshRequested) {this.refreshRequested=false;void this.run(()=>this.refresh());}
       }
     }
   }
@@ -88,6 +97,7 @@ class PaymentHistory extends HTMLElement {
         <strong>${escapeHTML(title(order.state))} · ${dollars(order.funding_cents)} account credit</strong>
         <span>${escapeHTML(title(order.environment))}</span><code>${escapeHTML(order.id)}</code>
         <time datetime="${escapeHTML(order.created_at)}">${escapeHTML(order.created_at)}</time>
+        ${['created','pending'].includes(order.state)?`<button data-payment-action="resume" data-order-id="${escapeHTML(order.id)}" ${disabled}>Continue payment</button>`:''}
         ${['paid','partially_refunded','refunded','disputed'].includes(order.state)?`<button data-payment-action="receipt" data-order-id="${escapeHTML(order.id)}" ${disabled}>View receipt</button>`:''}
       </li>`).join('')}</ul>
       ${this.page.next_cursor?`<button data-payment-action="more" ${disabled}>Load more payments</button>`:''}

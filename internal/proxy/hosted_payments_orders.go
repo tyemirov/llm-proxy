@@ -223,7 +223,7 @@ func (service *managementService) fundingOffersHandler() gin.HandlerFunc {
 			offers = append(offers, managementFundingOfferResponse{Code: offer.Code, FundingCents: strconv.FormatInt(offer.FundingCents, 10), Currency: CatalogCurrencyUSD})
 		}
 		sort.Slice(offers, func(first, second int) bool { return offers[first].Code < offers[second].Code })
-		ctx.JSON(http.StatusOK, gin.H{"offers": offers})
+		ctx.JSON(http.StatusOK, gin.H{"provider": "paddle", "environment": service.funding.environment, "client_token": service.paymentClientToken, "offers": offers})
 	}
 }
 

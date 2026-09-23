@@ -499,6 +499,42 @@ function assertFundingOrder(order) {
       !['created','pending','failed',...RECEIPT_STATES].includes(order.state) || !unsignedCents(order.funding_cents) || BigInt(order.funding_cents)<500n ||
       typeof order.offer_code!=='string' || !/^[a-z][a-z0-9_]{0,63}$/.test(order.offer_code) || !journalTimestamp(order.created_at)) throw new Error(APP_INTEGRITY_ERROR);
 }
+/** @param {string} accountID @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').FundingOffers>} */
+export async function fetchFundingOffers(accountID,signal) {
+  const result=await requestJSON(`${billingAccountPath(accountID)}/funding-offers`,{method:'GET',signal});
+  if (!result || result.provider!=='paddle' || !PAYMENT_ENVIRONMENTS.includes(result.environment) || typeof result.client_token!=='string' ||
+      !(result.environment==='sandbox'?/^test_[a-zA-Z0-9]+$/:/^live_[a-zA-Z0-9]+$/).test(result.client_token) || !Array.isArray(result.offers) || !result.offers.length) throw new Error(APP_INTEGRITY_ERROR);
+  const codes=new Set();
+  for (const offer of result.offers) {
+    if (!offer || typeof offer.code!=='string' || !/^[a-z][a-z0-9_]{0,63}$/.test(offer.code) || codes.has(offer.code) ||
+        offer.currency!=='USD' || !unsignedCents(offer.funding_cents) || BigInt(offer.funding_cents)<500n) throw new Error(APP_INTEGRITY_ERROR);
+    codes.add(offer.code);
+  }
+  return result;
+}
+/** @param {string} accountID @param {string} code @param {string} key @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').FundingOrder>} */
+export async function createFundingOrder(accountID,code,key,signal) {
+  const order=await requestJSON(`${billingAccountPath(accountID)}/funding-orders`,{method:'POST',body:{offer_code:code},idempotencyKey:key,signal});
+  assertFundingOrder(order);
+  if (order.offer_code!==code) throw new Error(APP_INTEGRITY_ERROR);
+  return order;
+}
+/** @param {string} accountID @param {string} orderID @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').FundingOrder>} */
+export async function fetchFundingOrder(accountID,orderID,signal) {
+  if (!FUNDING_ORDER_PATTERN.test(orderID)) throw new Error(APP_INTEGRITY_ERROR);
+  const order=await requestJSON(`${billingAccountPath(accountID)}/funding-orders/${encodeURIComponent(orderID)}`,{method:'GET',signal});
+  assertFundingOrder(order);
+  if (order.id!==orderID) throw new Error(APP_INTEGRITY_ERROR);
+  return order;
+}
+/** @param {string} accountID @param {string} orderID @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').PaymentCheckout>} */
+export async function fetchPaymentCheckout(accountID,orderID,signal) {
+  if (!FUNDING_ORDER_PATTERN.test(orderID)) throw new Error(APP_INTEGRITY_ERROR);
+  const checkout=await requestJSON(`${billingAccountPath(accountID)}/funding-orders/${encodeURIComponent(orderID)}/checkout`,{method:'GET',signal});
+  if (!checkout || checkout.provider!=='paddle' || !PAYMENT_ENVIRONMENTS.includes(checkout.environment) ||
+      typeof checkout.transaction_id!=='string' || !/^txn_[a-z0-9]{26}$/.test(checkout.transaction_id)) throw new Error(APP_INTEGRITY_ERROR);
+  return checkout;
+}
 /** @param {string} accountID @param {string} [cursor] @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').FundingOrderPage>} */
 export async function fetchFundingOrders(accountID,cursor='',signal) {
   if (cursor && !FUNDING_ORDER_PATTERN.test(cursor)) throw new Error(APP_INTEGRITY_ERROR);

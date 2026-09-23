@@ -43,14 +43,15 @@ var (
 )
 
 type managementService struct {
-	funding          *fundingCatalog
-	paymentPortal    paddlePortalClient
-	configuration    ManagementConfiguration
-	sessionValidator *managementSessionValidator
-	store            *managedTenantStore
-	providers        *providerRegistry
-	keyVerifier      providerKeyVerifier
-	structuredLogger *zap.SugaredLogger
+	funding            *fundingCatalog
+	paymentPortal      paddlePortalClient
+	paymentClientToken string
+	configuration      ManagementConfiguration
+	sessionValidator   *managementSessionValidator
+	store              *managedTenantStore
+	providers          *providerRegistry
+	keyVerifier        providerKeyVerifier
+	structuredLogger   *zap.SugaredLogger
 }
 
 type managementAccountResponse struct {

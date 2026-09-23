@@ -9168,8 +9168,11 @@ components:
     FundingOffers:
       type: object
       additionalProperties: false
-      required: [offers]
+      required: [provider, environment, client_token, offers]
       properties:
+        provider: {type: string, enum: [paddle]}
+        environment: {type: string, enum: [sandbox, production]}
+        client_token: {type: string, pattern: '^(test|live)_[a-zA-Z0-9]+$'}
         offers:
           type: array
           items: {$ref: '#/components/schemas/FundingOffer'}

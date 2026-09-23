@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 // PaymentConfiguration selects one processor environment. Nil disables payments.
 type PaymentConfiguration struct {
 	Environment        string                      `mapstructure:"environment"`
+	ClientToken        string                      `mapstructure:"client_token"`
 	ProcessorAccountID string                      `mapstructure:"processor_account_id"`
 	SupplierID         string                      `mapstructure:"supplier_id"`
 	APIKey             string                      `mapstructure:"api_key"`
@@ -36,11 +38,21 @@ type paymentSettings struct {
 	apiKey        string
 	apiBaseURL    string
 	webhookSecret string
+	clientToken   string
 }
+
+var paymentClientTokenPattern = regexp.MustCompile(`^(test|live)_[a-zA-Z0-9]+$`)
 
 func newPaymentSettings(input *PaymentConfiguration) (*paymentSettings, error) {
 	if input == nil {
 		return nil, nil
+	}
+	prefix := "live_"
+	if input.Environment == paymentEnvironmentSandbox {
+		prefix = "test_"
+	}
+	if !paymentClientTokenPattern.MatchString(input.ClientToken) || !strings.HasPrefix(input.ClientToken, prefix) {
+		return nil, fmt.Errorf("configure payments: client_token must match the payment environment")
 	}
 	if strings.TrimSpace(input.APIKey) == "" || strings.TrimSpace(input.WebhookSecret) == "" {
 		return nil, fmt.Errorf("configure payments: api_key and webhook_secret are required")
@@ -63,7 +75,7 @@ func newPaymentSettings(input *PaymentConfiguration) (*paymentSettings, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &paymentSettings{catalog: catalog, apiKey: input.APIKey, apiBaseURL: input.APIBaseURL, webhookSecret: input.WebhookSecret}, nil
+	return &paymentSettings{catalog: catalog, apiKey: input.APIKey, apiBaseURL: input.APIBaseURL, webhookSecret: input.WebhookSecret, clientToken: input.ClientToken}, nil
 }
 
 type paddlePaymentRuntime struct {

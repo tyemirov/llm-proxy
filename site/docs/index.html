@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="b5fa206f87d8bcdd03653507c25921782f0584013180b0ea4b19c02966e9adda">
+    <meta name="openapi-source-sha256" content="c6eec4e4f494a8027250c6823969a301a5cf2cf70e8fdb103efc19f0896ea132">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="b5fa206f87d8bcdd03653507c25921782f0584013180b0ea4b19c02966e9adda">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="c6eec4e4f494a8027250c6823969a301a5cf2cf70e8fdb103efc19f0896ea132">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>b5fa206f87d8bcdd03653507c25921782f0584013180b0ea4b19c02966e9adda</code></span>
+          <span>Source SHA-256 <code>c6eec4e4f494a8027250c6823969a301a5cf2cf70e8fdb103efc19f0896ea132</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -9231,8 +9231,11 @@ components:
     FundingOffers:
       type: object
       additionalProperties: false
-      required: [offers]
+      required: [provider, environment, client_token, offers]
       properties:
+        provider: {type: string, enum: [paddle]}
+        environment: {type: string, enum: [sandbox, production]}
+        client_token: {type: string, pattern: &#39;^(test|live)_[a-zA-Z0-9]+$&#39;}
         offers:
           type: array
           items: {$ref: &#39;#/components/schemas/FundingOffer&#39;}

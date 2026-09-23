@@ -63,6 +63,7 @@ management:
   proxy_origin: "https://llm-proxy-api.example"
 payments:
   environment: sandbox
+  client_token: "${PAYMENT_TEST_CLIENT_TOKEN}"
   processor_account_id: processor-fixture
   supplier_id: supplier-fixture
   api_key: "${PAYMENT_TEST_API_KEY}"
@@ -78,6 +79,7 @@ P411_MANAGEMENT_DATABASE_PATH=/var/lib/llm-proxy/management.sqlite
 P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 OPENAI_API_KEY=sk-openai-catalog-binding
 DASHSCOPE_BASE_URL=https://workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1
+PAYMENT_TEST_CLIENT_TOKEN=test_browserfixture
 PAYMENT_TEST_API_KEY=paddle-api-fixture
 PAYMENT_TEST_WEBHOOK_SECRET=paddle-webhook-fixture
 `)
@@ -92,7 +94,7 @@ PAYMENT_TEST_WEBHOOK_SECRET=paddle-webhook-fixture
 	if executeError != nil {
 		t.Fatalf("ExecuteC error: %v", executeError)
 	}
-	if capturedConfiguration.Payments == nil || capturedConfiguration.Payments.Environment != "sandbox" || capturedConfiguration.Payments.APIKey != "paddle-api-fixture" || capturedConfiguration.Payments.WebhookSecret != "paddle-webhook-fixture" || len(capturedConfiguration.Payments.Offers) != 1 || capturedConfiguration.Payments.Offers[0].FundingCents != 500 {
+	if capturedConfiguration.Payments == nil || capturedConfiguration.Payments.Environment != "sandbox" || capturedConfiguration.Payments.ClientToken != "test_browserfixture" || capturedConfiguration.Payments.APIKey != "paddle-api-fixture" || capturedConfiguration.Payments.WebhookSecret != "paddle-webhook-fixture" || len(capturedConfiguration.Payments.Offers) != 1 || capturedConfiguration.Payments.Offers[0].FundingCents != 500 {
 		t.Fatal("CLI did not retain payment configuration")
 	}
 	if capturedConfiguration.ProviderCatalog == nil || capturedConfiguration.ProviderCatalog.SchemaVersion() != proxy.ProviderCatalogSchemaVersion {

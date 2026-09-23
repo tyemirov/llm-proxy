@@ -1049,7 +1049,37 @@ Disconnecting the view cancels its pending requests and closes an unfinished por
 A controlled Paddle HTTP protocol supplies transactions, signed events, adjustments, and portal sessions.
 The test verifies delayed funding, receipts, pending holds, partial refunds, pagination, failure recovery, and desktop and narrow widths.
 These checks do not qualify a live Paddle environment.
-Browser checkout and full reconciliation remain open under F069.
+Full reconciliation remains open under F069.
+
+### Browser Checkout
+
+The browser adapts the PoodleScanner transaction checkout approach for one-time funding.
+The owned `funding-offers` response supplies the provider, environment, public client token, and available credit amounts.
+The response excludes the API key and webhook secret.
+The customer selects a server offer. The browser sends its code with a creation key.
+
+The browser retains the creation key and order reference in account-specific session storage.
+A lost response retains the same key for retry after reload.
+After order creation, the browser reads that order until checkout delivery finishes.
+The browser can also resume a retained order from funding history.
+These reads do not create another processor transaction.
+
+The adapter loads Paddle.js from its official CDN and initializes it once per page.
+A token or environment change requires a page reload.
+It opens the verified server transaction with customer changes and discount entry disabled.
+See [Paddle transaction checkout](https://developer.paddle.com/build/transactions/pass-transaction-checkout/).
+
+Paddle checkout events must match the active transaction identifier.
+A completion event starts server status reads. It does not grant funds.
+Verified server state refreshes the account balance and payment history.
+A closed checkout retains the order for later use.
+Automatic status reads stop after 30 attempts. The customer can request another status check.
+Disconnecting the component cancels its requests and timers and closes its active checkout.
+
+The funding view links to the Paddle Buyer Terms, Refund Policy, and buyer support.
+The controlled browser tests cover response loss, reload, duplicate events, delayed confirmation, SDK failure, and checkout closure.
+The tests also verify recovery from funding history without a retained browser intent.
+Actual Paddle connectivity remains a separate qualification step.
 
 ### Payment Runtime Configuration
 
@@ -1063,6 +1093,7 @@ The following configuration shows the field contract. It does not authorize live
 ```yaml
 payments:
   environment: sandbox
+  client_token: "${PADDLE_CLIENT_TOKEN}"
   processor_account_id: selected-paddle-account
   supplier_id: selected-platform-supplier
   api_key: "${PADDLE_API_KEY}"
@@ -1073,7 +1104,13 @@ payments:
       funding_cents: 500
 ```
 
-The normal CLI reads secrets through its existing environment interpolation.
+The normal CLI reads configured values through its existing environment interpolation.
+The required public client token starts with `test_` for sandbox or `live_` for production.
+The server rejects a token from the wrong environment before database access.
+Create this token in the selected Paddle account under Developer tools, Authentication.
+The [Paddle.js initialization contract](https://developer.paddle.com/paddle-js/methods/paddle-initialize/) uses this token instead of the API key.
+Configure and obtain approval for the default payment link before actual Paddle qualification.
+The [transaction checkout prerequisites](https://developer.paddle.com/build/transactions/pass-transaction-checkout/) define this processor setup requirement.
 The shared client selects the Paddle API origin for the configured environment.
 `api_base_url` can select an explicit HTTPS origin. A sandbox loopback protocol can use HTTP.
 Offer amounts must be at least 500 cents. The server rejects incomplete processor identities and secrets at startup.
@@ -1110,7 +1147,7 @@ The service rejects new hosted work when available funds are negative or a pendi
 This payment restriction does not replace an operator suspension.
 New funding and admission checks use available funds to complete retained refund holds.
 Controlled tests cover refund approval, rejection, concurrent processing, chargeback replay, reversal, and failed financial writes.
-Full reconciliation, browser checkout, and processor sandbox qualification remain open under F069.
+Full reconciliation and processor sandbox qualification remain open under F069.
 
 ### Payment Event Inbox
 
@@ -1136,7 +1173,7 @@ See [Paddle transaction completion](https://developer.paddle.com/webhooks/transa
 
 `make test-hosted-payments` tests the real HTTP receiver with the shared verifier and SQLite storage.
 The current component has controlled development integration only.
-Browser checkout, full reconciliation, and processor sandbox qualification remain open under F069.
+Full reconciliation and processor sandbox qualification remain open under F069.
 Production payments remain disabled.
 
 ### Issue Responsibilities

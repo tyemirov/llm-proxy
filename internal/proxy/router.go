@@ -162,6 +162,7 @@ func buildProxyApplication(configuration Configuration, structuredLogger *zap.Su
 	if payments != nil {
 		managementService.funding = payments.catalog
 		managementService.paymentPortal = payments.client
+		managementService.paymentClientToken = configuration.payments.clientToken
 		registerPaddlePaymentRoutes(router, payments.inbox)
 	}
 	managementService.registerRoutes(router)

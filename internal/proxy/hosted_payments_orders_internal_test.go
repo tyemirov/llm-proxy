@@ -29,6 +29,7 @@ func paymentOrdersFixture(t *testing.T, database *gormManagedTenantDatabase) (*m
 		t.Fatal(err)
 	}
 	service.funding = catalog
+	service.paymentClientToken = "test_browserfixture"
 	server, cookie := fundsManagementServiceHTTPFixture(t, service)
 	return service, server, cookie
 }
@@ -112,6 +113,9 @@ func TestHostedPaymentsOrdersRetainServerOfferAndOneDeliveryAcrossRestart(t *tes
 	offers := paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, "/billing-accounts/billing-journal/funding-offers", "", "", http.StatusOK)
 	if len(offers["offers"].([]any)) != 2 {
 		t.Fatalf("offers=%v", offers)
+	}
+	if offers["provider"] != "paddle" || offers["environment"] != "sandbox" || offers["client_token"] != "test_browserfixture" {
+		t.Fatalf("missing public checkout configuration: %v", offers)
 	}
 	body := `{"offer_code":"five"}`
 	created := paymentOrderHTTP(t, server, cookie("owner"), http.MethodPost, paymentOrdersTestPath, "order-one", body, http.StatusCreated)

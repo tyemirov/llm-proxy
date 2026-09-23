@@ -493,3 +493,7 @@ export {};
 /** @typedef {{orders:FundingOrder[],next_cursor:string}} FundingOrderPage */
 /** @typedef {{funding_order_id:string,environment:PaymentEnvironment,currency:'USD',state:FundingState,credit_cents:string,gross_cents:string,tax_cents:string,adjusted_gross_cents:string,adjusted_tax_cents:string,reversed_cents:string,pending_refund_cents:string,invoice_number:string|null,paid_at:string}} PaymentReceipt */
 /** @typedef {{provider:'paddle',environment:PaymentEnvironment,url:string}} PaymentPortalSession */
+/** @typedef {{code:string,funding_cents:string,currency:'USD'}} FundingOffer */
+/** @typedef {{provider:'paddle',environment:PaymentEnvironment,client_token:string,offers:FundingOffer[]}} FundingOffers */
+/** @typedef {{provider:'paddle',environment:PaymentEnvironment,transaction_id:string}} PaymentCheckout */
+/** @typedef {{key:string,offer_code:string,order_id:string|null}} FundingIntent */
