@@ -57,7 +57,7 @@ func paymentInboxHTTP(t *testing.T, server *httptest.Server, body, signature str
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Paddle-Signature", signature)
-	response, err := server.Client().Do(request)
+	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -23,6 +23,7 @@ type proxyApplication struct {
 	database managedTenantDatabase
 	address  string
 	now      func() time.Time
+	payments *paddlePaymentRuntime
 }
 
 // Serve runs HTTP and financial reconciliation under one process lifecycle.
@@ -44,6 +45,11 @@ func (application *proxyApplication) serve(ctx context.Context, listener net.Lis
 	if err := application.database.reconcileHostedFunds(ctx, application.now().UTC()); err != nil {
 		return errors.Join(fmt.Errorf("initialize funds reconciliation: %w", err), listener.Close())
 	}
+	if application.payments != nil {
+		if err := application.payments.reconcile(ctx); err != nil {
+			return errors.Join(fmt.Errorf("initialize payment reconciliation: %w", err), listener.Close())
+		}
+	}
 	group, running := errgroup.WithContext(ctx)
 	server := &http.Server{Handler: application.router, BaseContext: func(net.Listener) context.Context { return running }}
 	group.Go(func() error {
@@ -57,6 +63,25 @@ func (application *proxyApplication) serve(ctx context.Context, listener net.Lis
 		defer ticker.Stop()
 		return application.reconcileFunds(running, ticker.C)
 	})
+	if application.payments != nil {
+		group.Go(func() error {
+			ticker := time.NewTicker(hostedFundsReconciliationInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-running.Done():
+					return nil
+				case <-ticker.C:
+					if err := application.payments.reconcile(running); err != nil {
+						if running.Err() != nil {
+							return nil
+						}
+						return err
+					}
+				}
+			}
+		})
+	}
 	group.Go(func() error {
 		<-running.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), journalPersistenceTimeout)

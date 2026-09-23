@@ -61,6 +61,16 @@ management:
   provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
   management_api_origin: "https://llm-proxy-api.example"
   proxy_origin: "https://llm-proxy-api.example"
+payments:
+  environment: sandbox
+  processor_account_id: processor-fixture
+  supplier_id: supplier-fixture
+  api_key: "${PAYMENT_TEST_API_KEY}"
+  webhook_secret: "${PAYMENT_TEST_WEBHOOK_SECRET}"
+  offers:
+    - code: five
+      price_id: pri_01hv8x2axb33yr5y238zfwcn5p
+      funding_cents: 500
 `)
 	writeTestDotEnv(t, tempDir, `
 P411_TAUTH_JWT_SIGNING_KEY=tauth-signing-key
@@ -68,6 +78,8 @@ P411_MANAGEMENT_DATABASE_PATH=/var/lib/llm-proxy/management.sqlite
 P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 OPENAI_API_KEY=sk-openai-catalog-binding
 DASHSCOPE_BASE_URL=https://workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1
+PAYMENT_TEST_API_KEY=paddle-api-fixture
+PAYMENT_TEST_WEBHOOK_SECRET=paddle-webhook-fixture
 `)
 
 	var capturedConfiguration proxy.Configuration
@@ -79,6 +91,9 @@ DASHSCOPE_BASE_URL=https://workspace.ap-southeast-1.maas.aliyuncs.com/compatible
 	executeError := executeRootCommand(t, "--config", configPath)
 	if executeError != nil {
 		t.Fatalf("ExecuteC error: %v", executeError)
+	}
+	if capturedConfiguration.Payments == nil || capturedConfiguration.Payments.Environment != "sandbox" || capturedConfiguration.Payments.APIKey != "paddle-api-fixture" || capturedConfiguration.Payments.WebhookSecret != "paddle-webhook-fixture" || len(capturedConfiguration.Payments.Offers) != 1 || capturedConfiguration.Payments.Offers[0].FundingCents != 500 {
+		t.Fatal("CLI did not retain payment configuration")
 	}
 	if capturedConfiguration.ProviderCatalog == nil || capturedConfiguration.ProviderCatalog.SchemaVersion() != proxy.ProviderCatalogSchemaVersion {
 		t.Fatalf("provider catalog=%v", capturedConfiguration.ProviderCatalog)

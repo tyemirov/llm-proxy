@@ -155,6 +155,15 @@ func buildProxyApplication(configuration Configuration, structuredLogger *zap.Su
 		managedRequestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, managedTenants, usageEndpointText, chatHandler(upstreamProviders, providers, managedTenants, structuredLogger)),
 	)
 	managementService := newManagementService(configuration.Management, configuration.managementSessionValidator, managedTenants, providers, keyVerifier, structuredLogger)
+	payments, err := newPaddlePaymentRuntime(configuration.payments, journalDatabase)
+	if err != nil {
+		return nil, err
+	}
+	if payments != nil {
+		managementService.funding = payments.catalog
+		managementService.paymentPortal = payments.client
+		registerPaddlePaymentRoutes(router, payments.inbox)
+	}
 	managementService.registerRoutes(router)
 	if err := registerMCPRoutes(router, configuration, managementService, upstreamProviders, assetStore, mediaOperations); err != nil {
 		return nil, err
@@ -191,7 +200,7 @@ func buildProxyApplication(configuration Configuration, structuredLogger *zap.Su
 	if err := RegisterClientProtocols(router, adapters); err != nil {
 		return nil, err
 	}
-	return &proxyApplication{router: router, database: managedTenants.database, address: fmt.Sprintf(":%d", configuration.Port), now: time.Now}, nil
+	return &proxyApplication{router: router, database: managedTenants.database, address: fmt.Sprintf(":%d", configuration.Port), now: time.Now, payments: payments}, nil
 }
 
 // chatHandler returns a handler that forwards query-string requests to upstream providers.

@@ -19,13 +19,15 @@ type checkoutProtocolFixture struct {
 	transactions []map[string]any
 	adjustments  []map[string]any
 	creates      atomic.Int64
+	portalCalls  atomic.Int64
+	portalURL    string
 	dropResponse atomic.Bool
 	wrongAccount atomic.Bool
 }
 
 func newCheckoutProtocolFixture(t *testing.T) *checkoutProtocolFixture {
 	t.Helper()
-	fixture := &checkoutProtocolFixture{}
+	fixture := &checkoutProtocolFixture{portalURL: "https://customer-portal.paddle.com/fixture?token=temporary"}
 	fixture.server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		fixture.mutex.Lock()
 		defer fixture.mutex.Unlock()
@@ -39,6 +41,10 @@ func newCheckoutProtocolFixture(t *testing.T) *checkoutProtocolFixture {
 			}
 		}
 		switch {
+		case request.Method == http.MethodPost && request.URL.Path == "/customers/ctm_01hv8x2axb33yr5y238zfwcn5p/portal-sessions":
+			fixture.portalCalls.Add(1)
+			writer.WriteHeader(http.StatusCreated)
+			encode(map[string]any{"data": map[string]any{"urls": map[string]any{"general": map[string]any{"overview": fixture.portalURL}}}})
 		case request.Method == http.MethodGet && request.URL.Path == "/adjustments":
 			if request.URL.Query().Get("transaction_id") != "txn_00000000000000000000000001" {
 				t.Error("unscoped adjustment read")

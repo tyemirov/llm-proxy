@@ -2746,7 +2746,14 @@ retain satisfied historical dependencies.
   Payment and funds checks pass in 8.213 and 23.260 seconds against released utils v0.19.0.
   The complete backup test restores adjustment evidence and Ledger effects without another deduction after replay.
   The payment race check, Go lint, and format checks pass.
-  Runtime configuration, receipt resources, full reconciliation, and browser acceptance remain open.
+  Owned receipt resources expose original and adjusted customer amounts without private processor evidence.
+  Temporary Paddle portal sessions use the owned processor customer and remain uncached.
+  The normal CLI configures payment processing through its existing environment interpolation.
+  The normal service runs checkout delivery and payment processing with HTTP admission.
+  Financial write failure stops admission. Restart recovery applies the retained payment once.
+  The database binds to one payment environment and preserves that binding through backup restoration.
+  Payment, CLI, funds, restore, race, lint, and generated API checks pass against released utils v0.19.0.
+  Browser checkout, payment history, and full reconciliation remain open.
   Goal:
   Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
   Requirements:

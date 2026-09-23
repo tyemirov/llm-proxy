@@ -2252,6 +2252,81 @@ paths:
           $ref: '#/components/responses/HostedResourceError'
         '503':
           $ref: '#/components/responses/FundingError'
+  /api/management/billing-accounts/{billing_account_id}/funding-orders/{order_id}/receipt:
+    get:
+      operationId: getPaymentReceipt
+      summary: Read the receipt for an owned funding order
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+        - name: order_id
+          in: path
+          required: true
+          schema: {type: string, pattern: '^funding-[a-f0-9]{32}$'}
+      responses:
+        '200':
+          description: The owned funding resource.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentReceipt'
+        '400':
+          $ref: '#/components/responses/FundingError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/FundingError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+        '503':
+          $ref: '#/components/responses/FundingError'
+  /api/management/billing-accounts/{billing_account_id}/payment-portal-sessions:
+    post:
+      operationId: createPaymentPortalSession
+      summary: Create a temporary Paddle customer portal session
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+      description: Each request creates a temporary link without a financial effect. Do not cache or store the link.
+      x-llm-proxy-required-request-content-type: application/json
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: false, properties: {}}
+      responses:
+        '201':
+          description: The temporary portal session.
+          headers:
+            Location:
+              schema: {type: string, format: uri}
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentPortalSession'
+        '400':
+          $ref: '#/components/responses/FundingError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/FundingError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+        '503':
+          $ref: '#/components/responses/FundingError'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '415':
+          $ref: '#/components/responses/ManagementUnsupportedMediaType'
   /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/charge-summary:
     get:
       operationId: getRequestChargeSummary
@@ -9098,6 +9173,38 @@ components:
         offers:
           type: array
           items: {$ref: '#/components/schemas/FundingOffer'}
+    PaymentReceipt:
+      type: object
+      additionalProperties: false
+      required: [funding_order_id, environment, currency, state, credit_cents, gross_cents, tax_cents, adjusted_gross_cents, adjusted_tax_cents, reversed_cents, pending_refund_cents, invoice_number, paid_at]
+      properties:
+        funding_order_id: {type: string, pattern: '^funding-[a-f0-9]{32}$'}
+        environment: {type: string, enum: [sandbox, production]}
+        currency: {type: string, enum: [USD]}
+        state: {type: string, enum: [paid, partially_refunded, refunded, disputed]}
+        credit_cents: {type: string, pattern: '^[0-9]+$'}
+        gross_cents: {type: string, pattern: '^[0-9]+$'}
+        tax_cents: {type: string, pattern: '^[0-9]+$'}
+        adjusted_gross_cents: {type: string, pattern: '^[0-9]+$'}
+        adjusted_tax_cents: {type: string, pattern: '^[0-9]+$'}
+        reversed_cents:
+          type: string
+          pattern: '^[0-9]+$'
+          description: Cumulative customer credit removed after verified processor adjustments.
+        pending_refund_cents:
+          type: string
+          pattern: '^[0-9]+$'
+          description: Customer credit allocated to pending processor adjustments.
+        invoice_number: {type: string, nullable: true}
+        paid_at: {type: string, format: date-time}
+    PaymentPortalSession:
+      type: object
+      additionalProperties: false
+      required: [provider, environment, url]
+      properties:
+        provider: {type: string, enum: [paddle]}
+        environment: {type: string, enum: [sandbox, production]}
+        url: {type: string, format: uri, pattern: '^https://'}
     PaymentCheckout:
       type: object
       additionalProperties: false

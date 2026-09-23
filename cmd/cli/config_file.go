@@ -37,8 +37,9 @@ var (
 )
 
 type fileConfiguration struct {
-	Server     serverConfiguration     `mapstructure:"server"`
-	Management managementConfiguration `mapstructure:"management"`
+	Server     serverConfiguration         `mapstructure:"server"`
+	Management managementConfiguration     `mapstructure:"management"`
+	Payments   *proxy.PaymentConfiguration `mapstructure:"payments"`
 }
 
 type serverConfiguration struct {
@@ -259,6 +260,7 @@ func (configuration fileConfiguration) toProxyConfiguration(providerCatalog *pro
 	}
 	return proxy.NewConfiguration(proxy.Configuration{
 		Management:                        managementProxyConfiguration(configuration.Management, usageQueueSize),
+		Payments:                          configuration.Payments,
 		ProviderCatalog:                   providerCatalog,
 		ProviderConnectionValues:          providerConnectionValues,
 		Port:                              configuration.Server.Port,

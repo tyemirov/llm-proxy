@@ -49,7 +49,7 @@ func paymentOrderHTTP(t *testing.T, server *httptest.Server, cookie *http.Cookie
 		request.Header.Set("Content-Type", "application/json")
 	}
 	request.Header.Set("Origin", "http://localhost:8080")
-	response, err := server.Client().Do(request)
+	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,10 +72,14 @@ func paymentOrderHTTP(t *testing.T, server *httptest.Server, cookie *http.Cookie
 		template = "/api/management/billing-accounts/{billing_account_id}/ledger-entries"
 	} else if strings.HasSuffix(resourcePath, "/funding-offers") {
 		template = "/api/management/billing-accounts/{billing_account_id}/funding-offers"
+	} else if strings.HasSuffix(resourcePath, "/payment-portal-sessions") {
+		template = "/api/management/billing-accounts/{billing_account_id}/payment-portal-sessions"
 	} else if strings.Contains(resourcePath, "/funding-orders/") {
 		template += "/{order_id}"
 		if strings.HasSuffix(resourcePath, "/checkout") {
 			template += "/checkout"
+		} else if strings.HasSuffix(resourcePath, "/receipt") {
+			template += "/receipt"
 		}
 	}
 	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
@@ -92,7 +96,11 @@ func paymentOrderHTTP(t *testing.T, server *httptest.Server, cookie *http.Cookie
 	if err := json.Unmarshal(payload, &result); err != nil {
 		t.Fatal(err)
 	}
-	if status == http.StatusCreated && response.Header.Get("Location") != managementAPIPath+paymentOrdersTestPath+"/"+result["id"].(string) {
+	if status == http.StatusCreated && strings.HasSuffix(resourcePath, "/payment-portal-sessions") {
+		if response.Header.Get("Location") != result["url"] {
+			t.Fatalf("portal location=%s", response.Header.Get("Location"))
+		}
+	} else if status == http.StatusCreated && response.Header.Get("Location") != managementAPIPath+paymentOrdersTestPath+"/"+result["id"].(string) {
 		t.Fatalf("location=%s", response.Header.Get("Location"))
 	}
 	return result

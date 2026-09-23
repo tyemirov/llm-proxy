@@ -224,6 +224,8 @@ type managedUsageEventVisitor func(managedUsageEventRecord) error
 
 type managedTenantDatabase interface {
 	paymentCheckout(context.Context, string, string) (managementPaymentCheckoutResponse, error)
+	paymentReceipt(context.Context, string, string) (managementPaymentReceiptResponse, error)
+	paymentCustomer(context.Context, string, string, string) (string, error)
 	createFundingOrder(context.Context, *fundingCatalog, string, string, string, time.Time) (managedFundingOrderRecord, error)
 	fundingOrder(context.Context, string, string) (managedFundingOrderRecord, error)
 	fundingOrders(context.Context, string, managedConnectionPage) ([]managedFundingOrderRecord, error)

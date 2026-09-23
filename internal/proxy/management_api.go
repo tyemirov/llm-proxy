@@ -44,6 +44,7 @@ var (
 
 type managementService struct {
 	funding          *fundingCatalog
+	paymentPortal    paddlePortalClient
 	configuration    ManagementConfiguration
 	sessionValidator *managementSessionValidator
 	store            *managedTenantStore
@@ -328,6 +329,8 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	managementGroup.POST(managementBillingAccountsPath, service.createBillingAccountHandler())
 	managementGroup.GET(managementBillingAccountPath, service.getBillingAccountHandler())
 	managementGroup.GET(managementPaymentCheckoutPath, service.paymentCheckoutHandler())
+	managementGroup.GET(managementPaymentReceiptPath, service.paymentReceiptHandler())
+	managementGroup.POST(managementPaymentPortalSessionsPath, service.createPaymentPortalSessionHandler())
 	managementGroup.GET(managementFundingOffersPath, service.fundingOffersHandler())
 	managementGroup.POST(managementFundingOrdersPath, service.createFundingOrderHandler())
 	managementGroup.GET(managementFundingOrdersPath, service.listFundingOrdersHandler())

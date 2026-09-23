@@ -1010,7 +1010,57 @@ The receipt retains gross payment, tax, processor fees, earnings, customer credi
 Unknown processor fees remain null. Payout amounts retain their own currency.
 Controlled fixtures use the retained offer amount as the customer credit and keep processor fees separate.
 These fixtures do not decide the production fee allocation or tax policy.
-Customer receipt resources and normal runtime configuration remain open under F069.
+Owned receipt resources expose customer amounts without private processor evidence.
+
+### Receipts And Processor Portal
+
+`GET /api/management/billing-accounts/{billing_account_id}/funding-orders/{order_id}/receipt` reads one verified payment receipt.
+The response includes original and adjusted gross amounts, taxes, customer credit, credit reversals, and pending refund allocations.
+It also includes the invoice number, payment time, environment, and current order state.
+The database supplies one consistent snapshot. An unpaid order has no receipt.
+Private processor fees, payout evidence, customer identifiers, and event bodies do not enter this response.
+
+`POST /api/management/billing-accounts/{billing_account_id}/payment-portal-sessions` accepts an empty JSON object.
+The server selects the owned processor customer in its configured environment and returns a temporary Paddle URL.
+The response uses `201`, `Location`, and `Cache-Control: no-store`.
+Each request creates a new session without a financial effect.
+The service does not store or cache the URL.
+The [Paddle customer portal](https://developer.paddle.com/api-reference/customer-portals/create-customer-portal-session/) supplies transaction history and invoice downloads.
+The browser must open this URL directly, without an iframe.
+
+### Payment Runtime Configuration
+
+The optional `payments` object in the server configuration enables payment processing.
+Omit this object to disable checkout creation, portal sessions, and the webhook route.
+Owned historical records remain readable when payment processing is disabled.
+The tracked server configuration omits this object. Production payments remain disabled.
+
+The following configuration shows the field contract. It does not authorize live payment qualification.
+
+```yaml
+payments:
+  environment: sandbox
+  processor_account_id: selected-paddle-account
+  supplier_id: selected-platform-supplier
+  api_key: "${PADDLE_API_KEY}"
+  webhook_secret: "${PADDLE_WEBHOOK_SECRET}"
+  offers:
+    - code: five
+      price_id: pri_00000000000000000000000000
+      funding_cents: 500
+```
+
+The normal CLI reads secrets through its existing environment interpolation.
+The shared client selects the Paddle API origin for the configured environment.
+`api_base_url` can select an explicit HTTPS origin. A sandbox loopback protocol can use HTTP.
+Offer amounts must be at least 500 cents. The server rejects incomplete processor identities and secrets at startup.
+The selected price must satisfy the retained funding amount and currency before the service credits funds.
+
+The normal service runs checkout delivery and event processing before HTTP startup and once per second during operation.
+The worker retains uncertain processor outcomes with a reason and retry time.
+A financial database failure stops HTTP admission. A restart retries retained work without another funding effect.
+Shutdown cancels active processor requests through the shared client.
+The payment database binds to one environment. A different environment requires a separate database.
 
 ### Payment Adjustments
 
@@ -1063,7 +1113,7 @@ See [Paddle transaction completion](https://developer.paddle.com/webhooks/transa
 
 `make test-hosted-payments` tests the real HTTP receiver with the shared verifier and SQLite storage.
 The current component has controlled development integration only.
-Runtime configuration, payment history, full reconciliation, and processor sandbox qualification remain open under F069.
+Browser payment history, full reconciliation, and processor sandbox qualification remain open under F069.
 Production payments remain disabled.
 
 ### Issue Responsibilities

@@ -180,6 +180,9 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 	if err := database.database.First(&expectedDelivery).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := bindPaymentEnvironment(database.database, paymentEnvironmentSandbox); err != nil {
+		t.Fatal(err)
+	}
 	copyFundsDatabase(t, source.File, backup)
 	laterEvent := strings.Replace(event, "evt_01hv8x2axb33yr5y238zfwcn5p", "evt_01hv8x2axb33yr5y238zfwcn5q", 1)
 	paymentInboxHTTP(t, processor, laterEvent, paymentInboxSignature(laterEvent, paymentInboxTestSecret, time.Now()), http.StatusOK)
@@ -215,6 +218,12 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 	}
 	assertHostedFundsBalance(t, restored, 303, 300)
 	assertFundsCreditRemainder(t, restored, "109", "50000")
+	if err := bindPaymentEnvironment(restored.database, paymentEnvironmentSandbox); err != nil {
+		t.Fatal(err)
+	}
+	if err := bindPaymentEnvironment(restored.database, paymentEnvironmentProduction); err == nil {
+		t.Fatal("restored sandbox funds accepted production environment")
+	}
 	restoredProcessor := paymentInboxTestServer(t, restored, "sandbox", "backup-processor")
 	paymentInboxHTTP(t, restoredProcessor, event, paymentInboxSignature(event, paymentInboxTestSecret, time.Now()), http.StatusOK)
 	var restoredEvents []managedPaymentInboxRecord
