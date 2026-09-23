@@ -50,6 +50,11 @@ export async function startPaddleProtocolFixture() {
     config:{environment:'sandbox',client_token:'test_browserfixture',processor_account_id:'browser-processor',supplier_id:'browser-supplier',api_key:apiKey,api_base_url:origin,webhook_secret:webhookSecret,offers:[{code:'five',price_id:priceID,funding_cents:500}]},
     transactions,failures,
     get portalCalls(){return portalCalls;},
+    cancel(orderID) {
+      const transaction=transactions.find(item=>item.custom_data.funding_order_id===orderID);
+      Object.assign(transaction,{status:'canceled',updated_at:'2026-09-23T12:05:00Z'});
+      return structuredClone(transaction);
+    },
     complete(orderID) {
       const transaction=transactions.find(item=>item.custom_data.funding_order_id===orderID);
       if(!transaction)throw new Error('Checkout transaction is absent');

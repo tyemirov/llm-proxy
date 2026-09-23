@@ -228,6 +228,14 @@ test('browser checkout retries one order and waits for verified funding after Pa
   await history.getByRole('button',{name:'Continue payment',exact:true}).click();
   await expect(page.getByRole('dialog',{name:'Controlled Paddle checkout'})).toBeVisible();
   await page.getByRole('button',{name:'Close controlled checkout',exact:true}).click();
-  expect((await (await context.request.get(root+'/funding-orders',{headers})).json()).orders).toHaveLength(2);
+  const retainedOrders=(await (await context.request.get(root+'/funding-orders',{headers})).json()).orders;
+  expect(retainedOrders).toHaveLength(2);
+  const unfinished=retainedOrders.find(item=>item.state==='pending');
+  await processor.event(stack.llmProxyOrigin,'transaction.canceled',processor.cancel(unfinished.id));
+  await funding.getByRole('button',{name:'Check payment status',exact:true}).click();
+  await expect(funding).toContainText('Payment failed.');
+  await expect(page.locator('[data-funds-value="available_cents"]')).toHaveText('$5.00');
+  await expect(history.locator(`[data-payment-order="${unfinished.id}"]`)).toContainText('Failed');
+  await expect(history.getByRole('button',{name:'Continue payment',exact:true})).toHaveCount(0);
   expect(processor.failures).toEqual([]);
 });

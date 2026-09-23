@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/big"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/tyemirov/utils/billing"
@@ -104,7 +103,7 @@ func (worker *paddlePaymentProcessor) process(ctx context.Context, event managed
 			return worker.deferEvent(ctx, event, "adjustment_event_invalid")
 		}
 		transactionID = envelope.Data.TransactionID
-	} else if !strings.HasPrefix(event.EventType, "transaction.") {
+	} else if event.EventType != paymentTransactionCompleted && !paymentStateEvent(event.EventType) {
 		return worker.deferEvent(ctx, event, "event_processing_required")
 	}
 	var checkout managedPaymentCheckoutRecord
@@ -126,9 +125,7 @@ func (worker *paddlePaymentProcessor) process(ctx context.Context, event managed
 		return worker.processAdjustment(ctx, event, order, checkout)
 	}
 	if event.EventType != paymentTransactionCompleted {
-		// Informational events cannot grant funds or move a verified paid order
-		// backwards. Completion and adjustments own their financial effects.
-		return worker.database.database.WithContext(ctx).Model(&managedPaymentInboxRecord{}).Where("id = ? AND state IN ?", event.ID, []string{paymentInboxPending, paymentInboxReconciliation}).Updates(map[string]any{"state": paymentInboxApplied, "reason": "no_funding_effect"}).Error
+		return worker.processState(ctx, event, order, checkout)
 	}
 	var envelope struct {
 		Data billing.PaddleTransactionCompletedWebhookData `json:"data"`
@@ -150,6 +147,9 @@ func (worker *paddlePaymentProcessor) process(ctx context.Context, event managed
 	if err != nil {
 		return worker.deferEvent(ctx, event, "transaction_mismatch")
 	}
+	if verified.updatedAt.Before(eventEvidence.updatedAt) {
+		return worker.deferEvent(ctx, event, "transaction_snapshot_stale")
+	}
 	if eventEvidence.digest != verified.digest {
 		return worker.deferEvent(ctx, event, "transaction_evidence_changed")
 	}
@@ -163,6 +163,7 @@ func (worker *paddlePaymentProcessor) process(ctx context.Context, event managed
 type verifiedCompletedPayment struct {
 	transaction billing.PaddleTransactionCompletedWebhookData
 	completedAt time.Time
+	updatedAt   time.Time
 	encoded     string
 	digest      string
 }
@@ -174,6 +175,10 @@ func completedPaymentEvidence(transaction billing.PaddleTransactionCompletedWebh
 	}
 	completedAt, err := time.Parse(time.RFC3339Nano, transaction.CompletedAt)
 	if err != nil || completedAt.IsZero() {
+		return verifiedCompletedPayment{}, errFundingInvalid
+	}
+	updatedAt, err := time.Parse(time.RFC3339Nano, transaction.UpdatedAt)
+	if err != nil || updatedAt.Before(completedAt) {
 		return verifiedCompletedPayment{}, errFundingInvalid
 	}
 	totals := transaction.Details.Totals
@@ -231,7 +236,7 @@ func completedPaymentEvidence(transaction billing.PaddleTransactionCompletedWebh
 	if err != nil {
 		return verifiedCompletedPayment{}, fmt.Errorf("encode payment evidence: %w", err)
 	}
-	return verifiedCompletedPayment{transaction: transaction, completedAt: completedAt.UTC(), encoded: string(encoded), digest: sha256Hex(string(encoded))}, nil
+	return verifiedCompletedPayment{transaction: transaction, completedAt: completedAt.UTC(), updatedAt: updatedAt.UTC(), encoded: string(encoded), digest: sha256Hex(string(encoded))}, nil
 }
 
 func validPaymentTotals(totals *billing.PaddleTransactionTotals) bool {
@@ -253,19 +258,26 @@ func validPaymentTotals(totals *billing.PaddleTransactionTotals) bool {
 
 func (worker *paddlePaymentProcessor) credit(ctx context.Context, event managedPaymentInboxRecord, order managedFundingOrderRecord, checkout managedPaymentCheckoutRecord, evidence verifiedCompletedPayment, adjustments verifiedPaymentAdjustments) error {
 	now := worker.now().UTC()
+	observation, err := paymentStateObservation(event, order, evidence.transaction, adjustments.evidence.TransactionUpdatedAt, now)
+	if err != nil {
+		return err
+	}
 	totals := evidence.transaction.Details.Totals
 	receipt := managedPaymentReceiptRecord{OrderID: order.ID, BillingAccountID: order.BillingAccountID, Environment: order.Environment, ProcessorAccountID: order.ProcessorAccountID, TransactionID: checkout.TransactionID, CustomerID: checkout.CustomerID, InboxID: event.ID, LedgerKey: "payment-funding:" + order.ID, Currency: order.Currency, CreditCents: order.FundingCents, GrossCents: totals.Total, TaxCents: totals.Tax, FeeCents: totals.Fee, EarningsCents: totals.Earnings, InvoiceNumber: evidence.transaction.InvoiceNumber, FinancialEvidence: evidence.encoded, EvidenceDigest: evidence.digest, CompletedAt: evidence.completedAt, CreatedAt: now}
 	if payout := evidence.transaction.Details.PayoutTotals; payout != nil {
 		receipt.PayoutCurrency, receipt.PayoutEarningsCents = payout.CurrencyCode, payout.Earnings
 	}
 	privateQuery := worker.database.database.Session(&gorm.Session{Logger: paymentInboxLogger{worker.database.database.Logger}})
-	err := privateQuery.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = privateQuery.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		lock := tx.Model(&managedBillingAccountRecord{}).Where("id = ?", order.BillingAccountID).UpdateColumn("id", gorm.Expr("id"))
 		if lock.Error != nil {
 			return fmt.Errorf("lock payment account: %w", lock.Error)
 		}
 		if lock.RowsAffected != 1 {
 			return errFundingNotFound
+		}
+		if err := retainPaymentStateObservation(tx, observation); err != nil {
+			return err
 		}
 		var retained managedPaymentReceiptRecord
 		err := tx.Where("order_id = ?", order.ID).First(&retained).Error
@@ -284,7 +296,7 @@ func (worker *paddlePaymentProcessor) credit(ctx context.Context, event managedP
 			if err := tx.Omit(clause.Associations).Create(&receipt).Error; err != nil {
 				return fmt.Errorf("retain payment receipt: %w", err)
 			}
-			result := tx.Model(&managedFundingOrderRecord{}).Where("id = ? AND state IN ?", order.ID, []string{fundingOrderCreated, "pending", "failed"}).Update("state", fundingOrderPaid)
+			result := tx.Model(&managedFundingOrderRecord{}).Where("id = ? AND state IN ?", order.ID, []string{fundingOrderCreated, fundingOrderPending, fundingOrderFailed}).Update("state", fundingOrderPaid)
 			if result.Error != nil {
 				return fmt.Errorf("complete funding order: %w", result.Error)
 			}

@@ -159,6 +159,10 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 	if err := database.database.Order("revision").Find(&expectedRevisions).Error; err != nil {
 		t.Fatal(err)
 	}
+	var expectedStates []managedPaymentStateObservationRecord
+	if err := database.database.Order("id").Find(&expectedStates).Error; err != nil || len(expectedStates) == 0 {
+		t.Fatalf("processor states absent: %v", err)
+	}
 	var expectedReceipt managedPaymentReceiptRecord
 	if err := database.database.First(&expectedReceipt).Error; err != nil {
 		t.Fatal(err)
@@ -246,6 +250,10 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 	var restoredDeliveries []managedPaymentDeliveryRecord
 	if err := restored.database.Find(&restoredDeliveries).Error; err != nil || len(restoredDeliveries) != 1 || !reflect.DeepEqual(expectedDelivery, restoredDeliveries[0]) {
 		t.Fatalf("restored delivery differs: %v error=%v", restoredDeliveries, err)
+	}
+	var restoredStates []managedPaymentStateObservationRecord
+	if err := restored.database.Order("id").Find(&restoredStates).Error; err != nil || !reflect.DeepEqual(expectedStates, restoredStates) {
+		t.Fatalf("restored processor states differ: %v", err)
 	}
 	var restoredReceipt managedPaymentReceiptRecord
 	if err := restored.database.First(&restoredReceipt).Error; err != nil || !reflect.DeepEqual(expectedReceipt, restoredReceipt) {

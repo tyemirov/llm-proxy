@@ -1012,6 +1012,25 @@ Controlled fixtures use the retained offer amount as the customer credit and kee
 These fixtures do not decide the production fee allocation or tax policy.
 Owned receipt resources expose customer amounts without private processor evidence.
 
+### Payment State Evidence
+
+The worker verifies lifecycle events against the current processor transaction and the retained checkout.
+A verified canceled transaction changes an unpaid order to `failed` without a credit.
+A failed payment attempt leaves the order `pending` so the customer can retry checkout.
+A completed transaction without its completed event remains unresolved with `completion_event_required`.
+Lifecycle events cannot reverse a retained receipt. Paddle adjustments control financial reversals.
+
+Each accepted processor observation retains its timestamp, complete evidence, and digest.
+The observation, order state, and event state commit together under the account writer lock.
+Funding credits and adjustments use the same observation check within their financial transaction.
+An older processor snapshot cannot replace a newer retained observation.
+Different evidence at the same processor timestamp requires reconciliation.
+The processor snapshot must not precede the signed event that requires its verification.
+
+Controlled HTTP tests cover cancellation, retryable failure, reordered events, concurrent workers, and failed writes.
+The backup fixture restores observations with payment receipts and Ledger effects.
+The browser shows a failed payment without a change to the existing balance.
+
 ### Receipts And Processor Portal
 
 `GET /api/management/billing-accounts/{billing_account_id}/funding-orders/{order_id}/receipt` reads one verified payment receipt.

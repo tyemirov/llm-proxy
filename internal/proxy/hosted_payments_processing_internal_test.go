@@ -101,7 +101,7 @@ func TestHostedPaymentsCompletedCreditCommitsOnceAcrossEventsAndWorkers(t *testi
 }
 
 func TestHostedPaymentsCompletedRejectsMismatchedEvidence(t *testing.T) {
-	for _, scenario := range []string{"foreign-account", "currency", "amount", "discount", "uncaptured", "paid-only", "event-api-disagreement"} {
+	for _, scenario := range []string{"foreign-account", "currency", "amount", "discount", "uncaptured", "paid-only", "event-api-disagreement", "older-api-state"} {
 		t.Run(scenario, func(t *testing.T) {
 			database, _, _ := newJournalTransactionFixture(t)
 			service, server, cookie := paymentOrdersFixture(t, database)
@@ -129,6 +129,11 @@ func TestHostedPaymentsCompletedRejectsMismatchedEvidence(t *testing.T) {
 			}
 			processor.mutex.Unlock()
 			sendPaymentEventFixture(t, database, transaction, "transaction.completed", 1)
+			if scenario == "older-api-state" {
+				processor.mutex.Lock()
+				transaction["updated_at"] = "2026-09-23T12:00:00Z"
+				processor.mutex.Unlock()
+			}
 			if scenario == "event-api-disagreement" {
 				processor.mutex.Lock()
 				transaction["payments"].([]any)[0].(map[string]any)["amount"] = "500"
@@ -153,6 +158,7 @@ func TestHostedPaymentsCompletedRejectsMismatchedEvidence(t *testing.T) {
 func TestHostedPaymentsCompletedRollsBackAndRecoversFinancialWrites(t *testing.T) {
 	for _, boundary := range []struct{ name, statement string }{
 		{"receipt", "BEFORE INSERT ON managed_payment_receipt_records"},
+		{"state-observation", "BEFORE INSERT ON managed_payment_state_observation_records"},
 		{"order", "BEFORE UPDATE ON managed_funding_order_records WHEN NEW.state = 'paid'"},
 		{"event", "BEFORE UPDATE ON managed_payment_inbox_records WHEN NEW.state = 'applied'"},
 	} {

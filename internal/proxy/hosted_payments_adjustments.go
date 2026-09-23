@@ -73,10 +73,8 @@ func (worker *paddlePaymentProcessor) readAdjustments(ctx context.Context, payme
 
 func verifyPaymentAdjustments(payment verifiedCompletedPayment, order managedFundingOrderRecord, adjustments []billing.PaddleAdjustment) (verifiedPaymentAdjustments, error) {
 	transaction := payment.transaction
-	updated, err := time.Parse(time.RFC3339Nano, transaction.UpdatedAt)
-	if err != nil || updated.Before(payment.completedAt) {
-		return verifiedPaymentAdjustments{}, errFundingInvalid
-	}
+	updated := payment.updatedAt
+
 	totals := transaction.Details.AdjustedTotals
 	if totals == nil || totals.CurrencyCode != order.Currency {
 		return verifiedPaymentAdjustments{}, errFundingInvalid

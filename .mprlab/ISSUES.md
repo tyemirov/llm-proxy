@@ -2762,7 +2762,12 @@ retain satisfied historical dependencies.
   Browser completion events cannot grant funds. Verified server state refreshes the balance and payment history.
   Payment, CLI, format, Go lint, frontend lint, and generated API checks pass.
   All three payment and onboarding browser checks pass in 23.5 seconds with controlled Paddle protocols.
-  Payment failure transitions and full reconciliation remain open.
+  Verified cancellation changes an unpaid order to failed without a credit. Declined payment attempts remain retryable.
+  Processor observations commit with order and event changes. Funding and adjustments use the same timestamp check.
+  Older snapshots and conflicting evidence remain unresolved without a financial change.
+  HTTP tests verify rollback, concurrency, restart, and restoration of retained observations.
+  Payment, CLI, backup, race, browser, lint, format, and generated API checks pass.
+  Full reconciliation remains open.
   Goal:
   Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
   Requirements:
