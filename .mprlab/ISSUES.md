@@ -2966,6 +2966,9 @@ retain satisfied historical dependencies.
   - The tests check exact charges, account remainders, reservations, replay, and zero provider calls after unfunded rejection.
   - Missing usage, provider errors, and uncertain results keep funds for reconciliation without an automatic debit.
   - Related usage, rating, settlement, and exposure checks passed. Go lint passed after the test changes.
+  - Dictation financial acceptance passed every enabled offering through both public HTTP interfaces.
+  - It checks native model selection, duration and token rates, exact settlement, account remainders, and replay across interfaces.
+  - Missing usage keeps the funds reservation and has no customer charge. Related dictation tests and Go lint passed.
   - Complete provider-operation qualification, final CI, and the F069 PR remain open.
   - The remaining commercial decisions and F065 through F069 implementation remain open.
   Goal:

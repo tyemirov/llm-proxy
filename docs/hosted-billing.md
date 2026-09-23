@@ -806,6 +806,21 @@ Controlled upload tests verify complete execution, revocation during staging, cl
 A replacement worker can resume before generation dispatch while preserving the accepted execution identity.
 Cleanup failure prevents transcript publication and preserves measured generation usage.
 
+### Dictation Financial Acceptance
+
+The financial matrix covers every enabled dictation offering through `/dictate` and `/v1/audio/transcriptions`.
+It uses the current provider adapters, platform credentials, runtime financial admission, usage journal, and Ledger settlement.
+Each request keeps one identity across both interfaces. Replay does not cause another provider call.
+Unfunded requests return HTTP 402 before provider dispatch.
+The tests check the native model field declared for each provider protocol.
+
+Controlled prices exercise multipart duration and token meters, plus Gemini and Vertex modality tokens.
+Duration prices convert measured seconds to minutes before the exact 30% markup.
+Google output charges include separately reported reasoning tokens.
+The tests check exact provider costs, customer charges, funds release, balances, and account remainders after two settlements.
+Missing usage keeps the reservation for reconciliation. It does not create a zero charge or change the account remainder.
+These checks do not establish actual supplier rates, live meter accuracy, or support for an unqualified meter.
+
 ### Completion Recovery
 
 An expired worker claim permits another worker to take accepted work only before the first dispatch.
