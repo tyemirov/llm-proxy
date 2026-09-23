@@ -979,6 +979,10 @@ The snapshot fixture verifies restoration and replay of orders, customer associa
 ### Checkout Delivery
 
 The delivery worker uses the shared Paddle commerce client from `utils/billing` v0.19.0.
+Before transaction creation or uncertain recovery, it reads the retained price through that client.
+The price must match the order identity and amount and have no recurring billing cycle.
+A failed price read remains retryable without a new transaction dispatch intent.
+An incompatible price leaves checkout unavailable with a retained reconciliation reason.
 A durable customer association binds the processor customer to one billing account and environment.
 The worker records its dispatch intent before it creates the processor transaction.
 It verifies the returned transaction against the retained order, customer, price, quantity, currency, and server metadata.

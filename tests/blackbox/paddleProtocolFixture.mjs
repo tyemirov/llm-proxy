@@ -20,6 +20,9 @@ export async function startPaddleProtocolFixture() {
       const url=new URL(request.url,'http://localhost');
       response.setHeader('Content-Type','application/json');
       const send=data=>response.end(JSON.stringify({data,meta:{pagination:{has_more:false}}}));
+      if(request.method==='GET' && url.pathname===`/prices/${priceID}`) {
+        return send({id:priceID,billing_cycle:null,unit_price:{amount:'500',currency_code:'USD'}});
+      }
       if(request.method==='GET' && url.pathname==='/customers') {
         if(!url.searchParams.get('email'))throw new Error('Missing customer email');
         const email=url.searchParams.get('email');

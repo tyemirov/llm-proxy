@@ -27,6 +27,27 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B259] (P1) Reject recurring Paddle prices before prepaid checkout.
+  Goal:
+  Enforce the F069 one-time funding contract before the service creates or exposes a checkout.
+  Evidence:
+  A controlled recurring price returns a checkout through the authenticated funding resource.
+  The public HTTP test reports `status=200 want=404` and retains a processor transaction.
+  The shared transaction representation does not retain the price billing cycle.
+  Resolution:
+  The worker now reads the price through the existing shared client before transaction creation or uncertain recovery.
+  It rejects recurring prices and incompatible amounts without a checkout. Unavailable reads remain retryable without dispatch intent.
+  Payment, checkout, browser, Go lint, frontend lint, and formatting checks passed.
+  The checkout suite passed in 6.271 seconds. Both payment browser scenarios passed in 22.6 seconds.
+  Requirements:
+  - Read the selected price through the existing shared Paddle commerce client.
+  - Require the retained price identity, funding amount, and a nonrecurring billing cycle before transaction creation.
+  - Keep unavailable price reads retryable without a transaction dispatch intent.
+  - Preserve uncertain checkout recovery without another transaction creation request.
+  Validation:
+  - Reject the recurring price through the real authenticated checkout resource with zero processor transaction creations.
+  - Verify normal checkout, payment transitions, lost responses, and browser funding through controlled protocols.
+
 - [x] [B257] (P1) Document retained native completion failures.
   Resolution: The shared native HTTP 502 schema now includes the current durable failure envelope.
   Text, dictation, and client protocol replay tests pass without repeated provider work.
@@ -2787,7 +2808,10 @@ retain satisfied historical dependencies.
   The separate Paddle sandbox procedure specifies isolated configuration, required scenarios, and retained evidence.
   The separate native sandbox target verifies expected order and receipt amounts against the existing Paddle and Ledger reconciliation.
   It rejects production settings, protocol overrides, empty expectations, missing orders, and reused qualification reports.
-  Controlled input checks and payment tests pass. Actual sandbox evidence, final requirement audit, and stack CI remain open.
+  Controlled input checks and payment tests pass.
+  B259 rejects recurring prices before checkout and preserves retries after temporary price failures through the existing shared client.
+  Payment, checkout, browser, formatting, and lint checks pass after B259.
+  Actual sandbox evidence, final requirement audit, and stack CI remain open.
   Goal:
   Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
   Requirements:

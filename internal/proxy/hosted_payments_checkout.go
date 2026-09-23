@@ -151,6 +151,13 @@ func checkoutMetadata(order managedFundingOrderRecord) map[string]string {
 }
 
 func (worker *paddleCheckoutDelivery) deliver(ctx context.Context, job paymentCheckoutJob) error {
+	price, err := worker.client.GetPrice(ctx, job.order.PriceID)
+	if err != nil {
+		return worker.retainOutcome(ctx, job, paymentDeliveryPending, "price_unavailable")
+	}
+	if price.ID != job.order.PriceID || price.PriceCents != job.order.FundingCents || price.BillingCycle.Interval != "" || price.BillingCycle.Frequency != 0 {
+		return worker.retainOutcome(ctx, job, paymentDeliveryReconciliation, "price_mismatch")
+	}
 	if job.delivery.TransactionDispatchedAt != nil {
 		return worker.recover(ctx, job)
 	}

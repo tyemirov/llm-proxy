@@ -23,6 +23,8 @@ type checkoutProtocolFixture struct {
 	portalURL    string
 	dropResponse atomic.Bool
 	wrongAccount atomic.Bool
+	recurring    atomic.Bool
+	priceStatus  atomic.Int64
 }
 
 func newCheckoutProtocolFixture(t *testing.T) *checkoutProtocolFixture {
@@ -41,6 +43,17 @@ func newCheckoutProtocolFixture(t *testing.T) *checkoutProtocolFixture {
 			}
 		}
 		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/prices/pri_01hv8x2axb33yr5y238zfwcn5p":
+			if status := fixture.priceStatus.Load(); status != 0 {
+				writer.WriteHeader(int(status))
+				encode(map[string]any{"error": map[string]any{"code": "price_temporarily_unavailable"}})
+				return
+			}
+			var cycle any
+			if fixture.recurring.Load() {
+				cycle = map[string]any{"interval": "month", "frequency": 1}
+			}
+			encode(map[string]any{"data": map[string]any{"id": "pri_01hv8x2axb33yr5y238zfwcn5p", "billing_cycle": cycle, "unit_price": map[string]any{"amount": "500", "currency_code": "USD"}}})
 		case request.Method == http.MethodPost && request.URL.Path == "/customers/ctm_01hv8x2axb33yr5y238zfwcn5p/portal-sessions":
 			fixture.portalCalls.Add(1)
 			writer.WriteHeader(http.StatusCreated)
@@ -76,6 +89,9 @@ func newCheckoutProtocolFixture(t *testing.T) *checkoutProtocolFixture {
 				input.Metadata["billing_account_id"] = "billing-other"
 			}
 			transaction := map[string]any{"id": id, "status": "ready", "currency_code": "USD", "collection_mode": "automatic", "customer_id": input.CustomerID, "custom_data": input.Metadata, "items": []any{map[string]any{"quantity": 1, "price": map[string]any{"id": input.Items[0].PriceID, "unit_price": map[string]any{"amount": "500", "currency_code": "USD"}}}}}
+			if fixture.recurring.Load() {
+				transaction["items"].([]any)[0].(map[string]any)["price"].(map[string]any)["billing_cycle"] = map[string]any{"interval": "month", "frequency": 1}
+			}
 			fixture.transactions = append(fixture.transactions, transaction)
 			if fixture.dropResponse.Load() {
 				connection, _, err := writer.(http.Hijacker).Hijack()
@@ -204,6 +220,52 @@ func TestHostedPaymentsCheckoutRejectsForeignProcessorEvidence(t *testing.T) {
 	var delivery managedPaymentDeliveryRecord
 	if err := database.database.First(&delivery).Error; err != nil || delivery.State != "reconciliation_required" {
 		t.Fatalf("delivery=%+v error=%v", delivery, err)
+	}
+	assertHostedFundsBalance(t, database, 0, 0)
+}
+
+func TestHostedPaymentsCheckoutRejectsRecurringPriceBeforeDispatch(t *testing.T) {
+	database, _, _ := newJournalTransactionFixture(t)
+	service, server, cookie := paymentOrdersFixture(t, database)
+	processor := newCheckoutProtocolFixture(t)
+	processor.recurring.Store(true)
+	created := paymentOrderHTTP(t, server, cookie("owner"), http.MethodPost, paymentOrdersTestPath, "recurring-price", `{"offer_code":"five"}`, http.StatusCreated)
+	worker := checkoutWorkerFixture(t, database, service.funding, processor, time.Now())
+	if err := worker.reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, paymentOrdersTestPath+"/"+created["id"].(string)+"/checkout", "", "", http.StatusNotFound)
+	if processor.creates.Load() != 0 {
+		t.Fatal("recurring funding price created a processor transaction")
+	}
+	assertHostedFundsBalance(t, database, 0, 0)
+}
+
+func TestHostedPaymentsCheckoutRetriesPriceReadWithoutTransactionIntent(t *testing.T) {
+	database, _, _ := newJournalTransactionFixture(t)
+	service, server, cookie := paymentOrdersFixture(t, database)
+	processor := newCheckoutProtocolFixture(t)
+	processor.priceStatus.Store(http.StatusServiceUnavailable)
+	created := paymentOrderHTTP(t, server, cookie("owner"), http.MethodPost, paymentOrdersTestPath, "unavailable-price", `{"offer_code":"five"}`, http.StatusCreated)
+	now := time.Now()
+	worker := checkoutWorkerFixture(t, database, service.funding, processor, now)
+	if err := worker.reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	checkoutPath := paymentOrdersTestPath + "/" + created["id"].(string) + "/checkout"
+	paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, checkoutPath, "", "", http.StatusNotFound)
+	var delivery managedPaymentDeliveryRecord
+	if err := database.database.First(&delivery).Error; err != nil || delivery.State != paymentDeliveryPending || delivery.TransactionDispatchedAt != nil || processor.creates.Load() != 0 {
+		t.Fatalf("price failure retained a transaction intent: state=%s dispatched=%v creates=%d error=%v", delivery.State, delivery.TransactionDispatchedAt, processor.creates.Load(), err)
+	}
+	processor.priceStatus.Store(0)
+	worker.now = func() time.Time { return now.Add(2 * time.Minute) }
+	if err := worker.reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, checkoutPath, "", "", http.StatusOK)
+	if processor.creates.Load() != 1 {
+		t.Fatalf("recovery created %d transactions", processor.creates.Load())
 	}
 	assertHostedFundsBalance(t, database, 0, 0)
 }
