@@ -3,10 +3,12 @@
 ## Authoritative Resume State
 
 The user requested this handoff because the session has few tokens left.
-This section replaces all resume instructions in the historical sections below.
+Use this section and the resume procedure below as the current instructions.
 F070 remains incomplete. This handoff does not complete or pause the goal.
 
-B275 is published. The latest increment adds B266 journal admission acceptance. Verify publication, then continue the remaining B266 and F070 work.
+B275 and the journal admission increment are published. Publication was verified on September 24, 2026.
+The goal continuation resumed B266 after the handoff request.
+The current increment adds result replay integrity checks and removes duplicate identity validation.
 Do not expand the product scope.
 
 ### Checkout And Publication
@@ -16,7 +18,9 @@ Do not expand the product scope.
 - Published B275 commit: `5bcd86d96050c51c94995a12fd4e5d373759b48b`.
 - Published cancellation increment: `a3e72246c647b89c2543cb48e2daf81aeeb6237f`.
 - Published media input increment: `bcdbee132afe38afc5ac73deaf31695630f77f4a`.
-- The commit that contains this section adds B266 journal admission tests. Verify its remote publication before further edits.
+- Published journal admission commit: `fefb35796bf9f30083566b4e77a8c2488a448e26`.
+- Local HEAD and the PR head matched that commit before the current replay increment.
+- Verify the commit that contains this section in PR 344 before further edits.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
 - PR stack: 339 (F065), 340 (F066), 341 (F067), 342 (F068), 344 (F069).
@@ -24,8 +28,40 @@ Do not expand the product scope.
 - PR 343 is unrelated onboarding work.
 - Final stack CI and complete acceptance remain open. Keep F065 through F070 open.
 
-This section describes the B275 increment. Application merge, release, and deployment remain outside its scope.
+Application merge, release, and deployment remain outside the current authorization.
 The current production changes have focused validation. Aggregate validation remains incomplete.
+
+### Latest Result Replay Integrity
+
+The increment adds `internal/proxy/hosted_result_replay_integrity_internal_test.go`.
+Its 14 scenarios cover six saved identity conflicts before and after publication, plus two active publication states.
+All scenarios use real HTTP and the existing `publicationRecoveryFixture`.
+
+`hostedTextRequests.replay` calls `service.responses.lookupHosted(accepted)`.
+That filesystem boundary already calls `matchHostedResult` and validates six saved identity fields.
+Those fields are `ProxyRequestID`, `IntentSHA256`, `TenantSHA256`, `IdempotencySHA256`, `Provider`, and `Model`.
+Replay and status no longer repeat the request ID and intent digest checks after that boundary.
+All six checks remain in `matchHostedResult`.
+
+Identity conflicts return HTTP 409 for POST replay and HTTP 500 for status reads.
+The tests verify unchanged financial resources and one provider call.
+For unpublished results, conflicts also prevent recovery after claim expiry.
+Restoration of the original file permits recovery or replay across restart without another financial effect.
+
+Missing and dispatched response files return HTTP 202 before claim expiry without another provider call.
+After expiry, recovery records uncertainty and retains held funds. Repeated restart cannot repeat provider work.
+The controlled clock and persisted files create these conditions without invalid core objects.
+
+Characterization passed before production changes in 9.677 seconds.
+The text, result, dictation, runtime, and admission regression passed in 101.679 seconds.
+The separate failed-completion replay regression passed in 1.033 seconds. Go lint and formatting passed.
+The 14 new scenarios passed with race detection in 151.960 seconds. No test process remains active.
+Evidence uses `/tmp/llm-proxy-b266-result-replay` as its prefix.
+
+The latest diagnostic is `/tmp/llm-proxy-b266-result-replay-diagnostic.coverprofile`.
+It has 414 uncovered statements across 21170 statements.
+Old counts for `hosted_text_requests.go` and `hosted_text_status.go` were discarded before combination.
+Only current profiles contribute counts for those files. This diagnostic does not establish aggregate CI success.
 
 ### Latest Journal Admission Acceptance
 
@@ -41,7 +77,7 @@ The first fixture interrupted authentication. The corrected fixture selects the 
 Logs and profiles use `/tmp/llm-proxy-b266-journal-admission` as their prefix.
 No test process remains active.
 
-The latest diagnostic is `/tmp/llm-proxy-b266-journal-admission-diagnostic.coverprofile`.
+That increment produced `/tmp/llm-proxy-b266-journal-admission-diagnostic.coverprofile`.
 It has 422 uncovered statements across 21172 statements and retains the B275 aggregate baseline.
 Later focused profiles use unchanged production source coordinates. This diagnostic does not establish aggregate CI success.
 Discard old counts for each production file that changes before another profile combination.
@@ -169,7 +205,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b266-journal-admission-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b266-result-replay-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -185,7 +221,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest journal admission diagnostic reduces that count to 422 without production changes.
+The latest replay diagnostic has 414 uncovered statements across 21170 statements after the refactor.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.

@@ -32,7 +32,7 @@ func (service *hostedTextRequests) writeStatus(ctx *gin.Context, tenant tenant, 
 			} else {
 				writeStructuredRequestError(ctx, http.StatusGone, errHostedResultExpired.Error(), structuredRequestStateSucceeded, "", request.ExecutionID)
 			}
-		} else if err != nil || record.ProxyRequestID != request.ExecutionID || record.IntentSHA256 != request.IntentDigest {
+		} else if err != nil {
 			writeStructuredRequestError(ctx, http.StatusInternalServerError, llmproxycontract.ErrorCodeStructuredRequestStore, "", "", request.ExecutionID)
 		} else {
 			if record.State == structuredRequestStateSucceeded {

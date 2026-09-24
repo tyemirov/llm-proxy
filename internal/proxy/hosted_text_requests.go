@@ -223,9 +223,6 @@ func (service *hostedTextRequests) replay(accepted managedJournalRequestRecord, 
 	if err != nil {
 		return completionResult{}, err
 	}
-	if record.ProxyRequestID != accepted.ExecutionID || record.IntentSHA256 != accepted.IntentDigest {
-		return completionResult{}, errUsageJournalConflict
-	}
 	if record.State != structuredRequestStateSucceeded {
 		return completionResult{}, &hostedRequestReplay{record: record}
 	}

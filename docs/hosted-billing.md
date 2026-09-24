@@ -907,6 +907,11 @@ The response file and its database publication receipt remain separate durable e
 After an interruption, recovery can repair a missing receipt from the saved result.
 When no result exists, recovery records an uncertain result and preserves the known usage.
 Response expiry cannot remove a saved result before its publication receipt exists.
+
+The result store checks the saved request, intent, tenant, key, provider, and model against the journal before replay or status output.
+An identity conflict preserves funds and cannot cause another provider call.
+Before claim expiry, incomplete publication remains pending. After expiry, recovery preserves uncertainty when no completed result exists.
+
 Recovery, replay, and status reads require a JSON object with a non-null text string in the saved completion.
 Invalid completion data cannot repair a publication receipt or produce a successful response.
 Failed recovery preserves pending financial evidence and held funds without another provider call.

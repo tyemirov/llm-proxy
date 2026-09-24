@@ -358,6 +358,14 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - The new checks passed in 6.143 seconds. Their race run passed in 77.700 seconds. Go lint and formatting passed.
   - The latest combined diagnostic has 422 uncovered statements across 21172 statements. Production code is unchanged.
   - Use `/tmp/llm-proxy-b266-journal-admission-diagnostic.coverprofile` for the latest diagnostic. It does not replace aggregate CI.
+  - Added 14 result replay scenarios for saved identity conflicts and incomplete publication before claim expiry.
+  - Conflicts preserve financial resources. Missing results remain pending before expiry and become uncertain after recovery without another provider call.
+  - Replay and status reuse all six identity checks at the filesystem boundary. Duplicate checks after that boundary are removed.
+  - Characterization passed before the refactor in 9.677 seconds. Broad regression passed in 101.679 seconds.
+  - Failed-completion replay passed in 1.033 seconds. The new scenarios passed with race detection in 151.960 seconds.
+  - Go lint and formatting passed. No public API or event contract changed.
+  - The current diagnostic has 414 uncovered statements across 21170 statements. Changed production files use only current coverage counts.
+  - Use `/tmp/llm-proxy-b266-result-replay-diagnostic.coverprofile` for the latest diagnostic. It does not replace aggregate CI.
   - The required coverage gate, complete F070 acceptance, and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
