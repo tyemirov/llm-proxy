@@ -37,7 +37,11 @@ retain satisfied historical dependencies.
   - The checks verify unchanged receipts and balances after failure, restart recovery, and one effect after replay.
   - The complete payment regression passed in 42.920 seconds. Its CLI checks passed in 2.496 seconds.
   - Focused payment race checks passed in 343.417 seconds. Go lint and format checks pass.
-  - Combined focused profiles cover 56 statements absent from the retained aggregate profile. This diagnostic is not a new CI result.
+  - Added authority tests for atomic writes, failed reads, rejected inputs, provider qualification, pagination, and concurrent creation and rotation.
+  - Random-source failures preserve accepted authority. Unreadable grant data does not expose partial resources.
+  - The connection and grant regression passed in 3.698 seconds. Authority race checks passed in 37.526 seconds.
+  - Go lint and format checks pass after the authority increment.
+  - Combined focused profiles cover 137 statements absent from the retained aggregate profile. This diagnostic is not a new CI result.
   - The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
