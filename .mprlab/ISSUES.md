@@ -400,6 +400,12 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - The race groups passed in 88.835 and 13.080 seconds. Go lint and formatting passed after formatting the new test file.
   - The diagnostic has 396 uncovered statements across 21172 statements. No production code changed.
   - Use `/tmp/llm-proxy-b266-completion-startup-diagnostic.coverprofile`. Complete aggregate CI remains open.
+  - Added eight payment scenarios for malformed events, unknown checkouts, supplier changes, missing adjustment evidence, and refund timing.
+  - Unverified events retain reconciliation reasons without credits. Valid completion and restart retain one funding credit and one refund effect.
+  - A pending refund cannot hold more than the remaining payment principal. Rejection releases that hold without reversing an approved refund.
+  - Focused checks passed in 3.509 seconds and race checks in 46.507 seconds. Go lint and formatting passed.
+  - No production code changed. The current diagnostic has 389 uncovered statements across 21172 statements.
+  - Use `/tmp/llm-proxy-b266-deferred-payments-diagnostic.coverprofile`. This diagnostic does not replace aggregate CI.
   - The required coverage gate, complete F070 acceptance, and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

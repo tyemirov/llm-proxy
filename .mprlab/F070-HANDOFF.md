@@ -8,7 +8,7 @@ F070 remains incomplete. This handoff does not complete or pause the goal.
 
 B275 and the journal admission increment are published. Publication was verified on September 24, 2026.
 The goal continuation resumed B266 after the handoff request.
-The current increment adds B266 acceptance for normal application startup recovery.
+The current increment adds B266 acceptance for deferred payment evidence and bounded refund holds.
 Do not expand the product scope.
 
 ### Checkout And Publication
@@ -21,7 +21,8 @@ Do not expand the product scope.
 - Published journal admission commit: `fefb35796bf9f30083566b4e77a8c2488a448e26`.
 - Published replay integrity commit: `53eeff28729501a8b9460b31a4f27bec7b55f3d9`.
 - Published B276 commit: `44676d82310bbbc3891f6f5ffda465a3a480462a`.
-- Local HEAD and the PR head matched that commit before the current startup increment.
+- Published startup recovery commit: `31a41bda792f5b3ad6a627cbab8f497d39a35324`.
+- Local HEAD and the PR head matched that commit before the current payment increment.
 - Verify the commit that contains this section in PR 344 before further edits.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
@@ -33,7 +34,28 @@ Do not expand the product scope.
 Application merge, release, and deployment remain outside the current authorization.
 The current production changes have focused validation. Aggregate validation remains incomplete.
 
-### Latest Hosted Completion Startup Recovery
+### Latest Deferred Payment Evidence And Refund Holds
+
+The increment adds `internal/proxy/hosted_payments_deferred_evidence_internal_test.go`.
+Eight scenarios use signed webhook HTTP requests and the existing local Paddle protocol fixture.
+They cover incomplete adjustment events, malformed payment data, unknown checkouts, changed supplier configuration, and missing adjustment evidence.
+Unverified events retain reconciliation reasons without customer credits.
+Valid completion, replay, and restart preserve one funding credit and one applicable refund effect.
+
+An approved refund before funding completion does not make refunded funds available.
+A pending refund larger than the remaining principal holds only that remainder.
+Rejection releases the pending hold without reversing the earlier approved refund.
+Public balances, receipts, and Ledger history verify the financial effects.
+
+All eight scenarios passed in 3.509 seconds. Race checks passed in 46.507 seconds.
+Go lint and formatting passed. No production code or public contract changed. No test process remains active.
+Evidence uses `/tmp/llm-proxy-b266-deferred-payments` as its prefix.
+
+The current diagnostic is `/tmp/llm-proxy-b266-deferred-payments-diagnostic.coverprofile`.
+It has 389 uncovered statements across 21172 statements. Production source coordinates are unchanged.
+This diagnostic does not establish aggregate CI success. B266 and final F070 acceptance remain open.
+
+### Previous Hosted Completion Startup Recovery
 
 The increment adds `internal/proxy/hosted_completion_startup_recovery_internal_test.go`.
 Its 12 scenarios use normal application construction with the existing interrupted journal and unpublished result fixtures.
@@ -56,7 +78,7 @@ The final fixture preserves those earlier checks and adds injections specific to
 The initial log is `/tmp/llm-proxy-b266-completion-startup.log`.
 The complete final log is `/tmp/llm-proxy-b266-completion-startup-complete.log`.
 
-The current diagnostic is `/tmp/llm-proxy-b266-completion-startup-diagnostic.coverprofile`.
+That increment produced `/tmp/llm-proxy-b266-completion-startup-diagnostic.coverprofile`.
 It has 396 uncovered statements across 21172 statements. Production source coordinates are unchanged.
 This diagnostic does not establish aggregate CI success. B266 and final F070 acceptance remain open.
 
@@ -262,7 +284,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b266-completion-startup-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b266-deferred-payments-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -278,7 +300,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest startup diagnostic has 396 uncovered statements across 21172 statements.
+The latest payment diagnostic has 389 uncovered statements across 21172 statements.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.
