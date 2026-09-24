@@ -8,12 +8,10 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strconv"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -33,33 +31,6 @@ func newPaymentCreditRecoveryFixture(t *testing.T) paymentCreditRecoveryFixture 
 	completed := completedPaymentFixture(t, fixture.processor)
 	sendPaymentEventFixture(t, fixture.database, completed, paymentTransactionCompleted, 1)
 	return paymentCreditRecoveryFixture{fixture, completed, retainedPaymentInbox(t, fixture.database), fixture.funds(t)}
-}
-
-func (fixture paymentCreditRecoveryFixture) application(t *testing.T, database *gormManagedTenantDatabase) *proxyApplication {
-	t.Helper()
-	checkout := newPaddleCheckoutDelivery(database, fixture.worker.catalog, fixture.worker.client)
-	return &proxyApplication{
-		router: fixture.server.Config.Handler.(*gin.Engine), database: database, now: time.Now,
-		payments: &paddlePaymentRuntime{checkout: checkout, processor: paymentProcessorFixture(t, checkout, database)},
-	}
-}
-
-func (fixture paymentCreditRecoveryFixture) failStartup(t *testing.T, reason string) {
-	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	err = fixture.application(t, fixture.database).serve(ctx, listener)
-	if err == nil || !strings.Contains(err.Error(), "initialize payment reconciliation") || !strings.Contains(err.Error(), reason) {
-		t.Fatalf("credit failure did not stop startup: %v", err)
-	}
-	if connection, err := net.DialTimeout("tcp", listener.Addr().String(), time.Second); err == nil {
-		connection.Close()
-		t.Fatal("credit failure retained the HTTP listener")
-	}
 }
 
 func (fixture paymentCreditRecoveryFixture) assertRolledBack(t *testing.T) {

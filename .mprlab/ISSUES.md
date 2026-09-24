@@ -199,10 +199,13 @@ retain satisfied historical dependencies.
   - The refactor removes two duplicate checks and their unreachable caller error paths. External configuration and database errors remain unchanged.
   - Added 10 funding-order scenarios for failed admission, replay reads, authorization, invalid queries, and restart recovery.
   - Failed admission preserves existing orders, delivery records, receipts, and funds. Recovery retains one order and delivery for the request.
-  - The payment regression passed in 105.422 seconds. Management tests passed in 17.947 seconds.
-  - All 10 targeted race scenarios passed in 43.520 seconds. Go lint and format checks passed.
+  - Added 10 payment-state scenarios for failed storage, malformed events, processor outages, incomplete evidence, and cancellation after verified funding.
+  - Failed startup closes the listener and preserves the pending event. Recovery applies cancellation once without partial financial records.
+  - Cancellation cannot reverse verified funding. Conflicting evidence remains in reconciliation until matching completed-payment evidence resolves it.
+  - The payment regression passed in 124.414 seconds. Management tests passed in 19.121 seconds.
+  - All 22 targeted state and credit race scenarios passed in 139.001 seconds. Go lint and format checks passed.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 476 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
+  - The combined diagnostic has 470 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

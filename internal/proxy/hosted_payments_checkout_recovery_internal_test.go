@@ -1,8 +1,10 @@
 package proxy
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -12,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/tyemirov/utils/billing"
 	"gorm.io/gorm"
 )
@@ -36,6 +39,33 @@ func newCheckoutRecoveryFixture(t *testing.T) checkoutRecoveryFixture {
 	now := time.Now()
 	worker := checkoutWorkerFixture(t, database, service.funding, processor, now)
 	return checkoutRecoveryFixture{database, server, cookie("owner"), processor, worker, order, paymentOrdersTestPath + "/" + order["id"].(string), now}
+}
+
+func (fixture checkoutRecoveryFixture) application(t *testing.T, database *gormManagedTenantDatabase) *proxyApplication {
+	t.Helper()
+	checkout := newPaddleCheckoutDelivery(database, fixture.worker.catalog, fixture.worker.client)
+	return &proxyApplication{
+		router: fixture.server.Config.Handler.(*gin.Engine), database: database, now: time.Now,
+		payments: &paddlePaymentRuntime{checkout: checkout, processor: paymentProcessorFixture(t, checkout, database)},
+	}
+}
+
+func (fixture checkoutRecoveryFixture) failStartup(t *testing.T, reason string) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	err = fixture.application(t, fixture.database).serve(ctx, listener)
+	if err == nil || !strings.Contains(err.Error(), "initialize payment reconciliation") || !strings.Contains(err.Error(), reason) {
+		t.Fatalf("payment failure did not stop startup: %v", err)
+	}
+	if connection, err := net.DialTimeout("tcp", listener.Addr().String(), time.Second); err == nil {
+		connection.Close()
+		t.Fatal("payment failure retained the HTTP listener")
+	}
 }
 
 func (fixture checkoutRecoveryFixture) funds(t *testing.T) map[string]any {
