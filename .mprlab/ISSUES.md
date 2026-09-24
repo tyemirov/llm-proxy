@@ -150,10 +150,14 @@ retain satisfied historical dependencies.
   - A new billing account reads zero funds without creating Ledger or financial account records.
   - Added 18 credit-read scenarios for corrupt receipts, corrupt usage credits, storage failures, and restoration.
   - B270 fixes corrupt credit receipt publication. Restored records preserve financial resources and idempotent command replay.
-  - Funds, rating, and financial-read tests passed in 145.282 seconds. Management tests passed in 18.359 seconds.
-  - The new credit-read race suite passed in 34.426 seconds. Go lint and format checks pass.
+  - Added nine account-creation scenarios for storage failures, entropy failures, cancellation, and competing service instances.
+  - Failed creation retains no account or financial effects. Restart recovers one account for the accepted intent.
+  - Competing instances share one account for the same intent and reject a different intent.
+  - Account and authority tests passed in 4.971 seconds. Management tests passed in 17.852 seconds.
+  - The new account-creation race suite passed in 24.570 seconds. Go lint and format checks pass.
+  - Production source did not change.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 544 uncovered statements. Changed production files use only current validation counts.
+  - The combined diagnostic has 537 uncovered statements. Changed production files use only current validation counts.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
