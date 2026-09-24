@@ -187,10 +187,13 @@ retain satisfied historical dependencies.
   - Added 17 result-publication scenarios for storage failures, corrupt completion data, and valid tool-only results.
   - B271 rejects incomplete saved completions before recovery, replay, and status output.
   - Failed recovery preserves held funds and pending evidence. Restoration permits one settlement without another provider call.
-  - Text, funds, rating, and financial checks passed in 176.130 seconds. Management tests passed in 17.515 seconds.
-  - All 17 focused race scenarios passed in 157.728 seconds. Go lint and format checks passed.
+  - Added 20 inbox scenarios for malformed HTTP inputs, incomplete bodies, replay read failures, and exact large-number identity.
+  - Rejected inputs preserve the original event, receipt, balance, and Ledger history. Restart does not repeat an applied credit.
+  - Signed event replay preserves exact JSON numbers and rejects a one-unit difference above the exact integer range of float64.
+  - The payment regression passed in 93.196 seconds. Management tests passed in 16.900 seconds.
+  - All 25 inbox race scenarios passed in 51.387 seconds. Go lint and format checks passed.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 511 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
+  - The combined diagnostic has 502 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
