@@ -352,6 +352,12 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - The complete matrix passed in 28.715 seconds. Media input race checks passed in 61.995 seconds. Go lint and formatting passed.
   - The combined diagnostic now has 433 uncovered statements across 21172 statements. Production code is unchanged.
   - Use `/tmp/llm-proxy-b266-multimodal-diagnostic.coverprofile` for the latest diagnostic. Earlier totals are superseded.
+  - Added 12 journal admission scenarios for failed tenant locks, request writes, authority reads, and identifier generation.
+  - Malformed grant scope and absent or future credential qualification reject admission before reservation.
+  - Rejected requests preserve funds without journal, price, reservation, or provider effects. Restored dependencies admit once and preserve restart replay.
+  - The new checks passed in 6.143 seconds. Their race run passed in 77.700 seconds. Go lint and formatting passed.
+  - The latest combined diagnostic has 422 uncovered statements across 21172 statements. Production code is unchanged.
+  - Use `/tmp/llm-proxy-b266-journal-admission-diagnostic.coverprofile` for the latest diagnostic. It does not replace aggregate CI.
   - The required coverage gate, complete F070 acceptance, and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
