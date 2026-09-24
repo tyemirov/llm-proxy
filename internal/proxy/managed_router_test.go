@@ -66,7 +66,7 @@ func BuildRouterWithManagedTenantsForTest(testingInstance testing.TB, configurat
 	configuration.Endpoints = managedRouterTestEndpointOverrides(configuration)
 	configuration.Management = managedRouterTestManagementConfiguration()
 	configuration = withInternalUpstreamCapacity(testingInstance, configuration)
-	return buildRouter(configuration, structuredLogger, func(_ ManagementConfiguration, providers *providerRegistry) (*managedTenantStore, error) {
+	return buildRouterWithStoreForTest(testingInstance, configuration, structuredLogger, func(_ ManagementConfiguration, providers *providerRegistry) (*managedTenantStore, error) {
 		return newManagedRouterTestStore(configuration, providers, tenantConfigurations)
 	})
 }

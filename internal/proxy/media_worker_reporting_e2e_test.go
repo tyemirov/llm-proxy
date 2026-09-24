@@ -46,7 +46,7 @@ func TestMediaOperationWorkerReportsPersistenceFailures(t *testing.T) {
 				t.Fatal(err)
 			}
 			core, logs := observer.New(zap.InfoLevel)
-			router, err := proxy.BuildRouter(configuration, zap.New(core).Sugar())
+			router, err := testfixtures.BuildRouter(t, configuration, zap.New(core).Sugar())
 			if err != nil {
 				t.Fatal(err)
 			}

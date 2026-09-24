@@ -452,6 +452,16 @@ func validateCatalogPrices(prices []CatalogPriceDescriptor, catalog validatedMod
 			}
 		}
 	}
+	// Services own their price declarations beside their operation contract.
+	// Index those validated declarations with an empty model so all consumers
+	// use the same exact selection and rating machinery.
+	for _, provider := range catalog.providers {
+		for _, service := range provider.Services {
+			descriptor := servicePriceDescriptor(service.Price)
+			descriptor.Provider = provider.ID
+			catalog.prices[catalogPriceIdentifier(provider.ID, "", service.Operation)] = descriptor
+		}
+	}
 	return nil
 }
 

@@ -18,8 +18,11 @@ import (
 	"github.com/tyemirov/llm-proxy/internal/openapitest"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
+	"github.com/tyemirov/utils/billing"
 	"gopkg.in/yaml.v3"
 )
+
+const openAPIPaddleEventsPath = "/api/payments/paddle/events"
 
 func TestOpenAPIContractMatchesRegisteredOwnedRoutes(t *testing.T) {
 	contract, loadError := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
@@ -38,7 +41,16 @@ func TestOpenAPIContractMatchesRegisteredOwnedRoutes(t *testing.T) {
 		t.Fatalf("OpenAPI protocol methods: %v", protocolMethodsError)
 	}
 
-	handler := newManagementRouter(t, proxy.Configuration{})
+	processor := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		t.Errorf("route inventory contacted the processor: %s %s", request.Method, request.URL.Path)
+		writer.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(processor.Close)
+	handler := newManagementRouter(t, proxy.Configuration{Payments: &proxy.PaymentConfiguration{
+		Environment: "sandbox", ClientToken: "test_openapi", ProcessorAccountID: "openapi-account", SupplierID: "openapi-supplier",
+		APIKey: "openapi-fixture-key", APIBaseURL: processor.URL, WebhookSecret: "openapi-fixture-secret",
+		Offers: []proxy.PaymentOfferConfiguration{{Code: "five", PriceID: "pri_01hv8x2axb33yr5y238zfwcn5p", FundingCents: 500}},
+	}})
 	router, ok := handler.(*gin.Engine)
 	if !ok {
 		t.Fatalf("management router type=%T want *gin.Engine", handler)
@@ -93,6 +105,13 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 	if tauthSession != (openapitest.SecurityScheme{Type: "apiKey", In: "cookie", Name: "app_session_llm_proxy"}) {
 		t.Fatalf("TAuthSession=%+v", tauthSession)
 	}
+	paddleSignature, paddleSignatureError := contract.SecurityScheme("PaddleSignature")
+	if paddleSignatureError != nil {
+		t.Fatalf("PaddleSignature security scheme: %v", paddleSignatureError)
+	}
+	if paddleSignature != (openapitest.SecurityScheme{Type: "apiKey", In: "header", Name: billing.PaddleWebhookSignatureHeaderName}) {
+		t.Fatalf("PaddleSignature=%+v", paddleSignature)
+	}
 
 	operations, operationsError := contract.Operations()
 	if operationsError != nil {
@@ -101,6 +120,8 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 	for _, operation := range operations {
 		expectedSecurity := [][]string{{"TAuthSession"}}
 		switch operation.Path {
+		case openAPIPaddleEventsPath:
+			expectedSecurity = [][]string{{"PaddleSignature"}}
 		case "/mcp":
 			expectedSecurity = [][]string{{"MCPAccessToken"}}
 		case "/.well-known/oauth-protected-resource/mcp":

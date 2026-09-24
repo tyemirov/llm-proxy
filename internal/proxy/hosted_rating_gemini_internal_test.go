@@ -63,7 +63,7 @@ func testHostedGeminiRating(t *testing.T, mode string) {
 	t.Cleanup(upstream.Close)
 	server := newHostedTextProviderFixture(t, database, upstream.URL, "gemini", "gemini-3.5-flash", func(dependencies *hostedTextRequestDependencies) {
 		dependencies.now = func() time.Time { return ratingTestAcceptanceTime() }
-		dependencies.authorize = reserve
+		dependencies.authorize = fixedHostedCompletionAdmission(reserve)
 	})
 	if err := database.database.Model(&managedPlatformCredentialRecord{}).Where("connection_id = ?", "platform-text").Update("qualified_at", ratingTestAcceptanceTime().Add(-time.Hour)).Error; err != nil {
 		t.Fatal(err)

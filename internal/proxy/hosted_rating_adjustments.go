@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 	"time"
 
@@ -93,22 +94,22 @@ func (database *gormManagedTenantDatabase) applyCustomerChargeAdjustment(ctx con
 	})
 }
 
-func netCustomerCharge(original ExactMoney, adjustments []managedChargeAdjustmentRecord) (ExactMoney, error) {
+func netCustomerCharge(original ExactMoney, adjustments []managedChargeAdjustmentRecord) (*big.Rat, error) {
 	net, err := parseExactMoney(original)
 	if err != nil {
-		return ExactMoney{}, err
+		return nil, err
 	}
 	for _, adjustment := range adjustments {
 		credit, err := parseExactMoney(ExactMoney{Numerator: adjustment.CreditNumerator, Denominator: adjustment.CreditDenominator})
 		if err != nil || credit.Sign() <= 0 || !journalDimensionPattern.MatchString(adjustment.Reason) || adjustment.CreatedAt.IsZero() {
-			return ExactMoney{}, fmt.Errorf("invalid retained customer credit")
+			return nil, fmt.Errorf("invalid retained customer credit")
 		}
 		net.Sub(net, credit)
 	}
 	if net.Sign() < 0 {
-		return ExactMoney{}, fmt.Errorf("customer credits exceed original charge")
+		return nil, fmt.Errorf("customer credits exceed original charge")
 	}
-	return ratingMoney(net), nil
+	return net, nil
 }
 
 func (database *gormManagedTenantDatabase) billingChargeAdjustments(ctx context.Context, accountID string, ids []string) ([]managedChargeAdjustmentRecord, error) {

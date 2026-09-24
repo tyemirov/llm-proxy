@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -43,12 +44,15 @@ var (
 )
 
 type managementService struct {
-	configuration    ManagementConfiguration
-	sessionValidator *managementSessionValidator
-	store            *managedTenantStore
-	providers        *providerRegistry
-	keyVerifier      providerKeyVerifier
-	structuredLogger *zap.SugaredLogger
+	funding            *fundingCatalog
+	paymentPortal      paddlePortalClient
+	paymentClientToken string
+	configuration      ManagementConfiguration
+	sessionValidator   *managementSessionValidator
+	store              *managedTenantStore
+	providers          *providerRegistry
+	keyVerifier        providerKeyVerifier
+	structuredLogger   *zap.SugaredLogger
 }
 
 type managementAccountResponse struct {
@@ -326,6 +330,13 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	managementGroup.GET(managementBillingAccountsPath, service.listBillingAccountsHandler())
 	managementGroup.POST(managementBillingAccountsPath, service.createBillingAccountHandler())
 	managementGroup.GET(managementBillingAccountPath, service.getBillingAccountHandler())
+	managementGroup.GET(managementPaymentCheckoutPath, service.paymentCheckoutHandler())
+	managementGroup.GET(managementPaymentReceiptPath, service.paymentReceiptHandler())
+	managementGroup.POST(managementPaymentPortalSessionsPath, service.createPaymentPortalSessionHandler())
+	managementGroup.GET(managementFundingOffersPath, service.fundingOffersHandler())
+	managementGroup.POST(managementFundingOrdersPath, service.createFundingOrderHandler())
+	managementGroup.GET(managementFundingOrdersPath, service.listFundingOrdersHandler())
+	managementGroup.GET(managementFundingOrderPath, service.getFundingOrderHandler())
 	managementGroup.GET(managementFundsBalancePath, service.getFundsBalanceHandler())
 	managementGroup.GET(managementFundsReservationsPath, service.listFundsReservationsHandler())
 	managementGroup.GET(managementFundsReservationPath, service.getFundsReservationHandler())
@@ -834,7 +845,7 @@ func (service *managementService) providerResponses(providerSettings map[provide
 			Resources:                 providerResourceKinds(summary.resources),
 			Services:                  cloneProviderServices(summary.services),
 			ModelFamilies:             modelFamilies,
-			Configured:                configured && settings.hasRequiredConnectionFields(definition),
+			Configured:                configured && (settings.hostedGrantID != "" || settings.hasRequiredConnectionFields(definition)),
 			Fields:                    make([]managementProviderFieldResponse, 0, len(definition.fieldOrder)),
 			TextModel:                 summary.textDefaultModel,
 			SystemPrompt:              constants.EmptyString,
@@ -930,6 +941,9 @@ func decodeManagementJSON(ginContext *gin.Context, target any) error {
 	jsonDecoder.DisallowUnknownFields()
 	if decodeError := jsonDecoder.Decode(target); decodeError != nil {
 		return fmt.Errorf("%w: %v", errManagementBadRequest, decodeError)
+	}
+	if decodeError := jsonDecoder.Decode(new(any)); decodeError != io.EOF {
+		return fmt.Errorf("%w: request body requires one JSON value", errManagementBadRequest)
 	}
 	return nil
 }

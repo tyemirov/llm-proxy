@@ -92,6 +92,8 @@ const (
 	ErrorCodeUsageJournalClaimLost = "usage_journal_claim_lost"
 	// ErrorCodeUsageJournalUnavailable identifies a failed durable usage write.
 	ErrorCodeUsageJournalUnavailable = "usage_journal_unavailable"
+	// ErrorCodeMediaWorkerShutdown identifies interrupted media during service shutdown.
+	ErrorCodeMediaWorkerShutdown = "worker_shutdown"
 	// ErrorCodeInsufficientFunds identifies a request rejected before paid dispatch.
 	ErrorCodeInsufficientFunds = "insufficient_funds"
 	// ErrorCodeFinancialAdmissionUnavailable identifies an unavailable financial transaction.

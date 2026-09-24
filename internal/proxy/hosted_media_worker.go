@@ -95,7 +95,14 @@ func (service *mediaOperationService) dispatchHostedMedia(transaction *gorm.DB, 
 	// GORM uses savepoints for these nested transactions. The outer media
 	// transaction owns the final commit of authorization and dispatch intent.
 	journal := &gormManagedTenantDatabase{database: transaction}
-	attempt, err := journal.prepareJournalAttempt(transaction.Statement.Context, claim, identifier, service.hostedAdmission)
+	var operation mediaOperationRecord
+	if err := transaction.First(&operation, "operation_id = ?", operationID).Error; err != nil {
+		return fmt.Errorf("read hosted media intent for operation %s: %w", operationID, err)
+	}
+	reserve := func(transaction *gorm.DB, request managedJournalRequestRecord) error {
+		return service.hostedAdmission(transaction, request, operation)
+	}
+	attempt, err := journal.prepareJournalAttempt(transaction.Statement.Context, claim, identifier, reserve)
 	if err != nil {
 		return err
 	}

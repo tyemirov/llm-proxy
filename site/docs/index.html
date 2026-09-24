@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="60f08cdff3cf96e1cc013b6936ed28e1dfb6885c16474ce02d556290d729fd39">
+    <meta name="openapi-source-sha256" content="33b7c76d3728e4f41a0398ddee26f705d8b68a517245790d0a5383d55564678d">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="60f08cdff3cf96e1cc013b6936ed28e1dfb6885c16474ce02d556290d729fd39">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="33b7c76d3728e4f41a0398ddee26f705d8b68a517245790d0a5383d55564678d">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>60f08cdff3cf96e1cc013b6936ed28e1dfb6885c16474ce02d556290d729fd39</code></span>
+          <span>Source SHA-256 <code>33b7c76d3728e4f41a0398ddee26f705d8b68a517245790d0a5383d55564678d</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -109,6 +109,62 @@ tags:
   - name: Management
     description: TAuth-session-authenticated tenant management operations.
 paths:
+  /api/payments/paddle/events:
+    post:
+      operationId: receivePaddlePaymentEvent
+      summary: Retain a verified Paddle event
+      description: &gt;-
+        Verifies the signature against raw bytes before JSON parsing. The configured
+        secret binds the event to one processor account and environment. A successful
+        response confirms durable inbox storage, not a funding credit. Identical
+        events have one inbox record. Changed content for the same event returns 409.
+        This receiver currently has controlled development integration only.
+      tags: [Payments]
+      security:
+        - PaddleSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event_id, event_type, occurred_at, data]
+              properties:
+                event_id: {type: string, pattern: &#39;^evt_[a-z0-9]{26}$&#39;}
+                event_type: {type: string, maxLength: 128, pattern: &#39;^[a-z_]+\.[a-z_]+$&#39;}
+                occurred_at: {type: string, format: date-time}
+                data:
+                  type: object
+                  required: [id]
+                  properties:
+                    id: {type: string, pattern: &#39;^[a-z]{3}_[a-z0-9]{26}$&#39;}
+      responses:
+        &#39;200&#39;:
+          description: The verified event is in the durable inbox.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [event_id, status]
+                properties:
+                  event_id: {type: string, pattern: &#39;^evt_[a-z0-9]{26}$&#39;}
+                  status: {type: string, enum: [accepted]}
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/PaymentEventError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/PaymentEventError&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/PaymentEventError&#39;
+        &#39;413&#39;:
+          $ref: &#39;#/components/responses/PaymentEventError&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/PaymentEventError&#39;
+        &#39;503&#39;:
+          $ref: &#39;#/components/responses/PaymentEventError&#39;
   /.well-known/oauth-protected-resource/mcp:
     get:
       operationId: getMCPResourceMetadata
@@ -2075,6 +2131,265 @@ paths:
           $ref: &#39;#/components/responses/HostedResourceError&#39;
         &#39;500&#39;:
           $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}/funding-offers:
+    get:
+      operationId: listFundingOffers
+      summary: List server funding offers
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+      responses:
+        &#39;200&#39;:
+          description: The owned funding resource.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FundingOffers&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;503&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+  /api/management/billing-accounts/{billing_account_id}/funding-orders:
+    get:
+      operationId: listFundingOrders
+      summary: List owned funding orders
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+        - $ref: &#39;#/components/parameters/HostedPageLimit&#39;
+        - name: cursor
+          in: query
+          schema: {type: string, pattern: &#39;^funding-[a-f0-9]{32}$&#39;}
+          description: Continue after this identifier in ascending identifier order.
+      responses:
+        &#39;200&#39;:
+          description: The owned funding resource.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FundingOrders&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;503&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+    post:
+      operationId: createFundingOrder
+      summary: Create an owned funding order
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      description: &gt;-
+        Select one server offer. Commit its immutable price, USD funding amount,
+        processor identity, and checkout delivery intent in one transaction.
+        The account and creation key identify one order. A repeated key returns
+        that order. A changed offer or processor identity returns 409.
+        Order creation does not grant funds or confirm payment.
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+        - $ref: &#39;#/components/parameters/HostedCreationKey&#39;
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [offer_code]
+              properties:
+                offer_code: {type: string, minLength: 1, maxLength: 64}
+      responses:
+        &#39;201&#39;:
+          description: The owned funding resource.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+            Location:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FundingOrder&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;503&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+  /api/management/billing-accounts/{billing_account_id}/funding-orders/{order_id}:
+    get:
+      operationId: getFundingOrder
+      summary: Read an owned funding order
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+        - name: order_id
+          in: path
+          required: true
+          schema: {type: string, pattern: &#39;^funding-[a-f0-9]{32}$&#39;}
+      responses:
+        &#39;200&#39;:
+          description: The owned funding resource.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FundingOrder&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;503&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+  /api/management/billing-accounts/{billing_account_id}/funding-orders/{order_id}/checkout:
+    get:
+      operationId: getPaymentCheckout
+      summary: Read the checkout for an owned funding order
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+        - name: order_id
+          in: path
+          required: true
+          schema: {type: string, pattern: &#39;^funding-[a-f0-9]{32}$&#39;}
+      responses:
+        &#39;200&#39;:
+          description: The owned funding resource.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/PaymentCheckout&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;503&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+  /api/management/billing-accounts/{billing_account_id}/funding-orders/{order_id}/receipt:
+    get:
+      operationId: getPaymentReceipt
+      summary: Read the receipt for an owned funding order
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+        - name: order_id
+          in: path
+          required: true
+          schema: {type: string, pattern: &#39;^funding-[a-f0-9]{32}$&#39;}
+      responses:
+        &#39;200&#39;:
+          description: The owned funding resource.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/PaymentReceipt&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;503&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+  /api/management/billing-accounts/{billing_account_id}/payment-portal-sessions:
+    post:
+      operationId: createPaymentPortalSession
+      summary: Create a temporary Paddle customer portal session
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+      description: Each request creates a temporary link without a financial effect. Do not cache or store the link.
+      x-llm-proxy-required-request-content-type: application/json
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: false, properties: {}}
+      responses:
+        &#39;201&#39;:
+          description: The temporary portal session.
+          headers:
+            Location:
+              schema: {type: string, format: uri}
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/PaymentPortalSession&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;503&#39;:
+          $ref: &#39;#/components/responses/FundingError&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
   /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/charge-summary:
     get:
       operationId: getRequestChargeSummary
@@ -3791,6 +4106,11 @@ paths:
           $ref: &#39;#/components/responses/ManagementInternalError&#39;
 components:
   securitySchemes:
+    PaddleSignature:
+      type: apiKey
+      in: header
+      name: Paddle-Signature
+      description: Timestamp and HMAC signature of the raw request body, verified with the configured Paddle secret.
     MCPAccessToken:
       type: http
       scheme: bearer
@@ -4184,6 +4504,26 @@ components:
           schema:
             $ref: &#39;#/components/schemas/EmptyObject&#39;
   responses:
+    PaymentEventError:
+      description: The payment event was rejected or could not be retained.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [error]
+            properties:
+              error:
+                type: object
+                additionalProperties: false
+                required: [code]
+                properties:
+                  code:
+                    type: string
+                    enum: [payment_event_invalid, payment_event_conflict, payment_content_type_invalid, payment_event_too_large, payment_signature_invalid, payment_inbox_unavailable]
     TextSuccess:
       description: &gt;-
         Complete generated text in the selected representation. Each provider
@@ -4650,6 +4990,26 @@ components:
         application/json:
           schema:
             $ref: &#39;#/components/schemas/ProxyErrorEnvelope&#39;
+    FundingError:
+      description: The funding request failed without a financial effect.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [error]
+            properties:
+              error:
+                type: object
+                additionalProperties: false
+                required: [code]
+                properties:
+                  code:
+                    type: string
+                    enum: [funding_invalid, funding_conflict, funding_not_found, funding_unavailable, billing_account_not_found]
     HostedResourceError:
       description: The hosted resource request failed.
       headers:
@@ -8153,7 +8513,7 @@ components:
           properties:
             code:
               type: string
-              enum: [provider_error, provider_rate_limited, operation_deadline_exceeded, provider_outcome_unknown, worker_claim_lost, asset_publication_failed, provider_result_invalid, media_operation_unavailable, usage_journal_unavailable]
+              enum: [provider_error, provider_rate_limited, operation_deadline_exceeded, provider_outcome_unknown, worker_claim_lost, worker_shutdown, asset_publication_failed, provider_result_invalid, media_operation_unavailable, usage_journal_unavailable]
         cost:
           type: object
           additionalProperties: false
@@ -8857,6 +9217,91 @@ components:
       type: object
       additionalProperties: false
       properties: {}
+    FundingOffer:
+      type: object
+      additionalProperties: false
+      required: [code, funding_cents, currency]
+      properties:
+        code: {type: string, minLength: 1, maxLength: 64}
+        funding_cents:
+          type: string
+          pattern: &#39;^[0-9]+$&#39;
+          description: Server-selected customer credit in USD cents. The minimum is 500 cents.
+        currency: {type: string, enum: [USD]}
+    FundingOffers:
+      type: object
+      additionalProperties: false
+      required: [provider, environment, client_token, offers]
+      properties:
+        provider: {type: string, enum: [paddle]}
+        environment: {type: string, enum: [sandbox, production]}
+        client_token: {type: string, pattern: &#39;^(test|live)_[a-zA-Z0-9]+$&#39;}
+        offers:
+          type: array
+          items: {$ref: &#39;#/components/schemas/FundingOffer&#39;}
+    PaymentReceipt:
+      type: object
+      additionalProperties: false
+      required: [funding_order_id, environment, currency, state, credit_cents, gross_cents, tax_cents, adjusted_gross_cents, adjusted_tax_cents, reversed_cents, pending_refund_cents, invoice_number, paid_at]
+      properties:
+        funding_order_id: {type: string, pattern: &#39;^funding-[a-f0-9]{32}$&#39;}
+        environment: {type: string, enum: [sandbox, production]}
+        currency: {type: string, enum: [USD]}
+        state: {type: string, enum: [paid, partially_refunded, refunded, disputed]}
+        credit_cents: {type: string, pattern: &#39;^[0-9]+$&#39;}
+        gross_cents: {type: string, pattern: &#39;^[0-9]+$&#39;}
+        tax_cents: {type: string, pattern: &#39;^[0-9]+$&#39;}
+        adjusted_gross_cents: {type: string, pattern: &#39;^[0-9]+$&#39;}
+        adjusted_tax_cents: {type: string, pattern: &#39;^[0-9]+$&#39;}
+        reversed_cents:
+          type: string
+          pattern: &#39;^[0-9]+$&#39;
+          description: Cumulative customer credit removed after verified processor adjustments.
+        pending_refund_cents:
+          type: string
+          pattern: &#39;^[0-9]+$&#39;
+          description: Customer credit allocated to pending processor adjustments.
+        invoice_number: {type: string, nullable: true}
+        paid_at: {type: string, format: date-time}
+    PaymentPortalSession:
+      type: object
+      additionalProperties: false
+      required: [provider, environment, url]
+      properties:
+        provider: {type: string, enum: [paddle]}
+        environment: {type: string, enum: [sandbox, production]}
+        url: {type: string, format: uri, pattern: &#39;^https://&#39;}
+    PaymentCheckout:
+      type: object
+      additionalProperties: false
+      required: [provider, environment, transaction_id]
+      properties:
+        provider: {type: string, enum: [paddle]}
+        environment: {type: string, enum: [sandbox, production]}
+        transaction_id: {type: string, pattern: &#39;^txn_[a-z0-9]{26}$&#39;}
+    FundingOrder:
+      type: object
+      additionalProperties: false
+      required: [id, offer_code, funding_cents, currency, environment, state, created_at]
+      properties:
+        id: {type: string, pattern: &#39;^funding-[a-f0-9]{32}$&#39;}
+        offer_code: {type: string, minLength: 1, maxLength: 64}
+        funding_cents: {type: string, pattern: &#39;^[0-9]+$&#39;}
+        currency: {type: string, enum: [USD]}
+        environment: {type: string, enum: [sandbox, production]}
+        state:
+          type: string
+          enum: [created, pending, paid, failed, partially_refunded, refunded, disputed]
+        created_at: {type: string, format: date-time}
+    FundingOrders:
+      type: object
+      additionalProperties: false
+      required: [orders, next_cursor]
+      properties:
+        orders:
+          type: array
+          items: {$ref: &#39;#/components/schemas/FundingOrder&#39;}
+        next_cursor: {type: string}
     BillingAccount:
       type: object
       additionalProperties: false
@@ -10549,7 +10994,14 @@ components:
 <a href="#operation-getFundsBalance"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/balance</code><span>Read the funds of an owned billing account</span></a>
 <a href="#operation-listCharges"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/charges</code><span>Read charges for an owned billing account</span></a>
 <a href="#operation-getCharge"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/charges/{charge_id}</code><span>Read one charge from an owned billing account</span></a>
+<a href="#operation-listFundingOffers"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/funding-offers</code><span>List server funding offers</span></a>
+<a href="#operation-listFundingOrders"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/funding-orders</code><span>List owned funding orders</span></a>
+<a href="#operation-createFundingOrder"><span class="api-method api-method-post">POST</span><code>/api/management/billing-accounts/{billing_account_id}/funding-orders</code><span>Create an owned funding order</span></a>
+<a href="#operation-getFundingOrder"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/funding-orders/{order_id}</code><span>Read an owned funding order</span></a>
+<a href="#operation-getPaymentCheckout"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/funding-orders/{order_id}/checkout</code><span>Read the checkout for an owned funding order</span></a>
+<a href="#operation-getPaymentReceipt"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/funding-orders/{order_id}/receipt</code><span>Read the receipt for an owned funding order</span></a>
 <a href="#operation-listFundsEntries"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/ledger-entries</code><span>Read Ledger entries of an owned billing account</span></a>
+<a href="#operation-createPaymentPortalSession"><span class="api-method api-method-post">POST</span><code>/api/management/billing-accounts/{billing_account_id}/payment-portal-sessions</code><span>Create a temporary Paddle customer portal session</span></a>
 <a href="#operation-getPriceSnapshot"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/price-snapshots/{price_snapshot_id}</code><span>Read the prices retained for an accepted request</span></a>
 <a href="#operation-listJournalRequests"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests</code><span>Read the usage journal for an owned billing account</span></a>
 <a href="#operation-getJournalRequest"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}</code><span>Read one request from an owned usage journal</span></a>
@@ -10595,6 +11047,7 @@ components:
 <a href="#operation-getManagementAccountUsage"><span class="api-method api-method-get">GET</span><code>/api/management/usage</code><span>Read interval-scoped usage across every owned tenant</span></a>
 <a href="#operation-getManagementAccountUsageFailures"><span class="api-method api-method-get">GET</span><code>/api/management/usage/failures</code><span>Read safe failure details across every owned tenant and interval</span></a>
 <a href="#operation-getManagementAccountUsageRejections"><span class="api-method api-method-get">GET</span><code>/api/management/usage/rejections</code><span>Read safe rejected-request details across every owned tenant and interval</span></a>
+<a href="#operation-receivePaddlePaymentEvent"><span class="api-method api-method-post">POST</span><code>/api/payments/paddle/events</code><span>Retain a verified Paddle event</span></a>
 <a href="#operation-getPublicCapabilities"><span class="api-method api-method-get">GET</span><code>/api/public/capabilities</code><span>Read the public normalized model capability catalog</span></a>
 <a href="#operation-getBrowserConfiguration"><span class="api-method api-method-get">GET</span><code>/config-ui.yaml</code><span>Read the browser runtime configuration</span></a>
 <a href="#operation-postDictation"><span class="api-method api-method-post">POST</span><code>/dictate</code><span>Transcribe an audio upload</span></a>
@@ -11056,6 +11509,250 @@ components:
           </div>
         </div>
       </section>
+<section class="api-operation" id="operation-listFundingOffers">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/funding-offers</code>
+          <span class="api-operation-id">listFundingOffers</span>
+        </header>
+        <h2>List server funding offers</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The owned funding resource.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>503</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-listFundingOrders">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/funding-orders</code>
+          <span class="api-operation-id">listFundingOrders</span>
+        </header>
+        <h2>List owned funding orders</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>limit</code></td><td>query</td><td>No</td><td>integer</td><td></td></tr>
+<tr><td><code>cursor</code></td><td>query</td><td>No</td><td>string</td><td>Continue after this identifier in ascending identifier order.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The owned funding resource.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>503</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-createFundingOrder">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/funding-orders</code>
+          <span class="api-operation-id">createFundingOrder</span>
+        </header>
+        <h2>Create an owned funding order</h2>
+        <p>Select one server offer. Commit its immutable price, USD funding amount, processor identity, and checkout delivery intent in one transaction. The account and creation key identify one order. A repeated key returns that order. A changed offer or processor identity returns 409. Order creation does not grant funds or confirm payment.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>Yes</td><td>string</td><td>A creation key scoped to the authenticated actor and resource kind.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>offer_code</code></td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>201</code></td><td>application/json</td><td>Cache-Control, Location</td><td>The owned funding resource.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>503</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getFundingOrder">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/funding-orders/{order_id}</code>
+          <span class="api-operation-id">getFundingOrder</span>
+        </header>
+        <h2>Read an owned funding order</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>order_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The owned funding resource.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>503</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getPaymentCheckout">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/funding-orders/{order_id}/checkout</code>
+          <span class="api-operation-id">getPaymentCheckout</span>
+        </header>
+        <h2>Read the checkout for an owned funding order</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>order_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The owned funding resource.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>503</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getPaymentReceipt">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/funding-orders/{order_id}/receipt</code>
+          <span class="api-operation-id">getPaymentReceipt</span>
+        </header>
+        <h2>Read the receipt for an owned funding order</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>order_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The owned funding resource.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>503</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 <section class="api-operation" id="operation-listFundsEntries">
         <header class="api-operation-heading">
           <span class="api-method api-method-get">GET</span>
@@ -11089,6 +11786,47 @@ components:
 <tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-createPaymentPortalSession">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/payment-portal-sessions</code>
+          <span class="api-operation-id">createPaymentPortalSession</span>
+        </header>
+        <h2>Create a temporary Paddle customer portal session</h2>
+        <p>Each request creates a temporary link without a financial effect. Do not cache or store the link.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>201</code></td><td>application/json</td><td>Location, Cache-Control</td><td>The temporary portal session.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>503</code></td><td>application/json</td><td>Cache-Control</td><td>The funding request failed without a financial effect.</td></tr>
               </tbody>
             </table>
           </div>
@@ -12983,6 +13721,48 @@ components:
 <tr><td><code>400</code></td><td>text/plain</td><td>none</td><td>Malformed or invalid management input.</td></tr>
 <tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
 <tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-receivePaddlePaymentEvent">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/api/payments/paddle/events</code>
+          <span class="api-operation-id">receivePaddlePaymentEvent</span>
+        </header>
+        <h2>Retain a verified Paddle event</h2>
+        <p>Verifies the signature against raw bytes before JSON parsing. The configured secret binds the event to one processor account and environment. A successful response confirms durable inbox storage, not a funding credit. Identical events have one inbox record. Changed content for the same event returns 409. This receiver currently has controlled development integration only.</p>
+        <p class="api-security"><strong>Authentication:</strong> PaddleSignature (header Paddle-Signature)</p>
+        <div class="api-contract-block"><h3>Parameters</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>event_id</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>event_type</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>occurred_at</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>data</code></td><td>Yes</td><td>object</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The verified event is in the durable inbox.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The payment event was rejected or could not be retained.</td></tr>
+<tr><td><code>401</code></td><td>application/json</td><td>Cache-Control</td><td>The payment event was rejected or could not be retained.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The payment event was rejected or could not be retained.</td></tr>
+<tr><td><code>413</code></td><td>application/json</td><td>Cache-Control</td><td>The payment event was rejected or could not be retained.</td></tr>
+<tr><td><code>415</code></td><td>application/json</td><td>Cache-Control</td><td>The payment event was rejected or could not be retained.</td></tr>
+<tr><td><code>503</code></td><td>application/json</td><td>Cache-Control</td><td>The payment event was rejected or could not be retained.</td></tr>
               </tbody>
             </table>
           </div>

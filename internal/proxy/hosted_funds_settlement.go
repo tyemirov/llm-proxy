@@ -97,11 +97,7 @@ func settleHostedFunds(transaction *gorm.DB, requestID string, now time.Time) er
 		if err != nil {
 			return err
 		}
-		amount, err := parseExactMoney(net)
-		if err != nil {
-			return err
-		}
-		total.Add(total, amount)
+		total.Add(total, net)
 	}
 	return commitHostedFundsSettlement(transaction, reservation, total, creditIDs, now)
 }
@@ -111,8 +107,7 @@ func commitHostedFundsSettlement(transaction *gorm.DB, reservation managedFundsR
 	if err := transaction.Where("billing_account_id = ?", reservation.BillingAccountID).First(&financial).Error; err != nil {
 		return fmt.Errorf("read settlement account %s: %w", reservation.BillingAccountID, err)
 	}
-	exact := ratingMoney(total)
-	cents, remainder, err := SettleUSDCents(exact, ExactMoney{Numerator: financial.RemainderNumerator, Denominator: financial.RemainderDenominator})
+	cents, remainder, err := settleUSDCents(total, ExactMoney{Numerator: financial.RemainderNumerator, Denominator: financial.RemainderDenominator})
 	if err != nil {
 		return fmt.Errorf("calculate settlement %s: %w", reservation.RequestID, err)
 	}
@@ -126,6 +121,7 @@ func commitHostedFundsSettlement(transaction *gorm.DB, reservation managedFundsR
 	if err != nil {
 		return fmt.Errorf("encode settlement credits %s: %w", reservation.RequestID, err)
 	}
+	exact := ratingMoney(total)
 	settlement := managedFundsSettlementRecord{RequestID: reservation.RequestID, BillingAccountID: reservation.BillingAccountID,
 		ChargeNumerator: exact.Numerator, ChargeDenominator: exact.Denominator, AdjustmentIDs: encodedCreditIDs, SettledCents: cents,
 		RemainderBeforeNumerator: financial.RemainderNumerator, RemainderBeforeDenominator: financial.RemainderDenominator,
@@ -158,28 +154,20 @@ func postHostedFundsSettlement(transaction *gorm.DB, reservation managedFundsRes
 		return err
 	}
 	if reservation.MaximumCents > 0 {
-		identifier, err := ledger.NewReservationID(reservation.RequestID)
+		input, err := newHostedLedgerReleaseInput(reservation.RequestID, "settle-release:"+reservation.RequestID)
 		if err != nil {
-			return err
+			return fmt.Errorf("construct ledger release for request %s: %w", reservation.RequestID, err)
 		}
-		key, err := ledger.NewIdempotencyKey("settle-release:" + reservation.RequestID)
-		if err != nil {
-			return err
-		}
-		if err := account.service.Release(transaction.Statement.Context, account.tenant, account.user, account.namespace, identifier, key, metadata); err != nil {
+		if err := account.service.Release(transaction.Statement.Context, account.tenant, account.user, account.namespace, input.reservation, input.key, metadata); err != nil {
 			return fmt.Errorf("release settled reservation %s: %w", reservation.RequestID, err)
 		}
 	}
 	if cents > 0 {
-		amount, err := ledger.NewPositiveAmountCents(cents)
+		input, err := newHostedLedgerAmountInput(cents, "settle-charge:"+reservation.RequestID)
 		if err != nil {
-			return err
+			return fmt.Errorf("construct ledger charge for request %s: %w", reservation.RequestID, err)
 		}
-		key, err := ledger.NewIdempotencyKey("settle-charge:" + reservation.RequestID)
-		if err != nil {
-			return err
-		}
-		if err := account.service.Spend(transaction.Statement.Context, account.tenant, account.user, account.namespace, amount, key, metadata); err != nil {
+		if err := account.service.Spend(transaction.Statement.Context, account.tenant, account.user, account.namespace, input.amount, input.key, metadata); err != nil {
 			return fmt.Errorf("post settled charge %s: %w", reservation.RequestID, err)
 		}
 	}

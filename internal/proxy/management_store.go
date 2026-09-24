@@ -223,12 +223,18 @@ func newManagedTenantName(value string) (managedTenantName, error) {
 type managedUsageEventVisitor func(managedUsageEventRecord) error
 
 type managedTenantDatabase interface {
+	paymentCheckout(context.Context, string, string) (managementPaymentCheckoutResponse, error)
+	paymentReceipt(context.Context, string, string) (managementPaymentReceiptResponse, error)
+	paymentCustomer(context.Context, string, string, string) (string, error)
+	createFundingOrder(context.Context, *fundingCatalog, string, string, string, time.Time) (managedFundingOrderRecord, error)
+	fundingOrder(context.Context, string, string) (managedFundingOrderRecord, error)
+	fundingOrders(context.Context, string, managedConnectionPage) ([]managedFundingOrderRecord, error)
 	billingFundsReservation(context.Context, string, string) (managementFundsReservationDetailResponse, error)
 	fundsResolution(context.Context, string, string, *fundsResolutionCommand) (managementFundsResolutionResponse, error)
 	fundsCorrection(context.Context, string, string, string, *fundsCorrectionCommand) (managementFundsCreditResponse, error)
 	tenantFundsLimit(context.Context, managedBillingAccountRecord, string, *tenantFundsLimitChange, time.Time) (managementFundsTenantLimitResponse, error)
 	reconcileHostedFunds(context.Context, time.Time) error
-	billingFundsBalance(context.Context, string, time.Time) (managementFundsBalanceResponse, error)
+	billingFundsBalance(context.Context, string, time.Time) (hostedFundsBalance, error)
 	billingFundsReservations(context.Context, string, managedConnectionPage) ([]managedFundsReservationRecord, error)
 	billingFundsEntries(context.Context, string, managedConnectionPage) ([]managementFundsEntryResponse, error)
 	billingRequestChargeSummary(context.Context, string, string) (requestChargeSummary, error)
@@ -241,10 +247,10 @@ type managedTenantDatabase interface {
 	journalAttempts(context.Context, string, managedConnectionPage) ([]managedJournalAttemptRecord, error)
 	journalObservations(context.Context, string, managedConnectionPage) ([]managedJournalObservationRecord, error)
 	journalCases(context.Context, string, managedConnectionPage) ([]managedJournalCaseRecord, error)
-	hostedGrant(context.Context, managementPrincipal, string) (managedHostedGrantRecord, error)
-	hostedGrants(context.Context, managementPrincipal, managedConnectionPage) ([]managedHostedGrantRecord, error)
+	hostedGrant(context.Context, managementPrincipal, string) (hostedGrant, error)
+	hostedGrants(context.Context, managementPrincipal, managedConnectionPage) ([]hostedGrant, error)
 	createHostedGrant(context.Context, managedHostedGrantRecord, managedHostedGrantRevisionRecord, managedHostedCreationRecord) (managedHostedCreationRecord, error)
-	changeHostedGrant(context.Context, string, managementHostedGrantChange, string, time.Time) (managedHostedGrantRecord, error)
+	changeHostedGrant(context.Context, string, managementHostedGrantChange, string, time.Time) (hostedGrant, error)
 	hostedGrantRevisions(context.Context, string, managedConnectionPage) ([]managedHostedGrantRevisionRecord, error)
 	billingAccount(context.Context, string) (managedBillingAccountRecord, error)
 	createBillingAccount(context.Context, managedBillingAccountRecord) (managedBillingAccountRecord, error)
@@ -678,13 +684,19 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 		if err := initializeHostedSchema(transaction); err != nil {
 			return err
 		}
+		if err := validateAssignedRoutingDefaults(transaction, providerKeyCipher, providers); err != nil {
+			return err
+		}
 		if err := initializeHostedJournalSchema(transaction); err != nil {
 			return err
 		}
 		if err := initializeHostedRatingSchema(transaction); err != nil {
 			return err
 		}
-		return initializeHostedFundsSchema(transaction)
+		if err := initializeHostedFundsSchema(transaction); err != nil {
+			return err
+		}
+		return initializeHostedPaymentsSchema(transaction)
 	})
 }
 

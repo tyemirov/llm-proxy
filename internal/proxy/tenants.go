@@ -73,6 +73,7 @@ func normalizedTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
 type managedProviderSettings struct {
 	connectionID     string
 	hostedGrantID    string
+	hostedOfferings  []hostedGrantOffering
 	connectionValues map[string]string
 	configuredFields map[string]bool
 	textModel        string

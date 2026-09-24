@@ -309,7 +309,7 @@ func TestHostedTextRecoveryFencesReplacedWorker(t *testing.T) {
 	}
 	reserve := func(*gorm.DB, managedJournalRequestRecord) error { reservations.Add(1); return nil }
 	first := newHostedIdentityHTTPServer(t, database, upstream.URL, root, func(service *hostedTextRequestDependencies) {
-		service.authorize = reserve
+		service.authorize = fixedHostedCompletionAdmission(reserve)
 	})
 	t.Cleanup(func() { close(release) })
 	request, err := http.NewRequest(http.MethodPost, first.URL+"/?provider=openai&model=gpt-4.1", strings.NewReader(`{"prompt":"same intent"}`))
@@ -344,7 +344,7 @@ func TestHostedTextRecoveryFencesReplacedWorker(t *testing.T) {
 		t.Fatal(err)
 	}
 	second := newHostedIdentityHTTPServer(t, openJournalTransactionInstance(t, database), upstream.URL, root, func(service *hostedTextRequestDependencies) {
-		service.authorize = reserve
+		service.authorize = fixedHostedCompletionAdmission(reserve)
 		service.now = func() time.Time { return original.ClaimExpiresAt.Add(time.Second) }
 	})
 	hostedIdentityHTTP(t, second, "replaced", "same intent", http.StatusOK)

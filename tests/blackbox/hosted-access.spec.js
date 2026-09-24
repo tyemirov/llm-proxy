@@ -102,7 +102,7 @@ test('hosted onboarding creates tenant access without provider credentials at de
     await expect(card).toContainText('gpt-4.1');
     await card.getByRole('button',{name:'Use hosted access'}).click();
     await expect(card).toContainText('Assigned');
-    await expect(hosted).toContainText('Hosted execution is not available yet.');
+    await expect(hosted).toContainText('Hosted requests use your prepaid balance.');
     await dashboard.getByRole('button',{name:'API access',exact:true}).click();
     await page.getByRole('dialog').getByRole('button',{name:'Create API key',exact:true}).click();
     await expect(page.getByRole('dialog').getByLabel('Tenant API key')).toHaveValue(/^llmp_/);
@@ -147,12 +147,15 @@ test('hosted onboarding creates tenant access without provider credentials at de
     const serviceRequest={...retained,id:secondID,grant_id:serviceGrant.id,provider:'elevenlabs',operation:'audio_alignment',execution_kind:'media_operation',execution_id:'retained-media',state:'uncertain'};
     delete serviceRequest.model;
     const root=`${base}/billing-accounts/${billing.billing_accounts[0].id}/requests`;
-    let failObservations=false, invalidMeasurement=false, financialReason='usage_unknown';
+    let failObservations=false, invalidMeasurement=false, financialReason='usage_unknown', summaryState='unresolved';
+    let summaryCharge={numerator:'13',denominator:'1000'};
+    let summaryCredits={numerator:'1',denominator:'1000'}, summaryNet={numerator:'3',denominator:'250'}, summaryProvider={numerator:'1',denominator:'100'};
     await page.route(root+'**',async route=>{
       const url=new URL(route.request().url()),cursor=url.searchParams.get('cursor');
       let body;
       if(url.pathname.endsWith('/requests'))body={requests:[cursor?serviceRequest:retained],next_cursor:cursor?'':requestID};
       else if(url.pathname.endsWith('/'+requestID))body=retained;
+      else if(url.pathname.endsWith('/charge-summary'))body={request_id:requestID,state:summaryState,attempt_count:1,charge_count:1,provider_cost:summaryState==='pending'?null:summaryProvider,customer_charge:summaryState==='rated'?summaryCharge:null,customer_credits:summaryState==='rated'?summaryCredits:null,net_customer_charge:summaryState==='rated'?summaryNet:null};
       else if(url.pathname.endsWith('/attempts'))body={attempts:[{id:cursor?secondAttempt:attemptID,number:cursor?2:1,state:'observed',dispatched_at:timestamp,observed_at:timestamp,created_at:timestamp,updated_at:timestamp}],next_cursor:cursor?'':attemptID};
       else if(url.pathname.endsWith('/observations')) {
         if(failObservations){await route.fulfill({status:500,json:{error:{code:'usage_journal_unavailable',detail:'private storage diagnostic'}}});return;}
@@ -171,6 +174,7 @@ test('hosted onboarding creates tenant access without provider credentials at de
     await expect(details).toContainText('Unknown (not reported)');
     await expect(details).toContainText('Included in input tokens');
     await expect(details).toContainText('0 token');
+    await expect(details.getByRole('region',{name:'Request charges',exact:true})).toContainText('Charge unresolved');
     for(const kind of ['attempts','observations','cases'])await details.getByRole('button',{name:'Load more '+kind,exact:true}).click();
     await expect(details).toContainText('Attempt 2');
     await expect(details).toContainText('1.25 token');
@@ -198,8 +202,73 @@ test('hosted onboarding creates tenant access without provider credentials at de
     await expect(journalView.getByRole('alert')).toBeVisible();
     await expect(journalView.getByRole('region',{name:'Request evidence',exact:true})).toHaveCount(0);
     invalidMeasurement=false;
+    summaryState='rated';
     await journalView.locator(`[data-journal-request="${requestID}"]`).click();
     await expect(details).toContainText('9007199254740993');
+    const totals=details.getByRole('region',{name:'Request charges',exact:true});
+    await expect(totals).toContainText('Customer charge: $0.013');
+    await expect(totals).toContainText('Credits: $0.001');
+    await expect(totals).toContainText('Net charge: $0.012');
+    summaryState='pending';
+    await journalView.locator(`[data-journal-request="${requestID}"]`).click();
+    await expect(totals).toContainText('Charge pending');
+    await expect(totals).not.toContainText('$0.00');
+    summaryState='rated';
+    for(const [numerator,denominator,display] of [
+      ['9007199254740993','100','$90071992547409.93'],
+      ['1','3','≈$0.333333'],
+      ['1','10000000','Less than $0.000001'],
+    ]) {
+      summaryCharge={numerator,denominator};
+      summaryCredits={numerator:'0',denominator:'1'};summaryNet=summaryCharge;
+      let costNumerator=BigInt(numerator)*10n,costDenominator=BigInt(denominator)*13n;
+      let left=costNumerator,right=costDenominator;
+      while(right){const next=left%right;left=right;right=next;}
+      summaryProvider={numerator:String(costNumerator/left),denominator:String(costDenominator/left)};
+      await journalView.locator(`[data-journal-request="${requestID}"]`).click();
+      await expect(totals).toContainText('Customer charge: '+display);
+      await expect(totals.locator(`span[title="Exact: ${numerator}/${denominator} USD"]`).first()).toBeVisible();
+    }
+    summaryCharge={numerator:'13',denominator:'1000'};
+    summaryCredits={numerator:'1',denominator:'1000'};summaryNet={numerator:'3',denominator:'250'};summaryProvider={numerator:'1',denominator:'100'};
+    await journalView.locator(`[data-journal-request="${requestID}"]`).click();
+
+    const chargeID='charge-'+ '1'.repeat(32), secondCharge='charge-'+ '2'.repeat(32);
+    let invalidCharge=false, failedCharges=false;
+    await page.route(`${base}/billing-accounts/${billing.billing_accounts[0].id}/charges?*`,async route=>{
+      if(failedCharges)return route.fulfill({status:500,json:{error:{code:'usage_journal_unavailable',detail:'private charge diagnostic'}}});
+      const more=new URL(route.request().url()).searchParams.has('cursor');
+      const gross={numerator:invalidCharge?13:'13',denominator:'1000'}, providerCost={numerator:'1',denominator:'100'};
+      const rating={state:'resolved',lines:[{dimension:'input_tokens',component:'input_tokens',quantity:'10',quantity_unit:'token',provider_rate:'1000',customer_rate:{numerator:'1300',denominator:'1'},rate_unit:'USD/1M_tokens',conditions:{},provider_cost:providerCost,customer_charge:gross}],provider_cost:providerCost,customer_charge:gross,minimum_adjustment:{numerator:'0',denominator:'1'},unresolved_dimensions:[]};
+      const charge={id:more?secondCharge:chargeID,request_id:more?secondID:requestID,attempt_id:more?secondAttempt:attemptID,observation_id:more?secondObservation:observationID,price_snapshot_id:'price-'+ '1'.repeat(32),state:more?'usage_unresolved':'rated',rating:more?{state:'unresolved',lines:[],provider_cost:null,customer_charge:null,minimum_adjustment:null,unresolved_dimensions:['input_tokens']}:rating,customer_charge:more?null:gross,net_customer_charge:more?null:{numerator:'3',denominator:'250'},customer_adjustments:more?[]:[{id:'credit-'+ '1'.repeat(32),credit:{numerator:'1',denominator:'1000'},reason:'Approved correction',created_at:timestamp}],created_at:timestamp};
+      return route.fulfill({json:{charges:[charge],next_cursor:more?'':chargeID}});
+    });
+    await journalView.getByRole('button',{name:'Load charges',exact:true}).click();
+    const charges=journalView.getByRole('region',{name:'Itemized charges',exact:true});
+    await expect(charges).toContainText('10 token');
+    await expect(charges).toContainText('Provider cost: $0.01');
+    await expect(charges).toContainText('Customer charge: $0.013');
+    await expect(charges).toContainText('Approved correction');
+    await expect(charges).toContainText('Net charge: $0.012');
+    await charges.getByRole('button',{name:'Load more charges',exact:true}).click();
+    await expect(charges.locator('[data-charge-id]')).toHaveCount(2);
+    await expect(charges.locator(`[data-charge-id="${secondCharge}"]`)).toContainText('Charge unresolved');
+    await expect(charges.locator(`[data-charge-id="${secondCharge}"]`)).not.toContainText('$0.00');
+    for(const width of [1440,390,320]){
+      await page.setViewportSize({width,height:1000});
+      await expect(charges).toBeVisible();
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+    }
+    for(const invalid of ['numeric amount','failed read']) {
+      invalidCharge=invalid==='numeric amount';failedCharges=invalid==='failed read';
+      await journalView.getByRole('button',{name:'Refresh charges',exact:true}).click();
+      await expect(journalView.getByRole('alert')).toBeVisible();
+      await expect(charges.locator('[data-charge-id]')).toHaveCount(0);
+      await expect(journalView).not.toContainText('private charge diagnostic');
+    }
+    invalidCharge=false;failedCharges=false;
+    await journalView.getByRole('button',{name:'Refresh charges',exact:true}).click();
+    await expect(charges).toContainText('Net charge: $0.012');
 
     const fundsRoot=`${base}/billing-accounts/${billing.billing_accounts[0].id}`;
     let fundsFailure=false, invalidFunds=false;

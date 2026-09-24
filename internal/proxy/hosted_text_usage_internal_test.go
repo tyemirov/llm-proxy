@@ -116,11 +116,7 @@ func newHostedTextProviderFixture(t *testing.T, database *gormManagedTenantDatab
 		definition.transports[identifier] = transport
 	}
 	service.store.routingDefaults.definitions[providerID(provider)] = definition
-	secret, err := service.store.providerKeyCipher.encryptConnection(rand.Reader, platformCredentialReference("platform-text", 1), provider, CatalogCredentialAPIKey, "hosted-text-secret")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fields, _ := json.Marshal(map[string]string{CatalogCredentialAPIKey: secret})
+	fields := hostedTextCredentialFields(t, service.store.providerKeyCipher, "platform-text", definition, "hosted-text-secret")
 	offerings, _ := json.Marshal([]hostedGrantOffering{{Model: model, Operations: []string{ModelOperationText}}})
 	now := time.Now().UTC()
 	for _, record := range []any{
@@ -139,4 +135,33 @@ func newHostedTextProviderFixture(t *testing.T, database *gormManagedTenantDatab
 	server.Client().Transport = hostedIdentityTransport{next: server.Client().Transport}
 	t.Cleanup(server.Close)
 	return server
+}
+
+func hostedTextCredentialFields(t *testing.T, cipher managedProviderKeyCipher, connection string, provider providerDefinition, secret string) []byte {
+	t.Helper()
+	fields := make(map[string]string, len(provider.fields))
+	for name, field := range provider.fields {
+		fields[name] = *field.Default
+	}
+	fields[CatalogCredentialAPIKey] = secret
+	if provider.identifier == ProviderNameDashScope {
+		fields["base_url"] = "https://test-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+	}
+	values, err := validatedManagedProviderConnectionValues(provider, fields, managedProviderSettings{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, value := range values {
+		if provider.fields[name].Secret && value != "" {
+			values[name], err = cipher.encryptConnection(rand.Reader, platformCredentialReference(connection, 1), provider.identifier.string(), name, value)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	encoded, err := json.Marshal(values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encoded
 }

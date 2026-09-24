@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -37,8 +38,10 @@ var (
 )
 
 type fileConfiguration struct {
-	Server     serverConfiguration     `mapstructure:"server"`
-	Management managementConfiguration `mapstructure:"management"`
+	Server     serverConfiguration         `mapstructure:"server"`
+	Management managementConfiguration     `mapstructure:"management"`
+	Payments   *proxy.PaymentConfiguration `mapstructure:"payments"`
+	Hosted     *proxy.HostedConfiguration  `mapstructure:"hosted"`
 }
 
 type serverConfiguration struct {
@@ -118,11 +121,14 @@ func loadRuntimeConfiguration(rawConfigPath string) (proxy.Configuration, error)
 	if readConfigError := configReader.ReadConfig(strings.NewReader(expandedConfig)); readConfigError != nil {
 		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigFileParse, configPath, readConfigError)
 	}
-	if integerValidationError := validateExplicitPositiveIntegerConfiguration(configReader); integerValidationError != nil {
-		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigInvalid, configPath, integerValidationError)
+	if explicitValidationError := validateExplicitConfiguration(configReader); explicitValidationError != nil {
+		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigInvalid, configPath, explicitValidationError)
 	}
 
 	var parsedConfiguration fileConfiguration
+	if configReader.IsSet("payments") {
+		parsedConfiguration.Payments = &proxy.PaymentConfiguration{}
+	}
 	if unmarshalError := configReader.UnmarshalExact(&parsedConfiguration); unmarshalError != nil {
 		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigFileParse, configPath, unmarshalError)
 	}
@@ -146,7 +152,27 @@ func loadProviderCatalog(configPath string) (*proxy.ProviderCatalog, error) {
 	return catalog, nil
 }
 
-func validateExplicitPositiveIntegerConfiguration(configReader *viper.Viper) error {
+func validateExplicitConfiguration(configReader *viper.Viper) error {
+	rawOfferings := configReader.Get("hosted.offerings")
+	if configReader.IsSet("hosted") && rawOfferings == nil {
+		return fmt.Errorf("invalid configuration: hosted explicit offering scopes are required")
+	}
+	if rawOfferings != nil {
+		offerings, ok := rawOfferings.([]any)
+		if !ok {
+			return fmt.Errorf("invalid configuration: hosted.offerings must be a sequence")
+		}
+		for index, rawOffering := range offerings {
+			offering, ok := rawOffering.(map[string]any)
+			if !ok {
+				return fmt.Errorf("invalid configuration: hosted.offerings[%d] must be an object", index)
+			}
+			attempts, ok := offering["maximum_attempts"].(int)
+			if !ok || attempts <= 0 || uint64(attempts) > math.MaxUint32 {
+				return fmt.Errorf("invalid configuration: hosted.offerings[%d].maximum_attempts must be a positive uint32 integer", index)
+			}
+		}
+	}
 	positiveIntegerFields := map[string]struct{}{
 		"server.request_timeout_seconds":     {},
 		"server.max_request_timeout_seconds": {},
@@ -259,6 +285,8 @@ func (configuration fileConfiguration) toProxyConfiguration(providerCatalog *pro
 	}
 	return proxy.NewConfiguration(proxy.Configuration{
 		Management:                        managementProxyConfiguration(configuration.Management, usageQueueSize),
+		Payments:                          configuration.Payments,
+		Hosted:                            configuration.Hosted,
 		ProviderCatalog:                   providerCatalog,
 		ProviderConnectionValues:          providerConnectionValues,
 		Port:                              configuration.Server.Port,

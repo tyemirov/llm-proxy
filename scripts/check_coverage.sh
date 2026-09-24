@@ -29,7 +29,8 @@ run_coverage_probe() {
   fi
 }
 
-"$GO_BIN" test -count=1 ./... -covermode=count -coverpkg="$COVERPKG" -coverprofile="$TMP_DIR/go-test.coverprofile"
+"$GO_BIN" test -count=1 ./... -run='^TestHosted' -covermode=count -coverpkg="$COVERPKG" -coverprofile="$TMP_DIR/hosted-test.coverprofile"
+"$GO_BIN" test -count=1 ./... -skip='^TestHosted' -covermode=count -coverpkg="$COVERPKG" -coverprofile="$TMP_DIR/remaining-test.coverprofile"
 "$GO_BIN" build -cover -covermode=count -coverpkg="$RUNTIME_COVERPKG" -o "$TMP_DIR/llm-proxy.cover" ./cmd/cli
 "$GO_BIN" build -cover -covermode=count -coverpkg="$CLIENT_COVERPKG" -o "$TMP_DIR/llm-proxy-client.cover" ./llm-proxy-client
 
@@ -61,7 +62,7 @@ awk '
       print block, statements[block], counts[block]
     }
   }
-' "$TMP_DIR/go-test.coverprofile" "$TMP_DIR/bin-help.coverprofile" "$TMP_DIR/bin-missing-config.coverprofile" "$TMP_DIR/bin-obsolete-config.coverprofile" "$TMP_DIR/bin-client-missing-config.coverprofile" >"$COVERAGE_FILE"
+' "$TMP_DIR/hosted-test.coverprofile" "$TMP_DIR/remaining-test.coverprofile" "$TMP_DIR/bin-help.coverprofile" "$TMP_DIR/bin-missing-config.coverprofile" "$TMP_DIR/bin-obsolete-config.coverprofile" "$TMP_DIR/bin-client-missing-config.coverprofile" >"$COVERAGE_FILE"
 
 coverage_output="$("$GO_BIN" tool cover -func="$COVERAGE_FILE")"
 printf '%s\n' "$coverage_output"

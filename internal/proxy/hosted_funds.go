@@ -83,21 +83,12 @@ type hostedLedgerAccount struct {
 }
 
 func newHostedLedgerAccount(transaction *gorm.DB, accountID string, now time.Time) (hostedLedgerAccount, error) {
-	tenant, err := ledger.NewTenantID(hostedLedgerTenant)
-	if err != nil {
-		return hostedLedgerAccount{}, err
-	}
-	user, err := ledger.NewUserID(accountID)
-	if err != nil {
+	tenant, tenantErr := ledger.NewTenantID(hostedLedgerTenant)
+	user, userErr := ledger.NewUserID(accountID)
+	namespace, namespaceErr := ledger.NewLedgerID(CatalogCurrencyUSD)
+	service, serviceErr := ledger.NewService(gormstore.New(transaction), func() int64 { return now.Unix() })
+	if err := errors.Join(tenantErr, userErr, namespaceErr, serviceErr); err != nil {
 		return hostedLedgerAccount{}, fmt.Errorf("construct ledger account %s: %w", accountID, err)
-	}
-	namespace, err := ledger.NewLedgerID(CatalogCurrencyUSD)
-	if err != nil {
-		return hostedLedgerAccount{}, err
-	}
-	service, err := ledger.NewService(gormstore.New(transaction), func() int64 { return now.Unix() })
-	if err != nil {
-		return hostedLedgerAccount{}, fmt.Errorf("construct ledger service for account %s: %w", accountID, err)
 	}
 	return hostedLedgerAccount{service: service, tenant: tenant, user: user, namespace: namespace}, nil
 }
@@ -142,6 +133,19 @@ func reserveHostedFunds(transaction *gorm.DB, request managedJournalRequestRecor
 	if financial.State != fundsAccountActive {
 		return errFinancialAccountSuspended
 	}
+	if _, err := parseUSDCentRemainder(ExactMoney{Numerator: financial.RemainderNumerator, Denominator: financial.RemainderDenominator}); err != nil {
+		return fmt.Errorf("read retained remainder for financial account %s: %w", request.BillingAccountID, err)
+	}
+	if err := refreshPaymentHolds(transaction, request.BillingAccountID, request.CreatedAt); err != nil {
+		return err
+	}
+	restricted, err := paymentFundsRestricted(transaction, request.BillingAccountID, request.CreatedAt)
+	if err != nil {
+		return err
+	}
+	if restricted {
+		return errFinancialAccountSuspended
+	}
 	var retained managedPriceSnapshotRecord
 	if err := transaction.Where("request_id = ? AND billing_account_id = ?", request.ID, request.BillingAccountID).First(&retained).Error; err != nil {
 		return fmt.Errorf("read reserved price for request %s: %w", request.ID, err)
@@ -170,17 +174,9 @@ func reserveHostedFunds(transaction *gorm.DB, request managedJournalRequestRecor
 		if err != nil {
 			return err
 		}
-		amount, err := ledger.NewPositiveAmountCents(maximum)
+		input, err := newHostedLedgerReservationInput(maximum, request.ID, "reserve:"+request.ID)
 		if err != nil {
-			return err
-		}
-		reservationID, err := ledger.NewReservationID(request.ID)
-		if err != nil {
-			return err
-		}
-		key, err := ledger.NewIdempotencyKey("reserve:" + request.ID)
-		if err != nil {
-			return err
+			return fmt.Errorf("construct ledger reservation for request %s: %w", request.ID, err)
 		}
 		encoded, err := json.Marshal(struct {
 			RequestID string `json:"request_id"`
@@ -193,7 +189,7 @@ func reserveHostedFunds(transaction *gorm.DB, request managedJournalRequestRecor
 			return err
 		}
 		// A request timeout cannot release funds after an uncertain dispatch.
-		if err := account.service.Reserve(transaction.Statement.Context, account.tenant, account.user, account.namespace, amount, reservationID, key, 0, metadata); err != nil {
+		if err := account.service.Reserve(transaction.Statement.Context, account.tenant, account.user, account.namespace, input.amount, input.reservation, input.key, 0, metadata); err != nil {
 			if errors.Is(err, ledger.ErrInsufficientFunds) {
 				return errInsufficientFunds
 			}

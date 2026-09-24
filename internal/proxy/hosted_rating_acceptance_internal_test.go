@@ -32,6 +32,7 @@ func newHostedRatingFixtureForAttempts(t *testing.T, attempts uint32) (*gormMana
 	router := server.Config.Handler.(*gin.Engine)
 	router.GET(managementAPIPath+managementFundsBalancePath, service.getFundsBalanceHandler())
 	router.GET(managementAPIPath+managementFundsReservationsPath, service.listFundsReservationsHandler())
+	router.GET(managementAPIPath+managementFundsReservationPath, service.getFundsReservationHandler())
 	router.GET(managementAPIPath+managementFundsEntriesPath, service.listFundsEntriesHandler())
 	router.GET(managementAPIPath+managementFundsTenantLimitPath, service.fundsTenantLimitHandler())
 	router.PUT(managementAPIPath+managementFundsTenantLimitPath, service.fundsTenantLimitHandler())
@@ -367,6 +368,8 @@ func ratingHTTPExchange(t *testing.T, server *httptest.Server, method, path, bod
 	resourcePath := strings.SplitN(path, "?", 2)[0]
 	if strings.Contains(resourcePath, "/tenant-limits/") {
 		template = "/api/management/billing-accounts/{billing_account_id}/tenant-limits/{tenant_id}"
+	} else if strings.Contains(resourcePath, "/reservations/") {
+		template = "/api/management/billing-accounts/{billing_account_id}/reservations/{request_id}"
 	} else if strings.HasSuffix(resourcePath, "/reservations") {
 		template = "/api/management/billing-accounts/{billing_account_id}/reservations"
 	} else if strings.HasSuffix(resourcePath, "/ledger-entries") {

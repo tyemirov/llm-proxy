@@ -17,6 +17,9 @@ func loadJournalProvider(ctx context.Context, database *gorm.DB, cipher managedP
 	if err := json.Unmarshal(credential.Fields, &fields); err != nil {
 		return providerDefinition{}, fmt.Errorf("decode credential for request %s: %w", accepted.ID, err)
 	}
+	if len(fields) != len(provider.fields) {
+		return providerDefinition{}, fmt.Errorf("validate credential fields for request %s: %w", accepted.ID, errHostedAuthorityDenied)
+	}
 	values := make(map[string]string, len(fields))
 	for name, value := range fields {
 		field, known := provider.fields[name]

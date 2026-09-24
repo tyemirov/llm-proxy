@@ -458,6 +458,12 @@ export {};
  */
 /** @typedef {{requests:JournalRequest[], next_cursor:string}} JournalRequestPage */
 /** @typedef {{numerator:string,denominator:string}} ExactMoney */
+/** @typedef {{dimension:string,component:string,quantity:string,quantity_unit:string,provider_rate:string,customer_rate:ExactMoney,rate_unit:string,conditions:Record<string,unknown>,provider_cost:ExactMoney,customer_charge:ExactMoney}} RatedLine */
+/** @typedef {{state:'resolved'|'unresolved',lines:RatedLine[],provider_cost:ExactMoney|null,customer_charge:ExactMoney|null,minimum_adjustment:ExactMoney|null,unresolved_dimensions:string[]}} ChargeRating */
+/** @typedef {{id:string,credit:ExactMoney,reason:string,created_at:string}} ChargeAdjustment */
+/** @typedef {{id:string,request_id:string,attempt_id:string,observation_id:string,price_snapshot_id:string,state:'rated'|'usage_unresolved'|'policy_unresolved'|'limit_unresolved',rating:ChargeRating,customer_charge:ExactMoney|null,net_customer_charge:ExactMoney|null,customer_adjustments:ChargeAdjustment[],created_at:string}} CustomerCharge */
+/** @typedef {{charges:CustomerCharge[],next_cursor:string}} CustomerChargePage */
+/** @typedef {{request_id:string,state:'pending'|'unresolved'|'rated',attempt_count:number,charge_count:number,provider_cost:ExactMoney|null,customer_charge:ExactMoney|null,customer_credits:ExactMoney|null,net_customer_charge:ExactMoney|null}} RequestChargeSummary */
 /** @typedef {{currency:'USD',state:'active'|'suspended'|'reconciliation_required',posted_cents:string,available_cents:string,reserved_cents:string,spent_cents:string,pending_cents:string,unsettled_fraction:ExactMoney}} FundsBalance */
 /** @typedef {{id:string,currency:'USD',maximum_cents:string,state:'held'|'settled'|'released'|'reconciliation_required',revision:number,created_at:string,updated_at:string}} FundsReservation */
 /** @typedef {{id:string,currency:'USD',type:'grant'|'hold'|'reverse_hold'|'spend'|'refund',amount_cents:string,reservation_id:string|null,refund_of_entry_id:string|null,created_at:string}} FundsEntry */
@@ -471,7 +477,7 @@ export {};
 /** @typedef {{attempts:JournalAttempt[],next_cursor:string}} JournalAttemptPage */
 /** @typedef {{observations:JournalObservation[],next_cursor:string}} JournalObservationPage */
 /** @typedef {{cases:JournalCase[],next_cursor:string}} JournalCasePage */
-/** @typedef {{request:JournalRequest,attempts:JournalAttemptPage,observations:JournalObservationPage,cases:JournalCasePage}} JournalEvidence */
+/** @typedef {{request:JournalRequest,attempts:JournalAttemptPage,observations:JournalObservationPage,cases:JournalCasePage,summary:RequestChargeSummary}} JournalEvidence */
 /** @typedef {{provider:string, kind:'account_connection'|'hosted_access_grant', resource_id:string}} ProviderAssignment */
 /**
  * @typedef {object} HostedAccessGrant
@@ -486,3 +492,14 @@ export {};
  * @property {string} created_at
  * @property {string} updated_at
  */
+
+/** @typedef {'sandbox'|'production'} PaymentEnvironment */
+/** @typedef {'created'|'pending'|'paid'|'failed'|'partially_refunded'|'refunded'|'disputed'} FundingState */
+/** @typedef {{id:string,offer_code:string,funding_cents:string,currency:'USD',environment:PaymentEnvironment,state:FundingState,created_at:string}} FundingOrder */
+/** @typedef {{orders:FundingOrder[],next_cursor:string}} FundingOrderPage */
+/** @typedef {{funding_order_id:string,environment:PaymentEnvironment,currency:'USD',state:FundingState,credit_cents:string,gross_cents:string,tax_cents:string,adjusted_gross_cents:string,adjusted_tax_cents:string,reversed_cents:string,pending_refund_cents:string,invoice_number:string|null,paid_at:string}} PaymentReceipt */
+/** @typedef {{provider:'paddle',environment:PaymentEnvironment,url:string}} PaymentPortalSession */
+/** @typedef {{code:string,funding_cents:string,currency:'USD'}} FundingOffer */
+/** @typedef {{provider:'paddle',environment:PaymentEnvironment,client_token:string,offers:FundingOffer[]}} FundingOffers */
+/** @typedef {{provider:'paddle',environment:PaymentEnvironment,transaction_id:string}} PaymentCheckout */
+/** @typedef {{key:string,offer_code:string,order_id:string|null}} FundingIntent */

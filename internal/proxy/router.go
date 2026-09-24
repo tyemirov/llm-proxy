@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -81,19 +82,29 @@ type dictationRequestParameters struct {
 	audioReader io.Reader
 }
 
-// BuildRouter constructs the HTTP router used by the proxy. configuration supplies management, routing, upstream capacity, and timeout settings. structuredLogger records structured log messages during routing.
-func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger) (*gin.Engine, error) {
+// Router owns HTTP routes and their background media workers.
+type Router struct {
+	*gin.Engine
+	stop func()
+}
+
+// Close cancels media execution and waits for the router's workers to stop.
+func (router *Router) Close() { router.stop() }
+
+// BuildRouter constructs the proxy router. The caller must close it after HTTP shutdown.
+func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger) (*Router, error) {
 	return buildRouter(configuration, structuredLogger, newManagedTenantStore)
 }
 
 type managedTenantStoreOpener func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error)
 
-func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger, openManagedTenantStore managedTenantStoreOpener) (*gin.Engine, error) {
+func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger, openManagedTenantStore managedTenantStoreOpener) (*Router, error) {
 	application, err := buildProxyApplication(configuration, structuredLogger, openManagedTenantStore)
 	if err != nil {
 		return nil, err
 	}
-	return application.router, nil
+	application.startMedia()
+	return &Router{Engine: application.router, stop: application.close}, nil
 }
 
 func buildProxyApplication(configuration Configuration, structuredLogger *zap.SugaredLogger, openManagedTenantStore managedTenantStoreOpener) (*proxyApplication, error) {
@@ -145,6 +156,19 @@ func buildProxyApplication(configuration Configuration, structuredLogger *zap.Su
 	if structuredStoreError != nil {
 		return nil, structuredStoreError
 	}
+	if configuration.hosted != nil {
+		if journalDatabase == nil {
+			return nil, fmt.Errorf("configure hosted execution: managed financial database is required")
+		}
+		var hostedError error
+		upstreamProviders.hostedText, hostedError = newHostedTextRequests(context.Background(), hostedTextRequestDependencies{
+			database: journalDatabase, responses: structuredRequests, cipher: managedTenants.providerKeyCipher,
+			catalogRevision: configuration.ModelCatalog.Revision, authorize: configuration.hosted.authorizeCompletion, now: time.Now, entropy: rand.Reader,
+		})
+		if hostedError != nil {
+			return nil, fmt.Errorf("initialize hosted completion runtime: %w", hostedError)
+		}
+	}
 
 	router.Use(gin.Recovery())
 	router.GET(healthPath, healthHandler(managedTenants, structuredLogger))
@@ -155,6 +179,16 @@ func buildProxyApplication(configuration Configuration, structuredLogger *zap.Su
 		managedRequestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, managedTenants, usageEndpointText, chatHandler(upstreamProviders, providers, managedTenants, structuredLogger)),
 	)
 	managementService := newManagementService(configuration.Management, configuration.managementSessionValidator, managedTenants, providers, keyVerifier, structuredLogger)
+	payments, err := newPaddlePaymentRuntime(configuration.payments, journalDatabase)
+	if err != nil {
+		return nil, err
+	}
+	if payments != nil {
+		managementService.funding = payments.catalog
+		managementService.paymentPortal = payments.client
+		managementService.paymentClientToken = configuration.payments.clientToken
+		registerPaddlePaymentRoutes(router, payments.inbox)
+	}
 	managementService.registerRoutes(router)
 	if err := registerMCPRoutes(router, configuration, managementService, upstreamProviders, assetStore, mediaOperations); err != nil {
 		return nil, err
@@ -191,7 +225,7 @@ func buildProxyApplication(configuration Configuration, structuredLogger *zap.Su
 	if err := RegisterClientProtocols(router, adapters); err != nil {
 		return nil, err
 	}
-	return &proxyApplication{router: router, database: managedTenants.database, address: fmt.Sprintf(":%d", configuration.Port), now: time.Now}, nil
+	return &proxyApplication{router: router, database: managedTenants.database, address: fmt.Sprintf(":%d", configuration.Port), now: time.Now, payments: payments, media: mediaOperations}, nil
 }
 
 // chatHandler returns a handler that forwards query-string requests to upstream providers.

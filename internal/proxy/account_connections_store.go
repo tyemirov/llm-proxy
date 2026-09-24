@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -323,7 +324,11 @@ func (store *managedTenantStore) assignedProviderSettings(record managedTenantRe
 		if !exists {
 			return nil, fmt.Errorf("tenant=%s provider=%s hosted profile missing: %w", record.TenantID, assignment.ProviderID, errManagedConnectionInvalid)
 		}
-		settings[providerID(assignment.ProviderID)] = managedProviderSettings{hostedGrantID: assignment.GrantID, textModel: profile.TextModel, systemPrompt: profile.SystemPrompt}
+		var offerings []hostedGrantOffering
+		if err := json.Unmarshal(assignment.Grant.Offerings, &offerings); err != nil {
+			return nil, fmt.Errorf("read grant scope for tenant %s provider %s: %w", record.TenantID, assignment.ProviderID, err)
+		}
+		settings[providerID(assignment.ProviderID)] = managedProviderSettings{hostedGrantID: assignment.GrantID, hostedOfferings: offerings, textModel: profile.TextModel, systemPrompt: profile.SystemPrompt}
 	}
 	return settings, nil
 }
@@ -374,18 +379,16 @@ func validateAccountConnectionSchema(database *gorm.DB, keyCipher managedProvide
 		return fmt.Errorf("%w: operation=validate account connections: %w", errManagedTenantSchemaMigration, err)
 	}
 	store := managedTenantStore{providerKeyCipher: keyCipher, routingDefaults: providers}
-	settingsByConnection := make(map[string]managedProviderSettings, len(connections))
 	connectionsByID := make(map[string]managedAccountConnectionRecord, len(connections))
 	for _, connection := range connections {
 		name, nameError := newManagedTenantName(connection.Name)
 		if nameError != nil || name.display != connection.Name || connection.Version == 0 || connection.Owner.UserID != connection.OwnerUserID || connection.OwnerUserID == "" {
 			return fmt.Errorf("%w: operation=validate connection=%s: %w", errManagedTenantSchemaMigration, connection.ID, errManagedConnectionInvalid)
 		}
-		settings, err := store.accountConnectionSettings(connection)
+		_, err := store.accountConnectionSettings(connection)
 		if err != nil {
 			return fmt.Errorf("%w: operation=validate connection=%s: %w", errManagedTenantSchemaMigration, connection.ID, err)
 		}
-		settingsByConnection[connection.ID] = settings
 		connectionsByID[connection.ID] = connection
 	}
 	var tenants []managedTenantRecord
@@ -393,17 +396,12 @@ func validateAccountConnectionSchema(database *gorm.DB, keyCipher managedProvide
 		return err
 	}
 	for _, tenant := range tenants {
-		settings := make(map[providerID]managedProviderSettings, len(tenant.ConnectionAssignments))
 		for _, assignment := range tenant.ConnectionAssignments {
 			connection, exists := connectionsByID[assignment.ConnectionID]
-			profile, profileExists := managedProviderProfileRecordForProvider(tenant.ProviderProfiles, providerID(assignment.ProviderID))
+			_, profileExists := managedProviderProfileRecordForProvider(tenant.ProviderProfiles, providerID(assignment.ProviderID))
 			if !exists || !profileExists || connection.OwnerUserID != tenant.OwnerUserID || connection.ProviderID != assignment.ProviderID {
 				return fmt.Errorf("%w: operation=validate tenant=%s connection=%s invalid assignment", errManagedTenantSchemaMigration, tenant.TenantID, assignment.ConnectionID)
 			}
-			value := settingsByConnection[assignment.ConnectionID]
-			value.textModel = profile.TextModel
-			value.systemPrompt = profile.SystemPrompt
-			settings[providerID(assignment.ProviderID)] = value
 		}
 		for _, profile := range tenant.ProviderProfiles {
 			definition, known := providers.definitions[providerID(profile.ProviderID)]
@@ -413,6 +411,26 @@ func validateAccountConnectionSchema(database *gorm.DB, keyCipher managedProvide
 			if _, _, err := providers.resolveTextModel(profile.ProviderID, profile.TextModel, profile.ProviderID, profile.TextModel, false); err != nil {
 				return fmt.Errorf("%w: operation=validate table=%s owner=%s tenant=%s: %w", errManagedTenantSchemaMigration, managedProviderProfileTable, tenant.OwnerUserID, tenant.TenantID, err)
 			}
+		}
+	}
+	return nil
+}
+
+// Validate defaults after both assignment schemas exist. Startup and request
+// handling use the same projection for account connections and hosted grants.
+func validateAssignedRoutingDefaults(database *gorm.DB, keyCipher managedProviderKeyCipher, providers *providerRegistry) error {
+	store := &managedTenantStore{providerKeyCipher: keyCipher, routingDefaults: providers}
+	var tenants []managedTenantRecord
+	if err := database.Preload("ConnectionAssignments.Connection.Fields").Preload("ProviderProfiles").Find(&tenants).Error; err != nil {
+		return fmt.Errorf("read tenants for routing validation: %w", err)
+	}
+	for _, tenant := range tenants {
+		if err := readHostedTenantAssignments(database, &tenant); err != nil {
+			return err
+		}
+		settings, err := store.assignedProviderSettings(tenant)
+		if err != nil {
+			return err
 		}
 		if _, err := validatePersistedManagedRoutingDefaults(providers, settings, tenant.defaults()); err != nil {
 			return fmt.Errorf("%w: operation=validate table=%s owner=%s tenant=%s: %w", errManagedTenantSchemaMigration, managedTenantTable, tenant.OwnerUserID, tenant.TenantID, err)

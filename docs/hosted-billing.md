@@ -2,7 +2,7 @@
 
 F070 defines the prepaid hosted service. F065 through F069 own its implementation in that order.
 This document records the shared contract and current decisions.
-The service is not complete. Hosted activation remains disabled until F070 acceptance passes.
+The service is not complete. Tracked runtime configuration keeps hosted activation disabled until F070 acceptance passes.
 
 ## Product Decisions
 
@@ -16,6 +16,11 @@ The operator selected Paddle for payments. The service must obey the applicable 
 
 The operator required reuse of the existing PoodleScanner and Hecate integrations and implementation approaches.
 LLM Proxy has a browser application. Native mobile applications are outside this scope.
+
+On 2026-09-23, the operator selected the existing Ledger account model and balance conservation for acceptance.
+Use the existing append-only journal and verify each account balance against its recorded financial effects.
+Include exact remainders, active reservations, and payment reversal holds in these checks.
+F069 must extend conservation checks to payment credits, refunds, reversals, and recovery.
 
 ```text
 customer_price = provider_price * 1.30
@@ -51,6 +56,7 @@ A provider minimum applies before the customer markup.
 Ledger entries use integer USD cents. The maximum entry is `9223372036854775807` cents.
 Settlement adds the retained account remainder before conversion to cents.
 Settlement rounds down once and retains the exact remainder, which is less than one cent.
+Settlement consumes the calculated rational directly and preserves it for the settlement record and tenant usage.
 F068 must commit the remainder and the ledger entry in one transaction.
 An exact usage credit reduces this remainder before it credits whole cents.
 The conversion preserves the same fractional accounting boundary:
@@ -62,12 +68,21 @@ next_remainder = residual + credited_cents / 100
 ```
 
 The credit transaction retains the previous remainder, next remainder, and credited cents.
+The credit calculation retains its parsed amount with the cent effect and next remainder. Tenant accounting reuses that amount.
+Public amounts and stored remainders retain their boundary validation.
 The next remainder stays below one cent.
 Original provider costs, charges, and settlement records remain unchanged.
 
 The reservation estimate rounds up to cents and includes each authorized attempt.
 An upper bound for cached tokens does not establish a cache discount.
 An unknown component bound or an amount above the ledger limit prevents authorization.
+
+Provider services keep their prices in their catalog service declarations.
+The shared price index uses the provider, an empty model, and the operation for each service.
+Exact price selection and rating use that index for both model offerings and services.
+Service snapshots preserve rates, conditions, markup, and unknown usage under the same financial rules.
+Unavailable service prices retain their declared source and reason.
+Price lookup alone does not qualify a service for hosted execution. Native metering and bounded admission remain required.
 
 Text admission uses the catalog input bound and output-token limit for each authorized attempt.
 The input bound is the smallest fixed input-token or context-token limit.
@@ -144,6 +159,7 @@ A missing limit, an account-dependent limit, or an incompatible unit prevents ad
 The media API returns HTTP 422 with `media_operation_unavailable` in these cases.
 Billing limits do not replace the capability limits that validate request controls.
 The retained snapshot contains all selected bounds and the authorized attempt count.
+Invalid retained prices return HTTP 500 with `usage_journal_unavailable` and prevent settlement until the original data is restored.
 These tests use fixture prices and limits. They do not qualify production prices or provider limit enforcement.
 Publish only verified provider ceilings or enforced request ceilings as billing limits.
 A desired spending budget does not establish a usage ceiling.
@@ -158,6 +174,8 @@ Each adjustment has an account-scoped event identity, a positive exact credit, a
 A repeated event has no additional effect. A changed event with the same identity fails.
 The account lock serializes concurrent credits. Total credits cannot exceed the original customer charge.
 Only a resolved charge can receive a usage credit.
+Net charge calculation validates retained amounts and keeps its result as an exact rational through settlement.
+The HTTP response boundary encodes this result as numerator and denominator strings.
 
 The adjustment record and its settlement callback share one transaction.
 A failed callback rolls back the adjustment. F068 connects this callback to the shared Ledger service.
@@ -257,7 +275,8 @@ See [entity retention](https://developer.paddle.com/api-reference/about/delete-e
 
 The development API has billing account, platform connection, hosted access grant, and tenant assignment resources.
 The browser supports account creation, grant selection, and tenant API access without customer provider credentials.
-Hosted execution remains disabled. Financial admission and complete acceptance remain incomplete.
+Tracked configuration keeps hosted execution disabled. Explicit development configuration connects completion requests to financial admission.
+Complete service acceptance remains incomplete.
 
 Each grant binds one tenant to its billing account and one platform connection.
 The grant names exact models or explicit provider services and their permitted operations.
@@ -270,6 +289,9 @@ The retained creation response remains available after catalog changes and grant
 Only operators can create grants or change their state.
 Each state change requires the current revision and an operator reason.
 The grant state and audit record change in one database transaction.
+The database boundary decodes stored grant scope before it returns a grant or commits a transition.
+A failed scope decode preserves grant state and audit history. Response code consumes the decoded scope without another read.
+Grant creation responses reuse the validated request scope.
 A suspended grant can return to active state. A revoked grant cannot return to another state.
 Customers can read only their own grants. Their responses omit platform connection identifiers and operator audit details.
 Tenant deletion returns a conflict when the tenant has hosted grant history, including revoked grants.
@@ -284,6 +306,9 @@ The customer must detach the current resource before selecting another resource.
 Hosted profiles retain customer model and prompt settings without platform credentials.
 The browser shows grant state, permitted offerings, and the saved assignment.
 Suspension and revocation do not erase the assignment or its history.
+Customers can save text, transcription, and speech defaults within the assigned grant scope.
+The server validates each model and operation against that scope without exposing platform credentials.
+The same validation runs at startup. Suspension preserves the saved selection but prevents new execution.
 
 ### F066 Journal State
 
@@ -340,6 +365,17 @@ Unknown measurements retain their reason and have no numeric value.
 The browser shows inclusion relations to distinguish a quantity from its inclusive parent.
 Execution completion and complete usage do not establish a final customer charge.
 
+The usage journal reads request totals from the existing `charge-summary` resource.
+It shows the provider cost, customer charge, customer credits, and net charge when those amounts are available.
+Pending and unresolved totals remain explicit. The browser does not display an unknown charge as zero.
+The `charges` collection supplies itemized usage, customer rates, minimum adjustments, and approved credits with cursor pagination.
+
+The browser validates financial responses before display and formats exact integer fractions without floating-point conversion.
+The display uses at most six decimal places and marks nonterminating or smaller fractions as approximate amounts.
+Values below USD 0.000001 display `Less than $0.000001`.
+Each amount retains its exact numerator and denominator in its title.
+A failed charge refresh removes the prior charge list and provides a retry control.
+
 The request children are `attempts`, `observations`, and `reconciliation-cases` under the current account request resource.
 The browser shows open and resolved cases through safe identifiers and reasons.
 The public case reasons include unknown usage, unknown dispatch outcome, unknown execution outcome, and missing execution result.
@@ -348,7 +384,94 @@ This case remains visible after recovery and does not authorize another paid exe
 
 HTTP acceptance verifies account isolation, pagination, private-field omission, exact quantities, and unchanged journal records.
 Browser acceptance covers desktop and phone widths, additional pages, failed reads, and rejection of numeric measurement values.
-F066 remains open. Hosted execution remains disabled.
+It also covers itemized charges, customer credits, unresolved totals, large amounts, and exact fractions through controlled financial responses.
+F066 remains open. Tracked runtime configuration keeps hosted execution disabled.
+
+### Normal Hosted Runtime
+
+The optional `hosted` configuration selects exact offering scopes for financial admission.
+Omit this configuration to keep hosted execution disabled.
+An explicit `hosted` block requires a nonempty offering list. The CLI rejects an empty object before service startup or database creation.
+The normal server connects native text, client protocols, MCP, and dictation to the existing completion coordinator.
+That coordinator retains request identity, reserves Ledger funds, enforces attempt limits, and preserves uncertain outcomes.
+The normal financial worker records charges and settles completed usage.
+The normal media service uses the same price and Ledger admission components before it queues an operation.
+The media worker checks the saved request controls and financial reservation before dispatch.
+The media constructor attaches hosted financial admission before workers can start or resume queued operations.
+Restart preserves the configured scope for accepted operations.
+The server keeps customer-owned assignments separate from this hosted path.
+
+The following shape selects the controlled text fixture. It does not qualify a published offering:
+
+```yaml
+hosted:
+  offerings:
+    - provider: openai
+      model: gpt-4.1
+      operation: text
+      maximum_attempts: 1
+      conditions:
+        billing_mode: standard
+        service_tier: standard
+```
+
+Each scope requires a canonical provider, model or service, operation, positive integer attempt count, and exact categorical price conditions.
+For a model-free service, omit `model` and identify the catalog operation.
+The server rejects duplicate scopes and unknown provider, model, or operation selections.
+It also rejects noncanonical identifiers, invalid price conditions, and fractional or quoted attempt counts.
+Effective intervals, token ranges, cache classes, rates, and the approved markup remain in the catalog and retained price snapshot.
+The configuration cannot supply replacement rates or a customer markup.
+
+An active grant and qualified platform credential remain necessary for each request.
+A configured scope still requires available rates, measured billing dimensions, and fixed catalog bounds before dispatch.
+The request supplies its search selection and output limit to the existing price calculation.
+Image price conditions for quality and resolution must match the normalized request controls.
+Other request conditions require a codec-specific mapping before the server can use their rates.
+The request retains the resulting price snapshot and funds reservation in one transaction.
+An omitted hosted configuration or unlisted scope rejects hosted execution.
+After restart, these restrictions also reject queued hosted media before provider dispatch.
+Financial reconciliation releases the unused reservation. Restoring the scope cannot repeat the failed operation or its financial effects.
+Unavailable pricing produces `financial_admission_unavailable`. Insufficient funds produce `insufficient_funds`.
+These rejected requests cause no upstream work.
+
+Controlled normal-runtime HTTP acceptance verifies disabled activation, unlisted scopes, unavailable prices, and unfunded rejection.
+It also verifies one funded execution, idempotent replay, automatic settlement, and the exact fractional remainder.
+Media acceptance verifies these effects through the normal HTTP listener, worker, and financial settlement process.
+It also verifies zero provider calls for an image request with an unmatched quality condition.
+Run `make test-hosted-runtime` for configuration and normal-runtime acceptance.
+The broader `make test-hosted-billing` target includes these tests.
+
+#### Complete Text Catalog Acceptance
+
+`TestHostedRuntimeTextCatalogFinancialAcceptance` derives its scope from every enabled text offering in the current catalog.
+It runs the normal server, provider adapters, financial worker, shared Ledger, and management charge resources.
+Controlled upstream responses supply native protocol quantities. Explicit fixture prices and ceilings keep actual supplier qualification separate.
+The fixture routes every selected transport to its local protocol server through the existing endpoint configuration.
+
+Each offering must reject unfunded requests through `/`, `/v2`, `/v1/chat/completions`, and `/v1/responses` without upstream work.
+Each interface then submits funded work. The same intent replays through all four interfaces without another provider call.
+The upstream fixture verifies the selected native model and platform credential.
+Public charge pages must show one exact provider cost and customer charge for each accepted request.
+The fixture covers cache reads, Anthropic cache lifetimes, and separate Google reasoning tokens.
+The final Ledger balance must equal verified funding minus all whole-cent charges, with the exact remaining fraction retained.
+All reservations must be released after automatic settlement.
+
+The same runtime fixture checks image and audio inputs through `/v2` for each offering that declares those inputs.
+It sends ordered PNG images, WAV audio, and mixed image/audio messages through the existing provider adapters.
+The provider fixture verifies the original media bytes and their order, alongside the native model and platform credential.
+Google fixtures report separate input token quantities for the supplied media types within the exact input total.
+
+Each media case verifies unfunded rejection, exact charges, automatic settlement, and replay without another provider call.
+Removed media, changed bytes, and changed attachment order must return HTTP 409 under the accepted key.
+Response bodies must not expose the input media. The final account balance and exact remainder must explain every charge.
+
+Run `make test-hosted-runtime` for this matrix and the normal text, image, dictionary, and CLI checks.
+This matrix does not establish actual supplier prices, account limits, connectivity, or invoice agreement.
+Other operations and separate live qualification remain subject to the complete F070 acceptance requirements.
+
+The rendered funded usage flow and complete provider-operation qualification remain open under F070.
+All existing providers and supported operations remain in scope.
+The tracked configuration omits `hosted`. Production activation still requires complete acceptance and explicit operator authorization.
 
 ### Hosted Text Identity
 
@@ -374,7 +497,7 @@ Grant revocation prevents new work but does not remove a saved result.
 Native text and dictation replays use the durable failure envelope for retained HTTP 502 failures.
 Client protocol replays use their existing error envelope. Neither replay sends another provider request.
 
-The production router does not install the financial authorization operation yet.
+Without an explicit `hosted` configuration, the router does not install financial authorization.
 It denies hosted text with HTTP `403` after request validation.
 MCP uses the `idempotency_key` tool input for the same tenant-scoped identity.
 Concurrent duplicates return the retained execution identifier with `state: dispatched`.
@@ -473,6 +596,8 @@ The media worker generation and journal claim change in one transaction.
 Claim renewal updates both records together.
 Attempt authorization, journal dispatch intent, and media dispatch intent also use one transaction.
 The shared credential reader loads the platform version selected at admission.
+It rejects missing or unknown fields before returning provider settings.
+Malformed documents and ciphertext for another connection or version also prevent provider calls.
 
 Provider submission requires the current worker claim and an active grant.
 HTTP and gRPC calls use the same dispatch guard and permit one generation per execution attempt.
@@ -495,6 +620,8 @@ Unknown provider outcomes remain uncertain and require reconciliation.
 
 Provider observations and their delivery records use one transaction.
 The terminal operation and journal outcome use one transaction.
+Failed uncertainty writes preserve the funds reservation without partial journal cases, observations, or delivery records.
+Restart records the uncertain outcome without repeated provider work. An ignored journal claim prevents dispatch and preserves queued work.
 Unavailable usage extraction produces `unsupported_meter` evidence and unknown usage.
 It does not produce a measured zero or a settled customer charge.
 Confirmed cancellation records journal state `failed` with failure code `operation_cancelled`.
@@ -508,6 +635,8 @@ They verify voice isolation, accepted credential versions, admission races, and 
 Hosted gRPC speech tests cover dispatch fencing, recovery, artifact transfer, and cancellation.
 Recovery cannot submit another job, even when the grant remains active.
 Cancellation requires a current cancellation request and can proceed after grant revocation.
+A new explicit cancellation request renews requested state after an unsupported outcome on running work.
+Restored authority or provider access can then confirm cancellation. Replays of confirmed cancellation do not repeat provider work.
 Hosted voice discovery reuses the existing HTTP and gRPC adapters with current grant and credential checks.
 Voice pages and previews preserve tenant isolation without creating billable attempts.
 Hosted ElevenLabs discovery exposes default premade voices. Hosted Dictator discovery includes tenant-owned extracted voices.
@@ -528,8 +657,19 @@ Controlled HTTP tests verify dictionary creation and audio alignment through exi
 Admission and dispatch each require financial authorization through the shared transaction callback.
 Duplicate requests retain one operation and one provider submission.
 Changed intent conflicts. Grant revocation rejects new work and preserves accepted results.
-Missing service meters retain unknown usage.
-Complete service metering and live provider qualification remain open.
+Dictionary creation records one `service_calls` quantity from a validated native receipt.
+The journal uses `call` as the quantity unit. It does not infer money from the receipt.
+An explicit `service_calls` catalog rate in `USD/call` supplies the monetary conversion and effective interval.
+The existing adapter submits one creation call per attempt. Financial admission uses that fixed bound and the configured maximum attempt count.
+Receipt recovery restores the same observation without another provider call or another charge.
+An invalid or absent receipt leaves the outcome uncertain and does not establish a measured call.
+Other service meters can remain unknown. Complete service metering and live provider qualification remain open.
+
+The normal HTTP test uses a controlled rate of USD 0.50 per call and verifies a USD 0.65 customer charge.
+Eight calls spend a USD 5.20 balance down to zero. Subsequent admission returns HTTP 402 without another provider call.
+The test also verifies automatic settlement, released funds, exact provider costs, and idempotent replay.
+Separate HTTP checks verify receipt recovery after failed usage or terminal writes and preserve invalid receipt uncertainty.
+These fixture prices do not establish actual supplier rates or authorize production activation.
 
 ### Media Worker Failure Reports
 
@@ -568,6 +708,21 @@ Observation and delivery writes commit together. Failed writes prevent audio pub
 HTTP tests cover all current generation and conversion offerings, including multipart audio and timestamped generation responses.
 Tests also verify exact decimals, failures, duplicate requests, transaction rollback, and repeated worker execution.
 
+### Speech Financial Acceptance
+
+The financial tests cover each current ElevenLabs speech and conversion offering through the real HTTP and media worker interfaces.
+A controlled price of USD 0.004 per provider unit and a 100-unit bound require a 52-cent reservation.
+A response with 12.5 units produces a USD 0.05 provider cost and a USD 0.065 customer charge.
+Two settlements debit 13 cents without loss of the account remainder.
+The tests include timestamped speech, multipart conversion, unfunded rejection, and replay without another provider call.
+
+Zero usage releases the reservation without a debit.
+Missing, invalid, and duplicate usage values keep the reservation for reconciliation.
+Failed provider requests and uncertain results keep known provider costs but have no final customer total or automatic debit.
+Usage above the accepted bound keeps the reservation and reports the exact excess provider cost.
+The tests check balances, charge summaries, reconciliation cases, and exposure through management HTTP resources.
+Controlled prices and responses do not establish actual supplier rates or live provider acceptance.
+
 ### Dictator Duration Evidence
 
 The hosted gRPC boundary records terminal synthesis duration before the existing Dictator adapter transfers artifacts.
@@ -593,6 +748,22 @@ The gRPC boundary records terminal evidence before result parsing, artifact tran
 Controlled HTTP tests cover all current Dictator audio input offerings.
 These tests verify explicit unknown usage, reported sample duration, terminal states, invalid results, failed writes, and replay.
 No duration measurement establishes a provider price or customer charge.
+
+### Dictator Financial Acceptance
+
+The synthesis duration tests use real gRPC responses, runtime financial admission, and Ledger settlement.
+They cover Qwen3-TTS and Silero through the existing HTTP media interface.
+Unfunded requests cause no synthesis submission.
+A controlled rate of USD 0.04 per output second requires a 52-cent reservation for a ten-second bound.
+A 1.125-second response produces a USD 0.045 provider cost and a USD 0.0585 customer charge.
+Settlement debits five cents and keeps the exact USD 0.0085 remainder.
+
+The precision case checks the exact decimal value represented by the native duration field.
+A default zero duration remains unknown and keeps the reservation.
+Invalid durations, cancellation, provider errors, and artifact loss keep funds for reconciliation.
+Usage write errors cannot produce a charge or release the reservation.
+The tests check charge summaries, balances, account remainders, and replay without another synthesis submission.
+These checks do not resolve the missing input-duration contract for other Dictator operations.
 
 ### FAL Queue Usage Evidence
 
@@ -644,6 +815,43 @@ Failed, incomplete, and cancelled responses retain reported quantities without e
 Controlled HTTP tests verify retained quantities, separate cost layers, missing usage, inconsistent totals, replay, and evidence write failures.
 Complete image cost measurement and live Responses qualification remain open.
 
+### Image Financial Acceptance
+
+Controlled HTTP tests cover OpenAI image generation and editing through JSON and completed stream events.
+The tests use the current adapters, runtime financial admission, journal delivery, and Ledger settlement.
+A controlled set of modality rates produces a USD 0.016 provider cost and a USD 0.0208 customer charge.
+Settlement debits two cents, releases the reservation, and keeps the exact USD 0.0008 remainder.
+Zero usage releases funds without a debit. Missing usage keeps funds for reconciliation.
+An invalid output image keeps the known provider cost but has no final customer charge.
+
+The Responses surface has no qualified image-tool meter.
+Its response-model totals do not replace the missing image measurements.
+Hosted admission rejects this surface before dispatch because the Images snapshot does not bound the additional response-model cost.
+HTTP tests verify rejection for generation and editing with no provider calls, charges, or funds changes.
+Complete Responses image pricing and provider qualification remain open.
+
+The FAL queue tests use a controlled price of USD 0.02 per reported provider unit.
+A response with 2.125 units produces a USD 0.0425 provider cost and a USD 0.05525 customer charge.
+The tests check zero and missing units, excess cost, submission errors, result errors, and artifact transfer errors.
+Unresolved outcomes keep the reservation and the known provider cost.
+Unfunded requests cause no provider work. Replay does not submit, retrieve, or download the same result again.
+Worker replacement and grant revocation preserve one submission and one settlement through the accepted queue receipt.
+
+### Remaining Provider Measurement Contracts
+
+On 2026-09-24, a contract review confirmed the following unresolved measurement dependencies.
+
+- The [Responses image-call schema](https://developers.openai.com/api/reference/resources/responses/methods/create) has no image-tool usage field.
+  The [image guide](https://developers.openai.com/api/docs/guides/image-generation) states that Responses requests incur mainline model costs and image generation costs.
+  Complete hosted admission requires one bound for both components and qualified usage for settlement.
+- The [ElevenLabs alignment response](https://elevenlabs.io/docs/api-reference/forced-alignment/create) supplies alignment timestamps and loss values, without a billed-duration field.
+  These timestamps do not establish processed audio duration. The service needs a qualified duration measurement and an applicable supplier rate.
+- The installed Dictator SDK is v1.11.0. Its input-operation responses do not report processed input duration.
+  Complete duration billing requires evidence from the provider contract before settlement.
+
+These dependencies remain in F070 scope. Controlled results do not establish the missing measurements.
+The review does not authorize production activation or paid provider calls.
+
 ### Hosted Dictation
 
 Hosted dictation reuses the completion admission, pinned credentials, response store, and recovery code used by hosted text.
@@ -681,6 +889,21 @@ Controlled upload tests verify complete execution, revocation during staging, cl
 A replacement worker can resume before generation dispatch while preserving the accepted execution identity.
 Cleanup failure prevents transcript publication and preserves measured generation usage.
 
+### Dictation Financial Acceptance
+
+The financial matrix covers every enabled dictation offering through `/dictate` and `/v1/audio/transcriptions`.
+It uses the current provider adapters, platform credentials, runtime financial admission, usage journal, and Ledger settlement.
+Each request keeps one identity across both interfaces. Replay does not cause another provider call.
+Unfunded requests return HTTP 402 before provider dispatch.
+The tests check the native model field declared for each provider protocol.
+
+Controlled prices exercise multipart duration and token meters, plus Gemini and Vertex modality tokens.
+Duration prices convert measured seconds to minutes before the exact 30% markup.
+Google output charges include separately reported reasoning tokens.
+The tests check exact provider costs, customer charges, funds release, balances, and account remainders after two settlements.
+Missing usage keeps the reservation for reconciliation. It does not create a zero charge or change the account remainder.
+These checks do not establish actual supplier rates, live meter accuracy, or support for an unqualified meter.
+
 ### Completion Recovery
 
 An expired worker claim permits another worker to take accepted work only before the first dispatch.
@@ -699,6 +922,19 @@ After an interruption, recovery can repair a missing receipt from the saved resu
 When no result exists, recovery records an uncertain result and preserves the known usage.
 Response expiry cannot remove a saved result before its publication receipt exists.
 
+The result store checks the saved request, intent, tenant, key, provider, and model against the journal before replay or status output.
+An identity conflict preserves funds and cannot cause another provider call.
+Before claim expiry, incomplete publication remains pending. After expiry, recovery preserves uncertainty when no completed result exists.
+
+A failed terminal journal write cannot produce a terminal response file.
+The response remains pending until journal recovery decides the execution outcome.
+Recovery can dispatch accepted work only when the journal proves that no attempt reached the provider.
+Interrupted work that reached the provider retains uncertainty and held funds without another dispatch.
+
+Recovery, replay, and status reads require a JSON object with a non-null text string in the saved completion.
+Invalid completion data cannot repair a publication receipt or produce a successful response.
+Failed recovery preserves pending financial evidence and held funds without another provider call.
+
 Startup recovery checks expired completed requests that lack a publication receipt.
 An identical POST also checks an expired completed request after a result write failure.
 Status GET requests do not change the journal.
@@ -708,7 +944,13 @@ These tests do not prove funds settlement, provider reconciliation, or recovery 
 ### Funds Admission and Settlement
 
 F068 uses the shared Ledger service in the managed database transaction.
+Admission, settlement, credits, and refund holds share typed Ledger input construction.
+The adapter preserves every constructor error before it calls the Ledger service.
+Metadata, idempotency keys, transaction ownership, and Ledger operations retain their existing contracts.
+
 Admission locks the billing account before it reads funds or creates a reservation.
+Admission rejects a retained account remainder that is malformed, negative, or at least one cent.
+This check uses the same remainder validator as balance reads and settlement, before payment holds or provider dispatch.
 The transaction retains the request, accepted price, and reservation together.
 An unsuccessful transaction retains none of these effects.
 All tenants of the account use the same Ledger balance.
@@ -732,7 +974,7 @@ Unknown usage, unresolved charge policy, and usage above the accepted bound reta
 The account API exposes the reason through the request's reconciliation cases.
 Controlled acceptance uses local HTTP providers and reopened database connections.
 Production activation remains disabled.
-Decisions for uncertain costs and complete service acceptance remain open under F068.
+Audited financial decisions use the F068 resolution resources. Commercial charge policies and complete service acceptance remain open under F070.
 
 An audited usage credit uses the existing charge adjustment transaction and its account lock.
 A compensating Ledger grant restores whole cents when required.
@@ -750,7 +992,16 @@ It delivers pending funded observations and reviews held reservations in bounded
 Each financial effect has one transaction. A later run resumes pending records without a process-local checkpoint.
 
 The HTTP service reconciles funds before it accepts requests and then once per second.
-Its lifecycle owns the financial worker and HTTP listener.
+Its lifecycle owns the financial worker, media workers, and HTTP listener.
+Media workers start after initial financial reconciliation succeeds.
+Shutdown cancels active media execution and waits for media workers, adapters, and maintenance to stop.
+Interrupted media retains an uncertain outcome with `worker_shutdown`. Its funds remain held until reconciliation establishes the financial result.
+A failed startup leaves queued media and its financial records unchanged.
+
+Embedded Go callers use `BuildRouter` to obtain a `Router` and must call `Router.Close` after HTTP shutdown.
+The shared router fixtures register this cleanup before they release their test databases.
+The constructor does not start workers before all router components initialize.
+
 A reconciliation failure stops the listener and returns the financial error to the process owner.
 An interrupt or termination signal cancels the worker and active requests.
 HTTP shutdown has a ten-second limit.
@@ -785,6 +1036,8 @@ Usage delivery retains positive exposure with a `platform_exposure` reconciliati
 A failed write leaves usage delivery pending and keeps the hold.
 Repeated delivery and recovery retain one exposure record and case for the request.
 Customer credits and financial waivers do not erase provider costs or exposure.
+Delayed accounting adds provider costs and updates exposure after an operator decision.
+It preserves the retained decision, account balance, exact remainder, and tenant usage.
 The browser journal shows the exposure case. Reservation details expose the exact amounts to the owner and operator.
 
 ### Audited Financial Resolution
@@ -818,6 +1071,7 @@ Use this procedure for an approved decision:
 7. Read the same resolution resource with `GET` to verify the retained receipt.
 
 The command rejects customer sessions and active execution.
+Management request bodies must contain one JSON value. Additional values or trailing non-whitespace bytes produce `400` before any state change.
 It does not create a funding credit or change the payment processor records.
 
 An operator can credit a settled request through `PUT /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-credits/{credit_id}`.
@@ -825,6 +1079,8 @@ This resource also supports a settled decision with unresolved provider usage.
 The request body contains a positive exact `credit`, a `reason`, and an `evidence_reference`.
 The account owner or an operator can read the receipt with `GET` at the same resource.
 The audit record retains the operator identity and evidence reference. Customer responses omit these private fields.
+Retained receipts require a positive credit, a valid reason code, and a creation timestamp.
+Corrupt receipts return HTTP 500 with `billing_account_store_failed` and no partial receipt.
 
 Each request credit has one immutable identifier. A changed repeat produces `409`.
 The account lock serializes request credits and usage credits against the same settled amount.
@@ -835,7 +1091,7 @@ These credits correct customer usage charges. F069 owns Paddle payment refunds a
 ### Financial Backup and Restore
 
 `make snapshot-managed-database` copies the complete managed SQLite database through the SQLite snapshot API.
-The copy includes journal records, price snapshots, charges, Ledger entries, reservations, credits, tenant totals, financial decisions, and exposure records.
+The copy includes journal records, price snapshots, charges, Ledger entries, reservations, credits, tenant totals, financial decisions, exposure records, and payment inbox records.
 It also includes all other tables in that database. The command does not select a subset of financial records.
 Committed WAL data forms part of the snapshot. Uncommitted writes do not.
 
@@ -884,7 +1140,9 @@ Do not start old and restored instances against different financial copies for t
 
 `make test-managed-database-snapshot` verifies the CLI and restores financial fixtures through the management HTTP API.
 The test retains an uncertain hold and compares financial responses after two recovery runs.
-F069 acceptance must add payment receipts and processor events to this restore fixture.
+Restore acceptance includes verified processor events, their private bodies, and replay after restart.
+The fixture also preserves funding orders, verified receipts, adjustments, payment reconciliation, and their Ledger effects.
+Replay after restoration does not apply those effects again.
 
 ### Tenant Spending Limits
 
@@ -926,6 +1184,8 @@ All cent amounts use decimal strings to preserve integer precision in browsers.
 `pending_cents` identifies reservations that require financial reconciliation and forms part of reserved cents.
 
 `unsettled_fraction` retains an exact USD charge below one cent for later settlement.
+If the stored fraction is invalid, the balance read returns HTTP 500 with `billing_account_store_failed`.
+Settlement and credits use the same fraction validation.
 The account state identifies active, suspended, or reconciliation-required financial access.
 Financial read failures return an error without partial balance data.
 
@@ -947,6 +1207,558 @@ A failed balance refresh removes prior financial values and provides an error wi
 Malformed financial responses do not produce displayed balances.
 The usage journal accepts financial reconciliation reasons for unresolved usage, policy, and authorized limits.
 Browser acceptance covers desktop and narrow widths with the real local management stack and controlled financial responses.
+
+### Funding Orders
+
+The account owner can read `funding-offers` and create `funding-orders` under the billing account resource.
+The creation request contains one `offer_code` and an `Idempotency-Key` header.
+The server selects the Paddle price and USD funding amount from its configured offers.
+Each offer requires at least 500 cents. The browser cannot supply an amount, currency, account identity, or return URL.
+
+Order creation retains the offer, price, amount, supplier, processor account, and environment in one immutable snapshot.
+The order and its checkout delivery intent commit in one database transaction.
+A failed delivery write rolls back the order. Creation does not change the Ledger balance.
+The account and creation key identify one order across service instances and restarts.
+A repeated request retains the original snapshot when the offer changes or leaves the current catalog.
+A changed offer code, supplier, processor account, or environment returns `409` for that key.
+
+The owner can read one order or its paginated order history.
+The API orders history by ascending identifier and returns `next_cursor` for the next page.
+Order responses exclude private processor configuration and the creation key digest.
+Existing order reads remain available when new funding is disabled.
+
+Controlled HTTP tests configure funding offers explicitly. The normal runtime uses the optional `payments` configuration.
+The snapshot fixture verifies restoration and replay of orders, customer associations, checkout delivery, payment receipts, and Ledger credits.
+
+### Checkout Delivery
+
+The delivery worker uses the shared Paddle commerce client from `utils/billing` v0.19.0.
+Before transaction creation or uncertain recovery, it reads the retained price through that client.
+The price must match the order identity and amount and have no recurring billing cycle.
+A failed price read remains retryable without a new transaction dispatch intent.
+An incompatible price leaves checkout unavailable with a retained reconciliation reason.
+A durable customer association binds the processor customer to one billing account and environment.
+The worker records its dispatch intent before it creates the processor transaction.
+It verifies the returned transaction against the retained order, customer, price, quantity, currency, and server metadata.
+The owner can read the verified transaction through the order's `checkout` resource.
+Checkout creation does not grant funds.
+
+A lost response or receipt write leaves the outcome unresolved.
+Recovery reads processor transactions for the retained customer and order reference.
+The worker requires one matching transaction before it completes delivery.
+It does not repeat transaction creation after an uncertain dispatch.
+Concurrent workers use durable claims and reject obsolete claim tokens.
+
+### Completed Payment Credits
+
+The processor worker reads signed events from the durable inbox.
+A funding credit requires a completed event and the current processor transaction for the retained checkout.
+Both sources must match the order's customer, price, quantity, amount, currency, and server metadata.
+Captured payment amounts must explain the transaction total.
+Conflicting, unavailable, or unmatched evidence remains unresolved with a reason and retry time.
+
+The receipt, Ledger credit, paid order state, and applied event state commit in one database transaction.
+The order identifies the financial effect independently of the event identifier.
+Duplicate events and concurrent workers produce one receipt and one credit.
+A failed receipt, order, or event write rolls back the Ledger credit.
+Restart recovery retries the retained event.
+A delayed payment collection event cannot repeat a credit or change a paid order to pending.
+
+The receipt retains gross payment, tax, processor fees, earnings, customer credit, and payout currency separately.
+Unknown processor fees remain null. Payout amounts retain their own currency.
+Controlled fixtures use the retained offer amount as the customer credit and keep processor fees separate.
+These fixtures do not decide the production fee allocation or tax policy.
+Owned receipt resources expose customer amounts without private processor evidence.
+
+### Payment State Evidence
+
+The worker verifies lifecycle events against the current processor transaction and the retained checkout.
+A verified canceled transaction changes an unpaid order to `failed` without a credit.
+A failed payment attempt leaves the order `pending` so the customer can retry checkout.
+A completed transaction without its completed event remains unresolved with `completion_event_required`.
+Lifecycle events cannot reverse a retained receipt. Paddle adjustments control financial reversals.
+
+Each accepted processor observation retains its timestamp, complete evidence, and digest.
+The observation, order state, and event state commit together under the account writer lock.
+Funding credits and adjustments use the same observation check within their financial transaction.
+An older processor snapshot cannot replace a newer retained observation.
+Different evidence at the same processor timestamp requires reconciliation.
+The processor snapshot must not precede the signed event that requires its verification.
+The observation boundary owns transaction revision checks before any refund effect.
+The adjustment boundary separately rejects missing records, older adjustment revisions, and conflicting data at the same adjustment timestamp.
+Refund hold refresh uses the saved evidence without another processor read.
+
+Controlled HTTP tests cover cancellation, retryable failure, reordered events, concurrent workers, and failed writes.
+The backup fixture restores observations with payment receipts and Ledger effects.
+The browser shows a failed payment without a change to the existing balance.
+
+### Receipts And Processor Portal
+
+`GET /api/management/billing-accounts/{billing_account_id}/funding-orders/{order_id}/receipt` reads one verified payment receipt.
+The response includes original and adjusted gross amounts, taxes, customer credit, credit reversals, and pending refund allocations.
+It also includes the invoice number, payment time, environment, and current order state.
+The database supplies one consistent snapshot. An unpaid order has no receipt.
+Private processor fees, payout evidence, customer identifiers, and event bodies do not enter this response.
+
+`POST /api/management/billing-accounts/{billing_account_id}/payment-portal-sessions` accepts an empty JSON object.
+The server selects the owned processor customer in its configured environment and returns a temporary Paddle URL.
+The response uses `201`, `Location`, and `Cache-Control: no-store`.
+Each request creates a new session without a financial effect.
+The service does not store or cache the URL.
+The [Paddle customer portal](https://developer.paddle.com/api-reference/customer-portals/create-customer-portal-session/) supplies transaction history and invoice downloads.
+The browser must open this URL directly, without an iframe.
+
+### Browser Payment History
+
+The billing dashboard shows funding orders and verified receipts for the owned account.
+The customer can refresh payment records and request each additional page.
+Each order shows its state, credit amount, environment, identifier, and creation time.
+Pending orders have no receipt. A browser return URL cannot grant funds.
+
+The receipt shows original and current payment amounts, taxes, customer credit, reversals, and pending refund allocations.
+The browser keeps cent amounts as decimal strings and formats them with integer arithmetic.
+It rejects invalid amounts, currencies, and receipt identities before display.
+A failed refresh removes the affected records and shows a retry message.
+Financial history accepts opaque Ledger reservation identifiers, including payment refund holds.
+
+The invoice button creates a temporary Paddle portal session and opens it in a separate tab.
+The browser does not retain the session URL. A failed session request closes the empty tab.
+Disconnecting the view cancels its pending requests and closes an unfinished portal tab.
+
+`tests/blackbox/hosted-payments.spec.js` runs the normal CLI, authentication service, SQLite database, and browser.
+A controlled Paddle HTTP protocol supplies transactions, signed events, adjustments, and portal sessions.
+The test verifies delayed funding, receipts, pending holds, partial refunds, pagination, failure recovery, and desktop and narrow widths.
+These checks do not qualify a live Paddle environment.
+Controlled payment and provider reconciliation checks pass. F087 owns actual Paddle sandbox qualification without blocking F069 or F070 development completion.
+
+### Browser Checkout
+
+The browser adapts the PoodleScanner transaction checkout approach for one-time funding.
+The owned `funding-offers` response supplies the provider, environment, public client token, and available credit amounts.
+The response excludes the API key and webhook secret.
+The customer selects a server offer. The browser sends its code with a creation key.
+
+The browser retains the creation key and order reference in account-specific session storage.
+A lost response retains the same key for retry after reload.
+After order creation, the browser reads that order until checkout delivery finishes.
+The browser can also resume a retained order from funding history.
+These reads do not create another processor transaction.
+
+The adapter loads Paddle.js from its official CDN and initializes it once per page.
+A token or environment change requires a page reload.
+It opens the verified server transaction with customer changes and discount entry disabled.
+See [Paddle transaction checkout](https://developer.paddle.com/build/transactions/pass-transaction-checkout/).
+
+Paddle checkout events must match the active transaction identifier.
+A completion event starts server status reads. It does not grant funds.
+Verified server state refreshes the account balance and payment history.
+A closed checkout retains the order for later use.
+Automatic status reads stop after 30 attempts. The customer can request another status check.
+Disconnecting the component cancels its requests and timers and closes its active checkout.
+
+The funding view links to the Paddle Buyer Terms, Refund Policy, and buyer support.
+The controlled browser tests cover response loss, reload, duplicate events, delayed confirmation, SDK failure, and checkout closure.
+The tests also verify recovery from funding history without a retained browser intent.
+Actual Paddle connectivity remains a separate qualification step.
+
+### Payment Runtime Configuration
+
+The optional `payments` object in the server configuration enables payment processing.
+Omit this object to disable checkout creation, portal sessions, and the webhook route.
+An explicit empty object is invalid. The CLI retains it for payment validation before service startup or database access.
+Owned historical records remain readable when payment processing is disabled.
+The tracked server configuration omits this object. Production payments remain disabled.
+
+The following configuration shows the field contract. It does not authorize live payment qualification.
+
+```yaml
+payments:
+  environment: sandbox
+  client_token: "${PADDLE_CLIENT_TOKEN}"
+  processor_account_id: selected-paddle-account
+  supplier_id: selected-platform-supplier
+  api_key: "${PADDLE_API_KEY}"
+  webhook_secret: "${PADDLE_WEBHOOK_SECRET}"
+  offers:
+    - code: five
+      price_id: pri_00000000000000000000000000
+      funding_cents: 500
+```
+
+The normal CLI reads configured values through its existing environment interpolation.
+The required public client token starts with `test_` for sandbox or `live_` for production.
+The server rejects a token from the wrong environment before database access.
+Create this token in the selected Paddle account under Developer tools, Authentication.
+The [Paddle.js initialization contract](https://developer.paddle.com/paddle-js/methods/paddle-initialize/) uses this token instead of the API key.
+Configure the default payment link before actual Paddle qualification.
+Sandbox permits a test domain or localhost. Production requires Paddle domain verification.
+See the [default payment link contract](https://developer.paddle.com/build/transactions/default-payment-link/).
+The [transaction checkout prerequisites](https://developer.paddle.com/build/transactions/pass-transaction-checkout/) define this processor setup requirement.
+The shared client selects the Paddle API origin for the configured environment.
+`api_base_url` can select an explicit HTTPS origin. A sandbox loopback protocol can use HTTP.
+Offer amounts must be at least 500 cents. The server rejects incomplete processor identities and secrets at startup.
+The selected price must satisfy the retained funding amount and currency before the service credits funds.
+
+The normal service runs checkout delivery and event processing before HTTP startup and once per second during operation.
+The worker retains uncertain processor outcomes with a reason and retry time.
+A financial database failure stops HTTP admission. A restart retries retained work without another funding effect.
+Shutdown cancels active processor requests through the shared client.
+The payment database binds to one environment. A different environment requires a separate database.
+
+### Payment Adjustments
+
+F069 reads current transaction totals and all transaction adjustments through the shared Paddle client in utils v0.19.0.
+Each adjustment must match the retained transaction, customer, currency, and funding item.
+The worker checks approved amounts against the current adjusted totals before a financial change.
+Separate [Paddle adjustment records](https://developer.paddle.com/api-reference/adjustments/list-adjustments/) retain refund status, tax, fees, and payout evidence.
+
+Pending refunds reserve affected funds through Ledger. Rejected refunds release the hold.
+Approved refunds produce cumulative compensating entries. Replayed events cannot repeat the same deduction.
+Chargeback warnings and chargebacks cannot deduct more than the original customer credit for one order.
+Reversed original adjustments and separate reversal records cannot restore the same funds twice.
+The worker retains exact evidence and each applied revision in the same transaction as the Ledger effects.
+Funding credits and current adjustments commit together, including refunds that precede the initial funding event.
+
+Reconciliation, hold refresh, and receipt reads verify the digest of retained adjustment evidence through one database boundary.
+That boundary compares stored reversal and pending amounts with the exact evidence through the shared cumulative rounding calculation.
+The held amount cannot exceed the pending amount. The hold identity must match its order and revision.
+
+Identical event replay performs this check before it accepts the retained result.
+Changed evidence prevents financial effects, funded dispatch during hold refresh, and receipt publication.
+Restoration of the original evidence permits recovery without repeated financial effects.
+
+Development fixtures allocate customer credit in proportion to the original payment subtotal.
+The cumulative debit rounds down to whole cents. Pending holds round up to whole cents.
+Each revision retains the exact fraction. Full reversal removes the complete original credit.
+Taxes and processor fees remain separate from the customer debit.
+This development calculation does not select the production tax or fee policy.
+
+A mandatory reversal can produce a negative account balance.
+The service rejects new hosted work when available funds are negative or a pending refund lacks its complete hold.
+This payment restriction does not replace an operator suspension.
+New funding and admission checks use available funds to complete retained refund holds.
+Controlled tests cover refund approval, rejection, concurrent processing, chargeback replay, reversal, and failed financial writes.
+Payment and provider reconciliation have controlled acceptance. F087 owns actual processor sandbox qualification without blocking F069 or F070 development completion.
+
+### Audited Payment Reconciliation
+
+The operator command compares processor transactions with funding orders, receipts, refund projections, and Ledger entries.
+The command uses the configured shared Paddle client and the current service database.
+It retains private processor evidence and its digest for each comparison.
+It does not grant funds, reverse funds, or change a payment state.
+
+```bash
+make reconcile-payments PAYMENT_RECONCILIATION_CONFIG=config.yml PAYMENT_RECONCILIATION_RUN_ID=payments-2026-09-23T20
+```
+
+The run identifier binds to one processor account, supplier, and environment.
+A new run retains its complete order set before it reads processor evidence.
+Each result and its checkpoint commit in one transaction.
+Concurrent workers use the same checkpoint. A failed write cannot leave a partial result.
+Processor transport failure stops the command and leaves unfinished orders available for another attempt.
+Retry the same command with the same run identifier after correction of the failure.
+
+A completed run returns its retained JSON report without another processor request.
+Use a new run identifier to compare newer records or include orders created after the previous run started.
+The report separates timing, currency, discount, fee, amount, adjustment, Ledger, and duplicate-effect differences.
+Each item identifies its funding order, billing account, observation time, and retained evidence digest.
+A completed report can contain differences. Command success does not establish financial agreement.
+
+For scheduled execution, use one new identifier for each UTC hourly interval.
+Retry an unfinished interval with its existing identifier before the next scheduled run.
+Keep the report with the run identifier. Review every nonempty `differences` collection.
+Do not create corrective monetary entries without explicit approval and a retained audit record.
+The scheduler contract does not activate a production schedule.
+
+The complete backup includes runs, order sets, checkpoints, private evidence, and reports.
+Controlled tests verify seeded differences, concurrent runs, failed checkpoints, processor outages, replay, and backup restoration.
+Provider cost imports and approved corrections use the following contracts.
+
+### Provider Cost Reconciliation
+
+The provider comparison uses imported invoices or usage exports and the existing usage journal.
+One import selects a provider, platform connection, credential version, and half-open UTC period.
+Optional model and operation fields restrict this scope. Empty fields include all models and operations in the selected account scope.
+The comparison includes attempts whose dispatch time is at least `period_start` and less than `period_end`.
+It uses retained ratings and does not recalculate accepted prices from the current catalog.
+
+```bash
+make reconcile-provider-costs \
+  PROVIDER_RECONCILIATION_CONFIG=config.yml \
+  PROVIDER_RECONCILIATION_RUN_ID=provider-2026-09-22 \
+  PROVIDER_RECONCILIATION_EVIDENCE=provider-evidence.json \
+  PROVIDER_RECONCILIATION_SOURCE=provider-export.csv
+```
+
+The operator maps source fields into one normalized JSON object with these fields.
+The original source can be an invoice, CSV export, or another retained provider document.
+
+| Field | Required content |
+| --- | --- |
+| `source_reference` | Stable identifier for this source revision and scope |
+| `source_sha256` | SHA-256 of the original source bytes |
+| `provider` | Canonical provider identifier |
+| `platform_connection_id`, `credential_version` | Retained credential binding for the source account |
+| `provider_account_reference` | External account identifier declared by the operator |
+| `period_start`, `period_end`, `reported_at` | RFC 3339 timestamps |
+| `model`, `operation` | Optional exact scope filters |
+| `currency` | Three-letter source currency |
+| `usage_amount` | Usage cost before discounts, fees, and taxes |
+| `discount`, `fees` | Separate source amounts, including explicit zero values |
+| `attempt_count` | Optional count of provider attempts in this scope |
+
+Each amount uses `numerator` and `denominator` strings. The denominator must be positive.
+The service uses exact rational arithmetic and makes no currency conversion.
+It compares USD usage amounts with known provider costs before the customer markup.
+Discounts and fees remain separate report differences. They do not change customer charges.
+An absent rating produces a missing-usage difference and prevents a complete cost comparison.
+A source reported before the period ends produces a timing difference.
+Repeated provider request identifiers produce a duplicate-effect difference.
+
+The declared account mapping and normalized amounts are operator evidence.
+The file digest proves retained-byte identity. It does not prove provider authenticity or correct source interpretation.
+Without an imported attempt count, the report compares amounts but cannot establish that the provider listed every attempt.
+Actual provider qualification remains separate from these controlled import tests.
+
+The command limits normalized JSON to one MiB and the original source to 16 MiB.
+It rejects unknown fields, changed source bytes, invalid amounts, and absent or mismatched credential bindings.
+The source, normalized scope, local evidence, and report commit together.
+A failed write leaves no partial import. Concurrent imports retain one report for the run identifier.
+A completed run returns its retained report. A new run can compare later local observations against the same source.
+A changed source revision requires a new source reference.
+
+The complete backup preserves imported documents and reports with the journal, prices, Ledger, and payment records.
+Schedule each provider comparison after its source period and export are available.
+Use one identifier per comparison and retry that identifier after a failed import.
+Review differences before any separately approved monetary correction.
+
+### Approved Reconciliation Corrections
+
+Reconciliation reports do not authorize monetary entries.
+Use the existing F068 financial resolution and request credit resources for an approved customer charge correction.
+An operator session must approve each request. Customer sessions cannot create these financial decisions.
+Paddle remains authoritative for payment refunds and reversals.
+
+1. Read the retained payment or provider report and its original evidence.
+2. Verify the account, request, period, scope, and evidence digest before approval.
+3. Record the approved amount and reason in the external review record.
+4. For an unresolved reservation, use the financial resolution procedure in this document.
+5. For a settled request, create its immutable `funds-credits/{credit_id}` resource with an operator session.
+6. Put the retained report reference in `evidence_reference` and the approved reason code in `reason`.
+7. Verify the returned credit receipt and current account balance.
+8. Run a new reconciliation comparison after the correction.
+
+For a provider report, use `provider-reconciliation:{run_id}:{local_evidence_digest}` as the retained report reference.
+The API retains this reference as review evidence. The operator verifies its scope before approval.
+The audit record retains the operator identity, exact credit, reason, report reference, time, and Ledger effect.
+A repeated credit identifier has one effect. A different repeat produces `409`.
+The correction cannot exceed the settled customer charge after prior credits.
+
+The original rating, provider cost, payment receipt, and completed reconciliation report remain unchanged.
+A new provider comparison can still show the original cost difference after a customer credit.
+The credit records an approved customer decision. It does not certify the provider invoice or replace missing usage evidence.
+
+Controlled acceptance funds an account through Paddle, incurs a metered charge, and retains a provider cost difference.
+Customer approval attempts fail. The operator credit applies once and restores the exact account remainder.
+A later Paddle refund produces the expected balance and a payment report without financial differences.
+The existing F068 tests cover failed audit writes, concurrent corrections, and restart recovery.
+
+### Operational Financial Signals
+
+Use the existing managed database for operational financial signals:
+
+```bash
+make hosted-financial-signals HOSTED_SIGNALS_CONFIG=/private/path/config.yml
+```
+
+The command opens the database in read-only mode and reads one consistent transaction.
+It does not initialize a schema, create accounts, contact providers, or change financial records.
+Its JSON report contains aggregate counts, timestamps, exact amounts, and comparison codes.
+It excludes account identifiers, provider credentials, request content, and raw processor evidence.
+A missing database, failed read, or invalid retained comparison stops the command with an error.
+
+| Signal | Meaning |
+| --- | --- |
+| `unresolved_attempts` | Count and oldest creation time of uncertain provider attempts. |
+| `active_attempts` | Count and oldest creation time of prepared or dispatched attempts. |
+| `pending_usage_deliveries` | Count and oldest creation time of observations awaiting financial delivery. |
+| `unsettled_completed_requests` | Completed requests with held reservations. The timestamp is the oldest request update time. |
+| `open_reconciliation_cases` | Count and oldest creation time of cases without a resolution. |
+| `pending_payment_comparisons` | Count and oldest creation time of incomplete payment comparison runs. |
+| `latest_payment_comparisons` | Number of orders with a completed comparison and the oldest selected observation time. |
+| `latest_provider_comparisons` | Number of compared provider scopes and the oldest selected comparison time. |
+| `payment_differences` | Difference counts by code from the latest completed comparison for each funding order. |
+| `provider_differences` | Difference counts by code from the latest comparison for each provider scope. |
+| `posted_cents`, `reserved_cents` | Exact totals from the existing Ledger balance reader across billing accounts. |
+| `reconciliation_held_cents` | Total funds held for financial reconciliation. |
+| `unsettled_fraction_usd` | Exact sum of account charge remainders. |
+| `known_platform_exposure_usd` | Exact sum of retained provider costs above request authorization. |
+| `incomplete_provider_costs` | Number of exposure records whose provider cost remains incomplete. |
+
+A provider scope includes its connection, credential version, supplier account, period, model, operation, and currency.
+Comparison selection uses the observation or creation time, with the run identifier as a stable tie-breaker.
+Older differences remain in their audit records but do not replace the latest comparison for the same scope.
+Zero compared orders or scopes means comparison evidence is absent. It does not establish agreement with external records.
+Known exposure can remain after a customer waiver. An incomplete cost does not establish zero additional exposure.
+The sum of account remainders can exceed one cent. The report does not settle that sum across accounts.
+
+Compare queue timestamps with `observed_at` to measure age.
+Select alert thresholds in the deployment monitor according to the approved service policy.
+Keep active requests separate from uncertain attempts when evaluating these signals.
+Use the existing reconciliation procedures to investigate differences and unresolved work.
+Run `make test-hosted-signals` for CLI, financial snapshot, and comparison acceptance.
+
+### Payment Event Inbox
+
+F069 adds `POST /api/payments/paddle/events` through the shared Paddle signature verifier from `github.com/tyemirov/utils/billing`.
+The package resolves from `@latest` to v0.19.0.
+The receiver verifies `Paddle-Signature` against the raw body before JSON parsing.
+The configured secret binds each receiver to one processor account and environment.
+The receiver rejects duplicate signature headers and bodies above one MiB.
+
+The inbox retains the verified body, event identifier, entity identifier, event time, receipt time, and processor identity.
+These records are private financial evidence. They are not customer response fields or log messages.
+The database key includes the environment, processor account, and event identifier.
+An identical event has one record across service instances and restarts.
+Notification identifiers, JSON property order, and equivalent timestamp offsets do not change event identity.
+Different content for the same event produces `409`.
+
+The receiver returns `200` only after the inbox transaction commits. A database failure produces `503`.
+Inbox acceptance does not grant funds or establish that an event matches a funding order.
+The event starts as `pending` for the payment processor worker.
+Paddle distinguishes completed transaction processing from initial payment collection.
+F069 funding requires verified `transaction.completed` evidence and a matching order.
+See [Paddle transaction completion](https://developer.paddle.com/webhooks/transactions/transaction-completed/).
+
+`make test-hosted-payments` tests the real HTTP receiver with the shared verifier and SQLite storage.
+The current component has controlled development integration only.
+Payment and provider reconciliation have controlled acceptance. F087 owns actual processor sandbox qualification without blocking F069 or F070 development completion.
+Production payments remain disabled.
+
+### Processor Sandbox Qualification
+
+On 2026-09-23, the operator moved sandbox setup and actual qualification to F087.
+F087 does not block F069 or F070 development completion.
+The controlled acceptance suite and final CI remain required.
+
+Read-only product and notification requests succeeded with the sandbox API key from this private local file:
+
+`/Users/tyemirov/Development/PoodleScanner/configs/.env.ps`
+
+The file contains `PADDLE_API_KEY_SANDBOX`, `PADDLE_CLIENT_TOKEN_SANDBOX`, and `PADDLE_WEBHOOK_SECRET_SANDBOX`.
+Only the API key was verified against Paddle. No credential values were copied or disclosed.
+The account has active PoodleScanner, Hecate, and Crossword products, but no active LLM Proxy product or USD 5 funding price.
+No listed notification destination targets LLM Proxy.
+These API results do not establish the platform supplier or the canonical Paddle account identity.
+
+F087 must configure a distinct product, a one-time USD 5 price, the checkout origin, and the LLM Proxy notification destination.
+The notification destination must use its own secret.
+Do not use PoodleScanner or Hecate product identifiers for LLM Proxy funding.
+Hecate uses RevenueCat for browser Paddle commerce. F069 retains the direct shared Paddle integration used by PoodleScanner.
+Production payments remain disabled.
+
+This procedure uses actual Paddle sandbox transactions through the normal application runtime.
+Controlled protocol tests and simulated notifications cannot establish actual checkout or refund acceptance.
+Obtain the operator authorization required by the development acceptance contract before this procedure.
+The native target verifies financial checkpoints. F087 owns actual sandbox scenario receipts.
+Sandbox setup and actual qualification do not block F069 or F070 development completion.
+
+#### Required Inputs
+
+Record the source commit, authorization reference, sandbox supplier, processor account, and qualification run identifier.
+Use the normal server configuration with `payments.environment: sandbox` and a separate managed database.
+Omit `payments.api_base_url` so the shared client selects the actual Paddle sandbox API.
+Use sandbox credentials and a `test_` client token from the same processor account.
+Keep credentials in the existing private environment input. Do not copy credentials into qualification reports.
+Select a one-time USD price that matches the configured funding offer of at least 500 cents.
+Record its tax treatment and expected customer credit before checkout.
+Use isolated application accounts and no paid model-provider dispatches during payment qualification.
+
+Record the browser origin, API origin, authentication configuration, and externally reachable webhook URL.
+Configure the sandbox notification destination for `/api/payments/paddle/events` on that API origin.
+Select the transaction and adjustment events required by the payment state contracts in this document.
+Use the destination secret in the application configuration.
+Configure the default payment link for the browser origin.
+Do not infer these origins from a production deployment or a controlled browser fixture.
+
+#### Required Scenarios
+
+| Scenario | Procedure and required evidence |
+| --- | --- |
+| Checkout | Create a fresh application account and funding order through the browser. Complete the server-created transaction with a Paddle test card. Retain its transaction identifier, funding order, and rendered receipt. |
+| Delayed confirmation | Hold delivery of the completion notification after sandbox checkout. Verify that browser completion leaves funds unavailable. Restore delivery and verify one funding credit after processor verification. |
+| Signature rejection | Send an invalid signature to the selected receiver. Verify rejection and no funding change. Retain a valid Paddle delivery identifier and its successful response separately. |
+| Notification replay | Replay the completion notification through Paddle. Restart the application and verify one receipt and one funding credit. |
+| Partial refund | Request a partial sandbox refund for the funded transaction. Verify the pending hold, approved reversal, adjusted receipt, and remaining available funds. |
+| Full refund | Refund the remaining refundable amount. Verify the complete customer credit reversal and zero remaining funds for an unused account. |
+| Account isolation | Use another application account to read the funding order and receipt. Verify denial and no exposure of processor evidence. |
+| Reconciliation | Run `make reconcile-payments` with the sandbox configuration and a new run identifier. Resolve each difference through the documented review procedure. Replay the run and verify the same report. |
+
+Use the current [Paddle sandbox test cards](https://developer.paddle.com/sdks/sandbox/) for checkout.
+Paddle sandbox automatically approves refund adjustments every ten minutes.
+Record the observed pending and approved states instead of assuming immediate approval.
+Use Paddle notification replay for the original transaction. An unrelated simulated transaction cannot establish this financial chain.
+
+#### Native Financial Checkpoint
+
+After each stable financial transition, write the expected order state and exact receipt amounts to a private JSON file.
+Use actual account and order identifiers. Keep the expected amounts independent of the observed application response.
+The following example describes a USD 5 credit with USD 0.50 tax and no refund:
+
+```json
+{
+  "orders": [{
+    "order_id": "funding-REPLACE_WITH_ACTUAL_ORDER",
+    "billing_account_id": "billing-REPLACE_WITH_ACTUAL_ACCOUNT",
+    "state": "paid",
+    "receipt": {
+      "credit_cents": "500",
+      "gross_cents": "550",
+      "tax_cents": "50",
+      "reversed_cents": "0",
+      "pending_refund_cents": "0"
+    }
+  }]
+}
+```
+
+For an unpaid `created`, `pending`, or `failed` order, specify `"receipt": null`.
+For a pending refund, keep the current funding state and specify the expected `pending_refund_cents`.
+For an approved refund, specify `partially_refunded` or `refunded` and the expected cumulative `reversed_cents`.
+The original gross, tax, and credit amounts remain unchanged.
+
+```bash
+make qualify-paddle-sandbox \
+  PADDLE_SANDBOX_CONFIG=/private/path/config.yml \
+  PADDLE_SANDBOX_RUN_ID=sandbox-paid-2026-09-23T20 \
+  PADDLE_SANDBOX_EXPECTATIONS=/private/path/expected-paid.json
+```
+
+Use the normal environment interpolation for credentials in the selected configuration.
+The target requires the managed SQLite database and actual sandbox API selection without an origin override.
+It reads the selected orders and receipts before and after the existing payment reconciliation command logic.
+That logic uses the shared Paddle client and retains its normal durable report.
+Each selected order must have matching account ownership, state, amounts, processor evidence, and no reconciliation differences.
+The target rejects empty expectations and missing orders. It does not create payments or change customer funds.
+
+Use a new run identifier for each checkpoint so an earlier report cannot substitute for current processor reads.
+If reconciliation stops, resume its retained run with `make reconcile-payments` before a new qualification checkpoint.
+The successful target prints the safe report and retains its evidence through the existing database resources.
+Other orders in the report remain outside the selected checkpoint assertions.
+This target does not prove browser checkout, webhook delivery timing, or the complete scenario procedure by itself.
+Normal CI skips this actual sandbox lane. Controlled tests verify its input rejection separately.
+
+#### Evidence And Failure Handling
+
+Retain UTC times, scenario results, safe resource identifiers, application receipts, notification delivery results, and reconciliation run identifiers.
+Record browser acceptance at desktop and narrow widths through automated browsers.
+Retain the private consistent database snapshot through the existing backup procedure.
+Keep raw payment evidence private. Exclude secrets, session cookies, and personal customer details from shared reports.
+For each failure, retain the first failed assertion and its safe diagnostic output.
+Continue from the retained order and run identifiers after correction. Do not create another payment to hide an uncertain outcome.
+Leave sandbox qualification incomplete until all required scenarios have their actual evidence.
+The qualification report must distinguish actual sandbox results, controlled protocol results, and unexecuted scenarios.
+Sandbox completion does not authorize production activation or establish provider invoice acceptance.
 
 ### Issue Responsibilities
 
@@ -1006,9 +1818,9 @@ Its current amounts use integer cents.
 Its reservation expiry makes held funds spendable and prevents later capture.
 Its refund operation credits a prior usage debit. It does not reverse a funding grant.
 
-F067 must define exact fractional accounting without interpreting `amount_cents` as another unit.
-F068 must preserve holds for uncertain provider work. It must not apply automatic Ledger expiry to those holds.
-F069 must define payment reversals separately from refunds of usage debits.
+F067 defines exact fractional accounting without interpreting `amount_cents` as another unit.
+F068 preserves holds for uncertain provider work without automatic Ledger expiry.
+F069 applies payment reversals separately from refunds of usage debits.
 
 The Ledger integration guide also describes an embedded Go service and a public `Store` interface.
 Ledger F004 exposes the existing GORM adapter as `pkg/gormstore` in [merged PR 102](https://github.com/tyemirov/ledger/pull/102).
@@ -1022,8 +1834,8 @@ Implement missing shared capabilities in their owning package instead of creatin
 
 A remote Ledger transaction cannot commit atomically with the LLM Proxy database.
 F068 requires request admission, reservation, and ledger effects in one database transaction.
-The integration must preserve that requirement through a shared storage contract before implementation proceeds.
-The acceptance tests must prove transaction recovery and rejection before unauthorized provider dispatch.
+The published GORM store supplies this transaction boundary.
+Public tests check transaction recovery and rejection before unauthorized provider dispatch.
 
 ## Current Integration Boundaries
 
@@ -1042,7 +1854,7 @@ F067 must extend that contract where hosted pricing requires additional conditio
 
 `management_usage_writer.go` records operational telemetry through a memory queue.
 These records do not establish customer funds or financial history.
-F066 must write financial evidence durably before dispatch and before settlement.
+F066 writes financial evidence durably before dispatch and before settlement.
 HTTP acceptance fills this queue before a hosted request.
 The request retains exact usage and one delivery record while the telemetry writer drops its records.
 Replay returns the saved result without another provider call.
@@ -1055,7 +1867,7 @@ Credential rotation must preserve recovery references for accepted work.
 Revocation must prevent new provider work while permitting authorized result recovery.
 
 `upstream_admission.go` controls provider capacity.
-F068 must enforce financial admission separately and before each paid dispatch.
+F068 enforces financial admission separately and before each paid dispatch.
 Native HTTP, client protocols, MCP, dictation, and media workers require the same financial authority.
 
 ## Open Decisions
@@ -1072,7 +1884,18 @@ Native HTTP, client protocols, MCP, dictation, and media workers require the sam
 
 Complete each child issue before F070 acceptance.
 Use controlled provider and processor protocols for repeatable development tests.
-Record processor sandbox qualification separately from local protocol tests.
+Run `make test-hosted-billing` for the complete controlled acceptance target.
+This target runs hosted HTTP, exact rating, payments, official clients, database restoration, and authenticated browser checks.
+The funded browser test uses the normal server, authentication, database, and Ledger with controlled Paddle and provider HTTP responses.
+It verifies login, hosted model selection, a USD 5 credit, one provider call, and idempotent replay.
+The browser shows a USD 0.01 provider cost and a USD 0.013 customer charge.
+The account retains USD 4.99 and an exact USD 0.003 unsettled charge remainder.
+The test also verifies the payment receipt, account isolation, suspension, and layouts at 1440, 390, and 320 pixels.
+This scenario does not prove actual Paddle connectivity or acceptance for every provider operation.
+The target also includes the combined funding, usage, approved correction, and refund workflow.
+Final stack validation also requires `make ci`.
+F087 owns sandbox resource setup and actual processor qualification. Neither is a gate for F069 or F070 development completion.
+Record actual sandbox evidence separately from local protocol tests.
 Use real HTTP entry points and automated browsers at desktop and mobile widths.
 Restore one consistent database backup that contains all financial resources.
 Prove account isolation, exact charges, bounded spending, and recovery through the public interfaces.

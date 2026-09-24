@@ -10,6 +10,8 @@ import (
 	"gorm.io/gorm"
 )
 
+type hostedMediaReservation func(*gorm.DB, managedJournalRequestRecord, mediaOperationRecord) error
+
 // Validation can depend on a private credential reference, for example when a
 // request names a prior provider result. Admission rechecks this reference under
 // the database writer lock before reserving funds or creating an operation.
@@ -42,7 +44,7 @@ func (service *mediaOperationService) admitHostedMedia(transaction *gorm.DB, req
 		if mediaJournalCredentialReference(request) != operation.CredentialReference {
 			return errHostedAuthorityDenied
 		}
-		return service.hostedAdmission(transaction, request)
+		return service.hostedAdmission(transaction, request, operation)
 	})
 	if errors.Is(err, errUsageJournalConflict) {
 		return errMediaOperationIntentConflict

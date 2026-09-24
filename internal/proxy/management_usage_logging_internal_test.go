@@ -286,7 +286,7 @@ func TestManagedUsageWriterKeepsPublicResponsesIndependentFromPersistence(t *tes
 	}
 	configuration.upstreamCapacity = compiledCapacity
 	observedCore, observedLogs := observer.New(zapcore.InfoLevel)
-	router, buildError := buildRouter(configuration, zap.New(observedCore).Sugar(), func(_ ManagementConfiguration, providers *providerRegistry) (*managedTenantStore, error) {
+	router, buildError := buildRouterWithStoreForTest(t, configuration, zap.New(observedCore).Sugar(), func(_ ManagementConfiguration, providers *providerRegistry) (*managedTenantStore, error) {
 		store.routingDefaults = providers
 		return store, nil
 	})

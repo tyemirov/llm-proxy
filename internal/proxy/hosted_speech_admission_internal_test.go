@@ -158,7 +158,7 @@ func testHostedSpeechAuthority(t *testing.T, transition string) {
 		t.Fatal(err)
 	}
 	var reservations atomic.Int64
-	service.hostedAdmission = func(_ *gorm.DB, record managedJournalRequestRecord) error {
+	service.hostedAdmission = func(_ *gorm.DB, record managedJournalRequestRecord, _ mediaOperationRecord) error {
 		if record.CredentialVersion != 1 || record.PlatformConnectionID != "platform-speech" {
 			t.Error("speech admission changed authority")
 		}

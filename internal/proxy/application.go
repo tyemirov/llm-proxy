@@ -23,6 +23,20 @@ type proxyApplication struct {
 	database managedTenantDatabase
 	address  string
 	now      func() time.Time
+	payments *paddlePaymentRuntime
+	media    *mediaOperationService
+}
+
+func (application *proxyApplication) close() {
+	if application.media != nil {
+		application.media.stop()
+	}
+}
+
+func (application *proxyApplication) startMedia() {
+	if application.media != nil {
+		application.media.start()
+	}
 }
 
 // Serve runs HTTP and financial reconciliation under one process lifecycle.
@@ -31,6 +45,7 @@ func Serve(configuration Configuration, structuredLogger *zap.SugaredLogger) err
 	if err != nil {
 		return err
 	}
+	defer application.close()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	listener, err := net.Listen("tcp", application.address)
@@ -41,9 +56,16 @@ func Serve(configuration Configuration, structuredLogger *zap.SugaredLogger) err
 }
 
 func (application *proxyApplication) serve(ctx context.Context, listener net.Listener) error {
+	defer application.close()
 	if err := application.database.reconcileHostedFunds(ctx, application.now().UTC()); err != nil {
 		return errors.Join(fmt.Errorf("initialize funds reconciliation: %w", err), listener.Close())
 	}
+	if application.payments != nil {
+		if err := application.payments.reconcile(ctx); err != nil {
+			return errors.Join(fmt.Errorf("initialize payment reconciliation: %w", err), listener.Close())
+		}
+	}
+	application.startMedia()
 	group, running := errgroup.WithContext(ctx)
 	server := &http.Server{Handler: application.router, BaseContext: func(net.Listener) context.Context { return running }}
 	group.Go(func() error {
@@ -57,6 +79,25 @@ func (application *proxyApplication) serve(ctx context.Context, listener net.Lis
 		defer ticker.Stop()
 		return application.reconcileFunds(running, ticker.C)
 	})
+	if application.payments != nil {
+		group.Go(func() error {
+			ticker := time.NewTicker(hostedFundsReconciliationInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-running.Done():
+					return nil
+				case <-ticker.C:
+					if err := application.payments.reconcile(running); err != nil {
+						if running.Err() != nil {
+							return nil
+						}
+						return err
+					}
+				}
+			}
+		})
+	}
 	group.Go(func() error {
 		<-running.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), journalPersistenceTimeout)

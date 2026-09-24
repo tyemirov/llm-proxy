@@ -98,8 +98,7 @@ func (service *hostedTextRequests) recoverResult(ctx context.Context, requestID 
 				return err
 			}
 			if record.State == structuredRequestStateSucceeded {
-				var stored hostedStoredCompletion
-				if err := decodeStrictJSON(record.Result, &stored); err != nil {
+				if _, err := decodeHostedStoredCompletion(record.Result); err != nil {
 					return fmt.Errorf("validate unpublished result %s: %w", requestID, err)
 				}
 				if err := transaction.Model(&managedJournalRequestRecord{}).Where("id = ?", requestID).UpdateColumn("result_published_at", now).Error; err != nil {

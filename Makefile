@@ -80,6 +80,10 @@ test-frontend-dependency-contract:
 test-openapi-pages-artifact:
 	@./scripts/test-openapi-pages-artifact.sh
 
+.PHONY: test-openapi-contract
+test-openapi-contract:
+	$(GO) test ./internal/proxy -run '^Test(OpenAPIContract|HostedPaymentsRuntime|HostedPaymentsInbox)' -count=1
+
 test-management-auth-blackbox: frontend-dependencies prepare-shared-ui
 	$(NPM) run frontend:test:blackbox $(if $(BLACKBOX_TEST_ARGS),-- $(BLACKBOX_TEST_ARGS))
 
@@ -93,15 +97,58 @@ test-account-connections:
 
 .PHONY: test-hosted-access
 test-hosted-access:
-	$(GO) test ./internal/proxy -run '$(if $(HOSTED_TEST_PATTERN),$(HOSTED_TEST_PATTERN),^TestHosted)' -count=1
+	$(GO) test ./internal/proxy -run '$(if $(HOSTED_TEST_PATTERN),$(HOSTED_TEST_PATTERN),^TestHosted)' -count=1 $(HOSTED_TEST_ARGS)
+
+.PHONY: test-hosted-billing
+test-hosted-billing:
+	$(GO) test ./internal/proxy ./cmd/cli -run '^Test(Hosted|CatalogRating|CatalogService|CatalogPrice|ProviderCatalogExactAmounts|ProviderCatalogRejectsInvalidMonetaryAmounts|RootCommandRunsConfiguredProxyFromConfigFile)' -count=1
+	$(MAKE) test-hosted-clients
+	$(MAKE) test-managed-database-snapshot
+	$(MAKE) test-management-auth-blackbox BLACKBOX_TEST_ARGS='tests/blackbox/hosted-access.spec.js tests/blackbox/hosted-payments.spec.js tests/blackbox/hosted-service.spec.js'
 
 .PHONY: test-hosted-rating
+.PHONY: test-hosted-runtime
+test-hosted-runtime:
+	$(GO) test ./internal/proxy ./cmd/cli -run '^TestHostedRuntime' -count=1
+
+.PHONY: test-hosted-signals
+test-hosted-signals:
+	$(GO) test ./internal/proxy ./cmd/cli -run '^TestHostedSignals' -count=1
+
+HOSTED_SIGNALS_CONFIG ?= config.yml
+export HOSTED_SIGNALS_CONFIG
+.PHONY: hosted-financial-signals
+hosted-financial-signals:
+	$(GO) run ./cmd/cli hosted-financial-signals --config "$$HOSTED_SIGNALS_CONFIG"
+
 test-hosted-rating:
 	$(GO) test ./internal/proxy -run '^Test(HostedRating|CatalogRating|CatalogService|CatalogPrice|ProviderCatalogExactAmounts|ProviderCatalogRejectsInvalidMonetaryAmounts)' -count=1
 
 .PHONY: test-hosted-funds
 test-hosted-funds:
 	$(GO) test ./internal/proxy -run '^TestHostedFunds' -count=1
+
+.PHONY: test-hosted-payments
+test-hosted-payments:
+	$(GO) test ./internal/proxy ./cmd/cli -run '^Test(HostedPayments|RootCommandRunsConfiguredProxyFromConfigFile)' -count=1
+
+export PADDLE_SANDBOX_CONFIG PADDLE_SANDBOX_RUN_ID PADDLE_SANDBOX_EXPECTATIONS
+.PHONY: qualify-paddle-sandbox
+qualify-paddle-sandbox:
+	@test -n "$$PADDLE_SANDBOX_CONFIG" -a -n "$$PADDLE_SANDBOX_RUN_ID" -a -n "$$PADDLE_SANDBOX_EXPECTATIONS" || { echo 'Set PADDLE_SANDBOX_CONFIG, PADDLE_SANDBOX_RUN_ID, and PADDLE_SANDBOX_EXPECTATIONS.' >&2; exit 1; }
+	$(GO) test ./cmd/cli -run '^TestPaddleSandboxQualification$$' -count=1 -v
+
+PAYMENT_RECONCILIATION_CONFIG ?= config.yml
+export PAYMENT_RECONCILIATION_CONFIG PAYMENT_RECONCILIATION_RUN_ID
+.PHONY: reconcile-payments
+reconcile-payments:
+	$(GO) run ./cmd/cli reconcile-payments --config "$$PAYMENT_RECONCILIATION_CONFIG" --run-id "$$PAYMENT_RECONCILIATION_RUN_ID"
+
+PROVIDER_RECONCILIATION_CONFIG ?= config.yml
+export PROVIDER_RECONCILIATION_CONFIG PROVIDER_RECONCILIATION_RUN_ID PROVIDER_RECONCILIATION_EVIDENCE PROVIDER_RECONCILIATION_SOURCE
+.PHONY: reconcile-provider-costs
+reconcile-provider-costs:
+	$(GO) run ./cmd/cli reconcile-provider-costs --config "$$PROVIDER_RECONCILIATION_CONFIG" --run-id "$$PROVIDER_RECONCILIATION_RUN_ID" --evidence "$$PROVIDER_RECONCILIATION_EVIDENCE" --source "$$PROVIDER_RECONCILIATION_SOURCE"
 
 export SNAPSHOT_SOURCE SNAPSHOT_DESTINATION
 .PHONY: snapshot-managed-database test-managed-database-snapshot
@@ -139,6 +186,10 @@ test-operational-live-contracts:
 .PHONY: test-ci-runner
 test-ci-runner:
 	$(GO) test ./tests -run '^TestOperationalCIRunnerRequiresCurrentCompletionEvidence$$' -count=1
+
+.PHONY: test-coverage-contract
+test-coverage-contract:
+	$(GO) test ./tests -run '^TestOperationalCoverage' -count=1
 
 test-live-provider-harness:
 	@GO="$(GO)" ./scripts/test_live_providers.sh --preflight
@@ -282,7 +333,7 @@ test-provider-resources: frontend-dependencies
 
 .PHONY: test-provider-catalog
 test-provider-catalog: frontend-dependencies
-	$(GO) test ./internal/proxy ./tests ./cmd/cli -run 'Test(ProviderCatalog|PublicCapabilityCatalog|CatalogDefined|ModelActivation|RootCommandPrintsCatalogDerivedLiveDiscovery)' -count=1
+	$(GO) test ./internal/proxy ./tests ./cmd/cli -run 'Test(ProviderCatalog|PublicCapabilityCatalog|CatalogDefined|ModelActivation|RootCommandPrintsCatalogDerivedLiveDiscovery|RootCommandRejectsInvalidProviderCatalog)' -count=1
 
 .PHONY: test-deepseek-retirement
 test-deepseek-retirement: frontend-dependencies

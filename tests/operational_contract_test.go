@@ -1345,7 +1345,7 @@ func TestOperationalShellScriptsDoNotUseHeredocs(testingInstance *testing.T) {
 	}
 }
 
-func TestOperationalCoverageClientProbeUsesExplicitPrompt(testingInstance *testing.T) {
+func TestOperationalCoverageIncludesBothTestGroupsAndExplicitClientPrompt(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixtureRoot := testingInstance.TempDir()
 	coverageScriptPath := filepath.Join(fixtureRoot, operationalScriptsDirectory, "check_coverage.sh")
@@ -1361,15 +1361,33 @@ shift
 case "${command_name}" in
   test)
     coverage_profile=""
+    selection=""
+    all_packages=""
     for argument in "$@"; do
       case "${argument}" in
+        -run=^TestHosted)
+          selection="hosted"
+          ;;
+        -skip=^TestHosted)
+          selection="remaining"
+          ;;
+        ./...)
+          all_packages="yes"
+          ;;
+        -timeout=*)
+          exit 26
+          ;;
         -coverprofile=*)
           coverage_profile="${argument#-coverprofile=}"
           ;;
       esac
     done
     [[ -n "${coverage_profile}" ]]
-    builtin printf '%s\n' 'mode: count' 'fake.go:1.1,1.2 1 1' >"${coverage_profile}"
+    if [[ -z "${selection}" || "${all_packages}" != "yes" ]]; then
+      builtin printf 'coverage test group missing\n' >&2
+      exit 27
+    fi
+    builtin printf '%s\n' 'mode: count' "${selection}.go:1.1,1.2 1 1" 'shared.go:1.1,1.2 1 1' >"${coverage_profile}"
     ;;
   build)
     output_path=""
@@ -1412,6 +1430,10 @@ case "${command_name}" in
         builtin printf '%s\n' 'mode: count' 'fake.go:1.1,1.2 1 1' >"${coverage_profile}"
         ;;
       cover)
+        coverage_profile="${1#-func=}"
+        [[ "$(awk '$1 == "hosted.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
+        [[ "$(awk '$1 == "remaining.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
+        [[ "$(awk '$1 == "shared.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "2" ]]
         builtin printf '%s\n' 'total: (statements) 100.0%'
         ;;
       *)

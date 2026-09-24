@@ -1,4 +1,5 @@
 // @ts-check
+import {FUNDING_CHANGED_EVENT} from '../constants.js?v=20260903f037';
 import * as backend from '../core/backendClient.js?v=20260903f037';
 import {profileFailureMessage} from '../core/managementProfile.js?v=20260903f037';
 
@@ -23,6 +24,7 @@ class PrepaidBalance extends HTMLElement {
   busy=false;
   failure='';
   historyLoaded=false;
+  refreshRequested=false;
   /** @type {import('../types.d.js').FundsBalance|null} */ balance=null;
   /** @type {import('../types.d.js').FundsReservationPage} */ reservations={reservations:[],next_cursor:''};
   /** @type {import('../types.d.js').FundsEntryPage} */ entries={entries:[],next_cursor:''};
@@ -32,6 +34,11 @@ class PrepaidBalance extends HTMLElement {
     this.tenantID=this.getAttribute('tenant-id') || '';
     this.tenantName=this.getAttribute('tenant-name') || '';
     this.controller=new AbortController();
+    window.addEventListener(FUNDING_CHANGED_EVENT,event=>{
+      if (!(event instanceof CustomEvent) || event.detail.accountID!==this.accountID) return;
+      if (this.busy) this.refreshRequested=true;
+      else void this.run(()=>this.loadBalance());
+    },{signal:this.controller.signal});
     this.addEventListener('input',event=>{
       if (event.target instanceof HTMLInputElement && event.target.name==='tenant-limit') this.limitDraft=event.target.value;
     },{signal:this.controller.signal});
@@ -63,6 +70,7 @@ class PrepaidBalance extends HTMLElement {
         this.busy=false;this.render();
         const button=focused?this.querySelector(`[data-funds-action="${CSS.escape(focused)}"]`):null;
         if (button instanceof HTMLButtonElement) button.focus();
+        if (this.refreshRequested) {this.refreshRequested=false;void this.run(()=>this.loadBalance());}
       }
     }
   }

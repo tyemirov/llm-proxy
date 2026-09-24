@@ -1418,7 +1418,9 @@ Applications store this value as `LLM_PROXY_DEFAULT_TENANT_KEY`.
 This repository exposes the standard local targets used by MPR app repos:
 
 Hosted CI runs Go coverage, backend supporting checks, and frontend qualification in three independent jobs.
-The coverage job has a fifteen-minute limit for setup, compilation, and the existing ten-minute Go test limit.
+The coverage job has a fifteen-minute limit for setup, compilation, and tests.
+Go coverage uses separate passes for `TestHosted` and all remaining tests across every package.
+Each pass retains the existing ten-minute Go test limit. The coverage gate combines both profiles and the executable probes.
 The other qualification jobs have ten-minute limits.
 Together, the jobs run every gate from local `make ci`.
 Playwright global setup builds the capability binary before browser test workers start.
@@ -1439,6 +1441,7 @@ A failed, cancelled, skipped, or missing job result prevents success.
 | `make check-brand-icons` | Validate local SVG assets and all provider and family mappings. See [Provider and model icons](docs/provider-model-icons.md). |
 | `make test-brand-icons` | Run browser and build checks for management and public catalog icons. |
 | `make ci-backend` | Run the complete Go suite and require 100% statement coverage. |
+| `make test-coverage-contract` | Verify both Go test groups, merged coverage counts, and executable probe inputs. |
 | `make ci-backend-checks` | Run release checks, Go and Python analysis, protocol acceptance, admission race tests, Python tests, and local provider preflight. |
 | `make ci-frontend` | Run frontend analysis, browser tests, the Pages artifact check, and the management authentication test. |
 | `make up` | Require the ignored private `configs/.env.local`, then build and run the complete local browser orchestration: ghttp static UI and same-origin TAuth routes on `localhost:4179`, plus the API on `localhost:8080`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |
