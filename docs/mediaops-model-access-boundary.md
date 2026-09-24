@@ -1,73 +1,75 @@
-# MediaOps Model Access Boundary
+# MediaOps And TelePrompter Provider Boundary
 
-## Confirmed Scope
+## Current Decision
 
-On 2026-09-19, the operator limited this migration to model and provider access.
-This decision replaces the earlier proposal to move MediaOps applications into LLM Proxy.
+LLM Proxy owns all media-provider API access.
+MediaOps provides one backend for its public API, workflows, application data, and processing.
+TelePrompter is a separate timeline and prompt website connected to MediaOps.
+This decision replaces the 2026-09-19 requirement to keep the TelePrompter website inside MediaOps.
 
-MediaOps keeps all applications, browser interfaces, CLI and MCP product operations, local processing, and application data.
-LLM Proxy owns model access, provider connections, provider requests, provider operation recovery, and provider artifacts.
+Frame Picker stays in MediaOps, including thumbnails, hover zoom, storage, and frame extraction.
+Other retained MediaOps interfaces and YouTube authorization stay with MediaOps.
 Dictator remains a private provider runtime behind LLM Proxy.
 
-Frame Picker stays entirely in MediaOps.
-Its thumbnail strips, hover zoom, uploads, storage, FFmpeg worker, and downloads are outside this migration.
-The proposed LLM Proxy Frame Picker implementation was removed before publication or activation.
+## Responsibility
 
-## Ownership
+| Responsibility | Owner |
+| --- | --- |
+| Provider credentials, catalog, native requests, resource APIs, uploads, and recovery | LLM Proxy |
+| Provider staging, durable provider operations, tenant assets, and usage | LLM Proxy |
+| Projects, application assets, authorization, product jobs, and spend authority | MediaOps service |
+| Narration, composition, FFmpeg, inspection, preview, export, and validation | MediaOps service |
+| Timeline editing, prompt controls, and presentation | TelePrompter website |
+| Frame Picker and retained auxiliary interfaces | MediaOps |
 
-| Function | MediaOps responsibility | LLM Proxy responsibility |
+Construct the official gateway client in the MediaOps backend.
+Keep gateway secrets outside browser, CLI, and MCP payloads.
+Make those product clients use the MediaOps API for workflow execution.
+Keep application asset retention independent of gateway temporary assets.
+Keep provider metrics in LLM Proxy and route health in MediaOps.
+
+## Executable Umbrellas
+
+- I274 owns the retained-provider migration through its executable dependencies.
+- I286 establishes the current boundary before provider cutovers. It replaces F071.
+- MediaOps I093 owns the single backend and provider consumer changes.
+- MediaOps I094 owns the TelePrompter website extraction.
+- MediaOps I092 owns final cross-product acceptance.
+
+The full [execution table](https://github.com/MarcoPoloResearchLab/MediaOps/blob/tyemirov/media-migration-backlog/docs/public-sdk-contract.md) records the coordinated order.
+The local [provider inventory](media-provider-completeness.md) defines retained capability coverage.
+The [consolidation contract](media-gateway-consolidation.md) defines gateway lifecycle and provider protocol requirements.
+
+| Gateway contract | MediaOps consumer | Required result |
 | --- | --- | --- |
-| TelePrompter | Editing, project state, user access, task orchestration, preview, export | Model calls required by prompt operations |
-| Tube and YouTube | Channel access, OAuth, catalog, staged changes, uploads, playlists | Model calls used for text assistance |
-| Subtitles | Browser workflow, job state, local audio extraction, result presentation | Dictator transcription, alignment, and subtitle provider calls |
-| Text Video | Browser workflow, local render jobs, composition, output validation | Model calls required by that workflow |
-| Audio QC | Projects, review, corrections, repair plans, stitching, promotion, export | Model calls required for speech or alignment |
-| Frame Picker | Entire application, storage, and frame extraction | None |
-| CLI and MCP | Public product commands, authorization, dry runs, local paths, orchestration | Provider execution through the official client |
-| Narration and composition | Plans, chunk order, cadence, assembly, manifests, local validation | Speech, music, and other provider requests |
+| F024, F039 | I084 | OpenAI image generation, editing, chains, and progressive output. |
+| F072, F042 | I087 | Dictator speech, discovery, voices, recovery, and exact artifacts. |
+| F043, F040 | I089, I085 | Provider staging and Vertex images. |
+| F041, plus F043 where required | I086 | FAL images. |
+| F025 | I010 | Runway, Vertex, FAL, Kling, and xAI video. |
+| F026 | I011, B024 | ElevenLabs speech, music, alignment, voices, dictionaries, history, and account resources. |
+| F027 | I012 | HeyGen and Kling mutations, avatars, translation, lip-sync, and resources. |
+| I244 | I088 receipt is the prerequisite | Remove bounded import tooling after source reconciliation. |
 
-MediaOps keeps YouTube credentials and application authentication.
-Only model-provider credentials move to the gateway after their final direct consumer passes acceptance.
-Tenant metrics remain in LLM Proxy. A MediaOps metrics client is outside this task.
+Hand accepted capability contracts to MediaOps before I274 closes.
+Require MediaOps I088 before I244, then close I274 before final MediaOps I092 acceptance.
+Keep I274 out of the prerequisites for MediaOps provider cutovers.
+This ordering prevents a cross-repository dependency cycle.
 
-## Issue Sequence
+## Evidence And Boundaries
 
-The canonical provider sequence is in [Media Gateway Consolidation](media-gateway-consolidation.md#delivery-sequence).
+Preserve dated implementation receipts. Verify current source before implementing missing work.
+Use public gateway tests for provider protocols and MediaOps tests for product workflows.
+Use TelePrompter automated browser tests for the website.
+Record source qualification, official client publication, runtime activation, and paid acceptance separately.
 
-| Order | LLM Proxy | MediaOps | Result |
-| --- | --- | --- | --- |
-| 1 | F022, I046, F024 | I009 foundation | Durable model operations, capacity, and official client integration |
-| 2 | F039 | I084 | Complete OpenAI image access |
-| 3 | F042 | I087 | Dictator access through the gateway |
-| 4 | F043, F040 | I089, I085 | Required provider staging and Vertex image access |
-| 5 | F041 | I086 | FAL image access |
-| 6 | F025 | I010 | Video access: Runway, Vertex, FAL, Kling, then xAI |
-| 7 | F026 | I011 | ElevenLabs speech, music, alignment, voices, and history |
-| 8 | F027 | I012 | HeyGen and remaining Kling provider resources and mutations |
-| 9 | I244, F071 | I088, I092 | Final provider boundary and receipt audit |
+Keep application records and accepted assets in MediaOps.
+Inventory provider records and explicit owner mappings before each bounded import.
+Preserve uncertain operations for recovery without another paid submission.
+MediaOps I088 supplies per-tenant receipts, including verified zero-count families.
+I244 removes only migration tooling introduced for those records.
 
-F071 and I092 confirm this ownership boundary. They do not move applications.
-MediaOps F021 keeps preview and export on the existing local composition path after provider cutover.
-MediaOps I027, I030, and I031 remain MediaOps workflow work.
-P003 and P005 remain Planning items and are outside implementation.
-
-## Acceptance And Data
-
-Use each retained MediaOps public entry point to verify its gateway integration.
-Keep user authorization, explicit spend authority, dry-run behavior, local path containment, and product intent in MediaOps.
-Use the released official client for provider requests.
-Keep provider protocol tests in LLM Proxy and product behavior tests in MediaOps.
-
-Inventory provider records before each bounded import.
-Map each eligible provider handle to its source owner, destination tenant, and provider account.
-Keep application projects, drafts, local jobs, and local artifacts in MediaOps.
-Replace provider references with gateway references where the capability cutover requires them.
-Keep uncertain work available for recovery without another paid submission.
-
-The existing source inventory records 1,233 local operation records and 18 uncertain operations.
-These counts are historical evidence with explicit scope limits, not proof of an empty current runtime.
-MediaOps `docs/media-gateway-source-inventory.md` and the private receipts contain the detailed evidence.
-
-Remove only direct provider paths and obsolete provider credentials after acceptance.
-Keep Frame Picker and other local workers available throughout this migration.
-Record source CI, client publication, service activation, and consumer acceptance separately.
+I287 groups later Avatar V, MiniMax H3, and Speechify additions.
+P014 owns provider feasibility for the former MediaOps I071 proposal, now MediaOps P007.
+P008 owns later local inference planning.
+These issues do not block the retained-provider migration.
