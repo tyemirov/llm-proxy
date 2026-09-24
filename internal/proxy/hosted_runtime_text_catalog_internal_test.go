@@ -3,8 +3,11 @@ package proxy
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"image"
 	"io"
 	"math/big"
 	"net"
@@ -28,13 +31,45 @@ import (
 // This matrix derives its scope from enabled catalog offerings. Controlled
 // protocol responses and rates qualify local integration, not vendor accounts.
 func TestHostedRuntimeTextCatalogFinancialAcceptance(t *testing.T) {
+	hostedTextCatalogFinancialAcceptance(t, nil)
+}
+
+type hostedTextCatalogAttachment struct {
+	Type string `json:"type"`
+	MIME string `json:"mime_type"`
+	Data string `json:"data"`
+}
+
+func TestHostedRuntimeMultimodalCatalogFinancialAcceptance(t *testing.T) {
+	firstImage := hostedTextCatalogAttachment{Type: "image", MIME: "image/png", Data: base64.StdEncoding.EncodeToString(imageBoundaryPNG(t, image.NewNRGBA(image.Rect(0, 0, 2, 2))))}
+	secondImage := hostedTextCatalogAttachment{Type: "image", MIME: "image/png", Data: base64.StdEncoding.EncodeToString(imageBoundaryPNG(t, image.NewNRGBA(image.Rect(0, 0, 3, 3))))}
+	audio := []byte("RIFF\x00\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80\x3e\x00\x00\x00\x7d\x00\x00\x02\x00\x10\x00data\x02\x00\x00\x00\x00\x00")
+	binary.LittleEndian.PutUint32(audio[4:8], uint32(len(audio)-8))
+	voice := hostedTextCatalogAttachment{Type: "audio", MIME: "audio/wav", Data: base64.StdEncoding.EncodeToString(audio)}
+	for _, scenario := range []struct {
+		name        string
+		attachments []hostedTextCatalogAttachment
+	}{{"images", []hostedTextCatalogAttachment{firstImage, secondImage}}, {"audio", []hostedTextCatalogAttachment{voice}}, {"ordered-image-audio", []hostedTextCatalogAttachment{firstImage, voice, secondImage}}} {
+		t.Run(scenario.name, func(t *testing.T) { hostedTextCatalogFinancialAcceptance(t, scenario.attachments) })
+	}
+}
+
+func hostedTextCatalogFinancialAcceptance(t *testing.T, attachments []hostedTextCatalogAttachment) {
+	t.Helper()
 	catalog := internalCanonicalProviderCatalog()
 	offerings := []ProviderOffering{}
 	grants := map[string][]hostedGrantOffering{}
+	selectedOfferings := map[string]bool{}
 	for _, offering := range catalog.modelCatalog.Offerings {
 		if !slices.Contains(offering.Operations, ModelOperationText) {
 			continue
 		}
+		if slices.ContainsFunc(attachments, func(attachment hostedTextCatalogAttachment) bool {
+			return !slices.Contains(offering.MediaInputs, attachment.Type)
+		}) {
+			continue
+		}
+		selectedOfferings[offering.Provider+"/"+offering.Model] = true
 		offerings = append(offerings, offering)
 		grants[offering.Provider] = append(grants[offering.Provider], hostedGrantOffering{Model: offering.Model, Operations: []string{ModelOperationText}})
 	}
@@ -42,6 +77,11 @@ func TestHostedRuntimeTextCatalogFinancialAcceptance(t *testing.T) {
 		t.Fatal("text catalog is empty")
 	}
 	fixtures := hostedTextCatalogProtocolFixtures()
+	if len(attachments) > 0 {
+		for codec, fixture := range fixtures {
+			fixtures[codec] = fixture.withInputMedia(t, codec, attachments)
+		}
+	}
 	authentication := map[string]ProviderCatalogAuthentication{}
 	endpoints := &Endpoints{}
 	var activeOffering atomic.Pointer[ProviderOffering]
@@ -81,8 +121,21 @@ func TestHostedRuntimeTextCatalogFinancialAcceptance(t *testing.T) {
 		var input struct {
 			Model string `json:"model"`
 		}
-		if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
 			t.Error(err)
+		}
+		if err := json.Unmarshal(body, &input); err != nil {
+			t.Error(err)
+		}
+		remaining := string(body)
+		for _, attachment := range attachments {
+			position := strings.Index(remaining, attachment.Data)
+			if position < 0 {
+				t.Errorf("%s lost ordered %s input", route, attachment.Type)
+				break
+			}
+			remaining = remaining[position+len(attachment.Data):]
 		}
 		if parts[1] == CatalogProtocolVertexGenerateContent {
 			if !strings.Contains(request.URL.Path, selected.ProviderModel) {
@@ -122,7 +175,7 @@ func TestHostedRuntimeTextCatalogFinancialAcceptance(t *testing.T) {
 	}
 	for index := range catalog.modelCatalog.Prices {
 		price := &catalog.modelCatalog.Prices[index]
-		if price.Operation != ModelOperationText {
+		if price.Operation != ModelOperationText || !selectedOfferings[price.Provider+"/"+price.Model] {
 			continue
 		}
 		var codec string
@@ -205,7 +258,10 @@ func TestHostedRuntimeTextCatalogFinancialAcceptance(t *testing.T) {
 	})
 	client := &http.Client{Transport: hostedIdentityTransport{next: http.DefaultTransport}}
 	surfaces := []string{"/", v2Path, chatCompletionsPath, responsesPath}
-	exchange := func(offering ProviderOffering, surface, key string, status int) {
+	if len(attachments) > 0 {
+		surfaces = []string{v2Path}
+	}
+	exchange := func(offering ProviderOffering, surface, key string, status int, media []hostedTextCatalogAttachment) {
 		t.Helper()
 		activeOffering.Store(&offering)
 		query := url.Values{"provider": {offering.Provider}, "model": {offering.Model}}
@@ -217,6 +273,13 @@ func TestHostedRuntimeTextCatalogFinancialAcceptance(t *testing.T) {
 			path, payload = surface, fmt.Sprintf(`{"model":%q,"messages":[{"role":"user","content":"funded catalog prompt"}]}`, offering.Provider+"/"+offering.Model)
 		case responsesPath:
 			path, payload = surface, fmt.Sprintf(`{"model":%q,"input":"funded catalog prompt"}`, offering.Provider+"/"+offering.Model)
+		}
+		if len(media) > 0 {
+			encoded, err := json.Marshal(map[string]any{"messages": []any{map[string]any{"role": "user", "content": "funded catalog prompt", "attachments": media}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			payload = string(encoded)
 		}
 		request, err := http.NewRequest(http.MethodPost, "http://"+listener.Addr().String()+path, strings.NewReader(payload))
 		if err != nil {
@@ -234,13 +297,18 @@ func TestHostedRuntimeTextCatalogFinancialAcceptance(t *testing.T) {
 			t.Fatal(err)
 		}
 		validateHostedIdentityResponse(t, request, response, body)
+		for _, attachment := range media {
+			if strings.Contains(string(body), attachment.Data) {
+				t.Fatal("financial response exposed input media")
+			}
+		}
 		if response.StatusCode != status || (status == http.StatusOK && !strings.Contains(string(body), "catalog answer")) {
 			t.Fatalf("%s/%s status=%d want=%d body=%s", offering.Provider, offering.Model, response.StatusCode, status, body)
 		}
 	}
 	for _, offering := range offerings {
 		for _, surface := range surfaces {
-			exchange(offering, surface, "unfunded-"+offering.Provider+"-"+offering.Model, http.StatusPaymentRequired)
+			exchange(offering, surface, "unfunded-"+offering.Provider+"-"+offering.Model, http.StatusPaymentRequired, attachments)
 		}
 	}
 	mutex.Lock()
@@ -266,9 +334,29 @@ func TestHostedRuntimeTextCatalogFinancialAcceptance(t *testing.T) {
 		fixture := fixtures[offering.WireContract]
 		for _, surface := range surfaces {
 			key := "funded-" + offering.Provider + "-" + offering.Model + "-" + sha256Hex(surface)[:8]
-			exchange(offering, surface, key, http.StatusOK)
+			exchange(offering, surface, key, http.StatusOK, attachments)
 			for _, replaySurface := range surfaces {
-				exchange(offering, replaySurface, key, http.StatusOK)
+				exchange(offering, replaySurface, key, http.StatusOK, attachments)
+			}
+			if len(attachments) > 0 {
+				exchange(offering, v2Path, key, http.StatusConflict, nil)
+				changed := slices.Clone(attachments)
+				data, err := base64.StdEncoding.DecodeString(changed[0].Data)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if changed[0].Type == "image" {
+					data = imageBoundaryPNG(t, image.NewNRGBA(image.Rect(0, 0, 4, 4)))
+				} else {
+					data[len(data)-1] = 1
+				}
+				changed[0].Data = base64.StdEncoding.EncodeToString(data)
+				exchange(offering, v2Path, key, http.StatusConflict, changed)
+				if len(attachments) > 1 {
+					copy(changed, attachments)
+					slices.Reverse(changed)
+					exchange(offering, v2Path, key, http.StatusConflict, changed)
+				}
 			}
 			value, ok := new(big.Rat).SetString(fixture.customer)
 			if !ok {
@@ -377,4 +465,41 @@ func hostedTextCatalogProtocolFixtures() map[string]hostedTextCatalogProtocolFix
 		CatalogProtocolGeminiInteractions:    {body: `{"id":"catalog-interaction","status":"completed","steps":[{"type":"model_output","content":[{"type":"text","text":"catalog answer"}]}],"usage":{"total_input_tokens":1000,"total_output_tokens":100,"total_tokens":1140,"total_cached_tokens":200,"total_thought_tokens":40,"total_tool_use_tokens":0,"input_tokens_by_modality":[{"modality":"text","tokens":1000}],"output_tokens_by_modality":[{"modality":"text","tokens":100}],"cached_tokens_by_modality":[{"modality":"text","tokens":200}]}}`, provider: "141/50000", customer: "1833/500000"},
 		CatalogProtocolVertexGenerateContent: {body: `{"candidates":[{"content":{"parts":[{"text":"catalog answer"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":1000,"candidatesTokenCount":100,"totalTokenCount":1140,"cachedContentTokenCount":200,"thoughtsTokenCount":40,"toolUsePromptTokenCount":0,"promptTokensDetails":[{"modality":"TEXT","tokenCount":1000}],"candidatesTokensDetails":[{"modality":"TEXT","tokenCount":100}],"cacheTokensDetails":[{"modality":"TEXT","tokenCount":200}]}}`, provider: "141/50000", customer: "1833/500000"},
 	}
+}
+
+func (fixture hostedTextCatalogProtocolFixture) withInputMedia(t *testing.T, codec string, attachments []hostedTextCatalogAttachment) hostedTextCatalogProtocolFixture {
+	t.Helper()
+	var usageName, inputName, countName string
+	modalityName := func(value string) string { return value }
+	switch codec {
+	case CatalogProtocolGeminiInteractions:
+		usageName, inputName, countName = "usage", "input_tokens_by_modality", "tokens"
+	case CatalogProtocolVertexGenerateContent:
+		usageName, inputName, countName = "usageMetadata", "promptTokensDetails", "tokenCount"
+		modalityName = strings.ToUpper
+	default:
+		return fixture
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(fixture.body), &payload); err != nil {
+		t.Fatal(err)
+	}
+	modalities := []string{}
+	for _, attachment := range attachments {
+		if !slices.Contains(modalities, attachment.Type) {
+			modalities = append(modalities, attachment.Type)
+		}
+	}
+	perModality := 800 / len(modalities)
+	input := []any{map[string]any{"modality": modalityName("text"), countName: 1000 - perModality*len(modalities)}}
+	for _, modality := range modalities {
+		input = append(input, map[string]any{"modality": modalityName(modality), countName: perModality})
+	}
+	payload[usageName].(map[string]any)[inputName] = input
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.body = string(encoded)
+	return fixture
 }

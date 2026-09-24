@@ -6,7 +6,7 @@ The user requested this handoff because the session has few tokens left.
 This section replaces all resume instructions in the historical sections below.
 F070 remains incomplete. This handoff does not complete or pause the goal.
 
-B275 is published. The latest increment adds B266 cancellation acceptance. Verify publication, then continue the remaining B266 and F070 work.
+B275 is published. The latest increment adds B266 media input acceptance. Verify publication, then continue the remaining B266 and F070 work.
 Do not expand the product scope.
 
 ### Checkout And Publication
@@ -14,7 +14,8 @@ Do not expand the product scope.
 - Repository: `/Users/tyemirov/Development/llm-proxy`.
 - Branch: `feature/F069-prepaid-payments`.
 - Published B275 commit: `5bcd86d96050c51c94995a12fd4e5d373759b48b`.
-- The commit that contains this section adds B266 cancellation tests. Verify its remote publication before further edits.
+- Published cancellation increment: `a3e72246c647b89c2543cb48e2daf81aeeb6237f`.
+- The commit that contains this section adds B266 media input tests. Verify its remote publication before further edits.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
 - PR stack: 339 (F065), 340 (F066), 341 (F067), 342 (F068), 344 (F069).
@@ -25,7 +26,27 @@ Do not expand the product scope.
 This section describes the B275 increment. Application merge, release, and deployment remain outside its scope.
 The current production changes have focused validation. Aggregate validation remains incomplete.
 
-### Latest Cancellation Acceptance
+### Latest Media Input Acceptance
+
+The latest increment extends `internal/proxy/hosted_runtime_text_catalog_internal_test.go`.
+The shared normal-runtime fixture now tests image and audio inputs alongside the existing text matrix.
+All 67 text offerings across 13 providers retain their four-interface acceptance.
+Image cases cover 37 offerings across seven providers through `/v2`.
+Audio and mixed image/audio cases each cover eight offerings across two providers.
+
+Each case verifies ordered media bytes, platform credentials, native models, exact charges, settlement, and account remainders.
+Removed or changed media and reversed attachments return HTTP 409 under the accepted key without another provider call.
+Unfunded requests cause no provider work. Responses do not expose input media.
+The controlled Google responses report media token quantities within the exact input total.
+
+The original matrix passed in 22.016 seconds before fixture changes. The extended matrix passed in 28.715 seconds.
+Media input race checks passed in 61.995 seconds. Go lint and formatting passed.
+No production code or public contract changed. No test process remains active.
+Logs and profiles use `/tmp/llm-proxy-b266-multimodal` as their prefix.
+The latest combined diagnostic is `/tmp/llm-proxy-b266-multimodal-diagnostic.coverprofile`.
+It has 433 uncovered statements across 21172 statements. It does not establish aggregate CI success.
+
+### Previous Cancellation Acceptance
 
 The latest increment adds `internal/proxy/hosted_media_cancellation_recovery_internal_test.go`.
 It has ten queued cancellation scenarios and four running cancellation scenarios through real HTTP endpoints.
@@ -36,7 +57,7 @@ All 14 scenarios passed in 11.929 seconds. Their race run passed in 166.327 seco
 Go lint and formatting passed. No production code or public contract changed.
 The initial test used an incorrect response field. It now reads the canonical `cancellation_state` field.
 Logs use `/tmp/llm-proxy-b266-media-cancellation` as their prefix.
-The current combined diagnostic is `/tmp/llm-proxy-b266-media-cancellation-diagnostic.coverprofile`.
+That increment produced `/tmp/llm-proxy-b266-media-cancellation-diagnostic.coverprofile`.
 It combines the B275 aggregate profile with the new focused profile over unchanged production source.
 It has 434 uncovered statements across 21172 statements. It does not establish aggregate CI success.
 No test process remains active.
@@ -128,7 +149,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b266-media-cancellation-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b266-multimodal-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -144,7 +165,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest cancellation diagnostic reduces that count to 434 without production changes.
+The latest media input diagnostic reduces that count to 433 without production changes.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.

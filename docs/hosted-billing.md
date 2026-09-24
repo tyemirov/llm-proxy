@@ -448,6 +448,15 @@ The fixture covers cache reads, Anthropic cache lifetimes, and separate Google r
 The final Ledger balance must equal verified funding minus all whole-cent charges, with the exact remaining fraction retained.
 All reservations must be released after automatic settlement.
 
+The same runtime fixture checks image and audio inputs through `/v2` for each offering that declares those inputs.
+It sends ordered PNG images, WAV audio, and mixed image/audio messages through the existing provider adapters.
+The provider fixture verifies the original media bytes and their order, alongside the native model and platform credential.
+Google fixtures report separate input token quantities for the supplied media types within the exact input total.
+
+Each media case verifies unfunded rejection, exact charges, automatic settlement, and replay without another provider call.
+Removed media, changed bytes, and changed attachment order must return HTTP 409 under the accepted key.
+Response bodies must not expose the input media. The final account balance and exact remainder must explain every charge.
+
 Run `make test-hosted-runtime` for this matrix and the normal text, image, dictionary, and CLI checks.
 This matrix does not establish actual supplier prices, account limits, connectivity, or invoice agreement.
 Other operations and separate live qualification remain subject to the complete F070 acceptance requirements.

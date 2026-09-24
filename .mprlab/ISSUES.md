@@ -345,6 +345,13 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - The new checks passed in 11.929 seconds. Their race run passed in 166.327 seconds. Go lint and formatting passed.
   - The combined diagnostic has 434 uncovered statements across 21172 statements. No production code changed in this increment.
   - Use `/tmp/llm-proxy-b266-media-cancellation-diagnostic.coverprofile` for the updated diagnostic. It does not replace aggregate CI.
+  - Extended the normal catalog runtime fixture with ordered image, audio, and mixed input acceptance.
+  - Image checks cover 37 offerings across seven providers. Audio and mixed checks each cover eight offerings across two providers.
+  - The text regression retains all 67 offerings across 13 providers and four HTTP interfaces.
+  - Each media case verifies exact charges, settlement, replay, and rejection of changed media without another provider call.
+  - The complete matrix passed in 28.715 seconds. Media input race checks passed in 61.995 seconds. Go lint and formatting passed.
+  - The combined diagnostic now has 433 uncovered statements across 21172 statements. Production code is unchanged.
+  - Use `/tmp/llm-proxy-b266-multimodal-diagnostic.coverprofile` for the latest diagnostic. Earlier totals are superseded.
   - The required coverage gate, complete F070 acceptance, and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
@@ -3567,6 +3574,9 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - B262 added normal HTTP acceptance for dictionary service charges, exact balance exhaustion, replay, and receipt recovery.
   - The text acceptance matrix passed every enabled catalog offering through all four public HTTP interfaces.
   - It verified platform authority, native model selection, exact costs and charges, automatic settlement, and replay across interfaces.
+  - The same runtime fixture now verifies current image and audio inputs through `/v2`, including exact charges and media identity.
+  - Image acceptance passed for 37 offerings across seven providers. Audio and mixed inputs each passed for eight offerings across two providers.
+  - Changed bytes, removed media, and reversed attachments return HTTP 409 without additional provider work. Media input race checks passed.
   - `make test-hosted-runtime` and Go lint passed after the matrix change.
   - Speech financial tests passed each current ElevenLabs generation and conversion offering, including timestamped speech.
   - The tests check exact charges, account remainders, reservations, replay, and zero provider calls after unfunded rejection.
