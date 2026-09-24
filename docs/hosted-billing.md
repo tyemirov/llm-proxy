@@ -1246,7 +1246,7 @@ Disconnecting the view cancels its pending requests and closes an unfinished por
 A controlled Paddle HTTP protocol supplies transactions, signed events, adjustments, and portal sessions.
 The test verifies delayed funding, receipts, pending holds, partial refunds, pagination, failure recovery, and desktop and narrow widths.
 These checks do not qualify a live Paddle environment.
-Controlled payment and provider reconciliation checks pass. Actual Paddle sandbox qualification remains open under F069.
+Controlled payment and provider reconciliation checks pass. F087 owns actual Paddle sandbox qualification without blocking F069 or F070 development completion.
 
 ### Browser Checkout
 
@@ -1346,7 +1346,7 @@ The service rejects new hosted work when available funds are negative or a pendi
 This payment restriction does not replace an operator suspension.
 New funding and admission checks use available funds to complete retained refund holds.
 Controlled tests cover refund approval, rejection, concurrent processing, chargeback replay, reversal, and failed financial writes.
-Payment and provider reconciliation have controlled acceptance. Actual processor sandbox qualification remains open under F069.
+Payment and provider reconciliation have controlled acceptance. F087 owns actual processor sandbox qualification without blocking F069 or F070 development completion.
 
 ### Audited Payment Reconciliation
 
@@ -1540,15 +1540,36 @@ See [Paddle transaction completion](https://developer.paddle.com/webhooks/transa
 
 `make test-hosted-payments` tests the real HTTP receiver with the shared verifier and SQLite storage.
 The current component has controlled development integration only.
-Payment and provider reconciliation have controlled acceptance. Actual processor sandbox qualification remains open under F069.
+Payment and provider reconciliation have controlled acceptance. F087 owns actual processor sandbox qualification without blocking F069 or F070 development completion.
 Production payments remain disabled.
 
 ### Processor Sandbox Qualification
 
+On 2026-09-23, the operator moved sandbox setup and actual qualification to F087.
+F087 does not block F069 or F070 development completion.
+The controlled acceptance suite and final CI remain required.
+
+Read-only product and notification requests succeeded with the sandbox API key from this private local file:
+
+`/Users/tyemirov/Development/PoodleScanner/configs/.env.ps`
+
+The file contains `PADDLE_API_KEY_SANDBOX`, `PADDLE_CLIENT_TOKEN_SANDBOX`, and `PADDLE_WEBHOOK_SECRET_SANDBOX`.
+Only the API key was verified against Paddle. No credential values were copied or disclosed.
+The account has active PoodleScanner, Hecate, and Crossword products, but no active LLM Proxy product or USD 5 funding price.
+No listed notification destination targets LLM Proxy.
+These API results do not establish the platform supplier or the canonical Paddle account identity.
+
+F087 must configure a distinct product, a one-time USD 5 price, the checkout origin, and the LLM Proxy notification destination.
+The notification destination must use its own secret.
+Do not use PoodleScanner or Hecate product identifiers for LLM Proxy funding.
+Hecate uses RevenueCat for browser Paddle commerce. F069 retains the direct shared Paddle integration used by PoodleScanner.
+Production payments remain disabled.
+
 This procedure uses actual Paddle sandbox transactions through the normal application runtime.
 Controlled protocol tests and simulated notifications cannot establish actual checkout or refund acceptance.
 Obtain the operator authorization required by the development acceptance contract before this procedure.
-The native target verifies financial checkpoints. Actual sandbox scenario receipts remain open under F069 and F070.
+The native target verifies financial checkpoints. F087 owns actual sandbox scenario receipts.
+Sandbox setup and actual qualification do not block F069 or F070 development completion.
 
 #### Required Inputs
 
@@ -1781,7 +1802,8 @@ The test also verifies the payment receipt, account isolation, suspension, and l
 This scenario does not prove actual Paddle connectivity or acceptance for every provider operation.
 The target also includes the combined funding, usage, approved correction, and refund workflow.
 Final stack validation also requires `make ci`.
-Record processor sandbox qualification separately from local protocol tests.
+F087 owns sandbox resource setup and actual processor qualification. Neither is a gate for F069 or F070 development completion.
+Record actual sandbox evidence separately from local protocol tests.
 Use real HTTP entry points and automated browsers at desktop and mobile widths.
 Restore one consistent database backup that contains all financial resources.
 Prove account isolation, exact charges, bounded spending, and recovery through the public interfaces.

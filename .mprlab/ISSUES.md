@@ -1941,6 +1941,36 @@ retain satisfied historical dependencies.
 
 ## Features
 
+- [ ] [F087] (P1) Configure and qualify the LLM Proxy Paddle sandbox.
+  Status:
+  - On 2026-09-23, the operator moved sandbox setup and actual qualification to this separate follow-up issue.
+  - This issue does not block F069 or F070 development completion.
+  Evidence:
+  - Read-only Paddle sandbox requests succeeded with the API key from `/Users/tyemirov/Development/PoodleScanner/configs/.env.ps`.
+  - The file also contains sandbox client-token and webhook-secret inputs. Their values were not copied or disclosed.
+  - The account has active PoodleScanner, Hecate, and Crossword products. It has no active LLM Proxy product or USD 5 funding price.
+  - No listed notification destination targets LLM Proxy. The existing destinations belong to other application flows.
+  - Hecate uses RevenueCat for browser Paddle commerce. F069 uses the existing direct Paddle approach from PoodleScanner.
+  - The API checks did not establish the platform supplier or the canonical Paddle account identity.
+  Goal:
+  Configure separate LLM Proxy sandbox resources and retain evidence from actual processor scenarios.
+  Requirements:
+  - Confirm the platform supplier and Paddle account identity before configuration.
+  - Reuse the existing authorized sandbox account and shared Paddle client.
+  - Create a distinct LLM Proxy product and an active one-time USD 5 funding price.
+  - Keep the USD 5 funding minimum and permit spending down to USD 0 without a subscription.
+  - Configure the LLM Proxy checkout origin and a notification destination for `/api/payments/paddle/events`.
+  - Use the secret for that notification destination. Do not reuse another application's webhook secret or product identifiers.
+  - Select a sandbox client token from the same account and an isolated managed database.
+  - Record the private configuration path and non-secret account, product, price, and notification identifiers.
+  - Keep sandbox records separate from production. Keep production payments disabled.
+  - Use the actual sandbox procedure in `docs/hosted-billing.md`.
+  Validation:
+  - Complete checkout, signed notification, delayed confirmation, replay, refund, reversal, and reconciliation scenarios.
+  - Retain the source revision, scenario results, processor references, and expected financial totals without credentials.
+  - Run `make qualify-paddle-sandbox` and distinguish actual results from controlled protocol evidence.
+  - Preserve the existing F069 and F070 controlled acceptance and CI requirements.
+
 - [ ] [F086] (P1) Compare models on tenant tasks before a model change.
   Goal:
   Help tenants evaluate a candidate model with their own requests before they change the selected model.
@@ -2939,7 +2969,7 @@ retain satisfied historical dependencies.
   The corrected stack CI run passed all Go tests, Python checks, and upstream race checks.
   Its coverage gate failed with `coverage total 95.3%, want 100.0%`. B266 owns that failure.
   B265 now rejects Responses image requests whose accepted snapshot cannot bound both paid components.
-  The related HTTP regression and Go lint passed. Actual sandbox evidence and complete F070 acceptance remain open.
+  The related HTTP regression and Go lint passed. F087 owns actual sandbox evidence. Complete F070 development acceptance remains open.
   `make test-hosted-billing` passed after B265, including clients, backup restoration, and four browser scenarios in 37.1 seconds.
   Goal:
   Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
@@ -2992,7 +3022,7 @@ retain satisfied historical dependencies.
   - OpenAPI, applicable client, payment setup, and operational documentation updates.
   Validation:
   - Exercise the real service with controlled processor protocols for each financial transition and failure.
-  - Qualify checkout, webhook signatures, delayed payment, and refund behavior in the processor sandbox.
+  - Track actual checkout, webhook, delayed payment, and refund qualification in F087 without blocking development completion.
   - Prove duplicate events and different events for one payment create one customer credit.
   - Prove invalid signatures, mismatched amounts, and another account's payment cannot create funds.
   - Prove a browser success URL cannot create funds without verified payment evidence.
@@ -3039,8 +3069,9 @@ retain satisfied historical dependencies.
   - Cancellation, invalid durations, artifact loss, and usage write errors keep funds for reconciliation.
   - Related Dictator and speech regression checks passed. Go lint passed.
   - Actual Paddle sandbox inputs are absent from the process environment and all six repository private environment files.
-  - The operator was asked for the sandbox configuration path and selected account and supplier identity.
-  - Complete provider-operation qualification, final CI, and the F069 PR remain open.
+  - Read-only sandbox requests succeeded with the existing PoodleScanner local API key. No active LLM Proxy product or price exists there.
+  - F087 owns sandbox product, price, webhook, account identity, and actual qualification work without blocking development completion.
+  - Complete provider-operation qualification and final CI remain open. F069 has ready PR 344.
   - The remaining commercial decisions and F065 through F069 implementation remain open.
   - The corrected stack CI run passed all Go tests, Python checks, and upstream race checks.
   - B266 records the remaining gate failure: `coverage total 95.3%, want 100.0%`.
@@ -3094,10 +3125,10 @@ retain satisfied historical dependencies.
   Deliverables:
   - Completed F065 through F069 with linked validation evidence and resolved shared product decisions.
   - Hosted service architecture document, OpenAPI resources, customer onboarding, and billing dashboard.
-  - Controlled end-to-end acceptance suite and separate processor sandbox receipts.
+  - Controlled end-to-end acceptance suite and a separate F087 record for actual processor sandbox qualification.
   - Operator launch checklist with provider qualification, rate evidence, recovery evidence, and remaining activation decisions.
   Validation:
-  - Create a fresh account, complete sandbox funding, and use platform credentials through the customer interface.
+  - Create a fresh account, complete funding with controlled processor responses, and use platform credentials through the customer interface.
   - Verify the exact customer charge, provider cost, funds release, and remaining balance for every supported provider operation.
   - Exhaust the available balance and prove subsequent rejected requests cause zero upstream work.
   - Exercise concurrent requests across tenants, idempotent retries, failed providers, client disconnects, and restarts.
@@ -3105,7 +3136,7 @@ retain satisfied historical dependencies.
   - Restore a consistent backup and prove retained financial records explain all accepted requests and payments.
   - Verify one customer's resources and financial evidence remain inaccessible to another customer.
   - Verify the rendered login, onboarding, model selection, funding, usage, and receipt flows on desktop and mobile widths.
-  - Compare sandbox payment receipts, usage journal entries, charge calculations, and ledger totals with expected fixtures.
+  - Compare controlled payment receipts, usage journal entries, charge calculations, and ledger totals with expected fixtures.
   - Run `make ci` after the last application change and record the complete acceptance target result.
   - Mark this issue complete only after its development deliverables and acceptance requirements pass.
 
