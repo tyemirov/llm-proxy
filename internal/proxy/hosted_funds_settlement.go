@@ -107,8 +107,7 @@ func commitHostedFundsSettlement(transaction *gorm.DB, reservation managedFundsR
 	if err := transaction.Where("billing_account_id = ?", reservation.BillingAccountID).First(&financial).Error; err != nil {
 		return fmt.Errorf("read settlement account %s: %w", reservation.BillingAccountID, err)
 	}
-	exact := ratingMoney(total)
-	cents, remainder, err := SettleUSDCents(exact, ExactMoney{Numerator: financial.RemainderNumerator, Denominator: financial.RemainderDenominator})
+	cents, remainder, err := settleUSDCents(total, ExactMoney{Numerator: financial.RemainderNumerator, Denominator: financial.RemainderDenominator})
 	if err != nil {
 		return fmt.Errorf("calculate settlement %s: %w", reservation.RequestID, err)
 	}
@@ -122,6 +121,7 @@ func commitHostedFundsSettlement(transaction *gorm.DB, reservation managedFundsR
 	if err != nil {
 		return fmt.Errorf("encode settlement credits %s: %w", reservation.RequestID, err)
 	}
+	exact := ratingMoney(total)
 	settlement := managedFundsSettlementRecord{RequestID: reservation.RequestID, BillingAccountID: reservation.BillingAccountID,
 		ChargeNumerator: exact.Numerator, ChargeDenominator: exact.Denominator, AdjustmentIDs: encodedCreditIDs, SettledCents: cents,
 		RemainderBeforeNumerator: financial.RemainderNumerator, RemainderBeforeDenominator: financial.RemainderDenominator,

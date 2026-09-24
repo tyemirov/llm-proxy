@@ -56,6 +56,7 @@ A provider minimum applies before the customer markup.
 Ledger entries use integer USD cents. The maximum entry is `9223372036854775807` cents.
 Settlement adds the retained account remainder before conversion to cents.
 Settlement rounds down once and retains the exact remainder, which is less than one cent.
+Settlement consumes the calculated rational directly and preserves it for the settlement record and tenant usage.
 F068 must commit the remainder and the ledger entry in one transaction.
 An exact usage credit reduces this remainder before it credits whole cents.
 The conversion preserves the same fractional accounting boundary:
@@ -67,6 +68,8 @@ next_remainder = residual + credited_cents / 100
 ```
 
 The credit transaction retains the previous remainder, next remainder, and credited cents.
+The credit calculation retains its parsed amount with the cent effect and next remainder. Tenant accounting reuses that amount.
+Public amounts and stored remainders retain their boundary validation.
 The next remainder stays below one cent.
 Original provider costs, charges, and settlement records remain unchanged.
 

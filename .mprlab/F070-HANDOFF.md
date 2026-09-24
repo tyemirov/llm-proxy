@@ -6,8 +6,8 @@ The user requested this handoff because the session has few tokens left.
 Use this section and the resume procedure below as the current instructions.
 F070 remains incomplete. This handoff does not complete or pause the goal.
 
-B266 reservation integrity checks passed locally. The increment has no production changes.
-The preceding B278 commit is published in PR 344.
+B266 exact settlement and credit calculations passed characterization, financial regression, and race checks.
+The preceding reservation integrity commit is published in PR 344.
 Do not expand the product scope.
 
 ### Checkout And Publication
@@ -30,8 +30,9 @@ Do not expand the product scope.
 - Published grant transition commit: `3c549a55aaac2bbe97a39ead8ace49b68f4ee77e`.
 - Published B277 commit: `eeb768f86146c4abacc783b9bf75d1f7dc92fd68`.
 - Published B278 commit: `52ef3a6526366a3e61ed6497c7f6dd6824896b5b`.
-- Local HEAD and PR 344 matched that commit before the reservation integrity increment.
-- Verify the commit that contains the reservation integrity tests in PR 344 before further edits.
+- Published reservation integrity commit: `ae140d560e1819b4bd06d9b5ddbf35f163d27b0f`.
+- Local HEAD and PR 344 matched that commit before the exact settlement increment.
+- Verify the commit that contains the exact settlement increment in PR 344 before further edits.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
 - PR stack: 339 (F065), 340 (F066), 341 (F067), 342 (F068), 344 (F069).
@@ -42,7 +43,29 @@ Do not expand the product scope.
 Application merge, release, and deployment remain outside the current authorization.
 The current production changes have focused validation. Aggregate validation remains incomplete.
 
-### Latest Reservation Admission Integrity
+### Latest Exact Settlement And Credit Calculations
+
+Settlement now consumes the calculated rational directly. It no longer encodes and parses the total before cent conversion.
+The calculation preserves the original total for the settlement record and tenant usage.
+Credit calculation retains its parsed amount with the credited cents and next remainder.
+Tenant accounting reuses that amount without another parse after the Ledger effect.
+
+Public amount validation, stored remainder validation, cent rounding, overflow checks, and public representations remain unchanged.
+The Ledger dependency and its constructors are unchanged. No public schema or event contract changed.
+Existing public arithmetic and financial tests supply characterization. No new tests were added for this refactor.
+
+Characterization passed before the refactor in 4.950 seconds and after the final change in 5.101 seconds.
+Race checks passed in 68.909 seconds. Go lint and formatting passed.
+Catalog and financial regression passed in 161.064 seconds. No validation process remains active.
+Evidence uses `/tmp/llm-proxy-b266-exact-settlement` as its prefix.
+
+Changed production files are `catalog_money.go`, `hosted_funds_adjustments.go`, and `hosted_funds_settlement.go` in `internal/proxy/`.
+All prior coverage coordinates for those files were discarded. Only current regression counts contribute coverage for those files.
+The current diagnostic is `/tmp/llm-proxy-b266-exact-settlement-diagnostic.coverprofile`.
+It has 361 uncovered statements across 21167 statements. This diagnostic does not replace aggregate CI.
+B266 and final F070 acceptance remain open.
+
+### Previous Reservation Admission Integrity
 
 The increment adds `internal/proxy/hosted_funds_reservation_integrity_internal_test.go`.
 Seven scenarios cover corrupt retained prices, an ignored account lock, and conflicting prices or reservations before provider dispatch.
@@ -495,7 +518,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b266-reservation-integrity-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b266-exact-settlement-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -511,7 +534,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest reservation integrity diagnostic has 362 uncovered statements across 21167 statements.
+The latest exact settlement diagnostic has 361 uncovered statements across 21167 statements.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.

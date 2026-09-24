@@ -3,6 +3,7 @@ package proxy
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/MarkoPoloResearchLab/ledger/pkg/ledger"
@@ -72,26 +73,22 @@ func applyHostedFundsCredit(transaction *gorm.DB, accountID, requestID string, c
 	if err := transaction.Where("billing_account_id = ?", accountID).First(&financial).Error; err != nil {
 		return fundsCreditEffect{}, fmt.Errorf("read financial credit account %s: %w", accountID, err)
 	}
-	cents, remainder, err := CreditUSDCents(credit, ExactMoney{Numerator: financial.RemainderNumerator, Denominator: financial.RemainderDenominator})
+	calculation, err := calculateUSDCredit(credit, ExactMoney{Numerator: financial.RemainderNumerator, Denominator: financial.RemainderDenominator})
 	if err != nil {
 		return fundsCreditEffect{}, fmt.Errorf("calculate financial credit for request %s: %w", requestID, err)
 	}
-	if cents > 0 {
-		if err := post(cents); err != nil {
+	if calculation.creditedCents > 0 {
+		if err := post(calculation.creditedCents); err != nil {
 			return fundsCreditEffect{}, err
 		}
 	}
-	effect := fundsCreditEffect{CreditedCents: cents,
+	effect := fundsCreditEffect{CreditedCents: calculation.creditedCents,
 		RemainderBeforeNumerator: financial.RemainderNumerator, RemainderBeforeDenominator: financial.RemainderDenominator,
-		RemainderAfterNumerator: remainder.Numerator, RemainderAfterDenominator: remainder.Denominator}
-	if err := transaction.Model(&financial).Updates(map[string]any{"remainder_numerator": remainder.Numerator, "remainder_denominator": remainder.Denominator}).Error; err != nil {
+		RemainderAfterNumerator: calculation.remainder.Numerator, RemainderAfterDenominator: calculation.remainder.Denominator}
+	if err := transaction.Model(&financial).Updates(map[string]any{"remainder_numerator": calculation.remainder.Numerator, "remainder_denominator": calculation.remainder.Denominator}).Error; err != nil {
 		return fundsCreditEffect{}, fmt.Errorf("retain credit remainder for request %s: %w", requestID, err)
 	}
-	amount, err := parseExactMoney(credit)
-	if err != nil {
-		return fundsCreditEffect{}, err
-	}
-	if err := adjustHostedTenantUsage(transaction, accountID, requestID, amount.Neg(amount)); err != nil {
+	if err := adjustHostedTenantUsage(transaction, accountID, requestID, new(big.Rat).Neg(calculation.amount)); err != nil {
 		return fundsCreditEffect{}, err
 	}
 	return effect, nil

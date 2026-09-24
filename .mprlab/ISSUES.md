@@ -515,6 +515,14 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Race checks passed in 55.554 seconds. Go lint and formatting passed. No production code or public contract changed.
   - The diagnostic has 362 uncovered statements across 21167 statements. Use `/tmp/llm-proxy-b266-reservation-integrity-diagnostic.coverprofile`.
   - Production source coordinates are unchanged. Complete aggregate CI and F070 acceptance remain open.
+  - Settlement now consumes its calculated rational directly and preserves the original total for persistence and tenant usage.
+  - Credit calculation retains its parsed amount with the cent effect and next remainder. Tenant accounting no longer parses it after posting.
+  - Public amount validation, stored remainder validation, rounding, overflow checks, and representations are unchanged.
+  - Existing characterization passed before the refactor in 4.950 seconds and after the final change in 5.101 seconds.
+  - Catalog and financial regression passed in 161.064 seconds. Race checks passed in 68.909 seconds. Go lint and formatting passed.
+  - No new tests, shared package changes, public schema changes, or event changes were required.
+  - The diagnostic has 361 uncovered statements across 21167 statements. Use `/tmp/llm-proxy-b266-exact-settlement-diagnostic.coverprofile`.
+  - Old coordinates for all three changed production files were discarded. Complete aggregate CI and F070 acceptance remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
   - Preserve the required coverage threshold and the current provider scope.
