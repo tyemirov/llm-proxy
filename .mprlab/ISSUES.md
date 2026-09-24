@@ -443,6 +443,13 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Race checks passed in 36.926 seconds. Go lint and formatting passed.
   - The diagnostic has 371 uncovered statements across 21168 statements. Changed production files use only current financial regression counts.
   - Use `/tmp/llm-proxy-b266-net-charge-diagnostic.coverprofile`. Complete aggregate CI and F070 acceptance remain open.
+  - Added three grant transition scenarios for a failed read after grant and audit writes inside the transaction.
+  - Suspension, reactivation, and revocation failures preserve grant history, assignments, and funds through authenticated HTTP.
+  - Restoration applies one transition after restart. Stale revision retries cannot repeat the transition or change prior audit records.
+  - Grant and authority regression passed in 4.519 seconds. Race checks passed in 18.680 seconds. Go lint and formatting passed.
+  - Initial test errors concerned typed grant states and owner sessions. The corrected fixture uses the existing authorization contract.
+  - No production code or public contract changed. The diagnostic has 370 uncovered statements across 21168 statements.
+  - Use `/tmp/llm-proxy-b266-grant-transition-diagnostic.coverprofile`. Complete aggregate CI and F070 acceptance remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
   - Preserve the required coverage threshold and the current provider scope.

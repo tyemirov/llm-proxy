@@ -6,8 +6,8 @@ The user requested this handoff because the session has few tokens left.
 Use this section and the resume procedure below as the current instructions.
 F070 remains incomplete. This handoff does not complete or pause the goal.
 
-B266 payment revision ownership is published. Publication was verified on September 24, 2026.
-The current increment keeps net customer charges as exact rationals through settlement.
+B266 grant transition recovery checks passed locally. The increment has no production changes.
+The preceding exact net charge commit was verified in PR 344 on September 24, 2026.
 Do not expand the product scope.
 
 ### Checkout And Publication
@@ -26,8 +26,9 @@ Do not expand the product scope.
 - Published search limit commit: `dadcfa99e766f4c10507726ea0b473f756e2afd0`.
 - Published assignment commit: `c3ca9bf649bb0bcd35b2a1b9001300fe112dcaf0`.
 - Published payment revision commit: `713e9d50096e54e51b1a7860a41d42fdc70ce947`.
-- Local HEAD and the PR head matched that commit before the net charge increment.
-- Verify the commit that contains this section in PR 344 before further edits.
+- Published exact net charge commit: `3308ccc48eed91e0ce3d192abd599ef5d7a2f89d`.
+- Local HEAD and PR 344 matched that commit before the grant transition increment.
+- Verify the commit that contains the grant transition tests in PR 344 before further edits.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
 - PR stack: 339 (F065), 340 (F066), 341 (F067), 342 (F068), 344 (F069).
@@ -38,7 +39,32 @@ Do not expand the product scope.
 Application merge, release, and deployment remain outside the current authorization.
 The current production changes have focused validation. Aggregate validation remains incomplete.
 
-### Latest Exact Net Charge Calculation
+### Latest Grant Transition Read Recovery
+
+The increment adds `internal/proxy/hosted_grant_transition_recovery_internal_test.go`.
+Three scenarios cover suspension, reactivation, and revocation through authenticated management HTTP.
+A database callback fails the final grant read inside the transaction, after the grant and audit writes.
+Each failed request preserves grant state, revision history, tenant assignment, and balance.
+
+Restored storage permits one transition after restart. Its audit contains the expected state, revision, actor, and reason.
+Earlier audit records remain unchanged. Stale revision retries return HTTP 409 across repeated restarts without another transition.
+The existing transaction satisfies this contract. No production code or public contract changed.
+
+The three scenarios passed in 1.659 seconds. Authority and grant regression passed in 4.519 seconds.
+Race checks passed in 18.680 seconds. Go lint and formatting passed. No validation process remains active.
+Initial test errors concerned the typed grant state and owner sessions for assignment and balance reads.
+The final fixture uses operator sessions for grants and owner sessions for customer resources.
+Evidence uses `/tmp/llm-proxy-b266-grant-transition` as its prefix.
+
+The current diagnostic is `/tmp/llm-proxy-b266-grant-transition-diagnostic.coverprofile`.
+It has 370 uncovered statements across 21168 statements. Production source coordinates are unchanged.
+This diagnostic does not replace aggregate CI. B266 and final F070 acceptance remain open.
+
+The current Governor check cannot retrieve its issue-format source because the endpoint returns HTTP 404.
+The source is `https://issues-api.mprlab.com/api/contracts/issue-format`.
+Preserve the local format. Do not claim a successful Governor check or change unrelated governance files.
+
+### Previous Exact Net Charge Calculation
 
 `netCustomerCharge` now returns its exact rational after validation of retained charges and credits.
 Settlement adds that rational directly. It no longer encodes and parses the calculated amount again.
@@ -394,7 +420,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b266-net-charge-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b266-grant-transition-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -410,7 +436,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest net charge diagnostic has 371 uncovered statements across 21168 statements.
+The latest grant transition diagnostic has 370 uncovered statements across 21168 statements.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.
