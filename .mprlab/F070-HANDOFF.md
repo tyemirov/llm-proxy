@@ -6,9 +6,39 @@ The user requested this handoff because the session has few tokens left.
 Use this section and the resume procedure below as the current instructions.
 F070 remains incomplete. This handoff does not complete or pause the goal.
 
-B266 exact settlement and credit calculations passed characterization, financial regression, and race checks.
-The preceding reservation integrity commit is published in PR 344.
+B266 media uncertainty persistence and ignored journal claim checks passed.
+The previous exact settlement commit is published in PR 344.
 Do not expand the product scope.
+
+### Latest Media Uncertainty And Claim Acceptance
+
+The user requested a handoff before further implementation. The subsequent goal continuation resumed B266.
+The new test file is `internal/proxy/hosted_media_uncertainty_recovery_internal_test.go`.
+Three scenarios reject writes to uncertain attempts, journal requests, and reconciliation cases.
+Failed transactions preserve financial resources and the running operation without partial cases, observations, or delivery records.
+Public journal reads retain the executing state until recovery.
+Repeated restart records one uncertainty case and retains the 39-cent hold without repeated provider work.
+
+A fourth scenario ignores the journal claim update at the database boundary.
+Repeated worker attempts preserve queued work and create no worker claim, billable attempt, or provider call.
+Restored storage executes once and settles the account to 498 cents across repeated restart.
+The existing implementation satisfies these checks. No production code or public contract changed.
+
+Final focused checks passed in 3.949 seconds. Hosted media regression passed in 58.936 seconds.
+Race checks passed in 60.825 seconds. Go lint and formatting passed. No validation process remains active.
+Initial test failures concerned the expected log event and a charges-specific response validator used for journal reads.
+The corrected test uses the worker error event and the general management HTTP helper.
+Evidence uses `/tmp/llm-proxy-b266-media-uncertainty` as its prefix.
+
+The current diagnostic is `/tmp/llm-proxy-b266-media-uncertainty-diagnostic.coverprofile`.
+It has 359 uncovered statements across 21167 statements. Production source coordinates are unchanged.
+Profile combination checks coordinate and statement identity, then retains coverage from either profile.
+This diagnostic does not replace aggregate CI. B266 and final F070 acceptance remain open.
+
+The next investigation can use remaining media authorization and observation persistence boundaries.
+Inspect existing tests before selecting a missing public behavior. These candidates are not established defects.
+Update the B266 plan before implementation. Record each reproduced defect as a separate BugFix issue.
+Verify unused identifiers across the active tracker and archive before assigning one.
 
 ### Checkout And Publication
 
@@ -31,8 +61,10 @@ Do not expand the product scope.
 - Published B277 commit: `eeb768f86146c4abacc783b9bf75d1f7dc92fd68`.
 - Published B278 commit: `52ef3a6526366a3e61ed6497c7f6dd6824896b5b`.
 - Published reservation integrity commit: `ae140d560e1819b4bd06d9b5ddbf35f163d27b0f`.
-- Local HEAD and PR 344 matched that commit before the exact settlement increment.
-- Verify the commit that contains the exact settlement increment in PR 344 before further edits.
+- Published exact settlement commit: `9094d1c953493f0c08736dcbf8823baa155f464c`.
+- Local HEAD and PR 344 matched this exact settlement commit before the media uncertainty increment.
+- Verify the commit that contains the media uncertainty increment before further edits.
+- PR 344 reported no hosted checks during this update. Hosted CI success is not established.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
 - PR stack: 339 (F065), 340 (F066), 341 (F067), 342 (F068), 344 (F069).
@@ -518,7 +550,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b266-exact-settlement-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b266-media-uncertainty-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -534,7 +566,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest exact settlement diagnostic has 361 uncovered statements across 21167 statements.
+The latest media uncertainty diagnostic has 359 uncovered statements across 21167 statements.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.

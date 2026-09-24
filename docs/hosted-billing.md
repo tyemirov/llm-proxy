@@ -618,6 +618,8 @@ Unknown provider outcomes remain uncertain and require reconciliation.
 
 Provider observations and their delivery records use one transaction.
 The terminal operation and journal outcome use one transaction.
+Failed uncertainty writes preserve the funds reservation without partial journal cases, observations, or delivery records.
+Restart records the uncertain outcome without repeated provider work. An ignored journal claim prevents dispatch and preserves queued work.
 Unavailable usage extraction produces `unsupported_meter` evidence and unknown usage.
 It does not produce a measured zero or a settled customer charge.
 Confirmed cancellation records journal state `failed` with failure code `operation_cancelled`.

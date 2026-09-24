@@ -523,6 +523,14 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - No new tests, shared package changes, public schema changes, or event changes were required.
   - The diagnostic has 361 uncovered statements across 21167 statements. Use `/tmp/llm-proxy-b266-exact-settlement-diagnostic.coverprofile`.
   - Old coordinates for all three changed production files were discarded. Complete aggregate CI and F070 acceptance remain open.
+  - Added four media scenarios for failed uncertainty writes and an ignored journal claim.
+  - Failed writes preserve funds and running work without partial observations or cases. Restart records uncertainty without repeated provider work.
+  - Ignored claims preserve queued work without provider calls. Restoration executes once and preserves exact settlement across restart.
+  - Focused checks passed in 3.949 seconds. Hosted media regression passed in 58.936 seconds, and race checks passed in 60.825 seconds.
+  - Go lint and formatting passed. No production code or public contract changed.
+  - Initial test errors concerned the worker log event and the HTTP response validator. Both fixture errors are corrected.
+  - The diagnostic has 359 uncovered statements across 21167 statements. Use `/tmp/llm-proxy-b266-media-uncertainty-diagnostic.coverprofile`.
+  - Production source coordinates are unchanged. Complete aggregate CI and F070 acceptance remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
   - Preserve the required coverage threshold and the current provider scope.
