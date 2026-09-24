@@ -78,6 +78,12 @@ retain satisfied historical dependencies.
   - The management regression passed in 16.798 seconds. Go lint and format checks pass.
   - Funds-resolution race checks passed in 247.812 seconds.
   - The updated diagnostic has 754 uncovered statements. Unchanged source blocks retain their prior coverage after the decoder edit.
+  - Added 25 startup scenarios for failed financial reads and writes, pending delivery, and unresolved usage.
+  - Failed startup closes the listener and preserves financial resources. Restart uses retained evidence without another provider call.
+  - Repeated startup preserves one settlement or the unresolved hold. Delivery acknowledgment shares the financial transaction.
+  - The startup, runtime, and settlement regression passed in 27.034 seconds. Go lint and format checks pass.
+  - The new startup race suite passed in 161.590 seconds.
+  - The combined diagnostic now has 743 uncovered statements. It is not aggregate CI evidence.
   - The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
