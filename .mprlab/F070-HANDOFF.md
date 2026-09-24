@@ -1,5 +1,102 @@
 # F070 Handoff
 
+## Latest Handoff: 2026-09-24
+
+Read this section first. It supersedes all earlier checkout states and next steps below.
+The user requested a handoff because the session has few tokens left.
+After the handoff request, the active goal resumed with the B273 configuration correction.
+
+### Verified Checkout
+
+- Repository: `/Users/tyemirov/Development/llm-proxy`.
+- Branch: `feature/F069-prepaid-payments`.
+- Verified parent of the B273 increment: `ae2eb21c90bc20cf09d2235487d59931ffb0e3da`.
+- PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
+- PR 344 is open and ready for review. Its base is `feature/F068-prepaid-balances`.
+- The checkout was clean before the handoff update. The subsequent B273 changes are recorded below.
+- The operator committed the earlier CLI test, handoff, tracker, and media documents. Preserve those commits.
+- Consult the current B273 evidence below for validation and publication state.
+
+The F070 objective remains incomplete. Do not mark it complete or paused because of this handoff.
+Keep F065 through F070 in scope. Do not start unrelated I274 media work from the tracker instruction.
+Keep production activation disabled. Application merge is not authorized.
+
+### Current Payment Correction
+
+B273 confirmed the empty payment configuration defect through the real root command.
+The failing `empty` scenario reported `started=true error=<nil>`.
+The source correction preserves explicit payment presence before typed decoding.
+The existing payment validator now rejects the incomplete object. Omitted configuration still disables payments.
+The new tests are in `cmd/cli/payment_configuration_test.go`.
+
+CLI regression passed in 8.578 seconds. Go lint and format checks passed.
+All 87 selected CLI race scenarios passed in 95.615 seconds. No validation process remains active.
+Evidence files use `/tmp/llm-proxy-b273-` with suffixes `before.log`, `cli.log`, `race.log`, and `checks.log`.
+The fresh coverage diagnostic has 464 uncovered statements across 21145 statements.
+Use `/tmp/llm-proxy-b273-diagnostic.coverprofile` and `/tmp/llm-proxy-b273-merge.py`.
+The aggregate coverage gate and final CI remain open.
+
+B273 is recorded in the commit that contains this section. Verify its remote publication before the next edit.
+Continue B266 and the remaining provider qualification.
+Keep the full F070 scope below. Do not infer completion from this configuration correction.
+
+### Latest Completed Increment
+
+B272 is resolved in `ae2eb21c`. It rejects `hosted: {}` before service startup or database creation.
+Omitted hosted configuration still permits startup with hosted execution disabled.
+The B272 execution plan was removed. Keep `.mprlab/B266-PLAN.md` while B266 remains open.
+Its latest section, `Hosted Scope CLI Rejection Increment`, records the completed increment.
+
+Current evidence:
+
+| Validation | Result | Evidence |
+| --- | --- | --- |
+| Hosted runtime | Passed, proxy 36.644 seconds and CLI 2.679 seconds | `/tmp/llm-proxy-b272-runtime.log` |
+| Final CLI configuration | Passed, 7.389 seconds | `/tmp/llm-proxy-b272-cli-final.log` |
+| CLI race checks | 82 scenarios passed, 81.180 seconds | `/tmp/llm-proxy-b272-cli-race.log` |
+| Final lint and format | Passed | `/tmp/llm-proxy-b272-checks-final.log` |
+
+The race run preceded the final single-lookup refactor. Final CLI, lint, and format checks followed that change.
+These results do not establish aggregate CI success or hosted CI success.
+
+The current diagnostic has 464 uncovered statements across 21143 statements.
+Use `/tmp/llm-proxy-b272-diagnostic.coverprofile` or its copy, `/tmp/llm-proxy-b266-diagnostic.coverprofile`.
+The current merge script is `/tmp/llm-proxy-b272-merge.py`.
+It discards old counts for `cmd/cli/config_file.go` and uses the final CLI profile for that file.
+Do not merge stale source coordinates after another production edit.
+
+The last aggregate CI run failed with `coverage total 95.3%, want 100.0%`.
+B266 and final `make ci` remain open. Do not lower the coverage threshold.
+Responses image billing, Dictator duration billing, and ElevenLabs alignment qualification remain incomplete.
+See `Remaining F070 Work` below for the complete known scope and open commercial decisions.
+
+### Preserved Decisions And Sandbox Follow-Up
+
+Use provider cost multiplied by 1.30, all current providers, and a USD 5 funding minimum.
+Customers can spend down to zero. Use existing Ledger and verify balance conservation.
+Reuse existing integrations. Deliver the browser application without a native mobile application.
+
+F087 already records the separate Paddle sandbox setup. It does not block development completion.
+The verified private source path is `/Users/tyemirov/Development/PoodleScanner/configs/.env.ps`.
+Prior read-only authentication passed. No secret values belong in this handoff or another repository.
+The prior account check found no LLM Proxy product or USD 5 price.
+F087 owns distinct product and price creation, identity confirmation, notification setup, and actual sandbox qualification.
+Do not reuse another application's product or webhook secret.
+
+### Resume Commands
+
+Use the repository Make targets. Relevant focused commands are:
+
+```bash
+make test-hosted-runtime
+make test-upstream-admission ADMISSION_TEST_PATTERN='^Test(RootCommand|HostedRuntimeCLI|HostedRuntimeConfiguration)'
+make go-lint check-format
+```
+
+Use `GOFLAGS` for race or coverage options when needed.
+Run final `make ci` at the stack completion checkpoint after corrections.
+Update PR 344 only after applicable validation. Preserve the remaining-scope and F087 paragraphs in its description.
+
 ## Resume Update: 2026-09-24
 
 This section supersedes the original snapshot below.

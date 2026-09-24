@@ -126,6 +126,9 @@ func loadRuntimeConfiguration(rawConfigPath string) (proxy.Configuration, error)
 	}
 
 	var parsedConfiguration fileConfiguration
+	if configReader.IsSet("payments") {
+		parsedConfiguration.Payments = &proxy.PaymentConfiguration{}
+	}
 	if unmarshalError := configReader.UnmarshalExact(&parsedConfiguration); unmarshalError != nil {
 		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigFileParse, configPath, unmarshalError)
 	}

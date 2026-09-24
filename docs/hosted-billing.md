@@ -1295,6 +1295,7 @@ Actual Paddle connectivity remains a separate qualification step.
 
 The optional `payments` object in the server configuration enables payment processing.
 Omit this object to disable checkout creation, portal sessions, and the webhook route.
+An explicit empty object is invalid. The CLI retains it for payment validation before service startup or database access.
 Owned historical records remain readable when payment processing is disabled.
 The tracked server configuration omits this object. Production payments remain disabled.
 

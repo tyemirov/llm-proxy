@@ -35,6 +35,26 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B273] (P1) Reject explicit empty payment configuration.
+  Evidence:
+  The root command accepts `payments: {}` and reaches service startup without an error.
+  Viper drops the empty object during typed decoding and disables payment processing.
+  The new root-command scenario reports `started=true error=<nil>`.
+  Goal:
+  Preserve explicit payment configuration for validation before service startup or database access.
+  Requirements:
+  - Reject incomplete explicit payment configuration through the existing payment validator.
+  - Preserve omitted payment configuration as the disabled state.
+  - Preserve valid payment configuration and existing environment validation.
+  Validation:
+  - Pass root-command checks for omitted, empty, incomplete, and valid payment configuration.
+  - Pass CLI regression, race, lint, and format checks.
+  Resolution:
+  The configuration decoder preserves explicit payment presence for the existing payment validator.
+  Empty and incomplete objects are rejected before startup. Omitted configuration keeps payments disabled.
+  CLI regression passed in 8.578 seconds. All 87 selected CLI race scenarios passed in 95.615 seconds.
+  Go lint and format checks passed. B266 retains the aggregate coverage and final CI requirements.
+
 - [x] [B272] (P1) Reject explicit hosted configuration without offering scopes.
   Evidence:
   The root command accepts `hosted: {}` and reaches service startup without an error.
@@ -235,6 +255,8 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Media admission no longer repeats service or model resolution. Startup validation and request-specific pricing remain unchanged.
   - Eight root-command scenarios reject empty, duplicate, unknown-service, and invalid-condition scopes before startup or database creation.
   - B272 fixes the empty hosted-object defect found by these checks. Omitted hosted configuration remains disabled.
+  - B273 preserves explicit payment configuration for validation. Empty objects no longer silently disable payments.
+  - Payment presence and CLI regression passed in 8.578 seconds. All 87 selected CLI race scenarios passed in 95.615 seconds.
   - Runtime HTTP checks passed in 36.644 seconds. Final CLI configuration checks passed in 7.389 seconds.
   - All 82 selected CLI race scenarios passed before the final lookup refactor. Final CLI, lint, and format checks passed afterward.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
