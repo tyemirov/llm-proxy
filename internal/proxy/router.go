@@ -158,7 +158,6 @@ func buildProxyApplication(configuration Configuration, structuredLogger *zap.Su
 		if hostedError != nil {
 			return nil, fmt.Errorf("initialize hosted completion runtime: %w", hostedError)
 		}
-		mediaOperations.hostedAdmission = configuration.hosted.mediaAdmission(providers)
 	}
 
 	router.Use(gin.Recovery())

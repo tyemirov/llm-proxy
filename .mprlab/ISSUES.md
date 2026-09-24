@@ -35,6 +35,39 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [ ] [B275] (P1) Restore aggregate Go validation after the billing acceptance expansion.
+  Evidence:
+  The B274 `make go-test` run exhausted the Go package timeout after 601.301 seconds.
+  It reported `panic: test timed out after 10m0s` with `TestMCPDictatorWorkflow (2s)` as the active test.
+  The log contains no preceding assertion failure. The coverage script removed its temporary profile after the aborted run.
+  The stack dump also retains media maintenance workers from earlier tests after their database cleanup.
+  Requirements:
+  - Diagnose aggregate test duration and retained workers through the canonical validation target.
+  - Correct the owning test or runtime lifecycle without weakening assertions or the coverage threshold.
+  - Complete the Go test and executable coverage phases with a current aggregate profile.
+  Validation:
+  - Use `/tmp/llm-proxy-b274-go-test.log` as the initial failure evidence.
+  - Preserve B266 coverage requirements and the final F070 CI checkpoint.
+
+- [x] [B274] (P1) Attach hosted financial admission before media worker startup.
+  Evidence:
+  A normal-runtime restart rejects funded queued media while its accepted offering scope remains enabled.
+  A controlled storage delay exposes `state=failed`, `media_operation_unavailable`, and zero provider calls.
+  The media constructor starts workers before the router assigns hosted admission.
+  Requirements:
+  - Attach validated financial admission before workers resume accepted operations.
+  - Preserve rejection when hosted configuration or the accepted scope is removed.
+  - Preserve exact settlement, operation identity, and replay without duplicate provider work.
+  Validation:
+  - Run public HTTP restart acceptance, related media and runtime checks, race checks, lint, and formatting.
+  - Keep B266 and final stack CI requirements open.
+  Resolution:
+  The media constructor now attaches validated financial admission before worker startup and queued recovery.
+  The router no longer assigns this dependency after workers start.
+  Retained and removed-scope restart checks passed in 2.825 seconds. Their race run passed in 39.399 seconds.
+  Media and runtime regression passed in 71.957 seconds. Go lint and format checks passed.
+  B275 records the subsequent aggregate package timeout. B266 and final stack CI remain open.
+
 - [x] [B273] (P1) Reject explicit empty payment configuration.
   Evidence:
   The root command accepts `payments: {}` and reaches service startup without an error.
@@ -279,7 +312,10 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Two normal-runtime restart scenarios reject queued media after hosted configuration or the accepted offering scope is removed.
   - Rejected work causes no provider call or output. Reconciliation releases unused funds, and restored authorization cannot repeat the operation.
   - Both scenarios passed in 2.850 seconds. Their race run passed in 31.603 seconds. Go lint and format checks passed.
-  - The combined diagnostic has 437 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
+  - B274 fixes hosted admission assignment after media worker startup. Retained-scope recovery and removed-scope rejection pass through normal HTTP.
+  - The B274 component run exhausted the package timeout. B275 records the aggregate validation failure.
+  - The current focused diagnostic has 786 uncovered statements across 21145 statements after discarding old counts for both changed production files.
+  - Those files use only current focused profiles. The prior 437-statement diagnostic cannot establish coverage for the changed files.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

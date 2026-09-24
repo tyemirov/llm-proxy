@@ -389,6 +389,8 @@ That coordinator retains request identity, reserves Ledger funds, enforces attem
 The normal financial worker records charges and settles completed usage.
 The normal media service uses the same price and Ledger admission components before it queues an operation.
 The media worker checks the saved request controls and financial reservation before dispatch.
+The media constructor attaches hosted financial admission before it starts workers or resumes queued operations.
+Restart preserves the configured scope for accepted operations.
 The server keeps customer-owned assignments separate from this hosted path.
 
 The following shape selects the controlled text fixture. It does not qualify a published offering:

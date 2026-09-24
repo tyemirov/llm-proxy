@@ -462,6 +462,9 @@ func newMediaOperationService(configuration Configuration, managedTenants *manag
 		errorValue = store.database.Model(&mediaOperationPartialReferenceRecord{}).Where("tenant_id = ? AND asset_id = ?", tenantID, assetID).Count(&count).Error
 		return count != 0, errorValue
 	}
+	if configuration.hosted != nil {
+		service.hostedAdmission = configuration.hosted.mediaAdmission(providers)
+	}
 	if service.workerCount > 0 {
 		for workerIndex := 0; workerIndex < service.workerCount; workerIndex++ {
 			go service.runWorker(newMediaOperationIdentifier(), service.queue)

@@ -191,6 +191,14 @@ func TestHostedFundsImageGenerationAndEditing(t *testing.T) {
 
 func hostedImageFinancialSettings(t *testing.T, operation string) *hostedRuntimeSettings {
 	t.Helper()
+	settings, err := newHostedRuntimeSettings(&HostedConfiguration{Offerings: []HostedOfferingConfiguration{{Provider: "openai", Model: "gpt-image-2", Operation: operation, MaximumAttempts: 1, Conditions: CatalogPriceConditions{Quality: "low", Resolution: "1024x1024"}}}}, hostedImageFinancialCatalog(operation))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return settings
+}
+
+func hostedImageFinancialCatalog(operation string) ModelCatalog {
 	catalog := internalCanonicalProviderCatalog().ModelCatalog()
 	for index := range catalog.Offerings {
 		offering := &catalog.Offerings[index]
@@ -211,9 +219,5 @@ func hostedImageFinancialSettings(t *testing.T, operation string) *hostedRuntime
 			price.Rates = append(price.Rates, CatalogPriceRate{Component: component, Currency: "USD", Rate: CatalogDecimal(fmt.Sprint(200 << index)), Unit: "USD/1M_tokens", Conditions: CatalogPriceConditions{EffectiveFrom: "2026-09-01T00:00:00Z", Quality: "low", Resolution: "1024x1024"}})
 		}
 	}
-	settings, err := newHostedRuntimeSettings(&HostedConfiguration{Offerings: []HostedOfferingConfiguration{{Provider: "openai", Model: "gpt-image-2", Operation: operation, MaximumAttempts: 1, Conditions: CatalogPriceConditions{Quality: "low", Resolution: "1024x1024"}}}}, catalog)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return settings
+	return catalog
 }

@@ -1,12 +1,81 @@
 package proxy
 
 import (
+	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
 	"go.uber.org/zap"
 )
+
+func TestHostedMediaRecoveryAuthorizesBeforeWorkersStart(t *testing.T) {
+	fixture := newFundedMediaRecoveryFixture(t)
+	configuration, management := fixture.restartConfiguration(t, &HostedConfiguration{Offerings: []HostedOfferingConfiguration{{
+		Provider: "openai", Model: "gpt-image-2", Operation: ModelOperationImageGeneration, MaximumAttempts: 1,
+		Conditions: CatalogPriceConditions{Quality: "low", Resolution: "1024x1024"},
+	}}})
+	// Delay a later startup dependency until the queued worker finishes. This makes
+	// dispatch before initialization observable without relying on scheduler timing.
+	originalLstat := structuredRequestLstat
+	t.Cleanup(func() { structuredRequestLstat = originalLstat })
+	observed := false
+	structuredRequestLstat = func(path string) (os.FileInfo, error) {
+		if path == filepath.Join(configuration.AssetStorePath, structuredRequestDirectoryName) {
+			observed = true
+			deadline := time.After(5 * time.Second)
+			tick := time.NewTicker(10 * time.Millisecond)
+			defer tick.Stop()
+			for {
+				current := hostedMediaWorkerStatus(t, fixture.server, fixture.operationID)
+				if current["state"] != MediaOperationStateQueued && current["state"] != MediaOperationStateRunning {
+					break
+				}
+				select {
+				case <-deadline:
+					t.Fatalf("queued worker did not finish during delayed startup: %v", current)
+				case <-tick.C:
+				}
+			}
+		}
+		return originalLstat(path)
+	}
+	application, err := buildProxyApplication(configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
+		return management, nil
+	})
+	structuredRequestLstat = originalLstat
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !observed {
+		t.Fatal("startup did not reach the controlled storage dependency")
+	}
+	server := httptest.NewServer(application.router)
+	t.Cleanup(server.Close)
+	server.Client().Transport = hostedMCPBearerTransport{token: hostedIdentityFixtureKey}
+	current := hostedMediaWorkerStatus(t, server, fixture.operationID)
+	if current["state"] != MediaOperationStateSucceeded || fixture.calls.Load() != 1 || len(current["outputs"].([]any)) != 1 {
+		t.Fatalf("authorized queued media did not recover: state=%v calls=%d", current, fixture.calls.Load())
+	}
+	if err := fixture.database.reconcileHostedFunds(t.Context(), time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	assertHostedFundsBalance(t, fixture.database, 498, 498)
+	before := fixture.state(t)
+	for range 2 {
+		replay := hostedMediaAdmissionHTTP(t, server, mediaRecoveryKey, mediaRecoveryPrompt, http.StatusOK)
+		fixture.worker.runOperation("replayed-media-worker", fixture.operationID)
+		if err := fixture.database.reconcileHostedFunds(t.Context(), time.Now().UTC()); err != nil {
+			t.Fatal(err)
+		}
+		if replay["operation_id"] != fixture.operationID || fixture.calls.Load() != 1 || !reflect.DeepEqual(before, fixture.state(t)) {
+			t.Fatal("recovered media repeated provider work or financial effects")
+		}
+	}
+}
 
 func TestHostedMediaRecoveryRejectsRemovedRuntimeAuthorization(t *testing.T) {
 	for _, scenario := range []struct {
@@ -21,32 +90,9 @@ func TestHostedMediaRecoveryRejectsRemovedRuntimeAuthorization(t *testing.T) {
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			fixture := newFundedMediaRecoveryFixture(t)
-			database := openJournalTransactionInstance(t, fixture.database)
-			root := t.TempDir()
-			_, management, _ := newHostedIdentityHTTPHandler(t, database, fixture.upstreamURL, root)
-			var source struct{ File string }
-			if err := database.database.Raw("SELECT file FROM pragma_database_list WHERE name = 'main'").Scan(&source).Error; err != nil {
-				t.Fatal(err)
-			}
-			management.configuration.DatabasePath = source.File
-			catalog := internalCanonicalProviderCatalog()
-			for _, schema := range []*ProviderCatalogSchema{&catalog.schema, &catalog.runtimeSchema} {
-				for index := range schema.Providers {
-					if schema.Providers[index].ID != "openai" {
-						continue
-					}
-					for transport := range schema.Providers[index].Transports {
-						if schema.Providers[index].Transports[transport].Endpoint.Protocol == CatalogEndpointProtocolHTTP {
-							schema.Providers[index].Transports[transport].Endpoint.DefaultBaseURL = fixture.upstreamURL
-						}
-					}
-				}
-			}
-			configuration := withInternalUpstreamCapacity(t, Configuration{
-				Management: management.configuration, ProviderCatalog: catalog, AssetStorePath: root, Hosted: scenario.hosted,
-			})
+			configuration, management := fixture.restartConfiguration(t, scenario.hosted)
 			application, err := buildProxyApplication(configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
-				return management.store, nil
+				return management, nil
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -71,12 +117,42 @@ func TestHostedMediaRecoveryRejectsRemovedRuntimeAuthorization(t *testing.T) {
 				case <-tick.C:
 				}
 			}
-			if err := database.reconcileHostedFunds(t.Context(), time.Now().UTC()); err != nil {
+			if err := fixture.database.reconcileHostedFunds(t.Context(), time.Now().UTC()); err != nil {
 				t.Fatal(err)
 			}
-			assertHostedFundsBalance(t, database, 500, 500)
+			assertHostedFundsBalance(t, fixture.database, 500, 500)
 			// Restoring the original scope must preserve the terminal result and released funds.
 			fixture.recover(t, MediaOperationStateFailed)
 		})
 	}
+}
+
+func (fixture fundedMediaRecoveryFixture) restartConfiguration(t *testing.T, hosted *HostedConfiguration) (Configuration, *managedTenantStore) {
+	t.Helper()
+	database := openJournalTransactionInstance(t, fixture.database)
+	root := t.TempDir()
+	_, management, _ := newHostedIdentityHTTPHandler(t, database, fixture.upstreamURL, root)
+	var source struct{ File string }
+	if err := database.database.Raw("SELECT file FROM pragma_database_list WHERE name = 'main'").Scan(&source).Error; err != nil {
+		t.Fatal(err)
+	}
+	management.configuration.DatabasePath = source.File
+	catalog := internalCanonicalProviderCatalog()
+	catalog.modelCatalog = hostedImageFinancialCatalog(ModelOperationImageGeneration)
+	for _, schema := range []*ProviderCatalogSchema{&catalog.schema, &catalog.runtimeSchema} {
+		for index := range schema.Providers {
+			if schema.Providers[index].ID != "openai" {
+				continue
+			}
+			for transport := range schema.Providers[index].Transports {
+				if schema.Providers[index].Transports[transport].Endpoint.Protocol == CatalogEndpointProtocolHTTP {
+					schema.Providers[index].Transports[transport].Endpoint.DefaultBaseURL = fixture.upstreamURL
+				}
+			}
+		}
+	}
+	configuration := withInternalUpstreamCapacity(t, Configuration{
+		Management: management.configuration, ProviderCatalog: catalog, AssetStorePath: root, Hosted: hosted,
+	})
+	return configuration, management.store
 }

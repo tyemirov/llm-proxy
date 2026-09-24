@@ -2,19 +2,29 @@
 
 ## Authoritative Resume State: 2026-09-24
 
+B274 supersedes the initialization investigation below.
+The retained-scope regression reproduced failed queued work with `media_operation_unavailable` and zero provider calls.
+The media constructor now attaches validated hosted admission before worker startup.
+The router no longer assigns that dependency after workers start.
+The retained and removed-scope checks passed in 2.825 seconds. Their race run passed in 39.399 seconds.
+The related media and runtime regression passed in 71.957 seconds.
+Go lint and format checks passed. The full Go component run timed out after 601.301 seconds.
+B275 records this aggregate validation failure. No final aggregate profile was retained.
+Evidence files use `/tmp/llm-proxy-b274-` as their prefix.
+
 The user requested this handoff because the session has few tokens left. The active goal subsequently resumed.
 This section supersedes all checkout states, coverage totals, and next-step instructions below.
 The remaining sections retain historical evidence. Do not execute their obsolete instructions.
-The resumed increment adds media configuration recovery tests. It does not change production code.
+The resumed B274 increment changes media initialization and adds retained-scope recovery acceptance.
 
 ### Current Checkout And Scope
 
 - Repository: `/Users/tyemirov/Development/llm-proxy`.
 - Branch: `feature/F069-prepaid-payments`.
-- Local HEAD and verified PR head: `40082a4f26d83687864f5a0d6c8782355b3ba235`.
+- Verified parent of the B274 increment: `bc21175de4772af052f0df4971ec238031eead77`.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - PR 344 is open and ready for review. Its base is `feature/F068-prepaid-balances`.
-- The checkout was clean before the handoff task. The resumed increment includes that local handoff edit.
+- The checkout was clean before B274. The parent commit includes the requested handoff.
 - Verify the commit that contains this section before further work. The hash above identifies its parent.
 - No validation or publication process from the previous implementation remains active.
 
@@ -45,7 +55,7 @@ PoodleScanner supplies the direct Paddle pattern. Hecate uses RevenueCat for bro
 
 ### Latest Completed Work
 
-The current increment adds `internal/proxy/hosted_media_configuration_recovery_internal_test.go`.
+Commit `bc21175d` adds `internal/proxy/hosted_media_configuration_recovery_internal_test.go`.
 Two normal-runtime scenarios restart queued media with hosted configuration omitted or its accepted scope removed.
 Both reject dispatch, release the unused reservation through reconciliation, and preserve the terminal result after scope restoration.
 Restoration cannot repeat provider work or financial effects. The tests passed in 2.850 seconds and with race checks in 31.603 seconds.
@@ -69,10 +79,12 @@ Commit `a7dcb7f8` adds catalog boundary acceptance. B272 and B273 reject explici
 
 ### Validation Still Required
 
-B266 remains open. The current diagnostic has 437 uncovered statements across 21144 statements.
-Use `/tmp/llm-proxy-b266-media-configuration-diagnostic.coverprofile` or `/tmp/llm-proxy-b266-diagnostic.coverprofile`.
-The current merge script is `/tmp/llm-proxy-b266-merge-media-configuration.py`.
-This increment changes no production files. Duplicate executable blocks use the maximum count.
+B266 remains open. The current focused diagnostic has 786 uncovered statements across 21145 statements.
+Use `/tmp/llm-proxy-b274-diagnostic.coverprofile` or `/tmp/llm-proxy-b266-diagnostic.coverprofile`.
+The current merge script is `/tmp/llm-proxy-b274-merge.py`.
+It discards all prior counts for `media_operations.go` and `router.go`. Those files use only current focused profiles.
+The prior diagnostic had 437 uncovered statements. The new total reflects discarded coverage. Both changed files require broader current coverage.
+B275 must restore aggregate validation before the current aggregate coverage can be established.
 After another production edit, discard old counts for each changed file before combining profiles.
 
 This diagnostic does not establish aggregate CI success.
@@ -88,12 +100,15 @@ Run the complete controlled acceptance target and final `make ci` after the last
 The configuration-removal investigation found no production defect.
 Continue B266 through public financial boundaries. Keep the complete provider-operation acceptance requirements in scope.
 
-The source review also identified an initialization order that needs investigation.
-`newMediaOperationService` starts workers and resumes outstanding work before `buildProxyApplication` assigns `hostedAdmission`.
-The passing removed-scope tests do not prove correct restart when the accepted scope remains enabled.
-No retained-scope failure was reproduced in this increment.
-Use a normal-runtime restart test with controlled startup ordering to establish the behavior before changing production code.
-If a contract defect is reproduced, record a separate BugFix issue before the correction.
+B274 reproduced and corrected the retained-scope startup failure.
+The new regression delays a later storage operation until the media worker finishes.
+It verifies one successful execution, one output, exact funded balances, and unchanged financial records after repeated replay.
+
+After B274, investigate B275 before another aggregate validation attempt.
+The timeout listed `TestMCPDictatorWorkflow (2s)` as the active test.
+The stack dump also contains media maintenance workers from earlier tests after their database cleanup.
+Use `/tmp/llm-proxy-b274-go-test.log` for the complete failure evidence.
+Do not claim current aggregate coverage from the earlier B266 profile.
 
 Reuse `fundedMediaRecoveryFixture` in `internal/proxy/hosted_media_recovery_internal_test.go`.
 Its actual HTTP admission starts with 500 posted cents and 461 available cents after a 39-cent reservation.
