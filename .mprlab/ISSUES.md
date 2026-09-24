@@ -339,6 +339,12 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Both test passes and executable probes finished. The current aggregate profile has 438 uncovered statements across 21172 statements.
   - The command failed the unchanged gate with `coverage total 97.9%, want 100.0%`.
   - Use `/tmp/llm-proxy-b275-coverage.out` for current coverage. Earlier focused diagnostics are superseded.
+  - Added 14 funded media cancellation scenarios for failed storage before and after provider dispatch.
+  - Failed queued cancellation preserves the operation and funds. Recovery releases unused funds once without provider calls.
+  - Failed or unsupported cancellation after dispatch preserves the reservation. Uncertain provider results cannot trigger another submission after restart.
+  - The new checks passed in 11.929 seconds. Their race run passed in 166.327 seconds. Go lint and formatting passed.
+  - The combined diagnostic has 434 uncovered statements across 21172 statements. No production code changed in this increment.
+  - Use `/tmp/llm-proxy-b266-media-cancellation-diagnostic.coverprofile` for the updated diagnostic. It does not replace aggregate CI.
   - The required coverage gate, complete F070 acceptance, and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

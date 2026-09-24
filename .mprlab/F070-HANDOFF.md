@@ -5,15 +5,16 @@
 The user requested this handoff because the session has few tokens left.
 This section replaces all resume instructions in the historical sections below.
 F070 remains incomplete. This handoff does not complete or pause the goal.
-B275 implementation and acceptance passed. Verify publication, then resume B266 and the remaining F070 acceptance work.
+
+B275 is published. The latest increment adds B266 cancellation acceptance. Verify publication, then continue the remaining B266 and F070 work.
 Do not expand the product scope.
 
 ### Checkout And Publication
 
 - Repository: `/Users/tyemirov/Development/llm-proxy`.
 - Branch: `feature/F069-prepaid-payments`.
-- Parent of the B275 increment: `a9258ec3af859e39a147cd1342592f1025bddd3a` (B274).
-- The commit that contains this section records B275. Verify its remote publication before further edits.
+- Published B275 commit: `5bcd86d96050c51c94995a12fd4e5d373759b48b`.
+- The commit that contains this section adds B266 cancellation tests. Verify its remote publication before further edits.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
 - PR stack: 339 (F065), 340 (F066), 341 (F067), 342 (F068), 344 (F069).
@@ -23,6 +24,22 @@ Do not expand the product scope.
 
 This section describes the B275 increment. Application merge, release, and deployment remain outside its scope.
 The current production changes have focused validation. Aggregate validation remains incomplete.
+
+### Latest Cancellation Acceptance
+
+The latest increment adds `internal/proxy/hosted_media_cancellation_recovery_internal_test.go`.
+It has ten queued cancellation scenarios and four running cancellation scenarios through real HTTP endpoints.
+Storage failures preserve financial resources. Queued recovery releases unused funds once without provider work.
+Failed or unsupported cancellation after dispatch keeps funds reserved. Restart cannot repeat unresolved provider work.
+
+All 14 scenarios passed in 11.929 seconds. Their race run passed in 166.327 seconds.
+Go lint and formatting passed. No production code or public contract changed.
+The initial test used an incorrect response field. It now reads the canonical `cancellation_state` field.
+Logs use `/tmp/llm-proxy-b266-media-cancellation` as their prefix.
+The current combined diagnostic is `/tmp/llm-proxy-b266-media-cancellation-diagnostic.coverprofile`.
+It combines the B275 aggregate profile with the new focused profile over unchanged production source.
+It has 434 uncovered statements across 21172 statements. It does not establish aggregate CI success.
+No test process remains active.
 
 ### Completed Validation Process
 
@@ -110,26 +127,25 @@ The remaining timeout caused the two-pass runner change.
 
 ### Resume Procedure
 
-1. Inspect the checkout and the latest publication state.
-2. Complete required document checks and `git diff --check` for the B275 increment.
-3. Use the authorized delivery workflow for the intended B275 files and ready PR 344.
-4. Verify the remote commit and PR base before reporting publication.
-5. Remove the temporary B275 plan after validation and publication finish.
-6. Continue B266 from `/tmp/llm-proxy-b275-coverage.out` and its uncovered block list.
-7. Keep all remaining provider-operation acceptance requirements in scope.
-8. Run complete controlled acceptance and final `make ci` after the last stack correction.
+1. Inspect the checkout and verify the latest commit in ready PR 344.
+2. Continue B266 from `/tmp/llm-proxy-b266-media-cancellation-diagnostic.coverprofile`.
+3. Cover missing financial behavior through public entry points without invalid core states.
+4. Discard old coverage coordinates for each production file that changes.
+5. Keep all remaining provider-operation acceptance requirements in scope.
+6. Run complete controlled acceptance and final `make ci` after the last stack correction.
 
 Preserve `.mprlab/B266-PLAN.md` and `.mprlab/F070-PLAN.md` while their work remains open.
-Plans are untracked. Do not discard unrelated checkout changes.
-The current remote PR body snapshot is `/tmp/llm-proxy-f069-pr-body-current.md`.
-Prepare the PR description in `/tmp/llm-proxy-f069-pr-body.md` before its next update.
+The completed B275 plan is removed. Plans are untracked.
+Do not discard unrelated checkout changes.
+Prepare PR descriptions in `/tmp/llm-proxy-f069-pr-body.md` before each update.
 Use `gh pr edit 344 --body-file` with that file.
 Do not claim hosted CI success from local checks. PR 344 has no hosted checks at its latest inspection.
 
 ### B266 And Remaining F070 Scope
 
-The aggregate profile has 438 uncovered statements across 21172 statements.
-It supersedes the prior focused diagnostics. Do not combine stale source coordinates with new profiles.
+The B275 aggregate profile has 438 uncovered statements across 21172 statements.
+The latest cancellation diagnostic reduces that count to 434 without production changes.
+Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.
 Its evidence uses `/tmp/llm-proxy-f070-b266-coverage` as the prefix.
