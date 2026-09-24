@@ -1,21 +1,21 @@
 # F070 Handoff
 
-## Latest Media Authority Increment: 2026-09-24
+## Latest Exact Reservation Increment: 2026-09-24
 
 This section supersedes earlier coverage totals and next-step notes.
-B273 is published as `f09ee8d6` in ready PR 344. Catalog acceptance followed in `a7dcb7f8`, and financial schema acceptance in `c51ddf6d`.
-The subsequent increment adds `internal/proxy/hosted_media_renewal_recovery_internal_test.go`.
-Five funded media scenarios reject failed claim renewal and failed authorization after dispatch intent.
-They retain funds without partial output. Restart does not repeat the provider submission.
-The shared recovery fixture now accepts a controlled HTTP response handler and retains the observed submission count across restart.
-No production code changed. No API or event contract changed.
+B273 is published as `f09ee8d6` in ready PR 344. Subsequent test increments are `a7dcb7f8`, `c51ddf6d`, and `8b52f058`.
+The current increment changes `internal/proxy/catalog_rating.go` and `internal/proxy/catalog_money.go`.
+Reservation calculation retains its exact numeric charge. It no longer parses its own generated monetary representation.
+External monetary inputs retain their existing validation. A separate numeric rounding helper preserves its input amount and rejects integer-cent overflow.
+Three public characterization cases verify minimum charges, fractional cents, overflow, repeated calculations, and snapshot immutability.
+No public API or event contract changed.
 
-Before fixture changes, media recovery characterization passed in 22.252 seconds.
-Final media regression passed in 22.151 seconds. All five new race scenarios passed in 57.154 seconds.
-Go lint and format checks passed after the last test change.
-The diagnostic has 440 uncovered statements across 21145 statements.
-Use `/tmp/llm-proxy-b266-media-renewal-diagnostic.coverprofile` or `/tmp/llm-proxy-b266-diagnostic.coverprofile`.
-The merge script is `/tmp/llm-proxy-b266-merge-media-renewal.py`. Logs use `/tmp/llm-proxy-b266-media-renewal` as their prefix.
+Before production changes, rating and funds checks passed in 24.631 seconds. The three new characterization cases passed in 0.720 seconds.
+Final rating and funds regression passed in 21.556 seconds. Hosted rating regression passed in 25.954 seconds.
+All 48 selected race scenarios passed in 28.643 seconds. Go lint and format checks passed after the last production change.
+The diagnostic has 439 uncovered statements across 21144 statements. Both changed production files use only current counts.
+Use `/tmp/llm-proxy-b266-exact-reservation-diagnostic.coverprofile` or `/tmp/llm-proxy-b266-diagnostic.coverprofile`.
+The merge script is `/tmp/llm-proxy-b266-merge-exact-reservation.py`. Logs use `/tmp/llm-proxy-b266-exact-reservation` as their prefix.
 
 The hosted billing runbook records a fresh source review of the remaining provider measurement contracts.
 Responses image-tool usage, ElevenLabs alignment billed duration, and Dictator processed input duration remain unresolved.

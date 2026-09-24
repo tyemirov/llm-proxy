@@ -93,6 +93,11 @@ type catalogSelectedRate struct {
 	unit    catalogRatingUnit
 }
 
+type catalogRatingCalculation struct {
+	usage          CatalogRatedUsage
+	customerCharge *big.Rat
+}
+
 // CatalogRatingSnapshot owns immutable copies of the selected catalog rates.
 // Durable storage binds this value to an accepted request before dispatch.
 type CatalogRatingSnapshot struct {
@@ -215,7 +220,8 @@ func (snapshot *CatalogRatingSnapshot) Rate(input []CatalogUsageQuantity) (Catal
 		result.State = CatalogRatingUnresolved
 		return result, nil
 	}
-	return snapshot.rateSelectedMeasurements(measured, selected)
+	calculation, err := snapshot.rateSelectedMeasurements(measured, selected)
+	return calculation.usage, err
 }
 
 func ratingMeasurements(input []CatalogUsageQuantity) (map[string]journalQuantity, error) {
@@ -323,7 +329,7 @@ func selectMeasuredCatalogRate(component catalogSnapshotComponent, measured map[
 	return CatalogPriceRate{}, false
 }
 
-func (snapshot *CatalogRatingSnapshot) rateSelectedMeasurements(measured map[string]journalQuantity, selected []catalogSelectedRate) (CatalogRatedUsage, error) {
+func (snapshot *CatalogRatingSnapshot) rateSelectedMeasurements(measured map[string]journalQuantity, selected []catalogSelectedRate) (catalogRatingCalculation, error) {
 	result := CatalogRatedUsage{State: CatalogRatingResolved, Lines: []CatalogRatedLine{}, UnresolvedDimensions: []string{}}
 	priced := make(map[string]bool, len(selected))
 	for _, entry := range selected {
@@ -346,7 +352,7 @@ func (snapshot *CatalogRatingSnapshot) rateSelectedMeasurements(measured map[str
 			}
 		}
 		if amount.Sign() < 0 {
-			return CatalogRatedUsage{}, fmt.Errorf("%w: inclusive children exceed dimension=%s", ErrCatalogRatingInvalid, quantity.Dimension)
+			return catalogRatingCalculation{}, fmt.Errorf("%w: inclusive children exceed dimension=%s", ErrCatalogRatingInvalid, quantity.Dimension)
 		}
 		rate := ratingRational(string(entry.rate.Rate))
 		cost := new(big.Rat).Mul(amount, rate)
@@ -367,9 +373,10 @@ func (snapshot *CatalogRatingSnapshot) rateSelectedMeasurements(measured map[str
 		}
 	}
 	result.ProviderCost = ratingMoney(providerTotal)
-	result.CustomerCharge = ratingMoney(snapshot.customerAmount(providerTotal))
+	customerCharge := snapshot.customerAmount(providerTotal)
+	result.CustomerCharge = ratingMoney(customerCharge)
 	result.MinimumAdjustment = ratingMoney(minimumAdjustment)
-	return result, nil
+	return catalogRatingCalculation{usage: result, customerCharge: customerCharge}, nil
 }
 
 func ratingRational(value string) *big.Rat { amount, _ := new(big.Rat).SetString(value); return amount }
@@ -437,21 +444,16 @@ func (snapshot *CatalogRatingSnapshot) MaximumCharge(bounds []CatalogUsageBound,
 		}
 		selected = append(selected, catalogSelectedRate{binding: component.binding, rate: rate, unit: component.unit})
 	}
-	rated, err := snapshot.rateSelectedMeasurements(measured, selected)
+	calculation, err := snapshot.rateSelectedMeasurements(measured, selected)
 	if err != nil {
 		return CatalogAuthorizedMaximum{}, err
 	}
-	maximum, err := parseExactMoney(rated.CustomerCharge)
+	maximum := new(big.Rat).Mul(calculation.customerCharge, new(big.Rat).SetInt64(int64(attempts)))
+	reserved, err := reserveUSDCents(maximum)
 	if err != nil {
 		return CatalogAuthorizedMaximum{}, err
 	}
-	maximum.Mul(maximum, new(big.Rat).SetInt64(int64(attempts)))
-	exact := ratingMoney(maximum)
-	reserved, err := ReserveUSDCents(exact)
-	if err != nil {
-		return CatalogAuthorizedMaximum{}, err
-	}
-	return CatalogAuthorizedMaximum{Attempts: attempts, CustomerCharge: exact, ReservedCents: reserved}, nil
+	return CatalogAuthorizedMaximum{Attempts: attempts, CustomerCharge: ratingMoney(maximum), ReservedCents: reserved}, nil
 }
 
 func maximumCatalogRate(component catalogSnapshotComponent, measured map[string]journalQuantity) (CatalogPriceRate, error) {

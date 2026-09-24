@@ -90,9 +90,15 @@ func ReserveUSDCents(maximum ExactMoney) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	amount.Mul(amount, new(big.Rat).SetInt64(usdCentsPerDollar))
+	return reserveUSDCents(amount)
+}
+
+// The numeric amount is already validated or calculated from validated rates.
+// Keep its USD value unchanged while rounding a separate value to ledger cents.
+func reserveUSDCents(amount *big.Rat) (int64, error) {
+	scaled := new(big.Rat).Mul(amount, new(big.Rat).SetInt64(usdCentsPerDollar))
 	cents, remainder := new(big.Int), new(big.Int)
-	cents.QuoRem(amount.Num(), amount.Denom(), remainder)
+	cents.QuoRem(scaled.Num(), scaled.Denom(), remainder)
 	if remainder.Sign() != 0 {
 		cents.Add(cents, big.NewInt(1))
 	}

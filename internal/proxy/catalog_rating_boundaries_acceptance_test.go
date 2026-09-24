@@ -181,3 +181,54 @@ func TestCatalogRatingRejectsInvalidPriceConditionsAtImport(t *testing.T) {
 		})
 	}
 }
+
+func TestCatalogRatingReservationPreservesExactAmountAcrossRepeatedCalculations(t *testing.T) {
+	for _, scenario := range []struct {
+		name, rate, quantity string
+		minimum              *proxy.CatalogMinimumCharge
+		want                 proxy.ExactMoney
+		cents                int64
+		wantError            error
+	}{
+		{"minimum-per-attempt", "1", "1", &proxy.CatalogMinimumCharge{Currency: "USD", Amount: "2", Unit: "USD/request"}, proxy.ExactMoney{Numerator: "39", Denominator: "5"}, 780, nil},
+		{"fractional-cent", "0.000000000000000001", "1", nil, proxy.ExactMoney{Numerator: "39", Denominator: "10000000000000000000"}, 1, nil},
+		{"ledger-overflow", "1", "9223372036854775807", nil, proxy.ExactMoney{}, 0, proxy.ErrCatalogRatingUnavailable},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			rate, err := proxy.NewCatalogDecimal(scenario.rate)
+			if err != nil {
+				t.Fatal(err)
+			}
+			catalog, provider, model, operation := ratingCatalog(t, []proxy.CatalogPriceRate{{Component: "service_calls", Currency: "USD", Rate: rate, Unit: "USD/call"}}, scenario.minimum)
+			service, err := proxy.NewCatalogService(catalog)
+			if err != nil {
+				t.Fatal(err)
+			}
+			snapshot, err := service.NewRatingSnapshot(provider, model, operation, ratingTestAcceptanceTime(), []proxy.CatalogRateBinding{{Component: "service_calls", Dimension: "calls"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			quantities := []proxy.CatalogUsageQuantity{{Dimension: "calls", Unit: "call", Value: scenario.quantity}}
+			before, err := snapshot.Rate(quantities)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for range 2 {
+				maximum, err := snapshot.MaximumCharge([]proxy.CatalogUsageBound{{Dimension: "calls", Unit: "call", Maximum: scenario.quantity}}, 3)
+				if !errors.Is(err, scenario.wantError) || maximum.CustomerCharge != scenario.want || maximum.ReservedCents != scenario.cents {
+					t.Fatalf("reservation changed exact units: maximum=%+v error=%v", maximum, err)
+				}
+				if scenario.wantError == nil {
+					reserved, err := proxy.ReserveUSDCents(maximum.CustomerCharge)
+					if err != nil || reserved != scenario.cents || maximum.Attempts != 3 {
+						t.Fatalf("reservation differs from its reported exact charge: cents=%d maximum=%+v error=%v", reserved, maximum, err)
+					}
+				}
+				after, err := snapshot.Rate(quantities)
+				if err != nil || !reflect.DeepEqual(before, after) {
+					t.Fatalf("reservation mutated the accepted rating: before=%+v after=%+v error=%v", before, after, err)
+				}
+			}
+		})
+	}
+}
