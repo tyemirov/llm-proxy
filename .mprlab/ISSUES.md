@@ -62,10 +62,12 @@ retain satisfied historical dependencies.
   - Added 20 adjustment scenarios for refund-hold refresh, failed reads, corrupt records, processor outages, and retry checkpoint failures.
   - Refund-hold refresh reserves the pending refund before later usage. Failed refresh leaves no admitted request or provider call.
   - Unapplied adjustments preserve balances, holds, receipts, and Ledger history. Restart and repeated evidence have one refund effect.
-  - The adjustment regression passed in 45.183 seconds. Go lint and format checks pass.
-  - The new adjustment race suite passed in 151.880 seconds.
+  - Added 17 checkout scenarios for failed reads and writes, processor outages, and customer creation recovery.
+  - Checkout restart creates one transaction. Repeated payment events credit USD 5 once without additional Ledger entries.
+  - The checkout regression passed in 22.662 seconds. Go lint and format checks pass.
+  - The new checkout race suite passed in 103.986 seconds.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 706 uncovered statements. Unchanged source blocks retain prior counts across the B267 decoder edit.
+  - The combined diagnostic has 689 uncovered statements. Unchanged source blocks retain prior counts across the B267 decoder edit.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
