@@ -1,18 +1,19 @@
 # F070 Handoff
 
-## Latest Price Validation Increment: 2026-09-24
+## Latest Financial Storage Increment: 2026-09-24
 
 This section supersedes earlier coverage totals and next-step notes.
-B273 is published as `f09ee8d6` in ready PR 344.
-The subsequent increment adds public catalog acceptance in `internal/proxy/catalog_rating_boundaries_acceptance_test.go`.
-It covers invalid quantities, incomplete selections, tier gaps, imported conditions, and caller mutation of minimum charges.
+B273 is published as `f09ee8d6` in ready PR 344. Catalog acceptance followed in `a7dcb7f8`.
+The subsequent increment adds `internal/proxy/hosted_funds_schema_recovery_internal_test.go`.
+Ten public startup scenarios reject incomplete funds storage, incorrect Ledger indexes, and unavailable column or index metadata.
+They preserve retained schemas and financial resources. Restoration permits two normal starts without repeated financial effects.
 No production code changed. No API or event contract changed.
 
-Catalog regression passed in 1.624 seconds. All 43 selected race scenarios passed in 17.570 seconds.
+All ten startup scenarios passed in 4.752 seconds. Their race run passed in 68.107 seconds.
 Go lint and format checks passed after the last test change.
-The diagnostic has 447 uncovered statements across 21145 statements.
-Use `/tmp/llm-proxy-b266-price-boundaries-diagnostic.coverprofile` or `/tmp/llm-proxy-b266-diagnostic.coverprofile`.
-The merge script is `/tmp/llm-proxy-b266-merge-price-boundaries.py`. Logs use `/tmp/llm-proxy-b266-price-boundaries` as their prefix.
+The diagnostic has 443 uncovered statements across 21145 statements.
+Use `/tmp/llm-proxy-b266-financial-schema-diagnostic.coverprofile` or `/tmp/llm-proxy-b266-diagnostic.coverprofile`.
+The merge script is `/tmp/llm-proxy-b266-merge-financial-schema.py`. Logs use `/tmp/llm-proxy-b266-financial-schema` as their prefix.
 
 The hosted billing runbook records a fresh source review of the remaining provider measurement contracts.
 Responses image-tool usage, ElevenLabs alignment billed duration, and Dictator processed input duration remain unresolved.
