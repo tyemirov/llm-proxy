@@ -810,6 +810,21 @@ Unresolved outcomes keep the reservation and the known provider cost.
 Unfunded requests cause no provider work. Replay does not submit, retrieve, or download the same result again.
 Worker replacement and grant revocation preserve one submission and one settlement through the accepted queue receipt.
 
+### Remaining Provider Measurement Contracts
+
+On 2026-09-24, a contract review confirmed the following unresolved measurement dependencies.
+
+- The [Responses image-call schema](https://developers.openai.com/api/reference/resources/responses/methods/create) has no image-tool usage field.
+  The [image guide](https://developers.openai.com/api/docs/guides/image-generation) states that Responses requests incur mainline model costs and image generation costs.
+  Complete hosted admission requires one bound for both components and qualified usage for settlement.
+- The [ElevenLabs alignment response](https://elevenlabs.io/docs/api-reference/forced-alignment/create) supplies alignment timestamps and loss values, without a billed-duration field.
+  These timestamps do not establish processed audio duration. The service needs a qualified duration measurement and an applicable supplier rate.
+- The installed Dictator SDK is v1.11.0. Its input-operation responses do not report processed input duration.
+  Complete duration billing requires evidence from the provider contract before settlement.
+
+These dependencies remain in F070 scope. Controlled results do not establish the missing measurements.
+The review does not authorize production activation or paid provider calls.
+
 ### Hosted Dictation
 
 Hosted dictation reuses the completion admission, pinned credentials, response store, and recovery code used by hosted text.

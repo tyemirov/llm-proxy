@@ -1,5 +1,28 @@
 # F070 Handoff
 
+## Latest Price Validation Increment: 2026-09-24
+
+This section supersedes earlier coverage totals and next-step notes.
+B273 is published as `f09ee8d6` in ready PR 344.
+The subsequent increment adds public catalog acceptance in `internal/proxy/catalog_rating_boundaries_acceptance_test.go`.
+It covers invalid quantities, incomplete selections, tier gaps, imported conditions, and caller mutation of minimum charges.
+No production code changed. No API or event contract changed.
+
+Catalog regression passed in 1.624 seconds. All 43 selected race scenarios passed in 17.570 seconds.
+Go lint and format checks passed after the last test change.
+The diagnostic has 447 uncovered statements across 21145 statements.
+Use `/tmp/llm-proxy-b266-price-boundaries-diagnostic.coverprofile` or `/tmp/llm-proxy-b266-diagnostic.coverprofile`.
+The merge script is `/tmp/llm-proxy-b266-merge-price-boundaries.py`. Logs use `/tmp/llm-proxy-b266-price-boundaries` as their prefix.
+
+The hosted billing runbook records a fresh source review of the remaining provider measurement contracts.
+Responses image-tool usage, ElevenLabs alignment billed duration, and Dictator processed input duration remain unresolved.
+The current upstream contracts do not establish those measurements. Do not derive billable duration from word timestamps.
+All provider operations remain in F070 scope. Production activation remains disabled.
+
+Continue B266 with public financial boundaries and the unchanged coverage gate.
+The five component PRs remain incomplete pending full acceptance. Final stack CI remains open.
+This increment belongs to the commit that contains this section. Verify remote publication before the next edit.
+
 ## Latest Handoff: 2026-09-24
 
 Read this section first. It supersedes all earlier checkout states and next steps below.

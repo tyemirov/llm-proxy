@@ -260,7 +260,11 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Runtime HTTP checks passed in 36.644 seconds. Final CLI configuration checks passed in 7.389 seconds.
   - All 82 selected CLI race scenarios passed before the final lookup refactor. Final CLI, lint, and format checks passed afterward.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 464 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
+  - Public catalog checks reject fractional tokens, excessive quantities, incompatible units, incomplete selections, and invalid imported conditions.
+  - Missing supplier prices and tier gaps remain unavailable. Rejected inputs and caller mutations cannot change accepted prices.
+  - Catalog regression passed in 1.624 seconds. All 43 selected catalog race scenarios passed in 17.570 seconds.
+  - Go lint and format checks passed after the final test change. No production code changed in this increment.
+  - The combined diagnostic has 447 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
@@ -3502,6 +3506,8 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Read-only sandbox requests succeeded with the existing PoodleScanner local API key. No active LLM Proxy product or price exists there.
   - F087 owns sandbox product, price, webhook, account identity, and actual qualification work without blocking development completion.
   - Complete provider-operation qualification and final CI remain open. F069 has ready PR 344.
+  - A 2026-09-24 source review confirmed missing image-tool usage, alignment billed duration, and Dictator processed input duration.
+  - The current dependency evidence is in the hosted billing runbook. These provider measurements remain in F070 scope.
   - The remaining commercial decisions and F065 through F069 implementation remain open.
   - The corrected stack CI run passed all Go tests, Python checks, and upstream race checks.
   - B266 records the remaining gate failure: `coverage total 95.3%, want 100.0%`.
