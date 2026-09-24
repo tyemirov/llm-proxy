@@ -46,6 +46,26 @@ retain satisfied historical dependencies.
   Management tests passed in 16.798 seconds. Funds tests passed in 67.332 seconds.
   Funds-resolution race tests passed in 247.812 seconds. Go lint and format checks pass.
 
+- [x] [B268] (P1) Classify corrupt retained prices as service failures.
+  Evidence:
+  A valid price-snapshot GET returns HTTP 400 with `usage_journal_invalid` when the stored usage bound is not numeric.
+  The integration test reports `status=400 expected=500`.
+  Goal:
+  Keep stored price corruption separate from malformed customer requests.
+  Requirements:
+  - Use the existing internal-service error response for retained price validation failures.
+  - Preserve the original error cause without exposing private details.
+  - Preserve pending usage delivery and customer funds until the original price is restored.
+  Validation:
+  - Verify the public price resource and startup settlement with corrupt retained prices.
+  - Verify recovery settles once with the original accepted prices.
+  Resolution:
+  Retained price validation failures now return HTTP 500 with `usage_journal_unavailable`.
+  The wrapped error preserves its cause. The public response excludes private validation details.
+  The 32 scenarios verify price reads, unchanged funds after failure, and one settlement after restoration.
+  Rating tests passed in 25.214 seconds. Management tests passed in 17.905 seconds.
+  Price integrity race tests passed in 199.411 seconds. Go lint and format checks pass.
+
 - [ ] [B266] (P1) Restore the required coverage gate for the hosted billing stack.
   Evidence:
   The corrected stack CI run passed all Go tests but reported `coverage total 95.3%, want 100.0%`.
@@ -70,10 +90,14 @@ retain satisfied historical dependencies.
   - Failed media completion leaves outputs unpublished. Recovery preserves operation identity and prevents repeated provider work.
   - Added 28 credit scenarios for failed reads and writes, corrupt retained amounts, and invalid commands.
   - Failed credits preserve balances, remainders, tenant usage, and settlement records. Recovery applies one credit through the same HTTP resource.
-  - The full funds regression passed in 92.956 seconds. Go lint and format checks pass.
-  - The new credit recovery race suite passed in 235.323 seconds.
+  - Added 32 retained-price scenarios for corrupt data, invalid bounds, and prices that do not match the accepted request.
+  - Invalid prices preserve pending delivery and customer funds. Restoration settles once without another provider call.
+  - B268 fixes the stored-price error response found by these checks.
+  - The new price integrity race suite passed in 199.411 seconds.
+  - The rating regression passed in 25.214 seconds. The management regression passed in 17.905 seconds.
+  - Go lint and format checks pass.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 633 uncovered statements. Unchanged source blocks retain prior counts across the B267 decoder edit.
+  - The combined diagnostic has 614 uncovered statements. Unchanged source blocks retain prior counts across the B267 decoder edit.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

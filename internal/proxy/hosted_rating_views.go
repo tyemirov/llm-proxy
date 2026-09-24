@@ -177,7 +177,7 @@ func (service *managementService) getPriceSnapshotHandler() gin.HandlerFunc {
 		}
 		_, document, err := restoreHostedPriceSnapshot(record)
 		if err != nil {
-			writeUsageJournalError(ctx, err)
+			writeUsageJournalError(ctx, fmt.Errorf("%w: restore accepted price %s: %w", errUsageJournalUnavailable, record.ID, err))
 			return
 		}
 		ctx.JSON(http.StatusOK, managementPriceSnapshotResponse{ID: record.ID, RequestID: record.RequestID, Snapshot: document, CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339Nano)})

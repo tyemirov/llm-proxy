@@ -156,6 +156,7 @@ A missing limit, an account-dependent limit, or an incompatible unit prevents ad
 The media API returns HTTP 422 with `media_operation_unavailable` in these cases.
 Billing limits do not replace the capability limits that validate request controls.
 The retained snapshot contains all selected bounds and the authorized attempt count.
+Invalid retained prices return HTTP 500 with `usage_journal_unavailable` and prevent settlement until the original data is restored.
 These tests use fixture prices and limits. They do not qualify production prices or provider limit enforcement.
 Publish only verified provider ceilings or enforced request ceilings as billing limits.
 A desired spending budget does not establish a usage ceiling.
