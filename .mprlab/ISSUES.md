@@ -27,6 +27,31 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B271] (P1) Reject incomplete retained completion results.
+  Evidence:
+  An identical funded POST returns HTTP 200 with empty text when its retained result contains JSON `null`.
+  Recovery also records a publication receipt for that invalid result.
+  The status GET returns HTTP 200 with JSON `null` or null text from the same file.
+  Goal:
+  Reject invalid completion data before result replay, status reads, or publication recovery.
+  Requirements:
+  - Require a JSON object with a non-null text string at the stored-result boundary.
+  - Preserve valid empty text and optional tool calls and usage.
+  - Return the existing service error for invalid stored results.
+  - Preserve funds and pending evidence without another provider call.
+  Validation:
+  - Exercise result corruption through HTTP before and after publication.
+  - Restore the original result and verify replay and one financial settlement after repeated restart.
+  - Run focused result, text, funds, management, race, lint, and format checks.
+  Resolution:
+  The shared decoder requires a text string before recovery, replay, and status publication.
+  Invalid files return the existing errors without a successful result or a new publication receipt.
+  Seventeen HTTP scenarios verify storage failures, corrupt results, financial preservation, and repeated restart.
+  Valid tool-only results retain empty text, tool calls, usage, and one provider call.
+  Text, funds, rating, and financial regression checks passed in 176.130 seconds.
+  All 17 focused race scenarios passed in 157.728 seconds. Management tests passed in 17.515 seconds.
+  Go lint and format checks passed. B266 retains the open aggregate coverage and final CI requirements.
+
 - [x] [B270] (P1) Reject corrupt retained financial credit receipts.
   Evidence:
   Authenticated credit reads return HTTP 200 with invalid, negative, or zero credit amounts and invalid denominators.
@@ -159,11 +184,13 @@ retain satisfied historical dependencies.
   - Balance reads now retain numeric cents and validated fractions until output. Financial signals no longer parse validated API strings again.
   - Database validation and public response fields remain unchanged. The refactor removes two unreachable parsing errors.
   - Characterization verifies two maximum int64 account balances and their exact aggregate through HTTP and public signal reads.
-  - Funds, rating, financial-read, and signal tests passed in 148.109 seconds. Payment-adjustment tests passed in 33.898 seconds.
-  - Signal and CLI tests passed in 3.718 and 2.595 seconds. Management tests passed in 19.193 seconds.
-  - The focused race suite passed all 103 scenarios in 74.054 seconds. Go lint and format checks pass.
+  - Added 17 result-publication scenarios for storage failures, corrupt completion data, and valid tool-only results.
+  - B271 rejects incomplete saved completions before recovery, replay, and status output.
+  - Failed recovery preserves held funds and pending evidence. Restoration permits one settlement without another provider call.
+  - Text, funds, rating, and financial checks passed in 176.130 seconds. Management tests passed in 17.515 seconds.
+  - All 17 focused race scenarios passed in 157.728 seconds. Go lint and format checks passed.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 522 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
+  - The combined diagnostic has 511 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

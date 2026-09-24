@@ -35,6 +35,12 @@ func (service *hostedTextRequests) writeStatus(ctx *gin.Context, tenant tenant, 
 		} else if err != nil || record.ProxyRequestID != request.ExecutionID || record.IntentSHA256 != request.IntentDigest {
 			writeStructuredRequestError(ctx, http.StatusInternalServerError, llmproxycontract.ErrorCodeStructuredRequestStore, "", "", request.ExecutionID)
 		} else {
+			if record.State == structuredRequestStateSucceeded {
+				if _, err := decodeHostedStoredCompletion(record.Result); err != nil {
+					writeStructuredRequestError(ctx, http.StatusInternalServerError, llmproxycontract.ErrorCodeStructuredRequestStore, "", "", request.ExecutionID)
+					return true
+				}
+			}
 			writeStructuredRequestRecord(ctx, record, service.now().UTC())
 		}
 	case journalRequestUncertain:

@@ -877,6 +877,9 @@ The response file and its database publication receipt remain separate durable e
 After an interruption, recovery can repair a missing receipt from the saved result.
 When no result exists, recovery records an uncertain result and preserves the known usage.
 Response expiry cannot remove a saved result before its publication receipt exists.
+Recovery, replay, and status reads require a JSON object with a non-null text string in the saved completion.
+Invalid completion data cannot repair a publication receipt or produce a successful response.
+Failed recovery preserves pending financial evidence and held funds without another provider call.
 
 Startup recovery checks expired completed requests that lack a publication receipt.
 An identical POST also checks an expired completed request after a result write failure.

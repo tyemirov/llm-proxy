@@ -83,6 +83,21 @@ type hostedStoredCompletion struct {
 	Usage     *tokenUsage    `json:"usage,omitempty"`
 }
 
+func decodeHostedStoredCompletion(encoded []byte) (hostedStoredCompletion, error) {
+	var input struct {
+		Text      *string        `json:"text"`
+		ToolCalls []functionCall `json:"tool_calls,omitempty"`
+		Usage     *tokenUsage    `json:"usage,omitempty"`
+	}
+	if err := decodeStrictJSON(encoded, &input); err != nil {
+		return hostedStoredCompletion{}, err
+	}
+	if input.Text == nil {
+		return hostedStoredCompletion{}, errors.New("stored completion requires a text string")
+	}
+	return hostedStoredCompletion{Text: *input.Text, ToolCalls: input.ToolCalls, Usage: input.Usage}, nil
+}
+
 func (service *hostedTextRequests) execute(ctx context.Context, router *providerRouter, request chatRequestParameters, identity hostedTextIdentity, logger *zap.SugaredLogger) (completionResult, error) {
 	canonical, err := hostedTextIntent(request)
 	if err != nil {
@@ -214,8 +229,8 @@ func (service *hostedTextRequests) replay(accepted managedJournalRequestRecord, 
 	if record.State != structuredRequestStateSucceeded {
 		return completionResult{}, &hostedRequestReplay{record: record}
 	}
-	var stored hostedStoredCompletion
-	if err := decodeStrictJSON(record.Result, &stored); err != nil {
+	stored, err := decodeHostedStoredCompletion(record.Result)
+	if err != nil {
 		return completionResult{}, fmt.Errorf("decode result for request %s: %w", accepted.ID, err)
 	}
 	content := restore(stored.Text)
