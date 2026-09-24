@@ -197,10 +197,12 @@ retain satisfied historical dependencies.
   - Restoration and completion replay retain one USD 5 credit, one receipt, and unchanged Ledger history.
   - Payment worker assembly now consumes the validated database, catalog, and shared client without duplicate dependency checks.
   - The refactor removes two duplicate checks and their unreachable caller error paths. External configuration and database errors remain unchanged.
-  - The payment regression passed in 102.942 seconds. Management tests passed in 17.069 seconds with current coverage instrumentation.
-  - All 13 targeted race scenarios passed in 26.412 seconds. Go lint and format checks passed.
+  - Added 10 funding-order scenarios for failed admission, replay reads, authorization, invalid queries, and restart recovery.
+  - Failed admission preserves existing orders, delivery records, receipts, and funds. Recovery retains one order and delivery for the request.
+  - The payment regression passed in 105.422 seconds. Management tests passed in 17.947 seconds.
+  - All 10 targeted race scenarios passed in 43.520 seconds. Go lint and format checks passed.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 484 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
+  - The combined diagnostic has 476 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
