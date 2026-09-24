@@ -427,6 +427,15 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Assignment regression passed in 4.031 seconds and race checks in 41.997 seconds. Go lint and formatting passed.
   - No production code or public contract changed.
   - The diagnostic has 373 uncovered statements across 21172 statements. Use `/tmp/llm-proxy-b266-assignment-diagnostic.coverprofile`.
+  - Added four signed webhook scenarios for older and conflicting transaction and adjustment revisions.
+  - Conflicts preserve the refund hold and retained evidence. Valid evidence after restart applies one refund without repeated financial effects.
+  - Transaction revision checks remain at the processor observation boundary. The duplicate timestamp check in adjustment comparison is removed.
+  - Separate adjustment identity and revision checks remain. Hold refresh reuses its saved evidence without a processor read.
+  - Characterization passed before the refactor in 2.294 seconds. Full payment regression passed in 121.207 seconds.
+  - Race checks passed in 29.844 seconds. Admission and balance checks passed in 5.056 and 0.961 seconds.
+  - Go lint and formatting passed. No public API or event contract changed.
+  - The diagnostic has 372 uncovered statements across 21170 statements. The changed production file uses only current coverage counts.
+  - Use `/tmp/llm-proxy-b266-payment-revisions-diagnostic.coverprofile`. Complete aggregate CI and F070 acceptance remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
   - Preserve the required coverage threshold and the current provider scope.

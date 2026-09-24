@@ -1264,6 +1264,9 @@ Funding credits and adjustments use the same observation check within their fina
 An older processor snapshot cannot replace a newer retained observation.
 Different evidence at the same processor timestamp requires reconciliation.
 The processor snapshot must not precede the signed event that requires its verification.
+The observation boundary owns transaction revision checks before any refund effect.
+The adjustment boundary separately rejects missing records, older adjustment revisions, and conflicting data at the same adjustment timestamp.
+Refund hold refresh uses the saved evidence without another processor read.
 
 Controlled HTTP tests cover cancellation, retryable failure, reordered events, concurrent workers, and failed writes.
 The backup fixture restores observations with payment receipts and Ledger effects.

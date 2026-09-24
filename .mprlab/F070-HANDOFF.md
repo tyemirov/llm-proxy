@@ -6,8 +6,8 @@ The user requested this handoff because the session has few tokens left.
 Use this section and the resume procedure below as the current instructions.
 F070 remains incomplete. This handoff does not complete or pause the goal.
 
-B266 search limit storage acceptance is published. Publication was verified on September 24, 2026.
-The current increment verifies atomic hosted assignments and explicit choices across providers.
+B266 assignment storage acceptance is published. Publication was verified on September 24, 2026.
+The current increment gives payment transaction revision checks one owner.
 Do not expand the product scope.
 
 ### Checkout And Publication
@@ -24,7 +24,8 @@ Do not expand the product scope.
 - Published deferred payment commit: `a9a6f35b10316e92dd56495680a6dd5761f2b53a`.
 - Published tenant budget commit: `28ab5183a35e9ae4d7e45b97a8acf48211e49215`.
 - Published search limit commit: `dadcfa99e766f4c10507726ea0b473f756e2afd0`.
-- Local HEAD and the PR head matched that commit before the assignment increment.
+- Published assignment commit: `c3ca9bf649bb0bcd35b2a1b9001300fe112dcaf0`.
+- Local HEAD and the PR head matched that commit before the payment revision increment.
 - Verify the commit that contains this section in PR 344 before further edits.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
@@ -36,7 +37,31 @@ Do not expand the product scope.
 Application merge, release, and deployment remain outside the current authorization.
 The current production changes have focused validation. Aggregate validation remains incomplete.
 
-### Latest Hosted Assignment Storage Acceptance
+### Latest Payment Evidence Revision Ownership
+
+The increment adds `internal/proxy/hosted_payments_revision_recovery_internal_test.go`.
+Four scenarios cover older and conflicting revisions for transactions and adjustments through signed webhook HTTP.
+Each conflict preserves the USD 2 refund hold, original receipt, balance, and financial history.
+Rejected evidence creates no partial processor observation or adjustment revision.
+Valid evidence after restart applies the USD 2 refund once. Replay preserves earlier evidence and cannot repeat the debit.
+
+Characterization passed before the refactor in 2.294 seconds.
+`retainPaymentStateObservation` owns transaction timestamp and digest checks before financial effects in the same transaction.
+The adjustment comparison now accepts only adjustment records and retains their identity, timestamp, and content checks.
+Its duplicate transaction timestamp check is removed. Hold refresh reuses the saved evidence without a processor read.
+The billing runbook records this ownership. No public API or event contract changed.
+
+Full payment regression passed in 121.207 seconds. Race checks passed in 29.844 seconds.
+Admission failure regression passed in 5.056 seconds. Balance read failure checks passed in 0.961 seconds.
+The first balance filter selected no tests. The corrected filter ran the intended cases.
+Go lint and formatting passed. No test process remains active.
+Evidence uses `/tmp/llm-proxy-b266-payment-revisions` as its prefix.
+Discard all previous coverage coordinates for `hosted_payments_adjustments.go`.
+Only current payment, admission, and balance profiles contribute counts for that file.
+The current diagnostic is `/tmp/llm-proxy-b266-payment-revisions-diagnostic.coverprofile`.
+It has 372 uncovered statements across 21170 statements. This diagnostic does not replace aggregate CI.
+
+### Previous Hosted Assignment Storage Acceptance
 
 The increment adds `internal/proxy/hosted_assignment_recovery_internal_test.go` and `internal/proxy/hosted_assignment_recovery_test.go`.
 Six mutation scenarios cover tenant locks, grant reads, assignment reads, account assignment reads, assignment writes, and profile writes.
@@ -349,7 +374,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b266-assignment-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b266-payment-revisions-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -365,7 +390,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest assignment diagnostic has 373 uncovered statements across 21172 statements.
+The latest payment revision diagnostic has 372 uncovered statements across 21170 statements.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.

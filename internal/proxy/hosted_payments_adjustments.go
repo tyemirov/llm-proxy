@@ -230,7 +230,7 @@ func applyPaymentAdjustments(tx *gorm.DB, order managedFundingOrderRecord, verif
 		if err := json.Unmarshal([]byte(previous.Evidence), &evidence); err != nil {
 			return fmt.Errorf("decode retained adjustment evidence: %w", err)
 		}
-		if !paymentAdjustmentEvidenceFollows(evidence, verified.evidence) {
+		if !paymentAdjustmentRecordsFollow(evidence.Adjustments, verified.evidence.Adjustments) {
 			return errFundingConflict
 		}
 	}
@@ -337,15 +337,15 @@ func applyPaymentAdjustments(tx *gorm.DB, order managedFundingOrderRecord, verif
 	return nil
 }
 
-func paymentAdjustmentEvidenceFollows(previous, next paymentAdjustmentEvidence) bool {
-	if next.TransactionUpdatedAt.Before(previous.TransactionUpdatedAt) {
-		return false
-	}
-	current := make(map[string]billing.PaddleAdjustment, len(next.Adjustments))
-	for _, adjustment := range next.Adjustments {
+// New processor evidence passes retainPaymentStateObservation in the same
+// transaction. Hold refresh reuses its saved evidence without a processor read.
+// This boundary checks the separate adjustment history.
+func paymentAdjustmentRecordsFollow(previous, next []billing.PaddleAdjustment) bool {
+	current := make(map[string]billing.PaddleAdjustment, len(next))
+	for _, adjustment := range next {
 		current[adjustment.ID] = adjustment
 	}
-	for _, earlier := range previous.Adjustments {
+	for _, earlier := range previous {
 		later, exists := current[earlier.ID]
 		if !exists {
 			return false
