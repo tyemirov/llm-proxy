@@ -123,10 +123,13 @@ retain satisfied historical dependencies.
   - Added seven delayed-accounting scenarios after a waiver or partial operator charge.
   - Later evidence updates provider costs and exposure without changing the decision, balance, remainder, or tenant usage.
   - Failed delivery preserves the earlier exposure record and pending evidence. Restart retains one exposure record and one case.
-  - Funds and rating tests passed in 139.172 seconds. The new delayed-accounting race suite passed in 54.370 seconds.
-  - Go lint and format checks pass.
+  - Added 76 financial-read scenarios for storage failures, corrupt charges and prices, invalid queries, missing resources, and account isolation.
+  - Failed reads return no partial financial data. Restored storage returns the original resources without new provider work.
+  - A new billing account reads zero funds without creating Ledger or financial account records.
+  - The new financial-read race suite passed in 27.252 seconds. Management tests passed in 17.575 seconds.
+  - Go lint and format checks pass. Production source did not change.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 594 uncovered statements. Unchanged source blocks retain prior counts across source edits.
+  - The combined diagnostic has 546 uncovered statements. Unchanged source blocks retain prior counts across source edits.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
