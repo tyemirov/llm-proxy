@@ -68,10 +68,12 @@ retain satisfied historical dependencies.
   - Restart releases undispatched holds and preserves holds for unresolved usage. Replays do not repeat provider work.
   - Added 25 funded media scenarios for failed claims, dispatch, evidence reads, and completion checkpoints.
   - Failed media completion leaves outputs unpublished. Recovery preserves operation identity and prevents repeated provider work.
-  - The media regression passed in 34.675 seconds. Go lint and format checks pass.
-  - The new media recovery race suite passed in 251.857 seconds.
+  - Added 28 credit scenarios for failed reads and writes, corrupt retained amounts, and invalid commands.
+  - Failed credits preserve balances, remainders, tenant usage, and settlement records. Recovery applies one credit through the same HTTP resource.
+  - The full funds regression passed in 92.956 seconds. Go lint and format checks pass.
+  - The new credit recovery race suite passed in 235.323 seconds.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 653 uncovered statements. Unchanged source blocks retain prior counts across the B267 decoder edit.
+  - The combined diagnostic has 633 uncovered statements. Unchanged source blocks retain prior counts across the B267 decoder edit.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

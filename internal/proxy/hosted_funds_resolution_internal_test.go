@@ -179,6 +179,9 @@ func fundsResolutionHTTP(t *testing.T, server *httptest.Server, cookie *http.Coo
 	if strings.Contains(path, "/funds-credits/") {
 		template = "/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-credits/{credit_id}"
 	}
+	if strings.Contains(path, "/tenant-limits/") {
+		template = "/api/management/billing-accounts/{billing_account_id}/tenant-limits/{tenant_id}"
+	}
 	if err := contract.ValidateResponse(template, method, status, response.Header, payload); err != nil {
 		t.Fatal(err)
 	}
