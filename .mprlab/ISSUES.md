@@ -508,6 +508,13 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Go lint and formatting passed. No public schema or event contract changed.
   - The diagnostic has 366 uncovered statements across 21167 statements. Use `/tmp/llm-proxy-b278-diagnostic.coverprofile`.
   - Old coverage coordinates for `hosted_funds.go` were discarded. Complete aggregate CI and F070 acceptance remain open.
+  - Added seven admission scenarios for corrupt retained prices, an ignored account lock, and conflicting prices or reservations before dispatch.
+  - Failed initial admission preserves all financial resources. Conflicting attempts retain the original hold and create no provider work or observations.
+  - Replay leaves funds unchanged. Restart releases holds for undispatched work once and preserves the failed result.
+  - Focused checks passed in 4.052 seconds. Admission and text regression passed in 25.819 seconds.
+  - Race checks passed in 55.554 seconds. Go lint and formatting passed. No production code or public contract changed.
+  - The diagnostic has 362 uncovered statements across 21167 statements. Use `/tmp/llm-proxy-b266-reservation-integrity-diagnostic.coverprofile`.
+  - Production source coordinates are unchanged. Complete aggregate CI and F070 acceptance remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
   - Preserve the required coverage threshold and the current provider scope.
