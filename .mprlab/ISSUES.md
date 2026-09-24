@@ -84,6 +84,12 @@ retain satisfied historical dependencies.
   - The startup, runtime, and settlement regression passed in 27.034 seconds. Go lint and format checks pass.
   - The new startup race suite passed in 161.590 seconds.
   - The combined diagnostic now has 743 uncovered statements. It is not aggregate CI evidence.
+  - Added 17 funds-admission scenarios for financial writes, record reads, and balance reads.
+  - Rejected requests preserve Ledger history and retain no request, accepted price, or reservation. They make no provider call.
+  - The same key succeeds after recovery. Restart replay preserves one request, reservation, and provider execution.
+  - The admission and tenant-limit regression passed in 13.183 seconds. Go lint and format checks pass.
+  - The corrected admission race suite passed in 111.986 seconds.
+  - The combined diagnostic now has 725 uncovered statements. The aggregate gate remains open.
   - The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
