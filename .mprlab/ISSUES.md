@@ -48,49 +48,25 @@ retain satisfied historical dependencies.
 
 - [ ] [B266] (P1) Restore the required coverage gate for the hosted billing stack.
   Evidence:
-  The corrected stack CI run passes all Go tests but reports `coverage total 95.3%, want 100.0%`.
+  The corrected stack CI run passed all Go tests but reported `coverage total 95.3%, want 100.0%`.
   The function report identifies incomplete coverage in 288 functions across 79 files.
   Progress:
-  - Added payment evidence rejection and recovery checks, plus public read failures without partial amounts.
-  - Added 28 refund evidence and history scenarios, 14 financial write rollback scenarios, and a tax-inclusive refund sequence.
-  - The checks verify unchanged receipts and balances after failure, restart recovery, and one effect after replay.
-  - The complete payment regression passed in 42.920 seconds. Its CLI checks passed in 2.496 seconds.
-  - Focused payment race checks passed in 343.417 seconds. Go lint and format checks pass.
-  - Added authority tests for atomic writes, failed reads, rejected inputs, provider qualification, pagination, and concurrent creation and rotation.
-  - Random-source failures preserve accepted authority. Unreadable grant data does not expose partial resources.
-  - The connection and grant regression passed in 3.698 seconds. Authority race checks passed in 37.526 seconds.
-  - Go lint and format checks pass after the authority increment.
-  - Added exact reconciliation differences for processor snapshots, refund state, receipt identity, and Ledger holds.
-  - Added evidence read failures, atomic checkpoint recovery, invalid command inputs, and completed report recovery.
-  - Concurrent workers compare the same processor snapshot and retain one checkpoint and result.
-  - The reconciliation regression passed in 13.401 seconds. Its race suite passed in 138.827 seconds.
-  - The added Ledger-history check passed with the race detector in 6.751 seconds. Go lint and format checks pass.
-  - The Ledger-history check rejects offsetting monetary entries as well as balance changes during reconciliation.
-  - Added 28 provider reconciliation scenarios for invalid imports, failed reads and writes, retained evidence, and recovery.
-  - Failed imports leave no partial records. Repeated imports preserve the report, original source bytes, and customer charges.
-  - The provider reconciliation regression passed in 6.051 seconds. Its race suite passed in 74.472 seconds.
-  - Go lint and format checks pass after the provider reconciliation increment.
-  - Combined focused profiles cover 212 statements absent from the retained aggregate profile. This diagnostic is not a new CI result.
-  - Added 36 funds-resolution scenarios for financial read and write failures, invalid inputs, and completed receipt reads.
-  - Failed decisions preserve balances, holds, exact remainders, and Ledger history. Recovery and restart replay have one financial effect.
-  - These scenarios exposed B267. Its shared decoder correction rejects trailing input before financial changes.
-  - The resolution regression passed in 18.130 seconds. The complete funds suite passed in 67.332 seconds.
-  - The management regression passed in 16.798 seconds. Go lint and format checks pass.
-  - Funds-resolution race checks passed in 247.812 seconds.
-  - The updated diagnostic has 754 uncovered statements. Unchanged source blocks retain their prior coverage after the decoder edit.
-  - Added 25 startup scenarios for failed financial reads and writes, pending delivery, and unresolved usage.
-  - Failed startup closes the listener and preserves financial resources. Restart uses retained evidence without another provider call.
-  - Repeated startup preserves one settlement or the unresolved hold. Delivery acknowledgment shares the financial transaction.
-  - The startup, runtime, and settlement regression passed in 27.034 seconds. Go lint and format checks pass.
-  - The new startup race suite passed in 161.590 seconds.
-  - The combined diagnostic now has 743 uncovered statements. It is not aggregate CI evidence.
-  - Added 17 funds-admission scenarios for financial writes, record reads, and balance reads.
-  - Rejected requests preserve Ledger history and retain no request, accepted price, or reservation. They make no provider call.
-  - The same key succeeds after recovery. Restart replay preserves one request, reservation, and provider execution.
-  - The admission and tenant-limit regression passed in 13.183 seconds. Go lint and format checks pass.
-  - The corrected admission race suite passed in 111.986 seconds.
-  - The combined diagnostic now has 725 uncovered statements. The aggregate gate remains open.
-  - The required coverage gate and final stack CI remain open.
+  - Payment checks cover rejected evidence, refund history, tax-inclusive rounding, financial rollback, and unchanged receipts and balances after failure.
+  - Authority checks cover atomic writes, failed reads, random-source failures, provider qualification, pagination, and concurrent creation and rotation.
+  - Payment reconciliation checks cover exact differences, checkpoint recovery, concurrency, and immutable reports without new Ledger entries.
+  - Provider reconciliation checks cover invalid imports, failed reads and writes, retained evidence, and unchanged customer charges.
+  - Funds-resolution checks cover financial rollback, completed receipt reads, restart replay, and one monetary effect.
+  - B267 fixes the shared decoder defect found by these checks. Trailing JSON cannot trigger management writes.
+  - Startup checks preserve pending delivery and financial resources after failure. Restart does not repeat provider work.
+  - Admission checks reject before dispatch and preserve funds without partial request, price, or reservation records.
+  - Added 20 adjustment scenarios for refund-hold refresh, failed reads, corrupt records, processor outages, and retry checkpoint failures.
+  - Refund-hold refresh reserves the pending refund before later usage. Failed refresh leaves no admitted request or provider call.
+  - Unapplied adjustments preserve balances, holds, receipts, and Ledger history. Restart and repeated evidence have one refund effect.
+  - The adjustment regression passed in 45.183 seconds. Go lint and format checks pass.
+  - The new adjustment race suite passed in 151.880 seconds.
+  - Earlier increments retain their focused regression and race results in PR 344 and its commits.
+  - The combined diagnostic has 706 uncovered statements. Unchanged source blocks retain prior counts across the B267 decoder edit.
+  - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
   - Preserve the required coverage threshold and the current provider scope.
