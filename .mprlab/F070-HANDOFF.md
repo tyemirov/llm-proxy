@@ -6,9 +6,57 @@ The user requested this handoff because the session has few tokens left.
 Use this section and the resume procedure below as the current instructions.
 F070 remains incomplete. This handoff does not complete or pause the goal.
 
-B280 corrects failed cancellation retries found during B266 media acceptance.
-The previous B279 credential correction is published in PR 344.
+B281 rejects changed retained refund evidence found during B266 financial acceptance.
+B280 and the previous B279 credential correction are published in PR 344.
 Do not expand the product scope.
+
+### Immediate Resume Checkpoint
+
+The requested handoff update changed documentation only. The next goal continuation resumed B266 and reproduced B281.
+The current work preserves that handoff update.
+The branch is `feature/F069-prepaid-payments`.
+The last verified published commit is `3a3f29192ba19a07c840f17d597756d4c5bbbdc3` for B280.
+PR 344 has that head at the start of B281. It is open and ready, with no reported hosted checks.
+
+The latest focused diagnostic is `/tmp/llm-proxy-b281-diagnostic.coverprofile`: 349 uncovered statements across 21173 statements.
+The last complete Go run failed with `coverage total 97.9%, want 100.0%`.
+Its log is `/tmp/llm-proxy-b275-go-test.log`. Focused results do not establish aggregate CI success.
+F065 through F070 remain open. F087 owns the separate Paddle setup and actual sandbox qualification.
+F087 must not block development completion. Production activation remains disabled.
+
+1. Read this checkpoint, the B266 plan, and the remaining provider contracts in `docs/hosted-billing.md`.
+2. Inspect existing tests and the current diagnostic before selecting the next public financial failure scenario.
+3. Consider payment adjustment, funds settlement, and journal evidence boundaries. These are investigation candidates, not established defects.
+4. Update the B266 plan before implementation. Record each reproduced defect separately after checking available issue identifiers.
+5. Preserve all provider-operation requirements. Complete controlled acceptance and final `make ci` after the last correction.
+
+The resumed investigation selected retained adjustment evidence integrity and reproduced B281 before production changes.
+Temporary evidence is under `/tmp` and can disappear. Recreate missing evidence with repository Make targets.
+
+### Retained Refund Evidence And B281
+
+Changed retained refund evidence previously passed reconciliation, identical event replay, and refund hold refresh.
+Changed receipt totals or digests returned HTTP 200. Hold refresh dispatched funded work despite the damaged evidence.
+Identical event replay also bypassed malformed JSON before it examined the retained evidence.
+
+The shared database reader now decodes adjustment evidence and verifies its saved digest and required totals.
+Reconciliation, hold refresh, and receipt reads use this reader. Replay verifies evidence before it accepts an existing result.
+Failure preserves funds and revisions. Original evidence restoration permits recovery without repeated financial effects.
+No public schema, event contract, or shared dependency changed.
+
+The new acceptance contains eight processing scenarios, four receipt scenarios, and three hold refresh scenarios.
+These scenarios use signed HTTP events, financial HTTP resources, actual Ledger effects, and controlled provider protocols.
+Processing recovery opens fresh database instances and verifies one refund effect after restoration and replay.
+Focused checks passed in 6.544 seconds, including the existing hold refresh scenarios.
+Initial failures are in `/tmp/llm-proxy-b266-retained-adjustment-before.log` and `/tmp/llm-proxy-b266-retained-hold-before.log`.
+Final validation evidence uses `/tmp/llm-proxy-b281` as its prefix.
+
+Payment and funds regression passed in 243.435 seconds. Race checks passed in 97.840 seconds.
+Go lint and formatting passed. No validation process remains active.
+B281 is resolved. B266 and complete F070 acceptance remain open.
+The updated diagnostic has 349 uncovered statements across 21173 statements.
+Old coordinates for `hosted_payments_adjustments.go` and `hosted_payments_receipts.go` were discarded.
+Only the current regression profile contributes counts for these two production files. This diagnostic does not replace aggregate CI.
 
 ### Latest Cancellation Retry Boundary And B280
 
@@ -124,7 +172,7 @@ Verify unused identifiers across the active tracker and archive before assigning
 - Local HEAD and PR 344 matched this exact settlement commit before the media uncertainty increment.
 - Published media uncertainty commit: `1426d5eed0bc2b5c39b216ba344dc9463fb3404c`.
 - Published B279 commit: `c99431c0d61bd1109905f32f5714f319aa983b11`.
-- Verify the commit that contains B280 before further edits.
+- Published B280 commit: `3a3f29192ba19a07c840f17d597756d4c5bbbdc3`.
 - PR 344 reported no hosted checks during this update. Hosted CI success is not established.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
@@ -611,7 +659,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b280-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b281-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -627,7 +675,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest B280 diagnostic has 350 uncovered statements across 21169 statements.
+The latest B281 diagnostic has 349 uncovered statements across 21173 statements.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.

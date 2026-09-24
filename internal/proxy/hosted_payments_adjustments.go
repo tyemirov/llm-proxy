@@ -61,6 +61,17 @@ type verifiedPaymentAdjustments struct {
 	disputed bool
 }
 
+func (record managedPaymentAdjustmentRecord) decodedEvidence() (paymentAdjustmentEvidence, error) {
+	var evidence paymentAdjustmentEvidence
+	if err := json.Unmarshal([]byte(record.Evidence), &evidence); err != nil {
+		return paymentAdjustmentEvidence{}, fmt.Errorf("decode retained adjustment evidence for %s: %w", record.OrderID, err)
+	}
+	if evidence.Totals == nil || sha256Hex(record.Evidence) != record.EvidenceDigest {
+		return paymentAdjustmentEvidence{}, fmt.Errorf("retained adjustment evidence integrity failed for %s", record.OrderID)
+	}
+	return evidence, nil
+}
+
 func (worker *paddlePaymentProcessor) readAdjustments(ctx context.Context, payment verifiedCompletedPayment, order managedFundingOrderRecord, checkout managedPaymentCheckoutRecord) (verifiedPaymentAdjustments, error) {
 	attempt, cancel := context.WithTimeout(ctx, paymentCheckoutRetry)
 	defer cancel()
@@ -223,12 +234,12 @@ func applyPaymentAdjustments(tx *gorm.DB, order managedFundingOrderRecord, verif
 		return fmt.Errorf("read payment adjustment projection: %w", err)
 	}
 	if err == nil {
+		evidence, err := previous.decodedEvidence()
+		if err != nil {
+			return err
+		}
 		if previous.EvidenceDigest == verified.digest && previous.HeldCents == verified.pending {
 			return nil
-		}
-		var evidence paymentAdjustmentEvidence
-		if err := json.Unmarshal([]byte(previous.Evidence), &evidence); err != nil {
-			return fmt.Errorf("decode retained adjustment evidence: %w", err)
 		}
 		if !paymentAdjustmentRecordsFollow(evidence.Adjustments, verified.evidence.Adjustments) {
 			return errFundingConflict
@@ -412,8 +423,8 @@ func refreshPaymentHolds(tx *gorm.DB, accountID string, now time.Time) error {
 		if err := tx.Where("id = ?", projection.OrderID).First(&order).Error; err != nil {
 			return err
 		}
-		var evidence paymentAdjustmentEvidence
-		if err := json.Unmarshal([]byte(projection.Evidence), &evidence); err != nil {
+		evidence, err := projection.decodedEvidence()
+		if err != nil {
 			return err
 		}
 		verified := verifiedPaymentAdjustments{evidence: evidence, encoded: projection.Evidence, digest: projection.EvidenceDigest, reversed: projection.ReversedCents, pending: projection.PendingCents, disputed: order.State == "disputed"}

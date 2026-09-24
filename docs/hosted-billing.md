@@ -1415,6 +1415,11 @@ Reversed original adjustments and separate reversal records cannot restore the s
 The worker retains exact evidence and each applied revision in the same transaction as the Ledger effects.
 Funding credits and current adjustments commit together, including refunds that precede the initial funding event.
 
+Reconciliation, hold refresh, and receipt reads verify the digest of retained adjustment evidence through one database boundary.
+Identical event replay performs this check before it accepts the retained result.
+Changed evidence prevents financial effects, funded dispatch during hold refresh, and receipt publication.
+Restoration of the original evidence permits recovery without repeated financial effects.
+
 Development fixtures allocate customer credit in proportion to the original payment subtotal.
 The cumulative debit rounds down to whole cents. Pending holds round up to whole cents.
 Each revision retains the exact fraction. Full reversal removes the complete original credit.

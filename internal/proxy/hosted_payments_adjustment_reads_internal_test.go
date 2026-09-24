@@ -217,7 +217,7 @@ func TestHostedPaymentsAdjustmentProcessorOutagesRetainRetryableEvidence(t *test
 }
 
 func TestHostedPaymentsAdjustmentHoldDeficitRefreshesBeforeUsage(t *testing.T) {
-	for _, scenario := range []string{"success", "order-read", "retained-evidence", "revision-write"} {
+	for _, scenario := range []string{"success", "order-read", "retained-evidence", "retained-null", "retained-total", "retained-digest", "revision-write"} {
 		t.Run(scenario, func(t *testing.T) {
 			fixture := newPaymentAuditFixture(t)
 			account, err := newHostedLedgerAccount(fixture.database.database, "billing-journal", time.Now())
@@ -268,6 +268,7 @@ func TestHostedPaymentsAdjustmentHoldDeficitRefreshesBeforeUsage(t *testing.T) {
 			before := paymentAdjustmentResources(t, fixture)
 			var failures atomic.Int64
 			retainedEvidence := projection.Evidence
+			var restoreEvidence func()
 			switch scenario {
 			case "order-read":
 				if err := fixture.database.database.Callback().Query().Before("gorm:query").Register("test:refund_deficit_order", func(tx *gorm.DB) {
@@ -282,6 +283,9 @@ func TestHostedPaymentsAdjustmentHoldDeficitRefreshesBeforeUsage(t *testing.T) {
 				if err := fixture.database.database.Model(&projection).UpdateColumn("evidence", "{").Error; err != nil {
 					t.Fatal(err)
 				}
+			case "retained-null", "retained-total", "retained-digest":
+				corruption := map[string]string{"retained-null": "null", "retained-total": "changed-total", "retained-digest": "digest"}[scenario]
+				restoreEvidence = corruptRetainedPaymentAdjustment(t, fixture.database, fixture.orderID, corruption)
 			case "revision-write":
 				if err := fixture.database.database.Exec("CREATE TRIGGER reject_refund_refresh BEFORE INSERT ON managed_payment_adjustment_revision_records BEGIN SELECT RAISE(ABORT, 'controlled_refund_refresh_failure'); END").Error; err != nil {
 					t.Fatal(err)
@@ -304,6 +308,8 @@ func TestHostedPaymentsAdjustmentHoldDeficitRefreshesBeforeUsage(t *testing.T) {
 					if err := fixture.database.database.Model(&projection).UpdateColumn("evidence", retainedEvidence).Error; err != nil {
 						t.Fatal(err)
 					}
+				case "retained-null", "retained-total", "retained-digest":
+					restoreEvidence()
 				case "revision-write":
 					if err := fixture.database.database.Exec("DROP TRIGGER reject_refund_refresh").Error; err != nil {
 						t.Fatal(err)

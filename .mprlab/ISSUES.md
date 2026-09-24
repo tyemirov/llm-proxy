@@ -35,6 +35,28 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B281] (P1) Reject changed retained refund evidence before financial use.
+  Evidence:
+  Controlled database changes replaced retained refund evidence or its digest after a pending refund.
+  Reconciliation accepted these records. Identical event replay also bypassed malformed JSON.
+  Hold refresh returned HTTP 200 and executed funded work instead of rejecting the changed evidence.
+  Receipt reads returned HTTP 200 for changed totals or a changed digest instead of HTTP 503.
+  Requirements:
+  - Verify retained adjustment evidence at one shared database boundary.
+  - Reject changed evidence before reconciliation, hold refresh, receipt publication, and identical event replay.
+  - Preserve funds and immutable revisions after failure. Permit recovery after the original evidence is restored.
+  Validation:
+  - Use signed payment events, financial HTTP resources, and controlled provider protocols.
+  - Verify restoration and replay across a database restart without repeated financial effects.
+  - Run payment regression, race, lint, and formatting checks.
+  Resolution:
+  Reconciliation, hold refresh, and receipt reads now share retained adjustment evidence validation.
+  The reader verifies the saved digest and required totals before use, including identical event replay.
+  Fifteen new scenarios verify rejection, restoration, and recovery without repeated financial effects.
+  Focused checks passed in 6.544 seconds. Payment and funds regression passed in 243.435 seconds.
+  Race checks passed in 97.840 seconds. Go lint and formatting passed.
+  No public schema or event contract changed. B266 and complete F070 acceptance remain open.
+
 - [x] [B280] (P1) Renew cancellation intent after an unconfirmed provider cancellation.
   Evidence:
   Three funded HTTP scenarios returned unsupported cancellation after an authority read failure, absent authority, or provider outage.
@@ -589,6 +611,12 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Race checks passed in 35.442 seconds. Go lint and formatting passed. No public schema or event contract changed.
   - The diagnostic has 350 uncovered statements across 21169 statements. Use `/tmp/llm-proxy-b280-diagnostic.coverprofile`.
   - Old media service coordinates were discarded. Only current regression and boundary counts contribute coverage for that file.
+  - B281 rejects changed retained refund evidence before reconciliation, hold refresh, receipt reads, and identical event replay.
+  - Fifteen new scenarios verify rejection, restoration, financial conservation, and recovery without repeated effects.
+  - Focused checks passed in 6.544 seconds. Payment and funds regression passed in 243.435 seconds.
+  - Race checks passed in 97.840 seconds. Go lint and formatting passed. No public schema or event contract changed.
+  - The diagnostic has 349 uncovered statements across 21173 statements. Use `/tmp/llm-proxy-b281-diagnostic.coverprofile`.
+  - Old coordinates for both changed production files were discarded.
   - Complete aggregate CI and F070 acceptance remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

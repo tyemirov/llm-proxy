@@ -59,12 +59,9 @@ func (database *gormManagedTenantDatabase) paymentReceipt(ctx context.Context, a
 		if err := tx.Where("order_id = ? AND billing_account_id = ?", orderID, accountID).First(&adjustment).Error; err != nil {
 			return fmt.Errorf("read receipt adjustment: %w", err)
 		}
-		var evidence paymentAdjustmentEvidence
-		if err := json.Unmarshal([]byte(adjustment.Evidence), &evidence); err != nil {
-			return fmt.Errorf("decode retained receipt adjustment: %w", err)
-		}
-		if evidence.Totals == nil {
-			return fmt.Errorf("missing retained receipt adjustment totals for %s", orderID)
+		evidence, err := adjustment.decodedEvidence()
+		if err != nil {
+			return err
 		}
 		response = managementPaymentReceiptResponse{FundingOrderID: receipt.OrderID, Environment: receipt.Environment, Currency: receipt.Currency, State: order.State, CreditCents: strconv.FormatInt(receipt.CreditCents, 10), GrossCents: receipt.GrossCents, TaxCents: receipt.TaxCents, ReversedCents: strconv.FormatInt(adjustment.ReversedCents, 10), PendingRefundCents: strconv.FormatInt(adjustment.PendingCents, 10), InvoiceNumber: receipt.InvoiceNumber, PaidAt: receipt.CompletedAt.UTC().Format(time.RFC3339Nano)}
 		response.AdjustedGrossCents, response.AdjustedTaxCents = evidence.Totals.Total, evidence.Totals.Tax
