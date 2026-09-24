@@ -424,3 +424,39 @@ func TestHostedAuthorityUnreadableGrantDoesNotExposePartialLists(t *testing.T) {
 		t.Fatal("grant read failure changed accepted authority")
 	}
 }
+
+func TestHostedAuthorityUnreadableGrantPreservesTransition(t *testing.T) {
+	fixture := newAuthorityRecoveryFixture(t)
+	before, counts := fixture.publicSnapshot(t), fixture.recordCounts(t)
+	var original struct{ Offerings []byte }
+	if err := fixture.database.Table("managed_hosted_grant_records").Where("id = ?", fixture.grant).First(&original).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.database.Table("managed_hosted_grant_records").Where("id = ?", fixture.grant).Update("offerings", []byte(`{"private":"unreadable stored grant"}`)).Error; err != nil {
+		t.Fatal(err)
+	}
+	response := requireHostedHTTP(t, fixture.server, fixture.operator, http.MethodPatch, authorityGrantsPath+"/"+fixture.grant, authoritySuspensionBody, "", http.StatusInternalServerError)
+	if strings.TrimSpace(string(response.body)) != `{"error":{"code":"hosted_access_store_failed"}}` {
+		t.Fatalf("unreadable grant exposed partial or private data: %s", response.body)
+	}
+	if err := fixture.database.Table("managed_hosted_grant_records").Where("id = ?", fixture.grant).Update("offerings", original.Offerings).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, fixture.publicSnapshot(t)) || !reflect.DeepEqual(counts, fixture.recordCounts(t)) {
+		t.Fatal("failed transition on unreadable scope changed accepted authority or audit history")
+	}
+	fixture.server.Close()
+	fixture.server = httptest.NewServer(newManagementRouterWithDatabasePath(t, fixture.configuration, fixture.databasePath))
+	t.Cleanup(fixture.server.Close)
+	requireHostedHTTP(t, fixture.server, fixture.operator, http.MethodPatch, authorityGrantsPath+"/"+fixture.grant, authoritySuspensionBody, "", http.StatusOK)
+	after, recoveredCounts := fixture.publicSnapshot(t), fixture.recordCounts(t)
+	for range 2 {
+		fixture.server.Close()
+		fixture.server = httptest.NewServer(newManagementRouterWithDatabasePath(t, fixture.configuration, fixture.databasePath))
+		t.Cleanup(fixture.server.Close)
+		requireHostedHTTP(t, fixture.server, fixture.operator, http.MethodPatch, authorityGrantsPath+"/"+fixture.grant, authoritySuspensionBody, "", http.StatusConflict)
+		if !reflect.DeepEqual(after, fixture.publicSnapshot(t)) || !reflect.DeepEqual(recoveredCounts, fixture.recordCounts(t)) {
+			t.Fatal("recovered grant transition repeated authority or audit effects")
+		}
+	}
+}

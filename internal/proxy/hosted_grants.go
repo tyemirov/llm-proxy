@@ -88,6 +88,11 @@ type managedHostedGrantRevisionRecord struct {
 	CreatedAt   time.Time
 }
 
+type hostedGrant struct {
+	record    managedHostedGrantRecord
+	offerings []hostedGrantOffering
+}
+
 type managementHostedGrantRequest struct {
 	BillingAccountID     string                `json:"billing_account_id"`
 	TenantID             string                `json:"tenant_id"`
@@ -201,21 +206,26 @@ func (service *managementService) validateHostedGrantOfferings(request managemen
 	return nil
 }
 
-func hostedGrantResponse(record managedHostedGrantRecord, principal managementPrincipal) (managementHostedGrantResponse, error) {
+func decodeHostedGrant(record managedHostedGrantRecord) (hostedGrant, error) {
 	var offerings []hostedGrantOffering
 	if err := json.Unmarshal(record.Offerings, &offerings); err != nil {
-		return managementHostedGrantResponse{}, fmt.Errorf("read grant %s offerings: %w", record.ID, err)
+		return hostedGrant{}, fmt.Errorf("read grant %s offerings: %w", record.ID, err)
 	}
+	return hostedGrant{record: record, offerings: offerings}, nil
+}
+
+func hostedGrantResponse(grant hostedGrant, principal managementPrincipal) managementHostedGrantResponse {
+	record := grant.record
 	response := managementHostedGrantResponse{
 		ID: record.ID, BillingAccountID: record.BillingAccountID, TenantID: record.TenantID,
-		Provider: record.Provider, CatalogRevision: record.CatalogRevision, Offerings: offerings,
+		Provider: record.Provider, CatalogRevision: record.CatalogRevision, Offerings: grant.offerings,
 		State: record.State, Revision: record.Revision,
 		CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: record.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	if principal.isAdmin {
 		response.PlatformConnectionID = record.PlatformConnectionID
 	}
-	return response, nil
+	return response
 }
 
 func hostedGrantOwnerQuery(database *gorm.DB, principal managementPrincipal) *gorm.DB {
@@ -226,25 +236,33 @@ func hostedGrantOwnerQuery(database *gorm.DB, principal managementPrincipal) *go
 	return query
 }
 
-func (database *gormManagedTenantDatabase) hostedGrant(ctx context.Context, principal managementPrincipal, id string) (managedHostedGrantRecord, error) {
+func (database *gormManagedTenantDatabase) hostedGrant(ctx context.Context, principal managementPrincipal, id string) (hostedGrant, error) {
 	var record managedHostedGrantRecord
 	err := hostedGrantOwnerQuery(database.database.WithContext(ctx), principal).Where("id = ?", id).First(&record).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return record, errHostedAccessNotFound
+		return hostedGrant{}, errHostedAccessNotFound
 	}
 	if err != nil {
-		return record, fmt.Errorf("read hosted access grant %s: %w", id, err)
+		return hostedGrant{}, fmt.Errorf("read hosted access grant %s: %w", id, err)
 	}
-	return record, nil
+	return decodeHostedGrant(record)
 }
 
-func (database *gormManagedTenantDatabase) hostedGrants(ctx context.Context, principal managementPrincipal, page managedConnectionPage) ([]managedHostedGrantRecord, error) {
+func (database *gormManagedTenantDatabase) hostedGrants(ctx context.Context, principal managementPrincipal, page managedConnectionPage) ([]hostedGrant, error) {
 	records := []managedHostedGrantRecord{}
 	err := hostedGrantOwnerQuery(database.database.WithContext(ctx), principal).Where("id > ?", page.after).Order("id").Limit(page.limit + 1).Find(&records).Error
 	if err != nil {
 		return nil, fmt.Errorf("list hosted access grants for actor %s: %w", principal.userID, err)
 	}
-	return records, nil
+	grants := make([]hostedGrant, 0, len(records))
+	for _, record := range records {
+		grant, err := decodeHostedGrant(record)
+		if err != nil {
+			return nil, err
+		}
+		grants = append(grants, grant)
+	}
+	return grants, nil
 }
 
 func (database *gormManagedTenantDatabase) createHostedGrant(ctx context.Context, record managedHostedGrantRecord, audit managedHostedGrantRevisionRecord, intent managedHostedCreationRecord) (managedHostedCreationRecord, error) {
@@ -276,8 +294,8 @@ func (database *gormManagedTenantDatabase) createHostedGrant(ctx context.Context
 	return receipt, err
 }
 
-func (database *gormManagedTenantDatabase) changeHostedGrant(ctx context.Context, id string, change managementHostedGrantChange, actor string, now time.Time) (managedHostedGrantRecord, error) {
-	var record managedHostedGrantRecord
+func (database *gormManagedTenantDatabase) changeHostedGrant(ctx context.Context, id string, change managementHostedGrantChange, actor string, now time.Time) (hostedGrant, error) {
+	var grant hostedGrant
 	err := database.database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		result := transaction.Model(&managedHostedGrantRecord{}).Where("id = ? AND revision = ? AND state != ? AND state != ?", id, change.Revision, hostedGrantRevoked, change.State).
 			Updates(map[string]any{"state": change.State, "revision": change.Revision + 1, "updated_at": now})
@@ -291,12 +309,15 @@ func (database *gormManagedTenantDatabase) changeHostedGrant(ctx context.Context
 		if err := transaction.Omit("Grant").Create(&audit).Error; err != nil {
 			return fmt.Errorf("record hosted access grant transition: %w", err)
 		}
+		var record managedHostedGrantRecord
 		if err := transaction.Where("id = ?", id).First(&record).Error; err != nil {
 			return fmt.Errorf("read changed hosted access grant: %w", err)
 		}
-		return nil
+		var err error
+		grant, err = decodeHostedGrant(record)
+		return err
 	})
-	return record, err
+	return grant, err
 }
 
 func (database *gormManagedTenantDatabase) hostedGrantRevisions(ctx context.Context, id string, page managedConnectionPage) ([]managedHostedGrantRevisionRecord, error) {
@@ -360,11 +381,7 @@ func (service *managementService) createHostedGrantHandler() gin.HandlerFunc {
 			PlatformConnectionID: connection.ID, Provider: connection.Provider, CatalogRevision: request.CatalogRevision,
 			Offerings: offerings, State: hostedGrantActive, Revision: 1, CreatedAt: now, UpdatedAt: now}
 		principal := managementPrincipalFromContext(ctx)
-		response, err := hostedGrantResponse(record, principal)
-		if err != nil {
-			writeHostedAccessError(ctx, err)
-			return
-		}
+		response := hostedGrantResponse(hostedGrant{record: record, offerings: request.Offerings}, principal)
 		intent.ResourceID = id
 		intent.Response, err = json.Marshal(response)
 		if err != nil {
@@ -389,12 +406,7 @@ func (service *managementService) getHostedGrantHandler() gin.HandlerFunc {
 			writeHostedAccessError(ctx, err)
 			return
 		}
-		response, err := hostedGrantResponse(record, principal)
-		if err != nil {
-			writeHostedAccessError(ctx, err)
-			return
-		}
-		ctx.JSON(http.StatusOK, response)
+		ctx.JSON(http.StatusOK, hostedGrantResponse(record, principal))
 	}
 }
 
@@ -414,15 +426,10 @@ func (service *managementService) listHostedGrantsHandler() gin.HandlerFunc {
 		response := managementHostedGrantsResponse{Grants: []managementHostedGrantResponse{}}
 		if len(records) > page.limit {
 			records = records[:page.limit]
-			response.NextCursor = records[len(records)-1].ID
+			response.NextCursor = records[len(records)-1].record.ID
 		}
 		for _, record := range records {
-			grant, err := hostedGrantResponse(record, principal)
-			if err != nil {
-				writeHostedAccessError(ctx, err)
-				return
-			}
-			response.Grants = append(response.Grants, grant)
+			response.Grants = append(response.Grants, hostedGrantResponse(record, principal))
 		}
 		ctx.JSON(http.StatusOK, response)
 	}
@@ -453,12 +460,7 @@ func (service *managementService) changeHostedGrantHandler() gin.HandlerFunc {
 			writeHostedAccessError(ctx, err)
 			return
 		}
-		response, err := hostedGrantResponse(record, principal)
-		if err != nil {
-			writeHostedAccessError(ctx, err)
-			return
-		}
-		ctx.JSON(http.StatusOK, response)
+		ctx.JSON(http.StatusOK, hostedGrantResponse(record, principal))
 	}
 }
 

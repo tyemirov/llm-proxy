@@ -35,6 +35,27 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B277] (P1) Reject unreadable grant scope before a transition commits.
+  Evidence:
+  A grant PATCH returned HTTP 500 for unreadable stored offerings but committed the requested suspension and a new audit revision.
+  The public regression failed with `failed transition on unreadable scope changed accepted authority or audit history`.
+  Requirements:
+  - Decode stored grant scope at the database boundary before a transition commits.
+  - Preserve grant state and audit history after a failed read or decode.
+  - Return typed scope to response code without another decode after the transaction.
+  - Reuse validated request scope for creation responses without an encode and decode cycle.
+  - Verify rejection, restoration, stale revision retries, and restart through authenticated HTTP.
+  - Run grant and authority regression, race, lint, and formatting checks.
+  - Keep B266 coverage and final F070 acceptance open.
+  Resolution:
+  The database boundary now returns grants with decoded scope. A transition decodes its result before transaction commit.
+  Failed reads and corrupt scope preserve state, audit history, assignments, and funds.
+  Creation responses reuse validated request scope without decoding newly encoded data.
+  Public HTTP checks reproduce the original defect and verify restoration and stale revision retries across restart.
+  Targeted checks passed in 2.865 seconds. Grant, authority, and assignment regression passed in 10.690 seconds.
+  Race checks passed in 38.900 seconds. Go lint and formatting passed.
+  No public schema or event contract changed. B266 and final F070 acceptance remain open.
+
 - [x] [B276] (P1) Preserve pending response state after a journal completion failure.
   Evidence:
   Controlled HTTP checks failed with `status=409 want=200` after storage recovered for an accepted request with zero provider calls.
@@ -450,6 +471,15 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Initial test errors concerned typed grant states and owner sessions. The corrected fixture uses the existing authorization contract.
   - No production code or public contract changed. The diagnostic has 370 uncovered statements across 21168 statements.
   - Use `/tmp/llm-proxy-b266-grant-transition-diagnostic.coverprofile`. Complete aggregate CI and F070 acceptance remain open.
+  - B277 fixes a failed grant transition that committed state and audit history before scope decoding returned an error.
+  - Stored grants now return typed scope from the database boundary. Transition result decoding occurs before commit.
+  - Creation responses reuse validated request scope. Response code does not decode stored bytes again.
+  - Four new corruption scenarios verify rejection before and after transaction writes, restoration, and restart without repeated audit effects.
+  - Targeted checks passed in 2.865 seconds. Grant, authority, and assignment regression passed in 10.690 seconds.
+  - Race checks passed in 38.900 seconds. Go lint and formatting passed. No public schema or event contract changed.
+  - The diagnostic has 366 uncovered statements across 21165 statements. Use `/tmp/llm-proxy-b277-diagnostic.coverprofile`.
+  - Old grant coverage coordinates were discarded. The store interface change preserves executable source and coverage coordinates.
+  - Complete aggregate CI and F070 acceptance remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
   - Preserve the required coverage threshold and the current provider scope.

@@ -15,8 +15,19 @@ import (
 const grantTransitionRecoveryPath = "/hosted-access-grants/grant-journal"
 
 func TestHostedGrantTransitionReadFailurePreservesRevisionHistory(t *testing.T) {
-	for _, state := range []hostedGrantState{hostedGrantSuspended, hostedGrantActive, hostedGrantRevoked} {
-		t.Run(string(state), func(t *testing.T) {
+	for _, scenario := range []struct {
+		state   hostedGrantState
+		failure string
+	}{
+		{hostedGrantSuspended, "storage-error"},
+		{hostedGrantActive, "storage-error"},
+		{hostedGrantRevoked, "storage-error"},
+		{hostedGrantSuspended, "unreadable-scope"},
+		{hostedGrantActive, "unreadable-scope"},
+		{hostedGrantRevoked, "unreadable-scope"},
+	} {
+		t.Run(string(scenario.state)+"/"+scenario.failure, func(t *testing.T) {
+			state := scenario.state
 			database, _, _ := newJournalTransactionFixture(t)
 			server, cookie := newFundsManagementHTTPFixture(t, database)
 			exchange := func(method, path, body string, status int) map[string]any {
@@ -62,6 +73,10 @@ func TestHostedGrantTransitionReadFailurePreservesRevisionHistory(t *testing.T) 
 				record, ok := transaction.Statement.Dest.(*managedHostedGrantRecord)
 				if ok && record.Revision == revision+1 && record.State == state {
 					failedReads.Add(1)
+				}
+				if scenario.failure == "unreadable-scope" && ok {
+					record.Offerings = []byte(`{"private":"unreadable stored grant"}`)
+					return
 				}
 				transaction.AddError(errInternalTestDatabase)
 			}); err != nil {

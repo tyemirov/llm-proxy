@@ -286,6 +286,9 @@ The retained creation response remains available after catalog changes and grant
 Only operators can create grants or change their state.
 Each state change requires the current revision and an operator reason.
 The grant state and audit record change in one database transaction.
+The database boundary decodes stored grant scope before it returns a grant or commits a transition.
+A failed scope decode preserves grant state and audit history. Response code consumes the decoded scope without another read.
+Grant creation responses reuse the validated request scope.
 A suspended grant can return to active state. A revoked grant cannot return to another state.
 Customers can read only their own grants. Their responses omit platform connection identifiers and operator audit details.
 Tenant deletion returns a conflict when the tenant has hosted grant history, including revoked grants.

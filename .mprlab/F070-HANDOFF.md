@@ -6,8 +6,8 @@ The user requested this handoff because the session has few tokens left.
 Use this section and the resume procedure below as the current instructions.
 F070 remains incomplete. This handoff does not complete or pause the goal.
 
-B266 grant transition recovery checks passed locally. The increment has no production changes.
-The preceding exact net charge commit was verified in PR 344 on September 24, 2026.
+B277 corrects grant scope decoding after transaction commit. Local regression and race checks passed.
+The preceding grant transition commit was verified in PR 344 on September 24, 2026.
 Do not expand the product scope.
 
 ### Checkout And Publication
@@ -27,8 +27,9 @@ Do not expand the product scope.
 - Published assignment commit: `c3ca9bf649bb0bcd35b2a1b9001300fe112dcaf0`.
 - Published payment revision commit: `713e9d50096e54e51b1a7860a41d42fdc70ce947`.
 - Published exact net charge commit: `3308ccc48eed91e0ce3d192abd599ef5d7a2f89d`.
-- Local HEAD and PR 344 matched that commit before the grant transition increment.
-- Verify the commit that contains the grant transition tests in PR 344 before further edits.
+- Published grant transition commit: `3c549a55aaac2bbe97a39ead8ace49b68f4ee77e`.
+- Local HEAD and PR 344 matched that commit before B277.
+- Verify the commit that contains B277 in PR 344 before further edits.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
 - PR stack: 339 (F065), 340 (F066), 341 (F067), 342 (F068), 344 (F069).
@@ -39,7 +40,36 @@ Do not expand the product scope.
 Application merge, release, and deployment remain outside the current authorization.
 The current production changes have focused validation. Aggregate validation remains incomplete.
 
-### Latest Grant Transition Read Recovery
+### Latest Grant Scope Boundary And B277
+
+A public HTTP test reproduced B277: an unreadable saved scope caused HTTP 500 after the grant transition and audit committed.
+Three additional scenarios inject corrupt scope at the final transaction read for suspension, reactivation, and revocation.
+All three reproduced committed changes after failed requests. The initial logs retain those failures.
+
+The database adapter now decodes grant scope before it returns a grant or commits a transition.
+Its internal interface returns a typed grant. Response code consumes that scope without another decode.
+Creation responses reuse validated request scope. Stored scope validation and customer response privacy remain in place.
+Failed reads or corrupt scope preserve state, prior audit history, tenant assignments, and funds.
+Restoration permits one transition. Stale revision retries and repeated restarts cannot add another audit effect.
+
+Targeted checks passed in 2.865 seconds. Grant, authority, and assignment regression passed in 10.690 seconds.
+Race checks passed in 38.900 seconds. Go lint and formatting passed. No validation process remains active.
+The billing runbook records the boundary. No public schema or event contract changed.
+B277 is resolved. B266, complete provider acceptance, and final F070 CI remain open.
+
+The first failure is `/tmp/llm-proxy-b266-grant-scope-before.log`.
+The transaction failures are in `/tmp/llm-proxy-b277-transaction-before.log`.
+Final evidence uses `/tmp/llm-proxy-b277` as its prefix.
+The current diagnostic is `/tmp/llm-proxy-b277-diagnostic.coverprofile`.
+It has 366 uncovered statements across 21165 statements. This diagnostic does not replace aggregate CI.
+
+All previous coverage coordinates for `internal/proxy/hosted_grants.go` were discarded.
+Only current regression counts contribute coverage for that file.
+`internal/proxy/management_store.go` changes only three interface signatures.
+Its executable source and coverage coordinates were compared with the previous commit and remain unchanged.
+The profile combination preserves prior counts only for unchanged executable source.
+
+### Previous Grant Transition Read Recovery
 
 The increment adds `internal/proxy/hosted_grant_transition_recovery_internal_test.go`.
 Three scenarios cover suspension, reactivation, and revocation through authenticated management HTTP.
@@ -420,7 +450,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b266-grant-transition-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b277-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -436,7 +466,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest grant transition diagnostic has 370 uncovered statements across 21168 statements.
+The latest B277 diagnostic has 366 uncovered statements across 21165 statements.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.
