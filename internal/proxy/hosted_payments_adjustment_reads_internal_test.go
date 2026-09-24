@@ -188,10 +188,7 @@ func TestHostedPaymentsAdjustmentProcessorOutagesRetainRetryableEvidence(t *test
 			if err != nil {
 				t.Fatal(err)
 			}
-			worker, err := newPaddlePaymentProcessor(fixture.database, fixture.checkout.catalog, client)
-			if err != nil {
-				t.Fatal(err)
-			}
+			worker := newPaddlePaymentProcessor(fixture.database, fixture.checkout.catalog, client)
 			if scenario.rejectCheckpoint {
 				if err := fixture.database.database.Exec("CREATE TRIGGER reject_refund_retry BEFORE UPDATE ON managed_payment_inbox_records WHEN NEW.state = 'reconciliation_required' BEGIN SELECT RAISE(ABORT, 'controlled_refund_retry_failure'); END").Error; err != nil {
 					t.Fatal(err)

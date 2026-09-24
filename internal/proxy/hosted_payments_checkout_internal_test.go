@@ -133,10 +133,7 @@ func checkoutWorkerFixture(t *testing.T, database *gormManagedTenantDatabase, ca
 	if err != nil {
 		t.Fatal(err)
 	}
-	worker, err := newPaddleCheckoutDelivery(database, catalog, client)
-	if err != nil {
-		t.Fatal(err)
-	}
+	worker := newPaddleCheckoutDelivery(database, catalog, client)
 	worker.now = func() time.Time { return now }
 	return worker
 }

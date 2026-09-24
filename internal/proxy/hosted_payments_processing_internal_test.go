@@ -40,11 +40,7 @@ func sendPaymentEventFixture(t *testing.T, database *gormManagedTenantDatabase, 
 
 func paymentProcessorFixture(t *testing.T, checkout *paddleCheckoutDelivery, database *gormManagedTenantDatabase) *paddlePaymentProcessor {
 	t.Helper()
-	worker, err := newPaddlePaymentProcessor(database, checkout.catalog, checkout.client)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return worker
+	return newPaddlePaymentProcessor(database, checkout.catalog, checkout.client)
 }
 
 func TestHostedPaymentsCompletedCreditCommitsOnceAcrossEventsAndWorkers(t *testing.T) {

@@ -63,11 +63,8 @@ type paddlePaymentProcessor struct {
 	now      func() time.Time
 }
 
-func newPaddlePaymentProcessor(database *gormManagedTenantDatabase, catalog *fundingCatalog, client paddleTransactionReader) (*paddlePaymentProcessor, error) {
-	if database == nil || catalog == nil || client == nil {
-		return nil, fmt.Errorf("configure Paddle payment processor: missing dependency")
-	}
-	return &paddlePaymentProcessor{database: database, catalog: catalog, client: client, now: time.Now}, nil
+func newPaddlePaymentProcessor(database *gormManagedTenantDatabase, catalog *fundingCatalog, client paddleTransactionReader) *paddlePaymentProcessor {
+	return &paddlePaymentProcessor{database: database, catalog: catalog, client: client, now: time.Now}
 }
 
 func (worker *paddlePaymentProcessor) reconcile(ctx context.Context) error {

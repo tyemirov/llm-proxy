@@ -37,10 +37,7 @@ func newPaymentCreditRecoveryFixture(t *testing.T) paymentCreditRecoveryFixture 
 
 func (fixture paymentCreditRecoveryFixture) application(t *testing.T, database *gormManagedTenantDatabase) *proxyApplication {
 	t.Helper()
-	checkout, err := newPaddleCheckoutDelivery(database, fixture.worker.catalog, fixture.worker.client)
-	if err != nil {
-		t.Fatal(err)
-	}
+	checkout := newPaddleCheckoutDelivery(database, fixture.worker.catalog, fixture.worker.client)
 	return &proxyApplication{
 		router: fixture.server.Config.Handler.(*gin.Engine), database: database, now: time.Now,
 		payments: &paddlePaymentRuntime{checkout: checkout, processor: paymentProcessorFixture(t, checkout, database)},

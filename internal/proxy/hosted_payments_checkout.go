@@ -54,11 +54,8 @@ type paddleCheckoutDelivery struct {
 	now      func() time.Time
 }
 
-func newPaddleCheckoutDelivery(database *gormManagedTenantDatabase, catalog *fundingCatalog, client billing.PaddleCommerceClient) (*paddleCheckoutDelivery, error) {
-	if database == nil || catalog == nil || client == nil {
-		return nil, fmt.Errorf("configure Paddle checkout delivery: missing dependency")
-	}
-	return &paddleCheckoutDelivery{database: database, catalog: catalog, client: client, now: time.Now}, nil
+func newPaddleCheckoutDelivery(database *gormManagedTenantDatabase, catalog *fundingCatalog, client billing.PaddleCommerceClient) *paddleCheckoutDelivery {
+	return &paddleCheckoutDelivery{database: database, catalog: catalog, client: client, now: time.Now}
 }
 
 type paymentCheckoutJob struct {

@@ -94,14 +94,8 @@ func newPaddlePaymentRuntime(settings *paymentSettings, database *gormManagedTen
 	if err != nil {
 		return nil, fmt.Errorf("configure shared Paddle client: %w", err)
 	}
-	checkout, err := newPaddleCheckoutDelivery(database, settings.catalog, client)
-	if err != nil {
-		return nil, err
-	}
-	processor, err := newPaddlePaymentProcessor(database, settings.catalog, client)
-	if err != nil {
-		return nil, err
-	}
+	checkout := newPaddleCheckoutDelivery(database, settings.catalog, client)
+	processor := newPaddlePaymentProcessor(database, settings.catalog, client)
 	inbox, err := newPaddlePaymentInbox(database, settings.catalog.environment, settings.catalog.processorAccountID, settings.webhookSecret, 5*time.Minute)
 	if err != nil {
 		return nil, err
