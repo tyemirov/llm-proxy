@@ -421,6 +421,12 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Search regression passed in 7.743 seconds and race checks in 35.912 seconds. Go lint and formatting passed.
   - No production code changed. No public API or event contract changed.
   - The diagnostic has 382 uncovered statements across 21172 statements. Use `/tmp/llm-proxy-b266-tool-limit-diagnostic.coverprofile`.
+  - Added six assignment mutation scenarios and two collection read scenarios through authenticated HTTP.
+  - Failed storage operations preserve tenant profiles, selected grants, and balances. Restoration applies one assignment across restart and replay.
+  - A separate scenario verifies ordered hosted and customer-owned assignments across providers. A conflicting grant cannot change the original selection.
+  - Assignment regression passed in 4.031 seconds and race checks in 41.997 seconds. Go lint and formatting passed.
+  - No production code or public contract changed.
+  - The diagnostic has 373 uncovered statements across 21172 statements. Use `/tmp/llm-proxy-b266-assignment-diagnostic.coverprofile`.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
   - Preserve the required coverage threshold and the current provider scope.

@@ -6,9 +6,8 @@ The user requested this handoff because the session has few tokens left.
 Use this section and the resume procedure below as the current instructions.
 F070 remains incomplete. This handoff does not complete or pause the goal.
 
-B266 tenant budget storage recovery is published. Publication was verified on September 24, 2026.
-The goal continuation resumed implementation after the requested handoff.
-The current increment verifies search limits after failed or corrupt storage reads.
+B266 search limit storage acceptance is published. Publication was verified on September 24, 2026.
+The current increment verifies atomic hosted assignments and explicit choices across providers.
 Do not expand the product scope.
 
 ### Checkout And Publication
@@ -24,7 +23,8 @@ Do not expand the product scope.
 - Published startup recovery commit: `31a41bda792f5b3ad6a627cbab8f497d39a35324`.
 - Published deferred payment commit: `a9a6f35b10316e92dd56495680a6dd5761f2b53a`.
 - Published tenant budget commit: `28ab5183a35e9ae4d7e45b97a8acf48211e49215`.
-- Local HEAD and the PR head matched that commit before the search limit increment.
+- Published search limit commit: `dadcfa99e766f4c10507726ea0b473f756e2afd0`.
+- Local HEAD and the PR head matched that commit before the assignment increment.
 - Verify the commit that contains this section in PR 344 before further edits.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
@@ -36,7 +36,29 @@ Do not expand the product scope.
 Application merge, release, and deployment remain outside the current authorization.
 The current production changes have focused validation. Aggregate validation remains incomplete.
 
-### Latest Search Limit Storage Acceptance
+### Latest Hosted Assignment Storage Acceptance
+
+The increment adds `internal/proxy/hosted_assignment_recovery_internal_test.go` and `internal/proxy/hosted_assignment_recovery_test.go`.
+Six mutation scenarios cover tenant locks, grant reads, assignment reads, account assignment reads, assignment writes, and profile writes.
+Two collection read scenarios verify that unavailable storage cannot return partial assignments.
+Failed mutations preserve the tenant profile, selected grant, and balance through authenticated HTTP.
+Restoration applies one assignment. Repeated restart and replay preserve all selected resources.
+
+A separate scenario combines hosted OpenAI and customer-owned Gemini assignments.
+The collection preserves both explicit choices in provider order.
+A conflicting grant returns HTTP 409 without changing either choice. Restart preserves the original selection.
+An invalid tenant identifier returns the existing HTTP 404 response.
+
+Assignment regression passed in 4.031 seconds. Race checks passed in 41.997 seconds.
+Go lint and formatting passed. No test process remains active.
+No production code or public contract changed. Evidence uses `/tmp/llm-proxy-b266-assignment` as its prefix.
+The initial fixture used an unrelated funds-resolution OpenAPI validator. The corrected fixture uses the existing account HTTP helper.
+The first mixed-provider check expected HTTP 400 for an invalid tenant. The corrected assertion preserves the existing HTTP 404 contract.
+
+The current diagnostic is `/tmp/llm-proxy-b266-assignment-diagnostic.coverprofile`.
+It has 373 uncovered statements across 21172 statements. This diagnostic does not replace aggregate CI.
+
+### Previous Search Limit Storage Acceptance
 
 The increment adds `internal/proxy/hosted_tool_limit_recovery_internal_test.go`.
 Four scenarios inject failed reads and corrupt price documents at the database boundary.
@@ -327,7 +349,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b266-tool-limit-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b266-assignment-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -343,7 +365,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest search limit diagnostic has 382 uncovered statements across 21172 statements.
+The latest assignment diagnostic has 373 uncovered statements across 21172 statements.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.
