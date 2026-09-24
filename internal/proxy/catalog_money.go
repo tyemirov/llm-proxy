@@ -22,6 +22,17 @@ func parseExactMoney(value ExactMoney) (*big.Rat, error) {
 	return new(big.Rat).SetFrac(numerator, denominator), nil
 }
 
+func parseUSDCentRemainder(value ExactMoney) (*big.Rat, error) {
+	remainder, err := parseExactMoney(value)
+	if err != nil {
+		return nil, err
+	}
+	if remainder.Cmp(big.NewRat(1, usdCentsPerDollar)) >= 0 {
+		return nil, fmt.Errorf("%w: remainder must be less than one cent", ErrCatalogRatingInvalid)
+	}
+	return remainder, nil
+}
+
 // SettleUSDCents floors aggregate charges at the ledger's integer-cent boundary.
 // The exact remainder must be retained with the account in the same transaction.
 func SettleUSDCents(charge, remainder ExactMoney) (int64, ExactMoney, error) {
@@ -29,12 +40,9 @@ func SettleUSDCents(charge, remainder ExactMoney) (int64, ExactMoney, error) {
 	if err != nil {
 		return 0, ExactMoney{}, err
 	}
-	carry, err := parseExactMoney(remainder)
+	carry, err := parseUSDCentRemainder(remainder)
 	if err != nil {
 		return 0, ExactMoney{}, err
-	}
-	if carry.Cmp(big.NewRat(1, usdCentsPerDollar)) >= 0 {
-		return 0, ExactMoney{}, fmt.Errorf("%w: remainder must be less than one cent", ErrCatalogRatingInvalid)
 	}
 	amount.Add(amount, carry)
 	scaled := new(big.Rat).Mul(amount, new(big.Rat).SetInt64(usdCentsPerDollar))
@@ -54,12 +62,9 @@ func CreditUSDCents(credit, remainder ExactMoney) (int64, ExactMoney, error) {
 	if err != nil {
 		return 0, ExactMoney{}, err
 	}
-	carry, err := parseExactMoney(remainder)
+	carry, err := parseUSDCentRemainder(remainder)
 	if err != nil {
 		return 0, ExactMoney{}, err
-	}
-	if carry.Cmp(big.NewRat(1, usdCentsPerDollar)) >= 0 {
-		return 0, ExactMoney{}, fmt.Errorf("%w: remainder must be less than one cent", ErrCatalogRatingInvalid)
 	}
 	residual := new(big.Rat).Sub(carry, amount)
 	if residual.Sign() >= 0 {

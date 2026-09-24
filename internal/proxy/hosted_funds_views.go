@@ -39,6 +39,9 @@ func (database *gormManagedTenantDatabase) billingFundsBalance(ctx context.Conte
 		if err == nil {
 			response.State = financial.State
 			response.UnsettledFraction = ExactMoney{Numerator: financial.RemainderNumerator, Denominator: financial.RemainderDenominator}
+			if _, err := parseUSDCentRemainder(response.UnsettledFraction); err != nil {
+				return fmt.Errorf("read retained remainder: %w", err)
+			}
 		}
 		// Read the shared account without the service's create-on-read behavior.
 		var account gormstore.LedgerAccount

@@ -66,6 +66,27 @@ retain satisfied historical dependencies.
   Rating tests passed in 25.214 seconds. Management tests passed in 17.905 seconds.
   Price integrity race tests passed in 199.411 seconds. Go lint and format checks pass.
 
+- [x] [B269] (P1) Reject invalid stored fractions from balance reads.
+  Evidence:
+  A valid balance GET returns HTTP 200 when the stored remainder has a zero denominator, invalid text, or a negative numerator.
+  It also returns a remainder of USD 1 although the account fraction must stay below one cent.
+  Goal:
+  Apply the same remainder contract to public balances and financial transactions.
+  Requirements:
+  - Validate the stored remainder at the database boundary.
+  - Use the existing service error response without private data.
+  - Share remainder validation with settlement and credit calculations.
+  - Preserve pending delivery and customer funds until the original data is restored.
+  Validation:
+  - Reject each corrupt balance through the authenticated HTTP resource.
+  - Verify one settlement after restoration and restart.
+  Resolution:
+  Balance reads now reject invalid stored fractions with HTTP 500 and `billing_account_store_failed`.
+  The public response excludes private data. Settlement, credits, and balance reads share one remainder validator.
+  All 20 recovery scenarios passed. Funds and money tests passed in 103.746 seconds.
+  Management tests passed in 18.131 seconds. The new race suite passed in 128.605 seconds.
+  Go lint and format checks pass. The public error schema is unchanged.
+
 - [ ] [B266] (P1) Restore the required coverage gate for the hosted billing stack.
   Evidence:
   The corrected stack CI run passed all Go tests but reported `coverage total 95.3%, want 100.0%`.
@@ -93,11 +114,13 @@ retain satisfied historical dependencies.
   - Added 32 retained-price scenarios for corrupt data, invalid bounds, and prices that do not match the accepted request.
   - Invalid prices preserve pending delivery and customer funds. Restoration settles once without another provider call.
   - B268 fixes the stored-price error response found by these checks.
-  - The new price integrity race suite passed in 199.411 seconds.
-  - The rating regression passed in 25.214 seconds. The management regression passed in 17.905 seconds.
-  - Go lint and format checks pass.
+  - Added 20 settlement scenarios for later read failures, corrupt amounts, and reservation conflicts after Ledger effects.
+  - Failed settlement preserves pending delivery, holds, and funds. Restoration settles once without another provider call.
+  - B269 fixes the invalid balance response found by these checks and shares the remainder validator across financial boundaries.
+  - Funds and money tests passed in 103.746 seconds. Management tests passed in 18.131 seconds.
+  - The new settlement recovery race suite passed in 128.605 seconds. Go lint and format checks pass.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 614 uncovered statements. Unchanged source blocks retain prior counts across the B267 decoder edit.
+  - The combined diagnostic has 602 uncovered statements. Unchanged source blocks retain prior counts across source edits.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

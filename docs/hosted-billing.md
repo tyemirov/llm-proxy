@@ -1108,6 +1108,8 @@ All cent amounts use decimal strings to preserve integer precision in browsers.
 `pending_cents` identifies reservations that require financial reconciliation and forms part of reserved cents.
 
 `unsettled_fraction` retains an exact USD charge below one cent for later settlement.
+If the stored fraction is invalid, the balance read returns HTTP 500 with `billing_account_store_failed`.
+Settlement and credits use the same fraction validation.
 The account state identifies active, suspended, or reconciliation-required financial access.
 Financial read failures return an error without partial balance data.
 
