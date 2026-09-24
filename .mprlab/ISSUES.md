@@ -41,7 +41,13 @@ retain satisfied historical dependencies.
   - Random-source failures preserve accepted authority. Unreadable grant data does not expose partial resources.
   - The connection and grant regression passed in 3.698 seconds. Authority race checks passed in 37.526 seconds.
   - Go lint and format checks pass after the authority increment.
-  - Combined focused profiles cover 137 statements absent from the retained aggregate profile. This diagnostic is not a new CI result.
+  - Added exact reconciliation differences for processor snapshots, refund state, receipt identity, and Ledger holds.
+  - Added evidence read failures, atomic checkpoint recovery, invalid command inputs, and completed report recovery.
+  - Concurrent workers compare the same processor snapshot and retain one checkpoint and result.
+  - The reconciliation regression passed in 13.401 seconds. Its race suite passed in 138.827 seconds.
+  - The added Ledger-history check passed with the race detector in 6.751 seconds. Go lint and format checks pass.
+  - The Ledger-history check rejects offsetting monetary entries as well as balance changes during reconciliation.
+  - Combined focused profiles cover 193 statements absent from the retained aggregate profile. This diagnostic is not a new CI result.
   - The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
