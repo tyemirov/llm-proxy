@@ -267,7 +267,11 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Ten public startup scenarios reject incomplete funds storage, incorrect Ledger indexes, and unavailable metadata.
   - Rejected startup preserves the schema and financial resources. Restored storage permits two normal starts without repeated financial effects.
   - All ten startup scenarios passed in 4.752 seconds. Their race run passed in 68.107 seconds. Lint and format checks passed.
-  - The combined diagnostic has 443 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
+  - Five funded media scenarios cover failed claim renewal and failed authorization after dispatch intent.
+  - Rejected provider calls and interrupted work retain funds without partial output. Restart cannot repeat the provider submission.
+  - Media recovery and the new scenarios passed in 22.151 seconds. No production code changed.
+  - All five new race scenarios passed in 57.154 seconds. Go lint and format checks passed.
+  - The combined diagnostic has 440 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

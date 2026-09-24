@@ -1,19 +1,21 @@
 # F070 Handoff
 
-## Latest Financial Storage Increment: 2026-09-24
+## Latest Media Authority Increment: 2026-09-24
 
 This section supersedes earlier coverage totals and next-step notes.
-B273 is published as `f09ee8d6` in ready PR 344. Catalog acceptance followed in `a7dcb7f8`.
-The subsequent increment adds `internal/proxy/hosted_funds_schema_recovery_internal_test.go`.
-Ten public startup scenarios reject incomplete funds storage, incorrect Ledger indexes, and unavailable column or index metadata.
-They preserve retained schemas and financial resources. Restoration permits two normal starts without repeated financial effects.
+B273 is published as `f09ee8d6` in ready PR 344. Catalog acceptance followed in `a7dcb7f8`, and financial schema acceptance in `c51ddf6d`.
+The subsequent increment adds `internal/proxy/hosted_media_renewal_recovery_internal_test.go`.
+Five funded media scenarios reject failed claim renewal and failed authorization after dispatch intent.
+They retain funds without partial output. Restart does not repeat the provider submission.
+The shared recovery fixture now accepts a controlled HTTP response handler and retains the observed submission count across restart.
 No production code changed. No API or event contract changed.
 
-All ten startup scenarios passed in 4.752 seconds. Their race run passed in 68.107 seconds.
+Before fixture changes, media recovery characterization passed in 22.252 seconds.
+Final media regression passed in 22.151 seconds. All five new race scenarios passed in 57.154 seconds.
 Go lint and format checks passed after the last test change.
-The diagnostic has 443 uncovered statements across 21145 statements.
-Use `/tmp/llm-proxy-b266-financial-schema-diagnostic.coverprofile` or `/tmp/llm-proxy-b266-diagnostic.coverprofile`.
-The merge script is `/tmp/llm-proxy-b266-merge-financial-schema.py`. Logs use `/tmp/llm-proxy-b266-financial-schema` as their prefix.
+The diagnostic has 440 uncovered statements across 21145 statements.
+Use `/tmp/llm-proxy-b266-media-renewal-diagnostic.coverprofile` or `/tmp/llm-proxy-b266-diagnostic.coverprofile`.
+The merge script is `/tmp/llm-proxy-b266-merge-media-renewal.py`. Logs use `/tmp/llm-proxy-b266-media-renewal` as their prefix.
 
 The hosted billing runbook records a fresh source review of the remaining provider measurement contracts.
 Responses image-tool usage, ElevenLabs alignment billed duration, and Dictator processed input duration remain unresolved.

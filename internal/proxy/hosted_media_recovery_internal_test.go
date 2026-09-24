@@ -50,17 +50,24 @@ func newFundedMediaRecoveryWorker(t *testing.T, database *gormManagedTenantDatab
 
 func newFundedMediaRecoveryFixture(t *testing.T) fundedMediaRecoveryFixture {
 	t.Helper()
+	encoded := base64.StdEncoding.EncodeToString(imageBoundaryPNG(t, image.NewNRGBA(image.Rect(0, 0, 1024, 1024))))
+	return newFundedMediaRecoveryFixtureWithResponse(t, http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(writer, `{"data":[{"b64_json":%q}],"usage":{"total_tokens":22,"input_tokens":13,"output_tokens":9,"input_tokens_details":{"text_tokens":10,"image_tokens":3},"output_tokens_details":{"text_tokens":2,"image_tokens":7}}}`, encoded)
+	}))
+}
+
+func newFundedMediaRecoveryFixtureWithResponse(t *testing.T, response http.Handler) fundedMediaRecoveryFixture {
+	t.Helper()
 	database, _, management, _ := newHostedRatingFixture(t)
 	seedHostedFunds(t, database, 500)
 	calls := &atomic.Int64{}
-	encoded := base64.StdEncoding.EncodeToString(imageBoundaryPNG(t, image.NewNRGBA(image.Rect(0, 0, 1024, 1024))))
 	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		calls.Add(1)
 		if request.Method != http.MethodPost || request.Header.Get("Authorization") != "Bearer sk-platform-pinned" {
 			t.Error("media recovery changed dispatch authority")
 		}
-		writer.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(writer, `{"data":[{"b64_json":%q}],"usage":{"total_tokens":22,"input_tokens":13,"output_tokens":9,"input_tokens_details":{"text_tokens":10,"image_tokens":3},"output_tokens_details":{"text_tokens":2,"image_tokens":7}}}`, encoded)
+		response.ServeHTTP(writer, request)
 	}))
 	t.Cleanup(upstream.Close)
 	server, worker := newFundedMediaRecoveryWorker(t, database, upstream.URL, nil)
@@ -84,11 +91,12 @@ func (fixture fundedMediaRecoveryFixture) assertFailure(t *testing.T, state stri
 
 func (fixture fundedMediaRecoveryFixture) recover(t *testing.T, originalState string) {
 	t.Helper()
-	wantState, wantCalls := MediaOperationStateUncertain, int64(1)
+	wantState, wantCalls := MediaOperationStateUncertain, fixture.calls.Load()
 	posted, available := int64(500), int64(461)
 	switch originalState {
 	case MediaOperationStateQueued:
 		wantState, posted, available = MediaOperationStateSucceeded, 498, 498
+		wantCalls++
 	case MediaOperationStateFailed:
 		wantState, wantCalls, available = MediaOperationStateFailed, 0, 500
 	}
