@@ -202,10 +202,13 @@ retain satisfied historical dependencies.
   - Added 10 payment-state scenarios for failed storage, malformed events, processor outages, incomplete evidence, and cancellation after verified funding.
   - Failed startup closes the listener and preserves the pending event. Recovery applies cancellation once without partial financial records.
   - Cancellation cannot reverse verified funding. Conflicting evidence remains in reconciliation until matching completed-payment evidence resolves it.
-  - The payment regression passed in 124.414 seconds. Management tests passed in 19.121 seconds.
-  - All 22 targeted state and credit race scenarios passed in 139.001 seconds. Go lint and format checks passed.
+  - Hosted scopes now retain validated conditions, attempt limits, and transport from the immutable catalog.
+  - Media admission no longer repeats service or model resolution. Startup validation and request-specific pricing remain unchanged.
+  - Runtime HTTP checks passed in 42.490 seconds and CLI checks passed in 1.915 seconds.
+  - Media financial checks passed in 74.709 seconds. Both targeted runtime race scenarios passed in 19.718 seconds.
+  - Management tests passed in 24.410 seconds. Go lint and format checks passed.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 470 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
+  - The combined diagnostic has 468 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

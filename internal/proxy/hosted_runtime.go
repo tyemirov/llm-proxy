@@ -24,9 +24,9 @@ func (settings *hostedRuntimeSettings) authorizeCompletion(transaction *gorm.DB,
 	var err error
 	if request.Operation == ModelOperationText {
 		input := chatRequestParameters{provider: intent.provider, model: textModelDefinition{identifier: intent.model}, maxTokens: intent.maxTokens, webSearchEnabled: intent.webSearch}
-		reserve, err = newHostedTextPriceAdmission(settings.catalog, input, request.CreatedAt, scope.Conditions, scope.MaximumAttempts)
+		reserve, err = newHostedTextPriceAdmission(settings.catalog, input, request.CreatedAt, scope.conditions, scope.maximumAttempts)
 	} else {
-		reserve, err = newHostedMediaPriceAdmission(settings.catalog, request, intent.provider.activeTransport.requestCodec, scope.Conditions, scope.MaximumAttempts)
+		reserve, err = newHostedMediaPriceAdmission(settings.catalog, request, intent.provider.activeTransport.requestCodec, scope.conditions, scope.maximumAttempts)
 	}
 	if err != nil {
 		return fmt.Errorf("%w: select hosted request price: %w", errFinancialAdmissionUnavailable, err)
@@ -45,9 +45,15 @@ type HostedOfferingConfiguration struct {
 
 type hostedOfferingKey struct{ provider, model, operation string }
 
+type hostedOfferingScope struct {
+	conditions      CatalogPriceConditions
+	maximumAttempts uint32
+	transport       string
+}
+
 type hostedRuntimeSettings struct {
 	catalog   CatalogService
-	offerings map[hostedOfferingKey]HostedOfferingConfiguration
+	offerings map[hostedOfferingKey]hostedOfferingScope
 }
 
 func newHostedRuntimeSettings(input *HostedConfiguration, catalog ModelCatalog) (*hostedRuntimeSettings, error) {
@@ -61,7 +67,7 @@ func newHostedRuntimeSettings(input *HostedConfiguration, catalog ModelCatalog) 
 	if err != nil {
 		return nil, fmt.Errorf("configure hosted price catalog: %w", err)
 	}
-	settings := &hostedRuntimeSettings{catalog: prices, offerings: make(map[hostedOfferingKey]HostedOfferingConfiguration, len(input.Offerings))}
+	settings := &hostedRuntimeSettings{catalog: prices, offerings: make(map[hostedOfferingKey]hostedOfferingScope, len(input.Offerings))}
 	for _, offering := range input.Offerings {
 		key := hostedOfferingKey{offering.Provider, offering.Model, offering.Operation}
 		if offering.Provider != strings.TrimSpace(offering.Provider) || offering.Model != strings.TrimSpace(offering.Model) {
@@ -76,10 +82,13 @@ func newHostedRuntimeSettings(input *HostedConfiguration, catalog ModelCatalog) 
 		if err := validateCatalogPriceConditions(offering.Conditions); err != nil {
 			return nil, fmt.Errorf("configure hosted conditions for scope %v: %w", key, err)
 		}
+		scope := hostedOfferingScope{conditions: offering.Conditions, maximumAttempts: offering.MaximumAttempts}
 		if offering.Model == "" {
-			if _, err := prices.ResolveService(offering.Provider, offering.Operation); err != nil {
+			resolved, err := prices.ResolveService(offering.Provider, offering.Operation)
+			if err != nil {
 				return nil, fmt.Errorf("configure hosted service scope: %w", err)
 			}
+			scope.transport = resolved.Transport
 		} else {
 			resolved, err := prices.ResolveOffering(offering.Provider, offering.Model)
 			if err != nil {
@@ -88,8 +97,9 @@ func newHostedRuntimeSettings(input *HostedConfiguration, catalog ModelCatalog) 
 			if !slices.Contains(resolved.Operations, offering.Operation) {
 				return nil, fmt.Errorf("configure hosted execution: unsupported operation in scope %v", key)
 			}
+			scope.transport = resolved.Transport
 		}
-		settings.offerings[key] = offering
+		settings.offerings[key] = scope
 	}
 	return settings, nil
 }
@@ -100,25 +110,11 @@ func (settings *hostedRuntimeSettings) mediaAdmission(providers *providerRegistr
 		if !exists {
 			return errHostedAuthorityDenied
 		}
-		var transport string
-		if request.Model == "" {
-			route, err := settings.catalog.ResolveService(request.Provider, request.Operation)
-			if err != nil {
-				return fmt.Errorf("%w: resolve hosted service: %w", errFinancialAdmissionUnavailable, err)
-			}
-			transport = route.Transport
-		} else {
-			route, err := settings.catalog.ResolveOffering(request.Provider, request.Model)
-			if err != nil {
-				return fmt.Errorf("%w: resolve hosted media offering: %w", errFinancialAdmissionUnavailable, err)
-			}
-			transport = route.Transport
-		}
-		codec := providers.definitions[providerID(request.Provider)].transports[transport].requestCodec
-		if err := matchHostedMediaPriceConditions(codec, scope.Conditions, operation); err != nil {
+		codec := providers.definitions[providerID(request.Provider)].transports[scope.transport].requestCodec
+		if err := matchHostedMediaPriceConditions(codec, scope.conditions, operation); err != nil {
 			return fmt.Errorf("%w: select hosted media conditions: %w", errFinancialAdmissionUnavailable, err)
 		}
-		reserve, err := newHostedMediaPriceAdmission(settings.catalog, request, codec, scope.Conditions, scope.MaximumAttempts)
+		reserve, err := newHostedMediaPriceAdmission(settings.catalog, request, codec, scope.conditions, scope.maximumAttempts)
 		if err != nil {
 			return fmt.Errorf("%w: select hosted media price: %w", errFinancialAdmissionUnavailable, err)
 		}
