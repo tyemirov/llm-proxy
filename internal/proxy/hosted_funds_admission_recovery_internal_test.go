@@ -172,3 +172,45 @@ func TestHostedFundsAdmissionBalanceReadFailuresRollBackBeforeDispatch(t *testin
 		})
 	}
 }
+
+func TestHostedFundsAdmissionRejectsCorruptAccountRemainders(t *testing.T) {
+	for _, scenario := range []struct {
+		name      string
+		remainder ExactMoney
+	}{
+		{"zero-denominator", ExactMoney{Numerator: "0", Denominator: "0"}},
+		{"negative", ExactMoney{Numerator: "-1", Denominator: "1000"}},
+		{"invalid-number", ExactMoney{Numerator: "private-invalid-remainder", Denominator: "1000"}},
+		{"whole-cent", ExactMoney{Numerator: "1", Denominator: "100"}},
+		{"above-cent", ExactMoney{Numerator: "1", Denominator: "1"}},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			fixture := newFundsAdmissionFixture(t)
+			before := fixture.state(t)
+			callback := fixture.database.database.Callback().Query()
+			const name = "test:funds_admission_remainder"
+			var corruptReads atomic.Int64
+			if err := callback.After("gorm:query").Register(name, func(transaction *gorm.DB) {
+				if transaction.Error != nil || transaction.Statement.Table != "managed_funds_account_records" {
+					return
+				}
+				if record, ok := transaction.Statement.Dest.(*managedFundsAccountRecord); ok {
+					corruptReads.Add(1)
+					record.RemainderNumerator = scenario.remainder.Numerator
+					record.RemainderDenominator = scenario.remainder.Denominator
+				}
+			}); err != nil {
+				t.Fatal(err)
+			}
+			fixture.reject(t)
+			if err := callback.Remove(name); err != nil {
+				t.Fatal(err)
+			}
+			if corruptReads.Load() != 2 {
+				t.Fatalf("corrupt financial account reads=%d want=2", corruptReads.Load())
+			}
+			fixture.assertRolledBack(t, before)
+			fixture.recoverAdmission(t)
+		})
+	}
+}

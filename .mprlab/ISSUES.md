@@ -35,6 +35,27 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B278] (P1) Reject corrupt account remainders before paid admission.
+  Evidence:
+  Five HTTP scenarios returned `status=200 want=503 body=funded result` after storage supplied an invalid retained account remainder.
+  Admission accepted zero denominators, negative amounts, malformed numbers, and remainders at or above one cent.
+  Balance reads and settlement already reject these values through the shared remainder validator.
+  Requirements:
+  - Validate the retained account remainder at the financial admission boundary before holds or provider dispatch.
+  - Reuse the current remainder validator and shared Ledger model.
+  - Return the existing financial admission error without private storage details.
+  - Preserve request, price, reservation, balance, and Ledger records after rejection.
+  - Verify restored admission, exact settlement, and restart replay through HTTP.
+  - Run financial regression, race, lint, and formatting checks.
+  - Keep B266 coverage and final F070 acceptance open.
+  Resolution:
+  Financial admission now validates the account remainder before payment holds or provider dispatch.
+  The five corruption scenarios reject with HTTP 503, make zero provider calls, and preserve all financial resources.
+  Restored storage admits the original request once. Replay and restart preserve exact settlement without another provider call.
+  Targeted checks passed in 2.739 seconds. Financial regression passed in 144.422 seconds.
+  Race checks passed in 35.706 seconds. Go lint and formatting passed.
+  No public schema or event contract changed. B266 and final F070 acceptance remain open.
+
 - [x] [B277] (P1) Reject unreadable grant scope before a transition commits.
   Evidence:
   A grant PATCH returned HTTP 500 for unreadable stored offerings but committed the requested suspension and a new audit revision.
@@ -480,6 +501,13 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - The diagnostic has 366 uncovered statements across 21165 statements. Use `/tmp/llm-proxy-b277-diagnostic.coverprofile`.
   - Old grant coverage coordinates were discarded. The store interface change preserves executable source and coverage coordinates.
   - Complete aggregate CI and F070 acceptance remain open.
+  - B278 rejects invalid retained account remainders before payment holds or provider dispatch.
+  - Five corruption scenarios previously returned HTTP 200. They now return HTTP 503 with zero provider calls and no partial financial effects.
+  - The admission boundary reuses the existing remainder validator. Restoration, replay, and restart preserve one exact settlement.
+  - Targeted checks passed in 2.739 seconds. Financial regression passed in 144.422 seconds, and race checks passed in 35.706 seconds.
+  - Go lint and formatting passed. No public schema or event contract changed.
+  - The diagnostic has 366 uncovered statements across 21167 statements. Use `/tmp/llm-proxy-b278-diagnostic.coverprofile`.
+  - Old coverage coordinates for `hosted_funds.go` were discarded. Complete aggregate CI and F070 acceptance remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
   - Preserve the required coverage threshold and the current provider scope.

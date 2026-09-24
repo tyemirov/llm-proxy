@@ -6,8 +6,8 @@ The user requested this handoff because the session has few tokens left.
 Use this section and the resume procedure below as the current instructions.
 F070 remains incomplete. This handoff does not complete or pause the goal.
 
-B277 corrects grant scope decoding after transaction commit. Local regression and race checks passed.
-The preceding grant transition commit was verified in PR 344 on September 24, 2026.
+B278 adds retained remainder validation before financial admission. Targeted, regression, and race checks passed.
+The preceding B277 commit is published in PR 344.
 Do not expand the product scope.
 
 ### Checkout And Publication
@@ -28,8 +28,9 @@ Do not expand the product scope.
 - Published payment revision commit: `713e9d50096e54e51b1a7860a41d42fdc70ce947`.
 - Published exact net charge commit: `3308ccc48eed91e0ce3d192abd599ef5d7a2f89d`.
 - Published grant transition commit: `3c549a55aaac2bbe97a39ead8ace49b68f4ee77e`.
-- Local HEAD and PR 344 matched that commit before B277.
-- Verify the commit that contains B277 in PR 344 before further edits.
+- Published B277 commit: `eeb768f86146c4abacc783b9bf75d1f7dc92fd68`.
+- Local HEAD and PR 344 matched that commit before B278.
+- Verify the commit that contains B278 in PR 344 before further edits.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
 - PR stack: 339 (F065), 340 (F066), 341 (F067), 342 (F068), 344 (F069).
@@ -40,7 +41,29 @@ Do not expand the product scope.
 Application merge, release, and deployment remain outside the current authorization.
 The current production changes have focused validation. Aggregate validation remains incomplete.
 
-### Latest Grant Scope Boundary And B277
+### Latest Financial Admission Boundary And B278
+
+Five public HTTP scenarios reproduced B278. Invalid account remainders permitted provider work and returned HTTP 200 instead of HTTP 503.
+The cases cover zero denominators, negative amounts, malformed numbers, and remainders at or above one cent.
+A callback supplies the corrupt values at the database read boundary. Product admission and provider execution remain real.
+
+Admission now uses the existing `parseUSDCentRemainder` validator before payment holds or provider dispatch.
+The same validator controls balance reads and settlement. The shared Ledger model and monetary representation remain unchanged.
+Rejected admission makes zero provider calls and retains no partial request, price, financial account, or reservation records.
+Restored storage admits the same key once. Repeated requests and restart preserve exact settlement and one provider call.
+
+The five corrected scenarios passed in 2.739 seconds. Race checks passed in 35.706 seconds.
+Financial regression passed in 144.422 seconds. Go lint and formatting passed. No validation process remains active.
+Its log and profile use `/tmp/llm-proxy-b278-regression` as their prefix.
+The initial failures are in `/tmp/llm-proxy-b266-admission-remainder-before.log`.
+Other final evidence uses `/tmp/llm-proxy-b278` as its prefix.
+
+All old coverage coordinates for `internal/proxy/hosted_funds.go` were discarded. Only current financial regression counts contribute coverage for that file.
+The current diagnostic is `/tmp/llm-proxy-b278-diagnostic.coverprofile`.
+It has 366 uncovered statements across 21167 statements. This diagnostic does not replace aggregate CI.
+No public schema or event contract changed. B278 is resolved. B266 and final F070 acceptance remain open.
+
+### Previous Grant Scope Boundary And B277
 
 A public HTTP test reproduced B277: an unreadable saved scope caused HTTP 500 after the grant transition and audit committed.
 Three additional scenarios inject corrupt scope at the final transaction read for suspension, reactivation, and revocation.
@@ -450,7 +473,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b277-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b278-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -466,7 +489,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest B277 diagnostic has 366 uncovered statements across 21165 statements.
+The latest B278 diagnostic has 366 uncovered statements across 21167 statements.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.

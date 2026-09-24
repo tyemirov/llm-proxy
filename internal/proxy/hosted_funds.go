@@ -142,6 +142,9 @@ func reserveHostedFunds(transaction *gorm.DB, request managedJournalRequestRecor
 	if financial.State != fundsAccountActive {
 		return errFinancialAccountSuspended
 	}
+	if _, err := parseUSDCentRemainder(ExactMoney{Numerator: financial.RemainderNumerator, Denominator: financial.RemainderDenominator}); err != nil {
+		return fmt.Errorf("read retained remainder for financial account %s: %w", request.BillingAccountID, err)
+	}
 	if err := refreshPaymentHolds(transaction, request.BillingAccountID, request.CreatedAt); err != nil {
 		return err
 	}

@@ -936,6 +936,8 @@ These tests do not prove funds settlement, provider reconciliation, or recovery 
 
 F068 uses the shared Ledger service in the managed database transaction.
 Admission locks the billing account before it reads funds or creates a reservation.
+Admission rejects a retained account remainder that is malformed, negative, or at least one cent.
+This check uses the same remainder validator as balance reads and settlement, before payment holds or provider dispatch.
 The transaction retains the request, accepted price, and reservation together.
 An unsuccessful transaction retains none of these effects.
 All tenants of the account use the same Ledger balance.
