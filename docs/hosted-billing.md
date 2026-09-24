@@ -1007,6 +1007,8 @@ This resource also supports a settled decision with unresolved provider usage.
 The request body contains a positive exact `credit`, a `reason`, and an `evidence_reference`.
 The account owner or an operator can read the receipt with `GET` at the same resource.
 The audit record retains the operator identity and evidence reference. Customer responses omit these private fields.
+Retained receipts require a positive credit, a valid reason code, and a creation timestamp.
+Corrupt receipts return HTTP 500 with `billing_account_store_failed` and no partial receipt.
 
 Each request credit has one immutable identifier. A changed repeat produces `409`.
 The account lock serializes request credits and usage credits against the same settled amount.

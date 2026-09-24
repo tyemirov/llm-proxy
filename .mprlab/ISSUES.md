@@ -27,6 +27,28 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B270] (P1) Reject corrupt retained financial credit receipts.
+  Evidence:
+  Authenticated credit reads return HTTP 200 with invalid, negative, or zero credit amounts and invalid denominators.
+  The same reads expose invalid reason codes and missing receipt timestamps.
+  Goal:
+  Validate retained credit receipts before publication through the financial API.
+  Requirements:
+  - Validate the stored amount, reason, and timestamp at the database boundary.
+  - Return the existing service error without partial financial data or private details.
+  - Preserve balances, Ledger history, tenant usage, and the original financial decision.
+  Validation:
+  - Verify corrupt receipts through owner and operator HTTP sessions.
+  - Restore the original record and verify identical reads and idempotent command replay.
+  - Run credit, management, race, lint, and format checks.
+  Resolution:
+  Retained credit receipts now validate the amount, reason code, and timestamp before publication.
+  Invalid records return HTTP 500 with `billing_account_store_failed` and no partial receipt.
+  All 18 scenarios passed, including storage failures and corrupt usage credits. Restoration preserves the original receipt and financial effects.
+  Funds, rating, and financial-read tests passed in 145.282 seconds. Management tests passed in 18.359 seconds.
+  The new credit-read race suite passed in 34.426 seconds. Go lint and format checks pass.
+
+
 - [x] [B267] (P1) Reject trailing JSON before management writes.
   Evidence:
   The funds-resolution HTTP test sent a valid decision followed by a second JSON object.
@@ -126,10 +148,12 @@ retain satisfied historical dependencies.
   - Added 76 financial-read scenarios for storage failures, corrupt charges and prices, invalid queries, missing resources, and account isolation.
   - Failed reads return no partial financial data. Restored storage returns the original resources without new provider work.
   - A new billing account reads zero funds without creating Ledger or financial account records.
-  - The new financial-read race suite passed in 27.252 seconds. Management tests passed in 17.575 seconds.
-  - Go lint and format checks pass. Production source did not change.
+  - Added 18 credit-read scenarios for corrupt receipts, corrupt usage credits, storage failures, and restoration.
+  - B270 fixes corrupt credit receipt publication. Restored records preserve financial resources and idempotent command replay.
+  - Funds, rating, and financial-read tests passed in 145.282 seconds. Management tests passed in 18.359 seconds.
+  - The new credit-read race suite passed in 34.426 seconds. Go lint and format checks pass.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 546 uncovered statements. Unchanged source blocks retain prior counts across source edits.
+  - The combined diagnostic has 544 uncovered statements. Changed production files use only current validation counts.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

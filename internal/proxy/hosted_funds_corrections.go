@@ -79,7 +79,17 @@ func (database *gormManagedTenantDatabase) fundsCorrection(ctx context.Context, 
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errBillingAccountNotFound
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		amount, err := parseExactMoney(ExactMoney{Numerator: record.CreditNumerator, Denominator: record.CreditDenominator})
+		if err != nil {
+			return fmt.Errorf("decode retained credit amount: %w", err)
+		}
+		if amount.Sign() == 0 || !journalDimensionPattern.MatchString(record.Reason) || record.CreatedAt.IsZero() {
+			return fmt.Errorf("invalid retained credit receipt")
+		}
+		return nil
 	})
 	if err != nil {
 		return managementFundsCreditResponse{}, fmt.Errorf("financial credit for request %s: %w", requestID, err)
