@@ -1,5 +1,7 @@
 # ISSUES
 
+[repo:MediaOps]: https://github.com/MarcoPoloResearchLab/MediaOps
+
 Entries record newly discovered requests or changes.
 
 Read @AGENTS.md (Workflow section), @POLICY.md, and relevant stack guides before implementing changes.
@@ -24,6 +26,12 @@ initial `v0.2.43` index and complete entries from later archive passes.
 
 Current dependencies name unresolved prerequisites only. Archived issue bodies
 retain satisfied historical dependencies.
+
+Migration scope (2026-09-23):
+LLM Proxy owns all media-provider API access. MediaOps provides one API and processing service.
+TelePrompter is the separate timeline and prompt website. Frame Picker and other retained interfaces stay in MediaOps.
+Umbrellas coordinate executable dependencies. Complete dependency issues before closing their umbrella.
+Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I092 owns final acceptance.
 
 ## BugFixes
 
@@ -348,6 +356,46 @@ retain satisfied historical dependencies.
   Validation:
   - Reject the recurring price through the real authenticated checkout resource with zero processor transaction creations.
   - Verify normal checkout, payment transitions, lost responses, and browser funding through controlled protocols.
+
+- [ ] [B258] (P1) Reject unsupported Dictator alignment languages and preserve typed failure evidence.
+  Goal:
+  Make language discovery, request validation, and provider failures obey the actual alignment contract.
+  Evidence (2026-09-23):
+  - Creative Director B073 requested Bulgarian source alignment after successful original-audio review for Kamu F001.
+  - Gateway operation `mop_d70826f8327790380bcbbf2dab6d31f2` used `audio.align`, `dictator`, `whisper-medium`, language `bg`, and `remove_punctuation=true`.
+  - Input asset: `ast_c6b8bc61647a663a30a5a8b1f5b24b3d`.
+  - The gateway accepted the operation at `2026-09-23T19:22:39.805937619Z` and reported terminal `provider_error` without outputs.
+  - Retained gateway logs identify native job `4e4cd4a7b0b448fd898d04d2a4bc2d17` and native input `24aabf6a77994eb2ab0f6ceb52ecbf85`.
+  - The native job records `dictator.alignment.input.invalid_language` with `unsupported language: 'bg'`.
+  - The native job failed approximately 16 milliseconds after execution started, before model loading or alignment.
+  - Deployed Dictator alignment languages exclude `bg`. Both installed WhisperX default model maps also exclude `bg`.
+  - Successful diarization `mop_51b12ff8a363772f37d8ee988391adfb` does not establish forced-alignment language support.
+  Failing boundary:
+  - `dictator_adapter.go` accepts any nonempty alignment language.
+  - `dictator_grpc_protocol.go` forwards the language to `SubmitAlignTranscriptJob`.
+  - `dictatorExecutionResult` reduces the native terminal failure to `provider_error` without the specific validation reason.
+  Requirements:
+  - Declare supported alignment languages through the current provider capability contract.
+  - Validate the selected language before operation acceptance, provider upload, and native job submission.
+  - Reject unsupported languages with a stable, actionable public error and zero provider dispatch.
+  - Preserve safe typed provider failure evidence when a native job still rejects an accepted request.
+  - Keep native handles, credentials, private endpoints, and raw provider details outside public responses.
+  - Keep transcription, diarization, and forced-alignment language sets distinct.
+  - Preserve this terminal operation, input asset, original audio, checked transcript, and prior accepted recognition.
+  Deliverables:
+  - Capability metadata, edge validation, safe error mapping, official client documentation, and public HTTP regression coverage.
+  Validation:
+  - Prove `bg` rejection against the currently unsupported route before any native upload or submission.
+  - Prove a declared supported language still reaches alignment.
+  - Prove a native invalid-language failure produces retained typed evidence without another submission.
+  - Prove terminal reads preserve the original operation and asset references.
+  Provider follow-up:
+  - Dictator F003 owns new Bulgarian forced-alignment support and exact model qualification.
+  - B258 can close with truthful rejection before F003. Bulgarian production acceptance requires F003 and a qualified gateway route.
+  Diagnosis scope:
+  - Inspection used retained logs, the native job file, and installed source. It submitted no new operation.
+  - No release, deployment, artifact replacement, or accepted-content change occurred.
+
 
 - [x] [B257] (P1) Document retained native completion failures.
   Resolution: The shared native HTTP 502 schema now includes the current durable failure envelope.
@@ -780,6 +828,170 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [ ] [I288] (P0) Simplify installation of the official Python client.
+  Goal: Make the official client easy to install in external applications.
+  Requirements:
+  - Use the PAL integration evidence in https://github.com/BeehiveInnovations/pal-mcp-server/pull/483.
+  - Replace the required Git checkout and GitHub release lookup with a standard Python package installation.
+  - Supply wheel and source packages through the repository release process.
+  - State the supported Python versions and the current release selection policy.
+  - Keep the client optional when a host supports older Python versions or other providers.
+  - Coordinate client installation examples with I292 and the Node.js package scope in F016.
+  Deliverables:
+  - Package metadata, release automation, installation instructions, and package tests.
+  - A separate operational record for package publication and package registry access.
+  Validation:
+  - Install the built package in a clean environment without Git or GitHub CLI.
+  - Send a request through the installed official client to a local protocol server.
+  - Verify host startup without the optional client.
+  - Run the applicable repository checks and record package publication separately.
+
+- [ ] [I289] (P0) Preserve completion metadata through official client results.
+  Goal: Let integrations report the actual route, usage, and completion status.
+  Requirements:
+  - Use the PAL integration evidence in https://github.com/BeehiveInnovations/pal-mcp-server/pull/483.
+  - Replace text-only information loss with one typed result contract for the official clients.
+  - Include output text, request identifier, actual provider and model, completion status, and available token usage.
+  - Represent unavailable usage explicitly. Keep measured usage separate from estimates and calculated cost.
+  - Reuse the canonical result from F038 and attribution semantics from F083.
+  - Keep durable connection history in F083 and charge calculation in F067.
+  - Keep provider credentials and native response bodies outside public results.
+  - Update the server, OpenAPI, applicable clients, and examples as one current contract.
+  Deliverables:
+  - Typed completion results and a reference adapter that uses their metadata.
+  Validation:
+  - Verify explicit routes, tenant-selected routes, available usage, absent usage, and provider termination through public interfaces.
+  - Verify that the reference adapter reports actual results without invented token counts.
+  - Run the applicable repository checks.
+
+- [ ] [I290] (P0) Make executable text capabilities usable through official clients.
+  Goal: Remove duplicate model catalogs from external integrations.
+  Requirements:
+  - Use the PAL integration evidence in https://github.com/BeehiveInnovations/pal-mcp-server/pull/483.
+  - Inspect existing discovery from F038 and the authoritative provider catalog before changing public interfaces.
+  - Expose tenant-authorized executable text offerings through the official clients.
+  - Include exact model identity, route eligibility, context limits, output limits, supported controls, and allowed reasoning values.
+  - Keep account-visible provider observations distinct from executable tenant offerings.
+  - Keep host aliases and subjective model scores in the host application.
+  - Preserve one catalog authority and one documented public discovery contract.
+  Deliverables:
+  - SDK discovery methods, capability types, current API documentation, and a reference adapter example.
+  Validation:
+  - Enumerate tenant offerings through a real public interface with controlled provider connections.
+  - Verify tenant isolation and exclusion of unavailable offerings.
+  - Configure valid requests from discovered capabilities without a copied provider catalog.
+  - Run the applicable repository checks.
+
+- [ ] [I291] (P0) Unify tenant authentication across official client operations.
+  Goal: Use one header-based credential contract for text and media requests.
+  Requirements:
+  - Use the PAL integration evidence in https://github.com/BeehiveInnovations/pal-mcp-server/pull/483.
+  - Replace text query credentials with the canonical bearer key contract already used by media and F038 interfaces.
+  - Update the server, OpenAPI, official clients, CLI, examples, and affected consumers together.
+  - Remove obsolete query credential handling from the changed interfaces.
+  - Preserve tenant authorization and the server-owned provider credential boundary.
+  - Keep tenant key creation and retrieval in F081.
+  - Remove raw credentials from generated URLs, errors, traces, and access logs.
+  Deliverables:
+  - One current authentication contract, consumer update instructions, and public boundary tests.
+  Validation:
+  - Verify text and media authorization with valid, invalid, missing, and cross-tenant credentials.
+  - Verify rejection of obsolete credential inputs on the changed interfaces.
+  - Inspect captured request URLs and diagnostic output for test credential values.
+  - Run the applicable repository checks.
+
+- [ ] [I292] (P0) Make integration guidance fit each language and host.
+  Goal: Let external applications use the official clients within their existing architecture.
+  Requirements:
+  - Use the PAL integration evidence in https://github.com/BeehiveInnovations/pal-mcp-server/pull/483.
+  - Separate shared security and validation requirements from language-specific configuration instructions.
+  - Supply Go application and Python plugin examples with each host's canonical configuration surface.
+  - Preserve PAL environment settings and JSON model metadata without a second YAML hierarchy.
+  - Distinguish configured defaults from model and reasoning choices owned by an operation.
+  - Define package installation and release selection for each supported language.
+  - Align the mpr-integration skill, client guides, and repository examples with the same contract.
+  - Coordinate installation instructions with I288 and Node.js documentation with F016.
+  - Keep website presentation work in I218.
+  Deliverables:
+  - Revised integration contracts, skill instructions, and executable examples.
+  Validation:
+  - Run Go and Python examples through official clients against local protocol servers.
+  - Verify startup validation, secret ownership, explicit routing, tenant defaults, and request budgets.
+  - Verify that examples use only the host's existing configuration hierarchy.
+  - Run the applicable repository and documentation checks.
+
+- [ ] [I293] (P0) Clarify request recovery and retry ownership for integrations.
+  Goal: Let callers recover accepted work without duplicate provider execution.
+  Requirements:
+  - Use the PAL integration evidence in https://github.com/BeehiveInnovations/pal-mcp-server/pull/483.
+  - Inspect I229 recovery and current hosted request behavior before extending ordinary text recovery.
+  - Define server work budgets, client deadlines, cancellation, request identity, and result retrieval in one contract.
+  - Supply typed errors for validation, authentication, throttling, transport failure, and uncertain execution.
+  - State when a caller can safely repeat a request and when it must retrieve existing work.
+  - Preserve uncertainty when provider execution cannot be established.
+  - Reuse F082 configuration error codes rather than creating competing error meanings.
+  - Apply the same recovery semantics to all applicable official clients.
+  Deliverables:
+  - Current recovery documentation, typed client results and errors, and deterministic protocol fixtures.
+  Validation:
+  - Verify failures before dispatch and lost responses after dispatch through public interfaces.
+  - Verify server restart, result retrieval, repeated request identity, and conflicting request content.
+  - Prove one provider execution for recoverable repeated requests.
+  - Verify the distinction between the server work budget and client transport deadline.
+  - Run the applicable repository checks.
+
+- [ ] [I294] (P0) {I288,I289,I290,I291,I292,I293} Qualify official clients through external reference integrations.
+  Goal: Detect client integration failures before consumers adopt a release.
+  Requirements:
+  - Use the PAL integration evidence in https://github.com/BeehiveInnovations/pal-mcp-server/pull/483.
+  - Maintain a small reference adapter and shared conformance fixtures for each official client.
+  - Extend the I029 conformance checks instead of creating another API authority.
+  - Verify installation from built packages and declared dependency ranges in clean supported environments.
+  - Cover optional client absence, authentication, route selection, capabilities, result metadata, limits, and recovery.
+  - Do a test of the actual client transport against local protocol servers.
+  - Keep external model quality checks and production acceptance separate from deterministic integration checks.
+  - Record PAL's MCP and Black dependency failures as examples of clean-install qualification requirements.
+  Deliverables:
+  - Reference integrations, reusable protocol fixtures, runtime matrices, and release qualification checks.
+  Validation:
+  - Run all applicable client examples from packaged artifacts in clean environments.
+  - Verify enabled and disabled optional integrations.
+  - Prove that incompatible dependencies or contract changes fail with actionable diagnostics.
+  - Run the applicable repository checks and record each tested client version.
+
+- [ ] [I287] (P2) {F028,F029,F030} Umbrella: deliver additional media providers after the retained-provider migration.
+  Goal:
+  Keep approved provider extensions separate from migration of existing capabilities.
+  Execution:
+  - Complete F028, F029, and F030 after their retained-provider prerequisites.
+  - Hand F028 to MediaOps F022, F029 to MediaOps F023, and F030 to MediaOps F024.
+  - Deliver each provider contract and official client before its product integration.
+  Validation:
+  - Verify each exact provider offering through the public gateway and then its MediaOps consumer.
+  - Record provider acceptance and product acceptance separately.
+  Scope:
+  - This umbrella does not block I274 or MediaOps I092.
+
+- [ ] [I286] (P1) Establish provider ownership for the MediaOps and TelePrompter split.
+  Goal:
+  Make the gateway boundary executable before provider cutovers.
+  Requirements:
+  - Own every media-provider API call, credential, native request, upload, resource, history, and recovery path in LLM Proxy.
+  - Keep one provider catalog and reuse account connections across text and media offerings.
+  - Keep product workflows, projects, assets, authorization, and media processing in the single MediaOps backend.
+  - Keep the TelePrompter timeline and prompt website connected to MediaOps.
+  - Keep Frame Picker, thumbnails, hover zoom, and other retained MediaOps interfaces outside LLM Proxy.
+  - Keep Dictator as a private provider runtime. Keep provider metrics in LLM Proxy.
+  - Map each source API method to an executable capability issue and its official client contract.
+  Deliverables:
+  - Current ownership documents, provider-call inventory, and capability handoff criteria for I274.
+  Validation:
+  - Compare the inventory with current MediaOps source and public interfaces.
+  - Prove that each provider call has one destination owner and one consumer cutover issue.
+  Classification:
+  - Reclassified from F071. The earlier all-applications-in-MediaOps scope is historical.
+  - The proposed gateway Frame Picker was removed before publication. This work preserves that boundary.
+
 - [x] [I285] (P2) Retain browser screenshots only for failed tests.
   Goal: Remove routine screenshot storage after visual review.
   Requirements: Remove manual screenshot captures and the five obsolete tracked PNG files.
@@ -1009,24 +1221,34 @@ retain satisfied historical dependencies.
   Files: `scripts/render_public_site.mjs`, `site/assets/llm-proxy/js/constants.js`, `site/assets/llm-proxy/js/ui/routingTree.js`, browser tests, and `README.md`.
   Event contracts: No changes.
 
-- [ ] [I274] (P1) {F040,F042,F043,F025,F026,F027,I244,F071} Verify all MediaOps capabilities.
-  Goal: Complete the requested provider migration without missing capabilities.
-  Source: `docs/media-provider-completeness.md` records all nine providers and their source capabilities.
-  Requirements: Include OpenAI, Vertex, FAL, Runway, xAI, ElevenLabs, HeyGen, Kling, and Dictator.
-  Requirements: Account for each active source model, public provider method, supported control, and recovery path.
-  Requirements: Include discovery, account resources, histories, pronunciation dictionaries, uploads, quotas, and provider mutations.
-  Requirements: Keep `configs/providers.yml` as the only runtime provider and model inventory.
-  Requirements: Keep one definition per upstream provider. Extend existing OpenAI, Vertex, and xAI definitions for their media capabilities.
-  Requirements: Put capability branches in provider transports and offerings. Reuse existing connection fields and tenant assignments.
-  Requirements: Reject duplicate provider identities. Do not add capability-specific provider aliases or separate media credentials for the same account.
-  Requirements: Use the same registry for routing, discovery, connection forms, and public interfaces.
-  Requirements: Keep MediaOps applications, local processing, product authorization, and application data in MediaOps.
-  Requirements: Reuse the existing capability issues and complete them sequentially.
-  Validation: Prove provider protocols through public tests and the P011 second-provider procedure.
-  Validation: Prove one provider entry and one shared connection contract across text and media capability branches.
-  Validation: Prove affected MediaOps entry points through the official client before source retirement.
-  Validation: Record each capability as accepted or still open. Do not close this issue with an absent capability.
-  Release state: Client publication, service activation, website publication, and paid acceptance remain separate operational records.
+- [ ] [I274] (P1) {I286,F072,F042,F043,F040,F025,F026,F027,I244} Umbrella: migrate all retained media-provider APIs.
+  Goal:
+  Deliver every retained media-provider capability through the gateway and official clients.
+  Source:
+  - docs/media-provider-completeness.md records the nine-provider inventory.
+  - docs/mediaops-model-access-boundary.md records ownership and cross-repository execution order.
+  Execution:
+  - Complete I286 before provider cutovers.
+  - Reuse completed F022, I046, I216, F024, F039, and F041 foundations. Verify their current contract before reuse.
+  - Complete F072 and F042 for Dictator, then F043 and F040 for staging and Vertex images.
+  - Complete F025, F026, and F027 sequentially for video, ElevenLabs, and avatar or account operations.
+  - Hand each accepted capability to its named MediaOps cutover issue without waiting for this umbrella to close.
+  - After MediaOps I088 supplies its final receipt, complete I244.
+  Requirements:
+  - Include OpenAI, Vertex, FAL, Runway, xAI, ElevenLabs, HeyGen, Kling, and Dictator.
+  - Include every retained model, public provider method, supported control, and recovery path.
+  - Include discovery, voices, account resources, histories, dictionaries, uploads, quotas, and mutations.
+  - Keep configs/providers.yml as the single provider and model inventory.
+  - Reuse one provider identity and account connection across its capability branches.
+  - Deliver public API, official clients, provider protocol tests, and documentation in each capability issue.
+  - Preserve MediaOps application data and processing. Keep TelePrompter connected to the MediaOps API.
+  Validation:
+  - Prove public provider contracts, tenant isolation, capacity, recovery, cancellation, and artifact integrity.
+  - Record each source capability as accepted or still open. Close only after every retained capability has evidence.
+  - Use the MediaOps I088 receipt for source retirement and I244 for import-tool removal.
+  Delivery:
+  - Record source validation, client publication, runtime activation, and paid acceptance separately.
+  - Additional providers under I287 and local inference planning under P008 do not block this migration.
 
 - [x] [I272] (P1) Run Python and Go CI checks at the same time.
   Goal:
@@ -1234,7 +1456,11 @@ retain satisfied historical dependencies.
   Prove the different outcomes for invalid credentials and unsupported operations through public management HTTP requests.
   Prove that both failures preserve the previous connection and its settings.
 
-- [ ] [I244] (P1) {F024,F025,F026,F027,F039,F040,F042} Remove the completed MediaOps operation-import bridge.
+- [ ] [I244] (P1) {F025,F026,F027,F040,F042,F043,I088@MediaOps} Remove the completed MediaOps operation-import bridge.
+  Current execution contract:
+  - Require the final MediaOps I088 receipt, including accepted zero-count provider families.
+  - Keep I274 and MediaOps I092 after this cleanup. They must not be prerequisites for the receipt.
+  - Preserve application project and asset records in MediaOps.
   Goal:
   Leave only the canonical model-operation contract after migration of every
   selected MediaOps provider record.
@@ -1260,6 +1486,7 @@ retain satisfied historical dependencies.
   Inventory rule:
   - Accept an explicit zero-count receipt for a family with no recoverable source records.
   - Remove only import tooling actually introduced by the selected capability migrations.
+
 - [ ] [I241] (P1) Show provider requests over time on each provider card.
   Goal:
   Each provider card shows request activity across the selected Usage time
@@ -2655,6 +2882,10 @@ retain satisfied historical dependencies.
   - Define that feature as a model-backed evaluator over OpenAI or Anthropic.
 
 - [ ] [F072] (P1) Expose granular Dictator models for Whisper transcription and Qwen3 and Silero synthesis.
+  Current handoff:
+  - Supply exact model and capability evidence to F042 and MediaOps I087.
+  - Keep engine routing in the gateway. MediaOps and TelePrompter use the declared public capability contract.
+  - Verify existing source before implementing missing work.
   Goal:
   Replace the monolithic `dictator-speech-v1` catalog entry with distinct, purpose-built models for Dictator's underlying Whisper transcription and Qwen3/Silero speech synthesis engines.
   Requirements:
@@ -2677,6 +2908,11 @@ retain satisfied historical dependencies.
   - Final local `make ci` passes with 100% statement coverage.
 
 - [ ] [F073] (P1) {F072} Deconstruct umbrella Media capability into specific Transcription and Speech taxonomy.
+  Current ownership:
+  - This issue changes the LLM Proxy management interface and capability discovery.
+  - MediaOps projects those capabilities through its API. TelePrompter owns the creative product controls.
+  - Reconcile the existing task filters before further interface changes.
+  - This management UI refinement is outside the retained-provider migration gate.
   Goal:
   Replace the catch-all "Media" capability in the management dashboard and public capabilities catalog with first-class domain capabilities for Transcription, Speech synthesis, and visual media.
   Requirements:
@@ -2713,35 +2949,6 @@ retain satisfied historical dependencies.
   - `npx playwright test tests/e2e/management-ui.spec.js -g "dashboard|connection"` passes.
   - `npm run frontend:lint` passes without type or syntax errors.
   - Final local `make ci` passes all quality and coverage gates.
-
-- [ ] [F071] (P1) Align MediaOps model access with the provider gateway boundary.
-  Goal:
-  Move model and provider access to LLM Proxy while all MediaOps applications and local processing stay in MediaOps.
-  Requirements:
-  - Keep TelePrompter, Tube, Subtitles, Audio QC, Text Video, Frame Picker, CLI, and MCP product workflows in MediaOps.
-  - Keep narration plans, composition, local workers, media inspection, validation, and application data in MediaOps.
-  - Move model-provider adapters, credentials, native request handling, provider recovery, and provider artifacts through the existing capability issues.
-  - Keep provider operation metrics in LLM Proxy. Do not add a MediaOps metrics client without a product requirement.
-  - Use the official gateway client from retained MediaOps callers.
-  - Keep user authorization, explicit spend authority, dry runs, product intent, and local path containment in MediaOps.
-  - Map actual provider records before a bounded import. Keep application records and local artifacts at their current owner.
-  - Remove only direct provider paths and obsolete provider credentials after consumer acceptance.
-  - Coordinate MediaOps I009, I088, and I092 without a separate application migration sequence.
-  Deliverables:
-  - A current ownership contract, provider issue sequence, caller inventory, and provider migration receipts.
-  Validation:
-  - Verify each capability through the gateway and each affected MediaOps public entry point.
-  - Prove tenant isolation, duplicate recovery, cancellation, and artifact integrity without another paid submission.
-  - Record source validation, publication, activation, and consumer acceptance separately.
-  Status:
-  - On 2026-09-19, the operator limited the migration to model access. This replaces the earlier application migration scope.
-  - Frame Picker stays entirely in MediaOps, including its browser workflow, storage, and worker.
-  - Removed the proposed LLM Proxy Frame Picker backend and browser before publication or activation.
-  - Regenerated the API reference. The OpenAPI/static-page checks and all 129 frontend browser cases pass after removal.
-  - Full CI passed behavioral tests but failed the strict coverage gate at `dictator_grpc_protocol.go:253` with current synthesis-model changes.
-  - Final stack CI, provider cutovers, publication, and actual consumer acceptance remain open.
-  - See `docs/mediaops-model-access-boundary.md`. Provider capability work remains in scope.
-  - No MediaOps application routes, workers, or data were removed.
 
 - [ ] [F065] (P1) Add platform connections and explicit hosted access grants.
   Goal:
@@ -4049,6 +4256,15 @@ retain satisfied historical dependencies.
   - Prove tenant-isolated response chains, partial output order, cancellation, and final artifact integrity.
   - Run current repository validation and separately record explicitly authorized live acceptance.
 - [ ] [F040] (P1) {F043} Add Vertex image operations through tenant provider connections.
+  Current ownership and handoff:
+  - Close this capability issue after destination source validation.
+  - Record consumer cutover under its MediaOps issue and final retirement under I244.
+  - LLM Proxy owns native provider calls, credentials, resource APIs, uploads, and provider recovery for this capability.
+  - Deliver the public contract and official client methods before MediaOps I085 switches its service integration.
+  - Keep product jobs, application assets, and local media processing in one MediaOps backend.
+  - Keep TelePrompter browser controls connected to MediaOps.
+  - Preserve detailed requirements and dated implementation evidence below.
+  - Record source qualification separately from consumer activation and paid acceptance.
   Goal:
   Move the current Vertex image provider contract behind the shared gateway.
   Requirements:
@@ -4065,6 +4281,7 @@ retain satisfied historical dependencies.
   - Complete the P011 second-provider acceptance procedure for each protocol adapter added or changed in this slice.
   - Prove exact route controls, tenant isolation, staging ownership, duplicate prevention, and artifact integrity.
   - Run current repository validation and separately record explicitly authorized live acceptance.
+
 - [x] [F041] (P1) Add FAL image operations and queue recovery.
   Progress: One FAL provider now declares shared credentials, read-only verification, and the Reve image transport.
   Progress: Public tests cover a second provider identity, ordered artifacts, uncertain outcomes, queue recovery, and cancellation acknowledgements.
@@ -4097,7 +4314,22 @@ retain satisfied historical dependencies.
   - Prove queue recovery after restart, uncertain transport behavior, exact controls, and ordered verified artifacts.
   - Prove staging fetch and cleanup through real files and an HTTP serving boundary.
   - Run current repository validation and separately record explicitly authorized live acceptance.
-- [ ] [F042] (P1) Expose Dictator media capabilities through the tenant gateway.
+- [ ] [F042] (P1) {F072,B258} Expose Dictator media capabilities through the tenant gateway.
+  Current acceptance boundary:
+  - Require F072 model selection evidence and verify all six retained speech capabilities through the public gateway.
+  - Preserve voice discovery, extraction duration, aligned SRT, and private native identifiers.
+  - MediaOps I087 owns its service cutover. Creative Director owns its own product state and semantic output acceptance.
+  - A consumer transcript-quality defect does not prove a gateway transport defect.
+  - Recheck dated inventory and publication claims below before a new cutover.
+  Current ownership and handoff:
+  - Close this capability issue after destination source validation.
+  - Record consumer cutover under its MediaOps issue and final retirement under I244.
+  - LLM Proxy owns native provider calls, credentials, resource APIs, uploads, and provider recovery for this capability.
+  - Deliver the public contract and official client methods before MediaOps I087 switches its service integration.
+  - Keep product jobs, application assets, and local media processing in one MediaOps backend.
+  - Keep TelePrompter browser controls connected to MediaOps.
+  - Preserve detailed requirements and dated implementation evidence below.
+  - Record source qualification separately from consumer activation and paid acceptance.
   Current execution: Positive extraction duration, media CLI commands, and durable MCP tools are implemented.
   Validation: Public CLI and MCP tests passed. All six live capabilities passed in 5.21 seconds. Final `make ci` passed 13 gates in 324 seconds.
   Initial result: CI reported four uncovered blocks. Public rejection and store-failure tests cleared all four blocks.
@@ -4105,7 +4337,7 @@ retain satisfied historical dependencies.
   Contracts: `duration_seconds`, three media MCP tools, and eight media CLI commands. Existing event contracts did not change.
   Test and operator files: Public speech and MCP tests, CLI tests, `Makefile`, OpenAPI, generated API pages, and `docs/speech-workflows.md`.
   Production inventory: Both deployed MediaOps volumes are empty. The account owns the dedicated MediaOps tenant and its assigned Dictator connection.
-  Remaining: Migrate retained consumer state and verify installed product acceptance.
+  Remaining: Verify the current provider contract and hand its acceptance evidence to MediaOps I087.
   Reconciliation (2026-09-16):
   - The MediaOps tenant has Dictator connection `connection-ef115fb73594e0158a626d610393aec1` and a client key.
   - The deployed capability API returned all six speech routes for that key.
@@ -4114,8 +4346,8 @@ retain satisfied historical dependencies.
   - Deleted `mediaops-20260821T030050-000001` as directed. The other 22 source digests still match. No replacement work was submitted.
   - Creative Director I013 owns the consumer change. Its live adapter test passed in 12.67 seconds.
   - Final consumer CI passed with 100.0 percent statement coverage. The qualified CLI is installed and its public startup checks pass.
-  - Creative Director I014 owns retained state with obsolete identities and no current artifact registry. Installed validation reports 184 errors.
-  - Source retirement remains open for that migration and installed product acceptance.
+  - The 2026-09-16 Creative Director I014 checkpoint reported 184 retained-state validation errors.
+  - MediaOps I088 owns the final source-retirement receipt. Verify current consumer evidence before reporting an external blocker.
   Goal:
   Make Dictator a private media provider behind LLM Proxy's public API.
   SDK evidence (2026-09-14):
@@ -4140,7 +4372,7 @@ retain satisfied historical dependencies.
   - Extend official Go and Python clients and current public caller interfaces in the selected capability release.
   - Inventory retained voices and jobs before activation. Require explicit tenant and provider-account ownership mapping.
   - Coordinate MediaOps I087 source migration and each actual consumer in one bounded cutover.
-  - Keep MediaOps applications and local workflows in MediaOps. Move only Dictator provider access to LLM Proxy.
+  - Keep MediaOps processing and application data in its backend. Extract the TelePrompter website under MediaOps I094.
   - Do not require a replacement MediaOps metrics client. Keep tenant metrics in LLM Proxy.
   - Remove obsolete public runtime routing and direct caller credentials after the cutover acceptance.
   Deliverables:
@@ -4228,7 +4460,17 @@ retain satisfied historical dependencies.
   - Its public homepage already displays the pause notice. Its README and product document record the same status.
   - Exclude WriterBlock code, credentials, resource transfer, and consumer acceptance from this migration.
   - WriterBlock does not gate F042 acceptance, publication, or deployment.
+
 - [ ] [F043] (P1) Add provider-readable media staging and Google credential profiles.
+  Current ownership and handoff:
+  - Close this capability issue after destination source validation.
+  - Record consumer cutover under its MediaOps issue and final retirement under I244.
+  - LLM Proxy owns native provider calls, credentials, resource APIs, uploads, and provider recovery for this capability.
+  - Deliver the public contract and official client methods before MediaOps I089 switches its service integration.
+  - Keep product jobs, application assets, and local media processing in one MediaOps backend.
+  - Keep TelePrompter browser controls connected to MediaOps.
+  - Preserve detailed requirements and dated implementation evidence below.
+  - Record source qualification separately from consumer activation and paid acceptance.
   Goal:
   Let gateway providers read tenant media through the exact storage and credential contracts they require.
   Requirements:
@@ -4249,7 +4491,11 @@ retain satisfied historical dependencies.
   P012 reconciliation (2026-09-07):
   Keep media staging separate from independent customer completion connections.
   Operator credential profiles do not satisfy P012's customer setup requirement.
-  Resolve P012 and approve a separate storage ownership contract before further Google credential implementation under F043.
+  Prepare the separate storage ownership contract as the first F043 deliverable.
+  Obtain its approval before implementing storage credentials.
+  Bind private storage credentials to the authorized gateway account and its assigned tenant routes.
+  Keep customer completion authentication under P012, independent of provider staging.
+  Reuse existing credential storage and declare exact route requirements before adapter implementation.
   `docs/gemini-customer-connections.md` records the proposed boundary.
   F060 API-key revision (2026-09-08):
   F060 removed the completion route's operator profile loader after explicit user approval.
@@ -4259,6 +4505,7 @@ retain satisfied historical dependencies.
   - Use real files and HTTP serving to prove exact fetched bytes, digest, expiry, and cleanup.
   - Prove tenant isolation, active reference retention, failed staging, and secret-free public output.
   - Run repository validation and record storage acceptance separately from paid generation acceptance.
+
 - [ ] [F036] (P1) Add public provider-offering price comparison.
   Goal:
   Let landing-page visitors compare published prices and workload estimates for
@@ -4435,6 +4682,15 @@ retain satisfied historical dependencies.
   - Run the current repository checks after implementation.
   - Record published-client, deployed-service, and explicitly authorized live-provider acceptance separately.
 - [ ] [F025] (P1) {F043} Add durable video generation to model operations.
+  Current ownership and handoff:
+  - Close this capability issue after destination source validation.
+  - Record consumer cutover under its MediaOps issue and final retirement under I244.
+  - LLM Proxy owns native provider calls, credentials, resource APIs, uploads, and provider recovery for this capability.
+  - Deliver the public contract and official client methods before MediaOps I010 switches its service integration.
+  - Keep product jobs, application assets, and local media processing in one MediaOps backend.
+  - Keep TelePrompter browser controls connected to MediaOps.
+  - Preserve detailed requirements and dated implementation evidence below.
+  - Record source qualification separately from consumer activation and paid acceptance.
   Goal:
   Make LLM Proxy the sole provider boundary for Vertex Veo, Vertex Gemini Omni,
   Runway, FAL, Kling, and xAI video generation.
@@ -4470,11 +4726,23 @@ retain satisfied historical dependencies.
     fake provider suite and repository CI pass.
   - Start with the required failing integration test. Complete validation under the current repository policy.
   Delivery boundary:
+  - Execute provider slices in this order: Runway, Vertex, FAL, Kling, then xAI.
+  - F043 gates only routes that require staging. Accept independent routes before the complete F025 scope closes.
   - Implement and release provider slices with explicit acceptance and removal receipts.
   - Keep each current capability available under its single owner until its verified cutover.
   - Add import validators only for records identified by the migration inventory.
   - Use the current repository validation policy instead of older baseline CI instructions.
+
 - [ ] [F026] (P1) Add ElevenLabs speech, music, and alignment operations.
+  Current ownership and handoff:
+  - Close this capability issue after destination source validation.
+  - Record consumer cutover under its MediaOps issue and final retirement under I244.
+  - LLM Proxy owns native provider calls, credentials, resource APIs, uploads, and provider recovery for this capability.
+  - Deliver the public contract and official client methods before MediaOps I011 switches its service integration.
+  - Keep product jobs, application assets, and local media processing in one MediaOps backend.
+  - Keep TelePrompter browser controls connected to MediaOps.
+  - Preserve detailed requirements and dated implementation evidence below.
+  - Record source qualification separately from consumer activation and paid acceptance.
   Progress (2026-09-20): One YAML provider now defines shared credentials, account verification, model metadata, and subscription quotas.
   Progress: The gateway and both official clients expose typed account resources through the assigned connection.
   Validation: Public HTTP tests cover a second provider identity, account capacity, credential replacement, tenant separation, and malformed native responses.
@@ -4533,7 +4801,7 @@ retain satisfied historical dependencies.
     continuity context, timestamps, seed, normalization, pacing/speed
     translation, formats, provider concurrency, and history identifiers.
   - Keep render plans, narrative cadence, chunk reuse, stitching, and final composite validation in MediaOps.
-  - F071 defines the model access boundary. Keep all application workflows and project controls in MediaOps.
+  - I286 defines the model access boundary. Keep workflow execution in MediaOps and timeline controls in TelePrompter.
   - Represent each provider request as one durable gateway operation.
   - Materialize provider audio and JSON outputs as typed artifacts and retain
     history or song identifiers as internal recovery evidence.
@@ -4556,7 +4824,17 @@ retain satisfied historical dependencies.
   - Keep each migrated capability on one execution path and preserve current consumer behavior.
   - Add import validators only for actual recoverable records.
   - Use the current repository validation policy instead of older baseline CI instructions.
+
 - [ ] [F027] (P1) Add provider account mutations, avatars, translation, and lip-sync.
+  Current ownership and handoff:
+  - Close this capability issue after destination source validation.
+  - Record consumer cutover under its MediaOps issue and final retirement under I244.
+  - LLM Proxy owns native provider calls, credentials, resource APIs, uploads, and provider recovery for this capability.
+  - Deliver the public contract and official client methods before MediaOps I012 switches its service integration.
+  - Keep product jobs, application assets, and local media processing in one MediaOps backend.
+  - Keep TelePrompter browser controls connected to MediaOps.
+  - Preserve detailed requirements and dated implementation evidence below.
+  - Record source qualification separately from consumer activation and paid acceptance.
   Scope clarification (2026-09-20): Include every HeyGen and Kling source capability listed in `docs/media-provider-completeness.md`.
   Goal:
   Complete gateway ownership of external media-provider credentials and
@@ -4595,6 +4873,7 @@ retain satisfied historical dependencies.
   - Use F043 staging only for provider routes that require it.
   - Add import validators only for actual recoverable records.
   - Use the current repository validation policy instead of older baseline CI instructions.
+
 - [ ] [F017] (P1) Add shared MPR UI inactivity warning and automatic logout.
   Goal:
   Make an authenticated browser session warn and sign out explicitly after
@@ -5020,6 +5299,10 @@ retain satisfied historical dependencies.
   Dependency handoff: 2026-08-15 — gateway F001 and both application manifests
   passed local contract validation. Production activation remains separate.
 - [ ] [F028] (P2) {F027} Add HeyGen Avatar V as a gateway-owned avatar engine.
+  Current ownership:
+  - Implement the provider API and exact native specification in LLM Proxy.
+  - MediaOps F022 owns backend consumption and TelePrompter product controls.
+  - Keep this additional capability under I287, outside I274 and the retained-provider migration gate.
   Goal:
   Add the current Avatar V engine to the gateway HeyGen avatar contract for actual gateway consumers, including required TelePrompter flows.
   Cross-repository sequence:
@@ -5041,7 +5324,12 @@ retain satisfied historical dependencies.
   - Prove eligible success, ineligible pre-dispatch rejection, engine-specific
     control rejection, terminal artifact download, and restart recovery.
   - Start with the required failing integration test. Complete validation under the current repository policy.
+
 - [ ] [F029] (P2) {F025} Add MiniMax H3 V2 video generation to model operations.
+  Current ownership:
+  - Implement the provider API and exact native specification in LLM Proxy.
+  - MediaOps F023 owns backend consumption and TelePrompter product controls.
+  - Keep this additional capability under I287, outside I274 and the retained-provider migration gate.
   Goal:
   Add the provider-qualified MiniMax H3 V2 route to the gateway for actual gateway consumers, including required TelePrompter flows.
   Cross-repository sequence:
@@ -5067,7 +5355,12 @@ retain satisfied historical dependencies.
     uncertain recovery, input limits, artifact integrity, and absence of Hailuo
     V1 behavior through public black-box tests.
   - Start with the required failing integration test. Complete validation under the current repository policy.
+
 - [ ] [F030] (P2) {F026} Add Speechify text-to-speech and voice discovery to model operations.
+  Current ownership:
+  - Implement the provider API and exact native specification in LLM Proxy.
+  - MediaOps F024 owns backend consumption and TelePrompter product controls.
+  - Keep this additional capability under I287, outside I274 and the retained-provider migration gate.
   Goal:
   Add the current Speechify complete-response speech and voice-discovery
   contracts to the gateway for actual consumers, including required TelePrompter narration flows.
@@ -5096,6 +5389,7 @@ retain satisfied historical dependencies.
     speech marks, rate/concurrency handling, transport uncertainty, secret
     safety, and artifact integrity through public black-box tests.
   - Start with the required failing integration test. Complete validation under the current repository policy.
+
 - [ ] [F020] (P2) {F016} Add route-validated sampling controls to the canonical v3 messages contract.
   Goal:
   Let a caller set low-level sampling controls only when the selected provider
@@ -5138,6 +5432,22 @@ retain satisfied historical dependencies.
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
 ## Planning
+
+- [ ] [P014] (P2) Assess the native provider contract for Seedance and HeyGen avatar use.
+  Goal:
+  Determine whether the proposed workflow has a supported provider API.
+  Requirements:
+  - Verify the exact model name and provider route from current official sources.
+  - Verify whether HeyGen permits the proposed external video engine or requires a separate composition workflow.
+  - Record supported controls, account access, resource ownership, and concrete limitations.
+  - Supply the feasibility result to MediaOps P007.
+  Deliverables:
+  - A supported gateway contract proposal or a documented rejection of the unsupported integration.
+  Validation:
+  - Link current official evidence for each proposed native operation.
+  Scope:
+  - This Planning issue does not authorize implementation or block I274.
+
 *do not implement yet*
 
 - [!] [P012] (P1) Plan reliable Gemini access through independent customer connections.
