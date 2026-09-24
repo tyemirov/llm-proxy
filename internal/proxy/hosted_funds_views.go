@@ -28,8 +28,30 @@ type managementFundsBalanceResponse struct {
 	UnsettledFraction ExactMoney `json:"unsettled_fraction"`
 }
 
-func (database *gormManagedTenantDatabase) billingFundsBalance(ctx context.Context, accountID string, now time.Time) (managementFundsBalanceResponse, error) {
-	response := managementFundsBalanceResponse{Currency: CatalogCurrencyUSD, State: fundsAccountActive, PostedCents: "0", AvailableCents: "0", ReservedCents: "0", SpentCents: "0", PendingCents: "0", UnsettledFraction: ExactMoney{Numerator: "0", Denominator: "1"}}
+// hostedFundsBalance retains validated amounts until a transport formats them.
+type hostedFundsBalance struct {
+	state             string
+	postedCents       int64
+	reservedCents     int64
+	spentCents        int64
+	pendingCents      int64
+	unsettledFraction *big.Rat
+}
+
+func (balance hostedFundsBalance) response() managementFundsBalanceResponse {
+	return managementFundsBalanceResponse{
+		Currency: CatalogCurrencyUSD, State: balance.state,
+		PostedCents:       strconv.FormatInt(balance.postedCents, 10),
+		AvailableCents:    new(big.Int).Sub(big.NewInt(balance.postedCents), big.NewInt(balance.reservedCents)).String(),
+		ReservedCents:     strconv.FormatInt(balance.reservedCents, 10),
+		SpentCents:        strconv.FormatInt(balance.spentCents, 10),
+		PendingCents:      strconv.FormatInt(balance.pendingCents, 10),
+		UnsettledFraction: ratingMoney(balance.unsettledFraction),
+	}
+}
+
+func (database *gormManagedTenantDatabase) billingFundsBalance(ctx context.Context, accountID string, now time.Time) (hostedFundsBalance, error) {
+	balance := hostedFundsBalance{state: fundsAccountActive, unsettledFraction: new(big.Rat)}
 	err := database.database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var financial managedFundsAccountRecord
 		err := tx.Where("billing_account_id = ?", accountID).First(&financial).Error
@@ -37,11 +59,12 @@ func (database *gormManagedTenantDatabase) billingFundsBalance(ctx context.Conte
 			return err
 		}
 		if err == nil {
-			response.State = financial.State
-			response.UnsettledFraction = ExactMoney{Numerator: financial.RemainderNumerator, Denominator: financial.RemainderDenominator}
-			if _, err := parseUSDCentRemainder(response.UnsettledFraction); err != nil {
+			balance.state = financial.State
+			fraction, err := parseUSDCentRemainder(ExactMoney{Numerator: financial.RemainderNumerator, Denominator: financial.RemainderDenominator})
+			if err != nil {
 				return fmt.Errorf("read retained remainder: %w", err)
 			}
+			balance.unsettledFraction = fraction
 		}
 		// Read the shared account without the service's create-on-read behavior.
 		var account gormstore.LedgerAccount
@@ -63,9 +86,8 @@ func (database *gormManagedTenantDatabase) billingFundsBalance(ctx context.Conte
 			if err != nil {
 				return err
 			}
-			response.PostedCents = strconv.FormatInt(total.Int64(), 10)
-			response.ReservedCents = strconv.FormatInt(holds.Int64(), 10)
-			response.AvailableCents = new(big.Int).Sub(big.NewInt(total.Int64()), big.NewInt(holds.Int64())).String()
+			balance.postedCents = total.Int64()
+			balance.reservedCents = holds.Int64()
 		}
 		var spent, pending int64
 		if err := tx.Model(&managedFundsSettlementRecord{}).Where("billing_account_id = ?", accountID).Select("coalesce(sum(settled_cents), 0)").Scan(&spent).Error; err != nil {
@@ -74,21 +96,21 @@ func (database *gormManagedTenantDatabase) billingFundsBalance(ctx context.Conte
 		if err := tx.Model(&managedFundsReservationRecord{}).Where("billing_account_id = ? AND state = ?", accountID, fundsReservationReconciliation).Select("coalesce(sum(maximum_cents), 0)").Scan(&pending).Error; err != nil {
 			return err
 		}
-		response.SpentCents = strconv.FormatInt(spent, 10)
-		response.PendingCents = strconv.FormatInt(pending, 10)
+		balance.spentCents = spent
+		balance.pendingCents = pending
 		restricted, err := paymentFundsRestricted(tx, accountID, now)
 		if err != nil {
 			return err
 		}
-		if restricted && response.State == fundsAccountActive {
-			response.State = "suspended"
+		if restricted && balance.state == fundsAccountActive {
+			balance.state = "suspended"
 		}
 		return nil
 	})
 	if err != nil {
-		return managementFundsBalanceResponse{}, fmt.Errorf("read funds for billing account %s: %w", accountID, err)
+		return hostedFundsBalance{}, fmt.Errorf("read funds for billing account %s: %w", accountID, err)
 	}
-	return response, nil
+	return balance, nil
 }
 
 func (service *managementService) getFundsBalanceHandler() gin.HandlerFunc {
@@ -101,11 +123,11 @@ func (service *managementService) getFundsBalanceHandler() gin.HandlerFunc {
 			writeBillingAccountError(ctx, errBillingAccountInvalid)
 			return
 		}
-		response, err := service.store.database.billingFundsBalance(ctx.Request.Context(), account.ID, service.store.now())
+		balance, err := service.store.database.billingFundsBalance(ctx.Request.Context(), account.ID, service.store.now())
 		if err != nil {
 			writeBillingAccountError(ctx, err)
 			return
 		}
-		ctx.JSON(http.StatusOK, response)
+		ctx.JSON(http.StatusOK, balance.response())
 	}
 }

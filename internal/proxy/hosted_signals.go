@@ -122,21 +122,10 @@ func readFinancialExposureSignals(tx *gorm.DB, report *HostedFinancialSignals) e
 		if err != nil {
 			return err
 		}
-		for _, item := range []struct {
-			total *big.Int
-			value string
-		}{{posted, balance.PostedCents}, {reserved, balance.ReservedCents}, {pending, balance.PendingCents}} {
-			value, ok := new(big.Int).SetString(item.value, 10)
-			if !ok {
-				return fmt.Errorf("invalid retained account cents")
-			}
-			item.total.Add(item.total, value)
-		}
-		fraction, err := parseExactMoney(balance.UnsettledFraction)
-		if err != nil {
-			return fmt.Errorf("read account fraction: %w", err)
-		}
-		remainder.Add(remainder, fraction)
+		posted.Add(posted, big.NewInt(balance.postedCents))
+		reserved.Add(reserved, big.NewInt(balance.reservedCents))
+		pending.Add(pending, big.NewInt(balance.pendingCents))
+		remainder.Add(remainder, balance.unsettledFraction)
 	}
 	var exposures []managedFundsExposureRecord
 	if err := tx.Find(&exposures).Error; err != nil {

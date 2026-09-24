@@ -234,7 +234,7 @@ type managedTenantDatabase interface {
 	fundsCorrection(context.Context, string, string, string, *fundsCorrectionCommand) (managementFundsCreditResponse, error)
 	tenantFundsLimit(context.Context, managedBillingAccountRecord, string, *tenantFundsLimitChange, time.Time) (managementFundsTenantLimitResponse, error)
 	reconcileHostedFunds(context.Context, time.Time) error
-	billingFundsBalance(context.Context, string, time.Time) (managementFundsBalanceResponse, error)
+	billingFundsBalance(context.Context, string, time.Time) (hostedFundsBalance, error)
 	billingFundsReservations(context.Context, string, managedConnectionPage) ([]managedFundsReservationRecord, error)
 	billingFundsEntries(context.Context, string, managedConnectionPage) ([]managementFundsEntryResponse, error)
 	billingRequestChargeSummary(context.Context, string, string) (requestChargeSummary, error)

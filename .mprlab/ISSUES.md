@@ -156,11 +156,14 @@ retain satisfied historical dependencies.
   - Added 29 financial-signal scenarios for unavailable storage, corrupt amounts, unreadable queue timestamps, and inconsistent comparison evidence.
   - Failed CLI reads publish no partial report and preserve durable database bytes. Restoration returns the original signals.
   - Funded checks preserve balances, charges, pending delivery, and provider call counts.
-  - Signal tests passed in 3.849 seconds. CLI signal tests passed in 2.126 seconds.
-  - Signal and CLI race suites passed in 35.621 and 16.495 seconds. Management tests passed in 17.669 seconds.
-  - Go lint and format checks pass. Production source did not change.
+  - Balance reads now retain numeric cents and validated fractions until output. Financial signals no longer parse validated API strings again.
+  - Database validation and public response fields remain unchanged. The refactor removes two unreachable parsing errors.
+  - Characterization verifies two maximum int64 account balances and their exact aggregate through HTTP and public signal reads.
+  - Funds, rating, financial-read, and signal tests passed in 148.109 seconds. Payment-adjustment tests passed in 33.898 seconds.
+  - Signal and CLI tests passed in 3.718 and 2.595 seconds. Management tests passed in 19.193 seconds.
+  - The focused race suite passed all 103 scenarios in 74.054 seconds. Go lint and format checks pass.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 524 uncovered statements. Changed production files use only current validation counts.
+  - The combined diagnostic has 522 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
