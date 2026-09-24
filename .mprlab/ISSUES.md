@@ -436,6 +436,13 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Go lint and formatting passed. No public API or event contract changed.
   - The diagnostic has 372 uncovered statements across 21170 statements. The changed production file uses only current coverage counts.
   - Use `/tmp/llm-proxy-b266-payment-revisions-diagnostic.coverprofile`. Complete aggregate CI and F070 acceptance remain open.
+  - Net charge calculation now returns its exact rational after validation of retained charges and credits.
+  - Settlement consumes that rational directly. Charge responses encode numerator and denominator strings at the HTTP boundary.
+  - Stored amount validation and rounding are unchanged. No public API or event contract changed.
+  - Existing characterization passed before the refactor in 3.181 seconds. Financial regression passed in 149.702 seconds.
+  - Race checks passed in 36.926 seconds. Go lint and formatting passed.
+  - The diagnostic has 371 uncovered statements across 21168 statements. Changed production files use only current financial regression counts.
+  - Use `/tmp/llm-proxy-b266-net-charge-diagnostic.coverprofile`. Complete aggregate CI and F070 acceptance remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
   - Preserve the required coverage threshold and the current provider scope.

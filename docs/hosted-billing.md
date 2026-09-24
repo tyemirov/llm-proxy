@@ -171,6 +171,8 @@ Each adjustment has an account-scoped event identity, a positive exact credit, a
 A repeated event has no additional effect. A changed event with the same identity fails.
 The account lock serializes concurrent credits. Total credits cannot exceed the original customer charge.
 Only a resolved charge can receive a usage credit.
+Net charge calculation validates retained amounts and keeps its result as an exact rational through settlement.
+The HTTP response boundary encodes this result as numerator and denominator strings.
 
 The adjustment record and its settlement callback share one transaction.
 A failed callback rolls back the adjustment. F068 connects this callback to the shared Ledger service.

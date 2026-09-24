@@ -97,11 +97,7 @@ func settleHostedFunds(transaction *gorm.DB, requestID string, now time.Time) er
 		if err != nil {
 			return err
 		}
-		amount, err := parseExactMoney(net)
-		if err != nil {
-			return err
-		}
-		total.Add(total, amount)
+		total.Add(total, net)
 	}
 	return commitHostedFundsSettlement(transaction, reservation, total, creditIDs, now)
 }

@@ -103,7 +103,8 @@ func chargeResponse(record managedChargeRecord, adjustments []managedChargeAdjus
 		if err != nil {
 			return managementChargeResponse{}, err
 		}
-		response.NetCustomerCharge = &net
+		amount := ratingMoney(net)
+		response.NetCustomerCharge = &amount
 	} else if len(adjustments) != 0 {
 		return managementChargeResponse{}, fmt.Errorf("unresolved charge has customer credits")
 	}

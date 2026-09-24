@@ -6,8 +6,8 @@ The user requested this handoff because the session has few tokens left.
 Use this section and the resume procedure below as the current instructions.
 F070 remains incomplete. This handoff does not complete or pause the goal.
 
-B266 assignment storage acceptance is published. Publication was verified on September 24, 2026.
-The current increment gives payment transaction revision checks one owner.
+B266 payment revision ownership is published. Publication was verified on September 24, 2026.
+The current increment keeps net customer charges as exact rationals through settlement.
 Do not expand the product scope.
 
 ### Checkout And Publication
@@ -25,7 +25,8 @@ Do not expand the product scope.
 - Published tenant budget commit: `28ab5183a35e9ae4d7e45b97a8acf48211e49215`.
 - Published search limit commit: `dadcfa99e766f4c10507726ea0b473f756e2afd0`.
 - Published assignment commit: `c3ca9bf649bb0bcd35b2a1b9001300fe112dcaf0`.
-- Local HEAD and the PR head matched that commit before the payment revision increment.
+- Published payment revision commit: `713e9d50096e54e51b1a7860a41d42fdc70ce947`.
+- Local HEAD and the PR head matched that commit before the net charge increment.
 - Verify the commit that contains this section in PR 344 before further edits.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
@@ -37,7 +38,26 @@ Do not expand the product scope.
 Application merge, release, and deployment remain outside the current authorization.
 The current production changes have focused validation. Aggregate validation remains incomplete.
 
-### Latest Payment Evidence Revision Ownership
+### Latest Exact Net Charge Calculation
+
+`netCustomerCharge` now returns its exact rational after validation of retained charges and credits.
+Settlement adds that rational directly. It no longer encodes and parses the calculated amount again.
+The charge response converts the rational to numerator and denominator strings at the HTTP boundary.
+Original charge and credit validation remain in place. Rounding, public API resources, and event contracts are unchanged.
+
+Existing characterization passed before the refactor in 3.181 seconds.
+Race checks passed after the refactor in 36.926 seconds. Go lint and formatting passed.
+Financial regression passed in 149.702 seconds. No test process remains active.
+The tests verify fractional credits, concurrent credits, settlement across restart, and rejection of corrupt retained amounts.
+Evidence uses `/tmp/llm-proxy-b266-net-charge` as its prefix.
+
+Changed production files are `hosted_rating_adjustments.go`, `hosted_funds_settlement.go`, and `hosted_rating_views.go` in `internal/proxy/`.
+Discard all previous coverage coordinates for those files. Use only current financial regression counts for them.
+The billing runbook records the calculation and response boundary.
+The current diagnostic is `/tmp/llm-proxy-b266-net-charge-diagnostic.coverprofile`.
+It has 371 uncovered statements across 21168 statements. This diagnostic does not replace aggregate CI.
+
+### Previous Payment Evidence Revision Ownership
 
 The increment adds `internal/proxy/hosted_payments_revision_recovery_internal_test.go`.
 Four scenarios cover older and conflicting revisions for transactions and adjustments through signed webhook HTTP.
@@ -374,7 +394,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b266-payment-revisions-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b266-net-charge-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -390,7 +410,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest payment revision diagnostic has 372 uncovered statements across 21170 statements.
+The latest net charge diagnostic has 371 uncovered statements across 21168 statements.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.
