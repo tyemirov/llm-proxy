@@ -190,10 +190,12 @@ retain satisfied historical dependencies.
   - Added 20 inbox scenarios for malformed HTTP inputs, incomplete bodies, replay read failures, and exact large-number identity.
   - Rejected inputs preserve the original event, receipt, balance, and Ledger history. Restart does not repeat an applied credit.
   - Signed event replay preserves exact JSON numbers and rejects a one-unit difference above the exact integer range of float64.
-  - The payment regression passed in 93.196 seconds. Management tests passed in 16.900 seconds.
-  - All 25 inbox race scenarios passed in 51.387 seconds. Go lint and format checks passed.
+  - Added 16 startup scenarios for failed environment reads and writes, mixed environments, incomplete schemas, and invalid processor URLs.
+  - The public service rejects invalid startup before HTTP admission. Restoration permits two normal starts with unchanged financial resources.
+  - The payment regression passed in 97.881 seconds. Management tests passed in 16.825 seconds.
+  - All 16 startup race scenarios passed in 75.519 seconds. Go lint and format checks passed.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 502 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
+  - The combined diagnostic has 493 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
