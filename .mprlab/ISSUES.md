@@ -27,12 +27,27 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
-- [ ] [B263] (P1) Correct the CLI catalog rejection fixture.
+- [x] [B264] (P1) Correct OpenAPI payment route and authentication fixtures.
+  Evidence:
+  Stack CI compares the complete route contract with a fixture that disables payments.
+  The authentication test expects `TAuthSession` for the Paddle webhook, which requires `PaddleSignature`.
+  Requirements:
+  - Configure controlled payments in the complete route inventory fixture.
+  - Verify the Paddle signature header scheme and webhook authentication requirement.
+  - Preserve disabled payment behavior.
+  Validation:
+  - Run focused OpenAPI and payment checks, then the final stack CI checkpoint under F070.
+  Status:
+  The complete route fixture now configures controlled payments. Authentication expectations now include the Paddle signature scheme.
+  `make test-openapi-contract` passed in 5.467 seconds. Format checks passed.
+  The subsequent stack run passed all Go tests, including both OpenAPI checks. B266 owns its separate coverage failure.
+
+- [x] [B263] (P1) Correct the CLI catalog rejection fixture.
   Evidence:
   Stack CI rejects catalog schema version 7, but the test expects an error for version 6.
   The production loader reports the submitted invalid value correctly.
   The fixture now derives its values from the canonical version. Focused catalog checks and format checks pass.
-  Final stack CI remains open under F070.
+  The subsequent stack run passed all Go tests, including CLI catalog rejection. B266 owns its separate coverage failure.
   Requirements:
   - Derive the invalid schema value and expected error from the canonical version.
   - Include CLI catalog rejection tests in the existing provider catalog target.

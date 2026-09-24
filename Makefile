@@ -80,6 +80,10 @@ test-frontend-dependency-contract:
 test-openapi-pages-artifact:
 	@./scripts/test-openapi-pages-artifact.sh
 
+.PHONY: test-openapi-contract
+test-openapi-contract:
+	$(GO) test ./internal/proxy -run '^Test(OpenAPIContract|HostedPaymentsRuntime|HostedPaymentsInbox)' -count=1
+
 test-management-auth-blackbox: frontend-dependencies prepare-shared-ui
 	$(NPM) run frontend:test:blackbox $(if $(BLACKBOX_TEST_ARGS),-- $(BLACKBOX_TEST_ARGS))
 
