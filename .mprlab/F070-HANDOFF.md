@@ -6,11 +6,42 @@ The user requested this handoff because the session has few tokens left.
 Use this section and the resume procedure below as the current instructions.
 F070 remains incomplete. This handoff does not complete or pause the goal.
 
-B266 media uncertainty persistence and ignored journal claim checks passed.
-The previous exact settlement commit is published in PR 344.
+B279 corrects incomplete credential reads found during B266 media acceptance.
+The previous media uncertainty increment is published in PR 344.
 Do not expand the product scope.
 
-### Latest Media Uncertainty And Claim Acceptance
+### Latest Credential Read Boundary And B279
+
+Funded media operations with empty or null credential documents reached the provider and returned succeeded results.
+B279 requires rejection before provider calls. The shared loader now requires the complete current catalog field set.
+Existing unknown-field, JSON, and ciphertext checks remain at the same database read boundary.
+No public schema, event contract, or shared dependency changed.
+
+Eight media scenarios cover storage errors, malformed and incomplete documents, unknown fields, invalid ciphertext, and foreign credential bindings.
+Rejected execution preserves the accepted operation and funds. Restart retains the media hold without repeated provider work.
+Two text scenarios preserve HTTP 403 rejection and release the undispatched hold after restart.
+The text path already rejected missing credentials. The new checks preserve that behavior.
+
+The new scenarios passed in 7.611 seconds. Race checks passed in 109.660 seconds.
+Initial failures are in `/tmp/llm-proxy-b266-media-credential-before.log` and `/tmp/llm-proxy-b279-before.log`.
+Exploratory empty and whitespace secrets failed in the existing encryption constructor and were removed.
+The initial text assertion expected HTTP 502. The corrected assertion checks HTTP 403.
+
+The first broad regression found incomplete DashScope and Baidu credentials in existing catalog fixtures.
+A shared fixture now validates every catalog field before encryption. DashScope supplies an explicit test workspace URL.
+Local transport overrides remain in place. No external provider calls occur.
+The corrected catalog matrix passed in 36.865 seconds. Final Go lint and formatting passed.
+Final broad hosted regression passed in 187.425 seconds. No validation process remains active.
+B279 is resolved. The initial fixture regressions and final results remain in the logs.
+Its log and profile use `/tmp/llm-proxy-b279-regression-final` as their prefix.
+
+All prior coverage coordinates for `internal/proxy/hosted_credentials.go` were discarded.
+Only final regression counts contribute coverage for that file. The current credential loader has no uncovered statements.
+The current diagnostic is `/tmp/llm-proxy-b279-diagnostic.coverprofile`.
+It has 355 uncovered statements across 21169 statements. This diagnostic does not replace aggregate CI.
+B266 and complete F070 acceptance remain open.
+
+### Previous Media Uncertainty And Claim Acceptance
 
 The user requested a handoff before further implementation. The subsequent goal continuation resumed B266.
 The new test file is `internal/proxy/hosted_media_uncertainty_recovery_internal_test.go`.
@@ -63,7 +94,8 @@ Verify unused identifiers across the active tracker and archive before assigning
 - Published reservation integrity commit: `ae140d560e1819b4bd06d9b5ddbf35f163d27b0f`.
 - Published exact settlement commit: `9094d1c953493f0c08736dcbf8823baa155f464c`.
 - Local HEAD and PR 344 matched this exact settlement commit before the media uncertainty increment.
-- Verify the commit that contains the media uncertainty increment before further edits.
+- Published media uncertainty commit: `1426d5eed0bc2b5c39b216ba344dc9463fb3404c`.
+- Verify the commit that contains B279 before further edits.
 - PR 344 reported no hosted checks during this update. Hosted CI success is not established.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
@@ -550,7 +582,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b266-media-uncertainty-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b279-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -566,7 +598,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest media uncertainty diagnostic has 359 uncovered statements across 21167 statements.
+The latest B279 diagnostic has 355 uncovered statements across 21169 statements.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.

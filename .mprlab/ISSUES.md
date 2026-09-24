@@ -35,6 +35,28 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B279] (P1) Reject incomplete stored platform credentials before provider calls.
+  Evidence:
+  Funded media requests with empty or null stored credential documents reached the provider and returned succeeded operations.
+  The public test expected failed operations and zero provider calls.
+  Requirements:
+  - Validate stored credential fields at the shared database read boundary.
+  - Reject incomplete field sets and unreadable credentials before provider calls.
+  - Preserve accepted identity and financial resources after rejection.
+  - Preserve replay and restart without repeated provider work.
+  - Keep B266 coverage and complete F070 acceptance open.
+  Validation:
+  - Run public credential failure scenarios and relevant hosted execution regression.
+  - Run race, lint, and formatting checks.
+  Resolution:
+  The shared credential loader now rejects incomplete field sets before returning provider settings.
+  Eight media scenarios and two text scenarios verify rejection, funds conservation, and restart without repeated provider work.
+  Catalog fixtures now validate complete fields before encryption and supply the required DashScope workspace URL.
+  Targeted checks passed in 7.611 seconds. Catalog checks passed in 36.865 seconds.
+  Broad hosted regression passed in 187.425 seconds. Race checks passed in 109.660 seconds. Go lint and formatting passed.
+  No public schema or event contract changed. B266 and complete F070 acceptance remain open.
+
+
 - [x] [B278] (P1) Reject corrupt account remainders before paid admission.
   Evidence:
   Five HTTP scenarios returned `status=200 want=503 body=funded result` after storage supplied an invalid retained account remainder.
@@ -531,6 +553,14 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Initial test errors concerned the worker log event and the HTTP response validator. Both fixture errors are corrected.
   - The diagnostic has 359 uncovered statements across 21167 statements. Use `/tmp/llm-proxy-b266-media-uncertainty-diagnostic.coverprofile`.
   - Production source coordinates are unchanged. Complete aggregate CI and F070 acceptance remain open.
+  - B279 fixes incomplete credential documents that permitted funded media provider calls.
+  - The shared read boundary now requires the complete catalog field set before returning provider settings.
+  - Eight media scenarios and two text scenarios verify corrupt records, foreign credential bindings, unchanged funds, and restart replay.
+  - Existing catalog fixtures now validate complete fields before encryption and explicitly supply the DashScope workspace URL.
+  - Targeted checks passed in 7.611 seconds. Catalog checks passed in 36.865 seconds, and broad hosted regression passed in 187.425 seconds.
+  - Race checks passed in 109.660 seconds. Go lint and formatting passed. No public schema or event contract changed.
+  - The diagnostic has 355 uncovered statements across 21169 statements. Use `/tmp/llm-proxy-b279-diagnostic.coverprofile`.
+  - Old credential loader coordinates were discarded. Complete aggregate CI and F070 acceptance remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
   - Preserve the required coverage threshold and the current provider scope.

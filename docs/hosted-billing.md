@@ -596,6 +596,8 @@ The media worker generation and journal claim change in one transaction.
 Claim renewal updates both records together.
 Attempt authorization, journal dispatch intent, and media dispatch intent also use one transaction.
 The shared credential reader loads the platform version selected at admission.
+It rejects missing or unknown fields before returning provider settings.
+Malformed documents and ciphertext for another connection or version also prevent provider calls.
 
 Provider submission requires the current worker claim and an active grant.
 HTTP and gRPC calls use the same dispatch guard and permit one generation per execution attempt.

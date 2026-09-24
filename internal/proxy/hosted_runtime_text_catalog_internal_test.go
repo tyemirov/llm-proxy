@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -207,14 +206,7 @@ func hostedTextCatalogFinancialAcceptance(t *testing.T, attachments []hostedText
 			}
 		}
 		connection, grant := "matrix-platform-"+provider, "matrix-grant-"+provider
-		secret, err := management.store.providerKeyCipher.encryptConnection(rand.Reader, platformCredentialReference(connection, 1), provider, CatalogCredentialAPIKey, "catalog-platform-secret")
-		if err != nil {
-			t.Fatal(err)
-		}
-		fields, err := json.Marshal(map[string]string{CatalogCredentialAPIKey: secret})
-		if err != nil {
-			t.Fatal(err)
-		}
+		fields := hostedTextCredentialFields(t, management.store.providerKeyCipher, connection, management.store.routingDefaults.definitions[providerID(provider)], "catalog-platform-secret")
 		encoded, err := json.Marshal(scope)
 		if err != nil {
 			t.Fatal(err)
