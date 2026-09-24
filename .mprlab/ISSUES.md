@@ -64,10 +64,12 @@ retain satisfied historical dependencies.
   - Unapplied adjustments preserve balances, holds, receipts, and Ledger history. Restart and repeated evidence have one refund effect.
   - Added 17 checkout scenarios for failed reads and writes, processor outages, and customer creation recovery.
   - Checkout restart creates one transaction. Repeated payment events credit USD 5 once without additional Ledger entries.
-  - The checkout regression passed in 22.662 seconds. Go lint and format checks pass.
-  - The new checkout race suite passed in 103.986 seconds.
+  - Added 22 text execution scenarios for failed reads and writes, truncated responses, and uncertainty recovery.
+  - Restart releases undispatched holds and preserves holds for unresolved usage. Replays do not repeat provider work.
+  - The text and funds recovery regression passed in 28.283 seconds. Go lint and format checks pass.
+  - The new text execution race suite passed in 131.300 seconds.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 689 uncovered statements. Unchanged source blocks retain prior counts across the B267 decoder edit.
+  - The combined diagnostic has 666 uncovered statements. Unchanged source blocks retain prior counts across the B267 decoder edit.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
