@@ -8,7 +8,7 @@ F070 remains incomplete. This handoff does not complete or pause the goal.
 
 B275 and the journal admission increment are published. Publication was verified on September 24, 2026.
 The goal continuation resumed B266 after the handoff request.
-The current increment resolves B276, which the interrupted journal recovery checks exposed.
+The current increment adds B266 acceptance for normal application startup recovery.
 Do not expand the product scope.
 
 ### Checkout And Publication
@@ -20,7 +20,8 @@ Do not expand the product scope.
 - Published media input increment: `bcdbee132afe38afc5ac73deaf31695630f77f4a`.
 - Published journal admission commit: `fefb35796bf9f30083566b4e77a8c2488a448e26`.
 - Published replay integrity commit: `53eeff28729501a8b9460b31a4f27bec7b55f3d9`.
-- Local HEAD and the PR head matched that commit before the current B276 increment.
+- Published B276 commit: `44676d82310bbbc3891f6f5ffda465a3a480462a`.
+- Local HEAD and the PR head matched that commit before the current startup increment.
 - Verify the commit that contains this section in PR 344 before further edits.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
@@ -32,7 +33,34 @@ Do not expand the product scope.
 Application merge, release, and deployment remain outside the current authorization.
 The current production changes have focused validation. Aggregate validation remains incomplete.
 
-### Latest Interrupted Journal Recovery And B276
+### Latest Hosted Completion Startup Recovery
+
+The increment adds `internal/proxy/hosted_completion_startup_recovery_internal_test.go`.
+Its 12 scenarios use normal application construction with the existing interrupted journal and unpublished result fixtures.
+Controlled storage failures cover response recovery locks, expired dispatch locks and reads, interrupted attempts, requests, and reconciliation cases.
+Further cases cover unpublished result reads, receipt writes, and funds reconciliation after receipt recovery.
+
+Failed construction preserves financial and journal resources. Restored storage permits normal HTTP replay without another provider call.
+Repeated construction and replay preserve the recovered effects.
+A funds failure after receipt recovery retains that receipt and leaves financial resources unchanged.
+The next startup settles once. No production code or public contract changed.
+
+All 12 scenarios passed in 7.069 seconds. Race checks passed in separate groups of 11 and one scenario.
+The race groups passed in 88.835 and 13.080 seconds. Go lint and formatting passed.
+The initial format check required formatting of the new test file.
+
+No test process remains active. Evidence uses `/tmp/llm-proxy-b266-completion-startup` as its prefix.
+
+The first run injected some faults at response recovery before the selected expired-dispatch step.
+The final fixture preserves those earlier checks and adds injections specific to the later step.
+The initial log is `/tmp/llm-proxy-b266-completion-startup.log`.
+The complete final log is `/tmp/llm-proxy-b266-completion-startup-complete.log`.
+
+The current diagnostic is `/tmp/llm-proxy-b266-completion-startup-diagnostic.coverprofile`.
+It has 396 uncovered statements across 21172 statements. Production source coordinates are unchanged.
+This diagnostic does not establish aggregate CI success. B266 and final F070 acceptance remain open.
+
+### Previous Interrupted Journal Recovery And B276
 
 The increment adds `internal/proxy/hosted_journal_interruption_recovery_internal_test.go`.
 Eight scenarios exercise failed recovery reads and writes for accepted, dispatched, and observed work.
@@ -55,7 +83,7 @@ The product failure is in `/tmp/llm-proxy-b266-journal-interruption-before-final
 Earlier runs exposed fixture errors: a missing attempts route and duplicate reconciliation route registration.
 Those fixture errors are corrected. Their logs use `/tmp/llm-proxy-b266-journal-interruption` as their prefix.
 
-The current diagnostic is `/tmp/llm-proxy-b276-diagnostic.coverprofile`.
+That increment produced `/tmp/llm-proxy-b276-diagnostic.coverprofile`.
 It has 406 uncovered statements across 21172 statements.
 Old counts for `hosted_text_requests.go` were discarded. Only current profiles contribute counts for that changed file.
 This diagnostic does not establish aggregate CI success.
@@ -234,7 +262,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b276-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b266-completion-startup-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -250,7 +278,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest B276 diagnostic has 406 uncovered statements across 21172 statements.
+The latest startup diagnostic has 396 uncovered statements across 21172 statements.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.

@@ -393,6 +393,13 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Focused checks passed in 4.968 seconds, broad regression in 108.118 seconds, and race checks in 72.123 seconds.
   - Go lint and formatting passed. The current diagnostic has 406 uncovered statements across 21172 statements.
   - Use `/tmp/llm-proxy-b276-diagnostic.coverprofile`. The changed production file uses only current coverage counts.
+  - Added 12 normal application startup scenarios for interrupted dispatch, unpublished result, and funds recovery failures.
+  - Failed construction preserves financial and journal resources. Restored storage permits HTTP replay without another provider call.
+  - A later funds failure retains the recovered result receipt. Subsequent startup settles once.
+  - All 12 scenarios passed in 7.069 seconds. Race checks passed in separate groups of 11 and one scenario.
+  - The race groups passed in 88.835 and 13.080 seconds. Go lint and formatting passed after formatting the new test file.
+  - The diagnostic has 396 uncovered statements across 21172 statements. No production code changed.
+  - Use `/tmp/llm-proxy-b266-completion-startup-diagnostic.coverprofile`. Complete aggregate CI remains open.
   - The required coverage gate, complete F070 acceptance, and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
