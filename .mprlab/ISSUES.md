@@ -192,10 +192,13 @@ retain satisfied historical dependencies.
   - Signed event replay preserves exact JSON numbers and rejects a one-unit difference above the exact integer range of float64.
   - Added 16 startup scenarios for failed environment reads and writes, mixed environments, incomplete schemas, and invalid processor URLs.
   - The public service rejects invalid startup before HTTP admission. Restoration permits two normal starts with unchanged financial resources.
-  - The payment regression passed in 97.881 seconds. Management tests passed in 16.825 seconds.
-  - All 16 startup race scenarios passed in 75.519 seconds. Go lint and format checks passed.
+  - Added 12 funding-credit scenarios for account locks, Ledger writes, receipt reads, refund records, and balance reads.
+  - Failed credit stops HTTP startup and preserves the pending event without partial financial records.
+  - Restoration and completion replay retain one USD 5 credit, one receipt, and unchanged Ledger history.
+  - The payment regression passed in 101.237 seconds. Management tests passed in 16.887 seconds.
+  - All 12 credit race scenarios passed in 70.008 seconds. Go lint and format checks passed.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 493 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
+  - The combined diagnostic has 488 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
