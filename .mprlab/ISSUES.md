@@ -647,6 +647,13 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Race checks passed in 180.596 seconds. Go lint and formatting passed. No public schema or event contract changed.
   - The diagnostic has 350 uncovered statements across 21180 statements. Use `/tmp/llm-proxy-b282-diagnostic.coverprofile`.
   - Old adjustment source coordinates were discarded. Earlier validation now intercepts corrupt holds before a Ledger constructor error path.
+  - Admission, settlement, credits, and refund holds now share typed Ledger input construction.
+  - The shared constructors preserve all errors. Metadata, idempotency keys, service calls, transaction ownership, and Ledger v1.1.0 remain unchanged.
+  - Existing public characterization passed before the refactor in 27.396 seconds and after the final change in 28.453 seconds.
+  - Payment and funds regression passed in 258.262 seconds. Race checks passed in 118.602 seconds. Go lint and formatting passed.
+  - No new tests, shared dependency changes, public schemas, or event contracts were required.
+  - The diagnostic has 339 uncovered statements across 21159 statements. Use `/tmp/llm-proxy-b266-ledger-inputs-diagnostic.coverprofile`.
+  - Old coordinates for all four changed production files were discarded. The new input constructors have complete statement coverage.
   - Complete aggregate CI and F070 acceptance remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

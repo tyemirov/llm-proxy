@@ -154,19 +154,15 @@ func postHostedFundsCredit(transaction *gorm.DB, accountID, eventKey string, cen
 	if err != nil {
 		return err
 	}
-	amount, err := ledger.NewPositiveAmountCents(cents)
+	input, err := newHostedLedgerAmountInput(cents, eventKey)
 	if err != nil {
-		return err
-	}
-	key, err := ledger.NewIdempotencyKey(eventKey)
-	if err != nil {
-		return err
+		return fmt.Errorf("construct ledger credit %s: %w", eventKey, err)
 	}
 	metadata, err := ledger.NewMetadataJSON(string(encoded))
 	if err != nil {
 		return err
 	}
-	if err := account.service.Grant(transaction.Statement.Context, account.tenant, account.user, account.namespace, amount, key, 0, metadata); err != nil {
+	if err := account.service.Grant(transaction.Statement.Context, account.tenant, account.user, account.namespace, input.amount, input.key, 0, metadata); err != nil {
 		return fmt.Errorf("post shared ledger credit %s: %w", eventKey, err)
 	}
 	return nil

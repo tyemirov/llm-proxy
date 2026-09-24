@@ -154,28 +154,20 @@ func postHostedFundsSettlement(transaction *gorm.DB, reservation managedFundsRes
 		return err
 	}
 	if reservation.MaximumCents > 0 {
-		identifier, err := ledger.NewReservationID(reservation.RequestID)
+		input, err := newHostedLedgerReleaseInput(reservation.RequestID, "settle-release:"+reservation.RequestID)
 		if err != nil {
-			return err
+			return fmt.Errorf("construct ledger release for request %s: %w", reservation.RequestID, err)
 		}
-		key, err := ledger.NewIdempotencyKey("settle-release:" + reservation.RequestID)
-		if err != nil {
-			return err
-		}
-		if err := account.service.Release(transaction.Statement.Context, account.tenant, account.user, account.namespace, identifier, key, metadata); err != nil {
+		if err := account.service.Release(transaction.Statement.Context, account.tenant, account.user, account.namespace, input.reservation, input.key, metadata); err != nil {
 			return fmt.Errorf("release settled reservation %s: %w", reservation.RequestID, err)
 		}
 	}
 	if cents > 0 {
-		amount, err := ledger.NewPositiveAmountCents(cents)
+		input, err := newHostedLedgerAmountInput(cents, "settle-charge:"+reservation.RequestID)
 		if err != nil {
-			return err
+			return fmt.Errorf("construct ledger charge for request %s: %w", reservation.RequestID, err)
 		}
-		key, err := ledger.NewIdempotencyKey("settle-charge:" + reservation.RequestID)
-		if err != nil {
-			return err
-		}
-		if err := account.service.Spend(transaction.Statement.Context, account.tenant, account.user, account.namespace, amount, key, metadata); err != nil {
+		if err := account.service.Spend(transaction.Statement.Context, account.tenant, account.user, account.namespace, input.amount, input.key, metadata); err != nil {
 			return fmt.Errorf("post settled charge %s: %w", reservation.RequestID, err)
 		}
 	}

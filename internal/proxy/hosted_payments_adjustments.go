@@ -285,15 +285,11 @@ func applyPaymentAdjustments(tx *gorm.DB, order managedFundingOrderRecord, verif
 		return err
 	}
 	if previous.HeldCents > 0 {
-		reservation, err := ledger.NewReservationID(previous.HoldID)
+		input, err := newHostedLedgerReleaseInput(previous.HoldID, key+":release")
 		if err != nil {
-			return err
+			return fmt.Errorf("construct refund hold release for order %s: %w", order.ID, err)
 		}
-		releaseKey, err := ledger.NewIdempotencyKey(key + ":release")
-		if err != nil {
-			return err
-		}
-		if err := account.service.Release(tx.Statement.Context, account.tenant, account.user, account.namespace, reservation, releaseKey, ledgerMetadata); err != nil {
+		if err := account.service.Release(tx.Statement.Context, account.tenant, account.user, account.namespace, input.reservation, input.key, ledgerMetadata); err != nil {
 			return fmt.Errorf("release payment hold: %w", err)
 		}
 	}
@@ -334,19 +330,11 @@ func applyPaymentAdjustments(tx *gorm.DB, order managedFundingOrderRecord, verif
 	next.HeldCents = min(verified.pending, max(int64(0), balance.AvailableCents.Int64()))
 	if next.HeldCents > 0 {
 		next.HoldID = next.holdIdentifier()
-		reservation, err := ledger.NewReservationID(next.HoldID)
+		input, err := newHostedLedgerReservationInput(next.HeldCents, next.HoldID, next.HoldID)
 		if err != nil {
-			return err
+			return fmt.Errorf("construct refund hold for order %s: %w", order.ID, err)
 		}
-		holdKey, err := ledger.NewIdempotencyKey(next.HoldID)
-		if err != nil {
-			return err
-		}
-		amount, err := ledger.NewPositiveAmountCents(next.HeldCents)
-		if err != nil {
-			return err
-		}
-		if err := account.service.Reserve(tx.Statement.Context, account.tenant, account.user, account.namespace, amount, reservation, holdKey, 0, ledgerMetadata); err != nil {
+		if err := account.service.Reserve(tx.Statement.Context, account.tenant, account.user, account.namespace, input.amount, input.reservation, input.key, 0, ledgerMetadata); err != nil {
 			return fmt.Errorf("reserve payment hold: %w", err)
 		}
 	}

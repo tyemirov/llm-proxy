@@ -6,19 +6,19 @@ The user requested this handoff because the session has few tokens left.
 Use this section and the resume procedure below as the current instructions.
 F070 remains incomplete. This handoff does not complete or pause the goal.
 
-B282 rejects refund amounts and hold identities that disagree with retained evidence.
-B281 and the previous corrections are published in PR 344.
+The latest increment shares typed Ledger inputs across usage funds and refund holds.
+B282 and the previous corrections are published in PR 344.
 Do not expand the product scope.
 
 ### Immediate Resume Checkpoint
 
 The requested handoff update changed documentation only. Subsequent goal continuations resumed B266 and reproduced B281 and B282.
-The current work preserves that handoff update and the completed B281 correction.
+The current work preserves that handoff update and the completed refund corrections.
 The branch is `feature/F069-prepaid-payments`.
-The last verified published commit is `440dc169a49d4d2f72021b1ae0f387484ba3c303` for B281.
-PR 344 has that head at the start of B282. It is open and ready, with no reported hosted checks.
+The last verified published commit is `d13274e986c550ec231693485d49c6771a57092a` for B282.
+PR 344 has that head at the start of this refactor. It is open and ready, with no reported hosted checks.
 
-The latest focused diagnostic is `/tmp/llm-proxy-b282-diagnostic.coverprofile`: 350 uncovered statements across 21180 statements.
+The latest focused diagnostic is `/tmp/llm-proxy-b266-ledger-inputs-diagnostic.coverprofile`: 339 uncovered statements across 21159 statements.
 The last complete Go run failed with `coverage total 97.9%, want 100.0%`.
 Its log is `/tmp/llm-proxy-b275-go-test.log`. Focused results do not establish aggregate CI success.
 F065 through F070 remain open. F087 owns the separate Paddle setup and actual sandbox qualification.
@@ -30,8 +30,29 @@ F087 must not block development completion. Production activation remains disabl
 4. Update the B266 plan before implementation. Record each reproduced defect separately after checking available issue identifiers.
 5. Preserve all provider-operation requirements. Complete controlled acceptance and final `make ci` after the last correction.
 
-The resumed investigation selected retained refund amounts and reproduced B282 before production changes.
+The resumed investigation selected repeated Ledger input construction after completing B282.
 Temporary evidence is under `/tmp` and can disappear. Recreate missing evidence with repository Make targets.
+
+### Shared Ledger Inputs
+
+`internal/proxy/hosted_ledger_inputs.go` supplies typed amount, reservation, and release inputs.
+Admission, settlement, usage credits, and refund holds use these shared constructors.
+Each constructor preserves the Ledger domain types and returns every construction error through `errors.Join`.
+Account construction also preserves all errors with one contextual return path.
+Callers attach request, order, or credit identity to input construction failures before invoking Ledger.
+
+Metadata, idempotency keys, transaction ownership, service calls, and the Ledger v1.1.0 dependency remain unchanged.
+The existing public financial tests supply characterization. No new tests or public contracts are required for this refactor.
+Characterization passed before the refactor in 27.396 seconds. Final focused checks passed in 28.453 seconds.
+The initial usage-only refactor passed in 27.172 seconds before refund holds adopted the same constructors.
+Validation evidence uses `/tmp/llm-proxy-b266-ledger-inputs` as its prefix.
+
+Payment and funds regression passed in 258.262 seconds. Race checks passed in 118.602 seconds.
+Go lint and formatting passed. No validation process remains active.
+The updated diagnostic has 339 uncovered statements across 21159 statements. It does not replace aggregate CI.
+Old coordinates for `hosted_funds.go`, `hosted_funds_adjustments.go`, `hosted_funds_settlement.go`, and `hosted_payments_adjustments.go` were discarded.
+Only the current regression profile contributes counts for those files and the new input constructors.
+The input constructors have complete statement coverage. B266 and full F070 acceptance remain open.
 
 ### Retained Refund Amounts And B282
 
@@ -201,6 +222,7 @@ Verify unused identifiers across the active tracker and archive before assigning
 - Published B279 commit: `c99431c0d61bd1109905f32f5714f319aa983b11`.
 - Published B280 commit: `3a3f29192ba19a07c840f17d597756d4c5bbbdc3`.
 - Published B281 commit: `440dc169a49d4d2f72021b1ae0f387484ba3c303`.
+- Published B282 commit: `d13274e986c550ec231693485d49c6771a57092a`.
 - PR 344 reported no hosted checks during this update. Hosted CI success is not established.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
@@ -687,7 +709,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b282-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b266-ledger-inputs-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -703,7 +725,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest B282 diagnostic has 350 uncovered statements across 21180 statements.
+The latest shared Ledger input diagnostic has 339 uncovered statements across 21159 statements.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.

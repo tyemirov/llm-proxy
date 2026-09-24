@@ -944,6 +944,10 @@ These tests do not prove funds settlement, provider reconciliation, or recovery 
 ### Funds Admission and Settlement
 
 F068 uses the shared Ledger service in the managed database transaction.
+Admission, settlement, credits, and refund holds share typed Ledger input construction.
+The adapter preserves every constructor error before it calls the Ledger service.
+Metadata, idempotency keys, transaction ownership, and Ledger operations retain their existing contracts.
+
 Admission locks the billing account before it reads funds or creates a reservation.
 Admission rejects a retained account remainder that is malformed, negative, or at least one cent.
 This check uses the same remainder validator as balance reads and settlement, before payment holds or provider dispatch.
