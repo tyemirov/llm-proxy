@@ -47,7 +47,11 @@ retain satisfied historical dependencies.
   - The reconciliation regression passed in 13.401 seconds. Its race suite passed in 138.827 seconds.
   - The added Ledger-history check passed with the race detector in 6.751 seconds. Go lint and format checks pass.
   - The Ledger-history check rejects offsetting monetary entries as well as balance changes during reconciliation.
-  - Combined focused profiles cover 193 statements absent from the retained aggregate profile. This diagnostic is not a new CI result.
+  - Added 28 provider reconciliation scenarios for invalid imports, failed reads and writes, retained evidence, and recovery.
+  - Failed imports leave no partial records. Repeated imports preserve the report, original source bytes, and customer charges.
+  - The provider reconciliation regression passed in 6.051 seconds. Its race suite passed in 74.472 seconds.
+  - Go lint and format checks pass after the provider reconciliation increment.
+  - Combined focused profiles cover 212 statements absent from the retained aggregate profile. This diagnostic is not a new CI result.
   - The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
