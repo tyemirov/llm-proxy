@@ -1,10 +1,84 @@
 package proxy
 
 import (
+	"errors"
 	"net/http"
+	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"gorm.io/gorm"
 )
+
+func TestHostedPaymentsReadsFailWithoutPartialAmountsAndRecover(t *testing.T) {
+	database, _, _ := newJournalTransactionFixture(t)
+	service, server, cookie := paymentOrdersFixture(t, database)
+	processor := newCheckoutProtocolFixture(t)
+	order := paymentOrderHTTP(t, server, cookie("owner"), http.MethodPost, paymentOrdersTestPath, "read-failure", `{"offer_code":"five"}`, http.StatusCreated)
+	checkout := checkoutWorkerFixture(t, database, service.funding, processor, time.Now())
+	service.paymentPortal = checkout.client
+	if err := checkout.reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	sendPaymentEventFixture(t, database, completedPaymentFixture(t, processor), "transaction.completed", 1)
+	if err := paymentProcessorFixture(t, checkout, database).reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	orderPath := paymentOrdersTestPath + "/" + order["id"].(string)
+	var failedTable atomic.Pointer[string]
+	var failures atomic.Int64
+	const callback = "test:payment_resource_read_failure"
+	if err := database.database.Callback().Query().Before("gorm:query").Register(callback, func(tx *gorm.DB) {
+		if table := failedTable.Load(); table != nil && tx.Statement.Table == *table {
+			failures.Add(1)
+			tx.AddError(errors.New("controlled_private_payment_read_failure"))
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := database.database.Callback().Query().Remove(callback); err != nil {
+			t.Error(err)
+		}
+	})
+	for _, scenario := range []struct{ name, path, table string }{
+		{"orders", paymentOrdersTestPath, "managed_funding_order_records"},
+		{"order", orderPath, "managed_funding_order_records"},
+		{"checkout", orderPath + "/checkout", "managed_payment_checkout_records"},
+		{"receipt", orderPath + "/receipt", "managed_payment_receipt_records"},
+		{"receipt-order", orderPath + "/receipt", "managed_funding_order_records"},
+		{"receipt-adjustment", orderPath + "/receipt", "managed_payment_adjustment_records"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			before := paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, scenario.path, "", "", http.StatusOK)
+			failures.Store(0)
+			failedTable.Store(&scenario.table)
+			defer failedTable.Store(nil)
+			response := paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, scenario.path, "", "", http.StatusServiceUnavailable)
+			failedTable.Store(nil)
+			if failures.Load() == 0 || !reflect.DeepEqual(response, map[string]any{"error": map[string]any{"code": errFundingUnavailable.Error()}}) {
+				t.Fatalf("payment read failure exposed a partial or private response: %v", response)
+			}
+			after := paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, scenario.path, "", "", http.StatusOK)
+			if !reflect.DeepEqual(before, after) {
+				t.Fatalf("payment read recovery changed evidence: before=%v after=%v", before, after)
+			}
+			assertHostedFundsBalance(t, database, 500, 500)
+		})
+	}
+	t.Run("portal-customer", func(t *testing.T) {
+		table := "managed_payment_customer_records"
+		failedTable.Store(&table)
+		defer failedTable.Store(nil)
+		paymentOrderHTTP(t, server, cookie("owner"), http.MethodPost, "/billing-accounts/billing-journal/payment-portal-sessions", "", `{}`, http.StatusServiceUnavailable)
+		if processor.portalCalls.Load() != 0 {
+			t.Fatal("customer read failure created a portal session")
+		}
+		failedTable.Store(nil)
+		paymentOrderHTTP(t, server, cookie("owner"), http.MethodPost, "/billing-accounts/billing-journal/payment-portal-sessions", "", `{}`, http.StatusCreated)
+	})
+}
 
 func TestHostedPaymentsReceiptSeparatesCustomerAmountsAndPrivateEvidence(t *testing.T) {
 	database, _, _ := newJournalTransactionFixture(t)

@@ -97,7 +97,7 @@ test-account-connections:
 
 .PHONY: test-hosted-access
 test-hosted-access:
-	$(GO) test ./internal/proxy -run '$(if $(HOSTED_TEST_PATTERN),$(HOSTED_TEST_PATTERN),^TestHosted)' -count=1
+	$(GO) test ./internal/proxy -run '$(if $(HOSTED_TEST_PATTERN),$(HOSTED_TEST_PATTERN),^TestHosted)' -count=1 $(HOSTED_TEST_ARGS)
 
 .PHONY: test-hosted-billing
 test-hosted-billing:

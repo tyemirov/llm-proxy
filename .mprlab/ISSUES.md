@@ -31,6 +31,14 @@ retain satisfied historical dependencies.
   Evidence:
   The corrected stack CI run passes all Go tests but reports `coverage total 95.3%, want 100.0%`.
   The function report identifies incomplete coverage in 288 functions across 79 files.
+  Progress:
+  - Added payment evidence rejection and recovery checks, plus public read failures without partial amounts.
+  - Added 28 refund evidence and history scenarios, 14 financial write rollback scenarios, and a tax-inclusive refund sequence.
+  - The checks verify unchanged receipts and balances after failure, restart recovery, and one effect after replay.
+  - The complete payment regression passed in 42.920 seconds. Its CLI checks passed in 2.496 seconds.
+  - Focused payment race checks passed in 343.417 seconds. Go lint and format checks pass.
+  - Combined focused profiles cover 56 statements absent from the retained aggregate profile. This diagnostic is not a new CI result.
+  - The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
   - Preserve the required coverage threshold and the current provider scope.

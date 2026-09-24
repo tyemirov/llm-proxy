@@ -101,7 +101,13 @@ func TestHostedPaymentsCompletedCreditCommitsOnceAcrossEventsAndWorkers(t *testi
 }
 
 func TestHostedPaymentsCompletedRejectsMismatchedEvidence(t *testing.T) {
-	for _, scenario := range []string{"foreign-account", "currency", "amount", "discount", "uncaptured", "paid-only", "event-api-disagreement", "older-api-state"} {
+	for _, scenario := range []string{
+		"foreign-account", "currency", "amount", "discount", "uncaptured", "paid-only", "event-api-disagreement", "older-api-state",
+		"completion-time", "update-before-completion", "missing-totals", "totals-currency", "negative-amount", "invalid-fee",
+		"inconsistent-total", "wrong-funding-amount", "missing-line", "missing-line-totals", "wrong-line-price",
+		"missing-payment-id", "duplicate-payment", "invalid-payment-amount", "missing-capture-time", "capture-error", "invalid-capture-time",
+		"invalid-payout", "processor-unavailable", "changed-invoice",
+	} {
 		t.Run(scenario, func(t *testing.T) {
 			database, _, _ := newJournalTransactionFixture(t)
 			service, server, cookie := paymentOrdersFixture(t, database)
@@ -112,7 +118,15 @@ func TestHostedPaymentsCompletedRejectsMismatchedEvidence(t *testing.T) {
 				t.Fatal(err)
 			}
 			transaction := completedPaymentFixture(t, processor)
+			original, err := json.Marshal(transaction)
+			if err != nil {
+				t.Fatal(err)
+			}
 			processor.mutex.Lock()
+			details := transaction["details"].(map[string]any)
+			totals := details["totals"].(map[string]any)
+			payment := transaction["payments"].([]any)[0].(map[string]any)
+			line := details["line_items"].([]any)[0].(map[string]any)
 			switch scenario {
 			case "foreign-account":
 				transaction["custom_data"].(map[string]string)["billing_account_id"] = "billing-other"
@@ -126,6 +140,42 @@ func TestHostedPaymentsCompletedRejectsMismatchedEvidence(t *testing.T) {
 				transaction["payments"].([]any)[0].(map[string]any)["status"] = "authorized"
 			case "paid-only":
 				transaction["status"] = "paid"
+			case "completion-time":
+				transaction["completed_at"] = "not-a-timestamp"
+			case "update-before-completion":
+				transaction["updated_at"] = "2026-09-23T11:59:59Z"
+			case "missing-totals":
+				details["totals"] = nil
+			case "totals-currency":
+				totals["currency_code"] = "usd"
+			case "negative-amount":
+				totals["tax"] = "-50"
+			case "invalid-fee":
+				totals["fee"] = "0.30"
+			case "inconsistent-total":
+				totals["subtotal"] = "450"
+			case "wrong-funding-amount":
+				totals["subtotal"], totals["total"], totals["grand_total"] = "600", "650", "650"
+			case "missing-line":
+				details["line_items"] = []any{}
+			case "missing-line-totals":
+				line["totals"] = nil
+			case "wrong-line-price":
+				line["price_id"] = "pri_00000000000000000000000002"
+			case "missing-payment-id":
+				payment["payment_attempt_id"] = ""
+			case "duplicate-payment":
+				transaction["payments"] = []any{payment, payment}
+			case "invalid-payment-amount":
+				payment["amount"] = "5.50"
+			case "missing-capture-time":
+				delete(payment, "captured_at")
+			case "capture-error":
+				payment["error_code"] = "declined"
+			case "invalid-capture-time":
+				payment["captured_at"] = "not-a-timestamp"
+			case "invalid-payout":
+				details["payout_totals"].(map[string]any)["earnings"] = "not-an-amount"
 			}
 			processor.mutex.Unlock()
 			sendPaymentEventFixture(t, database, transaction, "transaction.completed", 1)
@@ -139,6 +189,14 @@ func TestHostedPaymentsCompletedRejectsMismatchedEvidence(t *testing.T) {
 				transaction["payments"].([]any)[0].(map[string]any)["amount"] = "500"
 				processor.mutex.Unlock()
 			}
+			processor.mutex.Lock()
+			switch scenario {
+			case "processor-unavailable":
+				processor.transactions = nil
+			case "changed-invoice":
+				transaction["invoice_number"] = "INV-CHANGED"
+			}
+			processor.mutex.Unlock()
 			if err := paymentProcessorFixture(t, checkout, database).reconcile(t.Context()); err != nil {
 				t.Fatal(err)
 			}
@@ -150,6 +208,30 @@ func TestHostedPaymentsCompletedRejectsMismatchedEvidence(t *testing.T) {
 			var event managedPaymentInboxRecord
 			if err := database.database.First(&event).Error; err != nil || event.State != paymentInboxReconciliation || event.Reason == "" {
 				t.Fatalf("event=%+v error=%v", event, err)
+			}
+			paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, paymentOrdersTestPath+"/"+order["id"].(string)+"/receipt", "", "", http.StatusNotFound)
+			var restored map[string]any
+			if err := json.Unmarshal(original, &restored); err != nil {
+				t.Fatal(err)
+			}
+			processor.mutex.Lock()
+			processor.transactions = []map[string]any{restored}
+			processor.mutex.Unlock()
+			sendPaymentEventFixture(t, database, restored, "transaction.completed", 2)
+			restarted := paymentProcessorFixture(t, checkout, openJournalTransactionInstance(t, database))
+			for range 2 {
+				if err := restarted.reconcile(t.Context()); err != nil {
+					t.Fatal(err)
+				}
+			}
+			balance := paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, fundsBalanceTestPath, "", "", http.StatusOK)
+			if balance["posted_cents"] != "500" || balance["available_cents"] != "500" {
+				t.Fatalf("corrected evidence did not produce one credit: %v", balance)
+			}
+			paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, paymentOrdersTestPath+"/"+order["id"].(string)+"/receipt", "", "", http.StatusOK)
+			history := paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, "/billing-accounts/billing-journal/ledger-entries", "", "", http.StatusOK)
+			if len(history["entries"].([]any)) != 1 || processor.creates.Load() != 1 {
+				t.Fatalf("payment recovery duplicated a financial effect: %v", history)
 			}
 		})
 	}
