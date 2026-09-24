@@ -64,13 +64,24 @@ func StandardManagedTenant(secret string) ManagedTenant {
 	}
 }
 
+// BuildRouter registers worker shutdown before the test releases its database.
+func BuildRouter(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger) (*gin.Engine, error) {
+	testingInstance.Helper()
+	router, err := proxy.BuildRouter(configuration, structuredLogger)
+	if err != nil {
+		return nil, err
+	}
+	testingInstance.Cleanup(router.Close)
+	return router.Engine, nil
+}
+
 // BuildManagedRouter builds and provisions a router through the mandatory management API.
 func BuildManagedRouter(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger, tenant ManagedTenant) (*gin.Engine, error) {
 	configured, provisionError := ProvisionManagedRouter(testingInstance, configuration, structuredLogger, tenant)
 	if provisionError != nil {
 		return nil, provisionError
 	}
-	return proxy.BuildRouter(configured, structuredLogger)
+	return BuildRouter(testingInstance, configured, structuredLogger)
 }
 
 // ProvisionManagedRouter provisions one tenant and returns the reusable persistent router configuration.
@@ -87,11 +98,13 @@ func ProvisionManagedRouter(testingInstance testing.TB, configuration proxy.Conf
 	configuration = WithModelCatalog(testingInstance, configuration)
 	bootstrapConfiguration := configuration
 	bootstrapConfiguration.UpstreamRateLimits = nil
-	bootstrapRouter, buildError := proxy.BuildRouter(bootstrapConfiguration, structuredLogger)
+	bootstrap, buildError := proxy.BuildRouter(bootstrapConfiguration, structuredLogger)
 	if buildError != nil {
 		proxy.HTTPClient = originalHTTPClient
 		return proxy.Configuration{}, buildError
 	}
+	defer bootstrap.Close()
+	bootstrapRouter := bootstrap.Engine
 	sessionCookie, cookieError := managedRouterSessionCookie()
 	if cookieError != nil {
 		return proxy.Configuration{}, cookieError

@@ -389,7 +389,7 @@ That coordinator retains request identity, reserves Ledger funds, enforces attem
 The normal financial worker records charges and settles completed usage.
 The normal media service uses the same price and Ledger admission components before it queues an operation.
 The media worker checks the saved request controls and financial reservation before dispatch.
-The media constructor attaches hosted financial admission before it starts workers or resumes queued operations.
+The media constructor attaches hosted financial admission before workers can start or resume queued operations.
 Restart preserves the configured scope for accepted operations.
 The server keeps customer-owned assignments separate from this hosted path.
 
@@ -953,7 +953,16 @@ It delivers pending funded observations and reviews held reservations in bounded
 Each financial effect has one transaction. A later run resumes pending records without a process-local checkpoint.
 
 The HTTP service reconciles funds before it accepts requests and then once per second.
-Its lifecycle owns the financial worker and HTTP listener.
+Its lifecycle owns the financial worker, media workers, and HTTP listener.
+Media workers start after initial financial reconciliation succeeds.
+Shutdown cancels active media execution and waits for media workers, adapters, and maintenance to stop.
+Interrupted media retains an uncertain outcome with `worker_shutdown`. Its funds remain held until reconciliation establishes the financial result.
+A failed startup leaves queued media and its financial records unchanged.
+
+Embedded Go callers use `BuildRouter` to obtain a `Router` and must call `Router.Close` after HTTP shutdown.
+The shared router fixtures register this cleanup before they release their test databases.
+The constructor does not start workers before all router components initialize.
+
 A reconciliation failure stops the listener and returns the financial error to the process owner.
 An interrupt or termination signal cancels the worker and active requests.
 HTTP shutdown has a ten-second limit.

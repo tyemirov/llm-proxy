@@ -54,7 +54,7 @@ func TestImageGenerationEditingRejectsInvalidAndForeignAssetsWithoutDispatch(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	router, err := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+	router, err := testfixtures.BuildRouter(t, configuration, zap.NewNop().Sugar())
 	if err != nil {
 		t.Fatal(err)
 	}

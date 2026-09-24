@@ -254,6 +254,7 @@ func newHostedMediaAdmissionHTTPServer(t *testing.T, database *gormManagedTenant
 		t.Fatal(err)
 	}
 	service := &mediaOperationService{
+		workerContext:   t.Context(),
 		logger:          zap.NewNop().Sugar(),
 		hostedAdmission: func(*gorm.DB, managedJournalRequestRecord, mediaOperationRecord) error { return nil },
 		httpClient:      http.DefaultClient,

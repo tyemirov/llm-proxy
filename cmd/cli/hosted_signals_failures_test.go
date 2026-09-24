@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"go.uber.org/zap"
 )
 
@@ -67,7 +67,7 @@ func TestHostedSignalsCLIFailuresPublishNoPartialReport(t *testing.T) {
 			t.Fatal("signals command created the missing database")
 		}
 	})
-	if _, err := proxy.BuildRouter(configuration, zap.NewNop().Sugar()); err != nil {
+	if _, err := testfixtures.BuildRouter(t, configuration, zap.NewNop().Sugar()); err != nil {
 		t.Fatal(err)
 	}
 	database, err := sql.Open("sqlite", path)

@@ -28,7 +28,7 @@ func TestHostedPaymentsRuntimeProcessesFundingThroughNormalService(t *testing.T)
 		Offers: []PaymentOfferConfiguration{{Code: "five", PriceID: "pri_01hv8x2axb33yr5y238zfwcn5p", FundingCents: 500}},
 	}})
 	configuration.Management.DatabasePath = source.File
-	application, err := buildProxyApplication(configuration, zap.NewNop().Sugar(), newManagedTenantStore)
+	application, err := buildProxyApplicationForTest(t, configuration, zap.NewNop().Sugar(), newManagedTenantStore)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestHostedPaymentsRuntimeProcessesFundingThroughNormalService(t *testing.T)
 	production.Environment, production.APIBaseURL = "production", ""
 	production.ClientToken = "live_browserfixture"
 	configuration.Payments = &production
-	if _, err := buildProxyApplication(configuration, zap.NewNop().Sugar(), newManagedTenantStore); err == nil || !strings.Contains(err.Error(), "payment environment") {
+	if _, err := buildProxyApplicationForTest(t, configuration, zap.NewNop().Sugar(), newManagedTenantStore); err == nil || !strings.Contains(err.Error(), "payment environment") {
 		t.Fatalf("sandbox database accepted production runtime: %v", err)
 	}
 }
@@ -199,7 +199,7 @@ func TestHostedPaymentsRuntimeRejectsInvalidConfigurationBeforeOpeningDatabase(t
 				input.APIBaseURL = "http://processor.example"
 			}
 			configuration := withInternalUpstreamCapacity(t, Configuration{Management: managedRouterTestManagementConfiguration(), ProviderCatalog: internalCanonicalProviderCatalog(), AssetStorePath: t.TempDir(), Payments: input})
-			_, err := buildProxyApplication(configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
+			_, err := buildProxyApplicationForTest(t, configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
 				t.Fatal("invalid payment configuration opened the database")
 				return nil, nil
 			})

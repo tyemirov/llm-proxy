@@ -187,6 +187,10 @@ test-operational-live-contracts:
 test-ci-runner:
 	$(GO) test ./tests -run '^TestOperationalCIRunnerRequiresCurrentCompletionEvidence$$' -count=1
 
+.PHONY: test-coverage-contract
+test-coverage-contract:
+	$(GO) test ./tests -run '^TestOperationalCoverage' -count=1
+
 test-live-provider-harness:
 	@GO="$(GO)" ./scripts/test_live_providers.sh --preflight
 

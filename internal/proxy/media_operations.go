@@ -292,6 +292,9 @@ type mediaOperationStore struct {
 }
 
 type mediaOperationService struct {
+	workerContext     context.Context
+	stopWorkers       context.CancelFunc
+	workers           sync.WaitGroup
 	logger            *zap.SugaredLogger
 	hostedAdmission   hostedMediaReservation
 	voiceCursorCipher managedProviderKeyCipher
@@ -377,7 +380,10 @@ func newMediaOperationService(configuration Configuration, managedTenants *manag
 			return nil, catalogError
 		}
 	}
+	workerContext, stopWorkers := context.WithCancel(context.Background())
 	service := &mediaOperationService{
+		workerContext:     workerContext,
+		stopWorkers:       stopWorkers,
 		logger:            logger,
 		voiceCursorCipher: managedTenants.providerKeyCipher,
 		voiceCursorRandom: managedTenants.randomReader,
@@ -465,19 +471,27 @@ func newMediaOperationService(configuration Configuration, managedTenants *manag
 	if configuration.hosted != nil {
 		service.hostedAdmission = configuration.hosted.mediaAdmission(providers)
 	}
+	return service, nil
+}
+
+func (service *mediaOperationService) start() {
 	if service.workerCount > 0 {
 		for workerIndex := 0; workerIndex < service.workerCount; workerIndex++ {
-			go service.runWorker(newMediaOperationIdentifier(), service.queue)
+			service.workers.Go(func() { service.runWorker(newMediaOperationIdentifier(), service.queue) })
 		}
 		for workerIndex := 0; workerIndex < service.dictatorWorkers; workerIndex++ {
-			go service.runWorker(newMediaOperationIdentifier(), service.dictatorQueue)
+			service.workers.Go(func() { service.runWorker(newMediaOperationIdentifier(), service.dictatorQueue) })
 		}
-		go service.runMaintenance()
+		service.workers.Go(service.runMaintenance)
 	}
 	service.deliverPendingUsage()
 	service.expireTerminalData()
 	service.resumeOutstanding()
-	return service, nil
+}
+
+func (service *mediaOperationService) stop() {
+	service.stopWorkers()
+	service.workers.Wait()
 }
 
 func registerMediaOperationRoutes(router *gin.Engine, authenticator tenantAuthenticator, structuredLogger *zap.SugaredLogger, service *mediaOperationService) {
@@ -980,10 +994,15 @@ func (service *mediaOperationService) resumeOutstanding() {
 func (service *mediaOperationService) runMaintenance() {
 	ticker := time.NewTicker(service.claimRenewal)
 	defer ticker.Stop()
-	for range ticker.C {
-		service.deliverPendingUsage()
-		service.expireTerminalData()
-		service.resumeOutstanding()
+	for {
+		select {
+		case <-service.workerContext.Done():
+			return
+		case <-ticker.C:
+			service.deliverPendingUsage()
+			service.expireTerminalData()
+			service.resumeOutstanding()
+		}
 	}
 }
 
@@ -1003,9 +1022,17 @@ func (service *mediaOperationService) reportMaintenanceError(phase mediaMaintena
 }
 
 func (service *mediaOperationService) runWorker(workerID string, queue <-chan string) {
-	for operationID := range queue {
-		service.queued.Delete(operationID)
-		service.runOperation(workerID, operationID)
+	for {
+		select {
+		case <-service.workerContext.Done():
+			return
+		case operationID, open := <-queue:
+			if !open || service.workerContext.Err() != nil {
+				return
+			}
+			service.queued.Delete(operationID)
+			service.runOperation(workerID, operationID)
+		}
 	}
 }
 
@@ -1027,7 +1054,7 @@ func (service *mediaOperationService) executeOperation(workerID string, operatio
 	if adapter == nil {
 		return errors.Join(errMediaOperationUnavailable, service.finish(operationID, generation, MediaOperationExecutionResult{State: MediaOperationStateFailed, ErrorCode: errMediaOperationUnavailable.Error()}))
 	}
-	requestContext, cancel := context.WithDeadline(context.Background(), record.DeadlineAt)
+	requestContext, cancel := context.WithDeadline(service.workerContext, record.DeadlineAt)
 	defer cancel()
 	hosted, authorityError := service.store.hostedMediaRequest(service.store.database.WithContext(requestContext), record.OperationID)
 	if authorityError == nil && hosted != nil {
@@ -1131,21 +1158,32 @@ func (service *mediaOperationService) persistProviderReceipt(operationID string,
 
 func (service *mediaOperationService) runWithClaimRenewal(requestContext context.Context, operationID string, generation uint64, execute func() MediaOperationExecutionResult) MediaOperationExecutionResult {
 	resultChannel := make(chan MediaOperationExecutionResult, 1)
-	go func() { resultChannel <- execute() }()
+	service.workers.Go(func() { resultChannel <- execute() })
 	ticker := time.NewTicker(service.claimRenewal)
 	defer ticker.Stop()
 	for {
 		select {
 		case result := <-resultChannel:
+			if err := requestContext.Err(); err != nil {
+				return interruptedMediaExecution(err)
+			}
 			return result
 		case <-requestContext.Done():
-			return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ErrorCode: "operation_deadline_exceeded"}
+			return interruptedMediaExecution(requestContext.Err())
 		case <-ticker.C:
 			if err := service.reportPersistenceFailure(operationID, "renew_claim", service.renewMediaClaim(operationID, generation)); err != nil {
 				return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ErrorCode: "worker_claim_lost"}
 			}
 		}
 	}
+}
+
+func interruptedMediaExecution(err error) MediaOperationExecutionResult {
+	code := "operation_deadline_exceeded"
+	if errors.Is(err, context.Canceled) {
+		code = llmproxycontract.ErrorCodeMediaWorkerShutdown
+	}
+	return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ErrorCode: code}
 }
 
 func (service *mediaOperationService) claim(workerID string, operationID string) (mediaOperationRecord, uint64, bool, error) {
@@ -1444,7 +1482,7 @@ func deliverMediaOperationUsage(transaction *gorm.DB, record mediaOperationRecor
 
 func callerSafeMediaOperationError(errorCode string) string {
 	switch strings.TrimSpace(errorCode) {
-	case "provider_error", "provider_rate_limited", "operation_deadline_exceeded", "provider_outcome_unknown", "worker_claim_lost", "asset_publication_failed", "provider_result_invalid", llmproxycontract.ErrorCodeUsageJournalUnavailable, errMediaOperationUnavailable.Error():
+	case "provider_error", "provider_rate_limited", "operation_deadline_exceeded", "provider_outcome_unknown", "worker_claim_lost", llmproxycontract.ErrorCodeMediaWorkerShutdown, "asset_publication_failed", "provider_result_invalid", llmproxycontract.ErrorCodeUsageJournalUnavailable, errMediaOperationUnavailable.Error():
 		return strings.TrimSpace(errorCode)
 	default:
 		return ""

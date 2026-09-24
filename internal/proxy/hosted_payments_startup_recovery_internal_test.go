@@ -54,7 +54,7 @@ func (fixture paymentStartupFixture) recover(t *testing.T) {
 	t.Helper()
 	for range 2 {
 		func() {
-			application, err := buildProxyApplication(fixture.configuration, zap.NewNop().Sugar(), newManagedTenantStore)
+			application, err := buildProxyApplicationForTest(t, fixture.configuration, zap.NewNop().Sugar(), newManagedTenantStore)
 			if err != nil {
 				t.Fatal(err)
 			}

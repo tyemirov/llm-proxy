@@ -623,7 +623,7 @@ func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *te
 		t.Fatal(capacityError)
 	}
 	configuration.upstreamCapacity = compiledCapacity
-	router, buildError := buildRouter(configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
+	router, buildError := buildRouterWithStoreForTest(t, configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
 		store.routingDefaults = newProviderRegistry(configuration)
 		return store, nil
 	})

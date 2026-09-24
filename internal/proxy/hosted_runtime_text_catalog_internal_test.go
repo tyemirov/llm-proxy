@@ -184,7 +184,7 @@ func TestHostedRuntimeTextCatalogFinancialAcceptance(t *testing.T) {
 		hosted.Offerings = append(hosted.Offerings, HostedOfferingConfiguration{Provider: offering.Provider, Model: offering.Model, Operation: ModelOperationText, MaximumAttempts: 1})
 	}
 	configuration := withInternalUpstreamCapacity(t, Configuration{Management: management.configuration, ProviderCatalog: catalog, Endpoints: endpoints, AssetStorePath: root, Hosted: hosted})
-	application, err := buildProxyApplication(configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
+	application, err := buildProxyApplicationForTest(t, configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
 		return management.store, nil
 	})
 	if err != nil {

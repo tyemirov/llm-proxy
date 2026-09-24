@@ -89,7 +89,7 @@ func TestHostedRuntimeDictionaryFundsAndSettlement(t *testing.T) {
 		}
 	}
 	configuration := withInternalUpstreamCapacity(t, Configuration{Management: management.configuration, ProviderCatalog: catalog, AssetStorePath: root, Hosted: &HostedConfiguration{Offerings: []HostedOfferingConfiguration{{Provider: "elevenlabs", Operation: ModelOperationPronunciationDictionaryCreation, MaximumAttempts: 1}}}})
-	application, err := buildProxyApplication(configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
+	application, err := buildProxyApplicationForTest(t, configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
 		return management.store, nil
 	})
 	if err != nil {

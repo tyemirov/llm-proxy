@@ -84,7 +84,7 @@ func TestImageGenerationReturnsOrderedTenantArtifacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router, err := proxy.BuildRouter(routerConfiguration, zap.NewNop().Sugar())
+	router, err := testfixtures.BuildRouter(t, routerConfiguration, zap.NewNop().Sugar())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -497,7 +497,7 @@ func TestImageGenerationRestartReportsUncertainWithoutRepeatingPaidSubmission(t 
 		t.Fatal(err)
 	}
 	newServer := func() (*httptest.Server, llmproxyclient.Client) {
-		router, err := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+		router, err := testfixtures.BuildRouter(t, configuration, zap.NewNop().Sugar())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -759,7 +759,7 @@ func TestImageGenerationRejectsChangedOrCorruptedAcceptedCredentials(t *testing.
 			if err != nil {
 				t.Fatal(err)
 			}
-			router, err := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+			router, err := testfixtures.BuildRouter(t, configuration, zap.NewNop().Sugar())
 			if err != nil {
 				t.Fatal(err)
 			}

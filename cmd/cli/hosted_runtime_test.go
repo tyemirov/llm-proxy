@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"go.uber.org/zap"
 )
 
@@ -65,7 +66,7 @@ hosted:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := proxy.BuildRouter(configuration, zap.NewNop().Sugar()); err != nil {
+	if _, err := testfixtures.BuildRouter(t, configuration, zap.NewNop().Sugar()); err != nil {
 		t.Fatal(err)
 	}
 	for _, replacement := range []struct{ from, to string }{

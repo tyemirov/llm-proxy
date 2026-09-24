@@ -146,8 +146,9 @@ func newMediaOperationInternalFixture(testingInstance *testing.T) mediaOperation
 		cancelResult:  MediaOperationCancellationResult{State: MediaCancellationUnsupported},
 	}
 	service := &mediaOperationService{
-		logger: zap.NewNop().Sugar(),
-		store:  store, assets: assets, adapters: map[string]MediaOperationAdapter{mediaOperationAdapterKey(llmproxycontract.MediaCapabilityVideoGenerate, ProviderNameXAI, "grok-imagine-video-1.5"): adapter},
+		workerContext: testingInstance.Context(),
+		logger:        zap.NewNop().Sugar(),
+		store:         store, assets: assets, adapters: map[string]MediaOperationAdapter{mediaOperationAdapterKey(llmproxycontract.MediaCapabilityVideoGenerate, ProviderNameXAI, "grok-imagine-video-1.5"): adapter},
 		catalog: catalog, providers: providers, queue: make(chan string, 1), claimLifetime: time.Minute, claimRenewal: time.Millisecond,
 		lifetime: time.Hour, globalCapacity: 2, tenantCapacity: 2, terminalRetention: time.Hour,
 	}
@@ -397,7 +398,7 @@ func TestMediaOperationServiceRejectsInvalidAdapterCatalog(testingInstance *test
 	configuration.ProviderCatalog = internalCanonicalProviderCatalog()
 	configuration.UpstreamCapacity = testUpstreamCapacity(1, 1)
 	configuration.AssetStorePath = testingInstance.TempDir()
-	if router, routerError := buildRouter(configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
+	if router, routerError := buildRouterWithStoreForTest(testingInstance, configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
 		return managedTenants, nil
 	}); router != nil || routerError == nil {
 		testingInstance.Fatalf("router=%v error=%v", router, routerError)
@@ -915,15 +916,18 @@ func TestMediaOperationClaimExecutionAndTerminalEdges(testingInstance *testing.T
 		testingInstance.Fatalf("response=%+v error=%v", response, responseError)
 	}
 
-	deadlineContext, cancelDeadline := context.WithCancel(context.Background())
-	cancelDeadline()
-	deadlineResult := fixture.service.runWithClaimRenewal(deadlineContext, "missing", 1, func() MediaOperationExecutionResult { select {} })
+	blocked := make(chan struct{})
+	defer close(blocked)
+	waitForRelease := func() MediaOperationExecutionResult { <-blocked; return MediaOperationExecutionResult{} }
+	deadlineContext, cancelDeadline := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancelDeadline()
+	deadlineResult := fixture.service.runWithClaimRenewal(deadlineContext, "missing", 1, waitForRelease)
 	if deadlineResult.ErrorCode != "operation_deadline_exceeded" {
 		testingInstance.Fatalf("deadline result=%+v", deadlineResult)
 	}
 	claimContext, cancelClaim := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancelClaim()
-	claimResult := fixture.service.runWithClaimRenewal(claimContext, "missing", 1, func() MediaOperationExecutionResult { select {} })
+	claimResult := fixture.service.runWithClaimRenewal(claimContext, "missing", 1, waitForRelease)
 	if claimResult.ErrorCode != "worker_claim_lost" {
 		testingInstance.Fatalf("claim result=%+v", claimResult)
 	}

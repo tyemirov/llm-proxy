@@ -249,7 +249,7 @@ func imageResponsesDurableClient(t *testing.T, upstream *httptest.Server) (llmpr
 		for _, change := range changes {
 			change(&configuration)
 		}
-		router, err := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+		router, err := testfixtures.BuildRouter(t, configuration, zap.NewNop().Sugar())
 		if err != nil {
 			t.Fatal(err)
 		}

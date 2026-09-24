@@ -77,7 +77,7 @@ func buildRouterWithCatalogs(testingInstance testing.TB, configuration proxy.Con
 	}
 	management := configuration.Management
 	if management.PublicOrigin != "" || management.UIDescription != "" || management.TAuthURL != "" || management.DatabasePath != "" || management.ProviderKeyEncryptionKey != "" || management.DatabaseDialector != nil {
-		return proxy.BuildRouter(configuration, structuredLogger)
+		return testfixtures.BuildRouter(testingInstance, configuration, structuredLogger)
 	}
 	return proxy.BuildRouterWithManagedTenantForTest(testingInstance, configuration, structuredLogger, proxy.StandardManagedTenantTestConfiguration(TestSecret))
 }
@@ -199,7 +199,7 @@ func assertInvalidUpstreamEndpointStartup(t *testing.T, endpoints *proxy.Endpoin
 		t.Fatal(err)
 	}
 	configuration.Endpoints = endpoints
-	if _, err := proxy.BuildRouter(configuration, zap.NewNop().Sugar()); !errors.Is(err, proxy.ErrInvalidUpstreamCapacity) {
+	if _, err := testfixtures.BuildRouter(t, configuration, zap.NewNop().Sugar()); !errors.Is(err, proxy.ErrInvalidUpstreamCapacity) {
 		t.Fatalf("invalid endpoint startup error=%v", err)
 	}
 }

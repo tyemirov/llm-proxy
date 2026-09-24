@@ -17,6 +17,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -176,7 +177,7 @@ payments:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := proxy.BuildRouter(configuration, zap.NewNop().Sugar()); err != nil {
+	if _, err := testfixtures.BuildRouter(t, configuration, zap.NewNop().Sugar()); err != nil {
 		t.Fatal(err)
 	}
 	missingOrder := `{"orders":[{"order_id":"missing","billing_account_id":"missing","state":"pending","receipt":null}]}`

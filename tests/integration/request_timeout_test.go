@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -725,7 +725,7 @@ func TestIntegrationRequestTimeoutConfigurationInvariants(testingInstance *testi
 	}
 	for _, testCase := range testCases {
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
-			_, buildError := proxy.BuildRouter(
+			_, buildError := testfixtures.BuildRouter(subTest,
 				proxy.Configuration{
 					RequestTimeoutSeconds:    testCase.defaultValue,
 					MaxRequestTimeoutSeconds: testCase.maximumValue,

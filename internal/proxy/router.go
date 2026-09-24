@@ -82,19 +82,29 @@ type dictationRequestParameters struct {
 	audioReader io.Reader
 }
 
-// BuildRouter constructs the HTTP router used by the proxy. configuration supplies management, routing, upstream capacity, and timeout settings. structuredLogger records structured log messages during routing.
-func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger) (*gin.Engine, error) {
+// Router owns HTTP routes and their background media workers.
+type Router struct {
+	*gin.Engine
+	stop func()
+}
+
+// Close cancels media execution and waits for the router's workers to stop.
+func (router *Router) Close() { router.stop() }
+
+// BuildRouter constructs the proxy router. The caller must close it after HTTP shutdown.
+func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger) (*Router, error) {
 	return buildRouter(configuration, structuredLogger, newManagedTenantStore)
 }
 
 type managedTenantStoreOpener func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error)
 
-func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger, openManagedTenantStore managedTenantStoreOpener) (*gin.Engine, error) {
+func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger, openManagedTenantStore managedTenantStoreOpener) (*Router, error) {
 	application, err := buildProxyApplication(configuration, structuredLogger, openManagedTenantStore)
 	if err != nil {
 		return nil, err
 	}
-	return application.router, nil
+	application.startMedia()
+	return &Router{Engine: application.router, stop: application.close}, nil
 }
 
 func buildProxyApplication(configuration Configuration, structuredLogger *zap.SugaredLogger, openManagedTenantStore managedTenantStoreOpener) (*proxyApplication, error) {
@@ -215,7 +225,7 @@ func buildProxyApplication(configuration Configuration, structuredLogger *zap.Su
 	if err := RegisterClientProtocols(router, adapters); err != nil {
 		return nil, err
 	}
-	return &proxyApplication{router: router, database: managedTenants.database, address: fmt.Sprintf(":%d", configuration.Port), now: time.Now, payments: payments}, nil
+	return &proxyApplication{router: router, database: managedTenants.database, address: fmt.Sprintf(":%d", configuration.Port), now: time.Now, payments: payments, media: mediaOperations}, nil
 }
 
 // chatHandler returns a handler that forwards query-string requests to upstream providers.

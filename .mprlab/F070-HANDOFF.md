@@ -1,140 +1,198 @@
 # F070 Handoff
 
-## Authoritative Resume State: 2026-09-24
+## Authoritative Resume State
 
-B274 supersedes the initialization investigation below.
-The retained-scope regression reproduced failed queued work with `media_operation_unavailable` and zero provider calls.
-The media constructor now attaches validated hosted admission before worker startup.
-The router no longer assigns that dependency after workers start.
-The retained and removed-scope checks passed in 2.825 seconds. Their race run passed in 39.399 seconds.
-The related media and runtime regression passed in 71.957 seconds.
-Go lint and format checks passed. The full Go component run timed out after 601.301 seconds.
-B275 records this aggregate validation failure. No final aggregate profile was retained.
-Evidence files use `/tmp/llm-proxy-b274-` as their prefix.
+The user requested this handoff because the session has few tokens left.
+This section replaces all resume instructions in the historical sections below.
+F070 remains incomplete. This handoff does not complete or pause the goal.
+B275 implementation and acceptance passed. Verify publication, then resume B266 and the remaining F070 acceptance work.
+Do not expand the product scope.
 
-The user requested this handoff because the session has few tokens left. The active goal subsequently resumed.
-This section supersedes all checkout states, coverage totals, and next-step instructions below.
-The remaining sections retain historical evidence. Do not execute their obsolete instructions.
-The resumed B274 increment changes media initialization and adds retained-scope recovery acceptance.
-
-### Current Checkout And Scope
+### Checkout And Publication
 
 - Repository: `/Users/tyemirov/Development/llm-proxy`.
 - Branch: `feature/F069-prepaid-payments`.
-- Verified parent of the B274 increment: `bc21175de4772af052f0df4971ec238031eead77`.
+- Parent of the B275 increment: `a9258ec3af859e39a147cd1342592f1025bddd3a` (B274).
+- The commit that contains this section records B275. Verify its remote publication before further edits.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
-- PR 344 is open and ready for review. Its base is `feature/F068-prepaid-balances`.
-- The checkout was clean before B274. The parent commit includes the requested handoff.
-- Verify the commit that contains this section before further work. The hash above identifies its parent.
-- No validation or publication process from the previous implementation remains active.
+- Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
+- PR stack: 339 (F065), 340 (F066), 341 (F067), 342 (F068), 344 (F069).
+- Each component uses the preceding component as its base. PR 339 targets `master`.
+- PR 343 is unrelated onboarding work.
+- Final stack CI and complete acceptance remain open. Keep F065 through F070 open.
 
-F070 remains incomplete. Preserve its complete scope and the five component PRs: 339, 340, 341, 342, and 344.
-Only PR 344 was checked again for this handoff. Do not infer current hosted CI results for the other PRs.
-Keep F065 through F070 open until their acceptance requirements pass.
-Do not start unrelated I274 work. Do not add native mobile work or new provider capabilities.
-Do not treat this handoff as goal completion or a request to pause the goal.
+This section describes the B275 increment. Application merge, release, and deployment remain outside its scope.
+The current production changes have focused validation. Aggregate validation remains incomplete.
 
-### Confirmed Decisions And Authority
+### Completed Validation Process
+
+Unified exec session `92981` finished with exit code 2. No validation process remains active.
+Its command was:
+
+```sh
+make go-test COVERAGE_FILE=/tmp/llm-proxy-b275-coverage.out > /tmp/llm-proxy-b275-go-test.log 2>&1
+```
+
+Both complete test passes and all four executable probes finished.
+The hosted proxy pass took 452.809 seconds. The remaining proxy pass took 274.878 seconds.
+The command then failed with `coverage total 97.9%, want 100.0%`.
+The aggregate profile has 438 uncovered statements across 21172 statements, in 425 uncovered blocks.
+B275 is resolved. B266 retains the coverage failure and final CI requirements.
+The uncovered block list is `/tmp/llm-proxy-b275-uncovered.txt`.
+
+The coverage runner executes two disjoint passes across all packages:
+
+```sh
+go test -count=1 ./... -run='^TestHosted' -covermode=count ...
+go test -count=1 ./... -skip='^TestHosted' -covermode=count ...
+```
+
+The actual commands and profile paths are in `scripts/check_coverage.sh`.
+Both passes retain the existing ten-minute timeout. Their profiles combine with all four executable probes.
+No tests or production files are excluded. Required coverage remains 100.0%, with no uncovered blocks.
+The hosted coverage job retains its 15-minute limit. Hosted execution remains unverified for this increment.
+
+### B275 Implementation In The Checkout
+
+The initial aggregate failure retained 663 maintenance loops and 1952 workers from previous fixtures.
+Normal HTTP shutdown tests reproduced six later database reads and an active provider request after service return.
+A delayed transport also reproduced `service returned before adapter cleanup: <nil>`.
+
+| Files | Current change |
+| --- | --- |
+| `internal/proxy/media_operations.go` | Own worker cancellation and completion. Wait for adapter goroutines. Preserve uncertainty on shutdown. |
+| `internal/proxy/application.go` | Start media after initial financial reconciliation. Stop media on shutdown and startup failure. |
+| `internal/proxy/router.go` | Return a closable `Router` from `BuildRouter`. Separate construction from worker startup. |
+| `pkg/llmproxycontract/contract.go` | Add `ErrorCodeMediaWorkerShutdown` with value `worker_shutdown`. |
+| `docs/openapi.yaml`, `site/docs/index.html` | Add the error code and regenerate the API page. |
+| `internal/proxy/router_lifecycle_fixture_test.go` | Add internal fixtures that close routers before database cleanup. |
+| `internal/testfixtures/managed_router.go` | Give shared and bootstrap routers explicit cleanup ownership. |
+| Router callers in proxy, CLI, and integration tests | Use the lifecycle fixtures. Preserve test behavior. |
+| `internal/proxy/hosted_media_lifecycle_internal_test.go` | Verify startup failure, idle shutdown, provider cancellation, and delayed adapter cleanup. |
+| `internal/proxy/hosted_media_configuration_recovery_internal_test.go` | Verify queued work remains idle during construction and executes once after startup. |
+| `internal/proxy/media_operations_edges_internal_test.go` | Use real deadline cancellation and release controlled adapter goroutines. |
+| `scripts/check_coverage.sh` | Run both test groups and combine their coverage with executable probes. |
+| `tests/operational_contract_test.go`, `Makefile` | Verify both groups, unchanged timeouts, profile combination, and the explicit client prompt. |
+| `README.md`, `docs/hosted-billing.md` | Record coverage execution and media lifecycle ownership. |
+| Tracker, this handoff, and B275 plan | Record progress and remaining validation. |
+
+The new shutdown result is uncertain with `worker_shutdown`.
+The account retains 500 posted cents and 461 available cents while the 39-cent reservation remains unresolved.
+A restart cannot submit the uncertain operation again.
+The constructor establishes hosted authorization before any worker starts.
+The application starts media only after initial funds and Paddle reconciliation succeed.
+Embedded router callers must stop HTTP service, then call `Router.Close()`.
+The shared fixtures register that cleanup before database cleanup.
+
+### B275 Validation Evidence
+
+| Validation | Result | Evidence |
+| --- | --- | --- |
+| Final lifecycle, recovery, and media edge checks | Passed, 12.590 seconds | `/tmp/llm-proxy-b275-recovery-final.log` |
+| Same selected checks with race detection | Passed, 96.067 seconds | `/tmp/llm-proxy-b275-race-final.log` |
+| Go lint and formatting after runner changes | Passed | `/tmp/llm-proxy-b275-checks-complete.log` |
+| OpenAPI contract and generated page checks | Passed | `/tmp/llm-proxy-b275-openapi.log` |
+| API page generation | Passed | `/tmp/llm-proxy-b275-api-docs.log` |
+| Coverage runner contract | Passed, 2.215 seconds | `/tmp/llm-proxy-b275-coverage-contract.log` |
+| Complete Go component with both passes | Tests and probes passed. Coverage gate failed at 97.9% | `/tmp/llm-proxy-b275-go-test.log` |
+
+The initial runner regression failed with `coverage test group missing`.
+Its log is `/tmp/llm-proxy-b275-coverage-contract-before.log`.
+The initial lifecycle failures are in `/tmp/llm-proxy-b275-before.log` and `/tmp/llm-proxy-b275-adapter-before.log`.
+The error-code regression is in `/tmp/llm-proxy-b275-interruption-before.log`.
+
+An earlier canonical run was stopped deliberately when the delayed adapter test exposed another defect.
+Its log is `/tmp/llm-proxy-b275-go-test-before-adapter.log`. Do not treat it as a completed run.
+After the adapter correction, the single-pass run still timed out at 601.142 seconds without an assertion failure.
+Its log is `/tmp/llm-proxy-b275-go-test-single-pass.log`.
+That stack contained only one maintenance loop and three workers, which belonged to the active service.
+The remaining timeout caused the two-pass runner change.
+
+### Resume Procedure
+
+1. Inspect the checkout and the latest publication state.
+2. Complete required document checks and `git diff --check` for the B275 increment.
+3. Use the authorized delivery workflow for the intended B275 files and ready PR 344.
+4. Verify the remote commit and PR base before reporting publication.
+5. Remove the temporary B275 plan after validation and publication finish.
+6. Continue B266 from `/tmp/llm-proxy-b275-coverage.out` and its uncovered block list.
+7. Keep all remaining provider-operation acceptance requirements in scope.
+8. Run complete controlled acceptance and final `make ci` after the last stack correction.
+
+Preserve `.mprlab/B266-PLAN.md` and `.mprlab/F070-PLAN.md` while their work remains open.
+Plans are untracked. Do not discard unrelated checkout changes.
+The current remote PR body snapshot is `/tmp/llm-proxy-f069-pr-body-current.md`.
+Prepare the PR description in `/tmp/llm-proxy-f069-pr-body.md` before its next update.
+Use `gh pr edit 344 --body-file` with that file.
+Do not claim hosted CI success from local checks. PR 344 has no hosted checks at its latest inspection.
+
+### B266 And Remaining F070 Scope
+
+The aggregate profile has 438 uncovered statements across 21172 statements.
+It supersedes the prior focused diagnostics. Do not combine stale source coordinates with new profiles.
+The repository-root `coverage.out` is also stale.
+The last full stack CI failed with `coverage total 95.3%, want 100.0%`.
+Its evidence uses `/tmp/llm-proxy-f070-b266-coverage` as the prefix.
+Do not lower coverage requirements, exclude production code, or construct invalid core states to increase coverage.
+
+Complete provider-operation acceptance remains in scope. Consult `Remaining Provider Measurement Contracts` in `docs/hosted-billing.md`.
+OpenAI Responses image-tool usage and its combined model/image price bound remain incomplete.
+B265 rejects an incomplete bound before dispatch. This rejection does not complete billing support.
+ElevenLabs alignment lacks established billed duration and exact account pricing.
+Dictator SDK 1.11.0 input-duration operations lack native processed-input duration evidence.
+Do not infer billed duration from word timestamps, upload metadata, or output duration.
+Keep all selected providers and supported operations in scope.
+Do not add unrelated provider features, native video F025, native mobile work, or I274 work.
+
+### Confirmed Commercial Decisions And Authority
 
 - Use provider cost multiplied by 1.30. This is a markup.
-- Include all current providers and supported operations in the shared financial contract.
+- Include all current providers and supported operations under the shared financial contract.
 - Require USD 5 minimum funding. Permit customers to spend down to zero.
 - Use Paddle and its applicable financial policies.
-- Reuse the existing Ledger journal and verify balance conservation. Do not add double-entry accounting.
+- Reuse the existing Ledger journal. Verify balance conservation without adding double-entry accounting.
 - Reuse existing integrations and shared code. Deliver the browser application without a native mobile application.
 - Keep production activation disabled. Application merge and paid provider calls are not authorized.
-- Ledger PR 102 and utils PRs 45 and 47 were approved and released. Dependencies use Ledger v1.1.0 and utils v0.19.0.
+- Ledger PR 102 was released as v1.1.0. Approved utils PRs 45 and 47 were released as v0.18.0 and v0.19.0.
 - Do not infer authorization for another shared release from those approvals.
 
-F087 records the separate Paddle setup and actual sandbox qualification. It must not block F069 or F070 development completion.
+Account and supplier identity, tax presentation, fee allocation, account exposure, charge policies, and retention remain open before activation.
+Commercial rights and provider capacity also require activation decisions.
+Keep unspecified decisions explicit. Controlled fixtures do not establish live provider or payment qualification.
+
+### Separate Paddle Follow-Up
+
+F087 already records the separate Paddle setup and actual sandbox qualification.
+It must not block F069 or F070 development completion.
 Prior read-only authentication used `/Users/tyemirov/Development/PoodleScanner/configs/.env.ps`.
 The account had no LLM Proxy product, USD 5 price, or notification setup.
-F087 owns distinct resources, account and supplier identity, checkout origin, webhook configuration, and actual qualification.
+F087 owns distinct product and price resources, identity, checkout origin, webhook configuration, isolated storage, and actual qualification.
 Do not copy secrets or reuse another application's product or webhook secret.
 PoodleScanner supplies the direct Paddle pattern. Hecate uses RevenueCat for browser commerce.
 
-### Latest Completed Work
+### Reusable Evidence And Constraints
 
-Commit `bc21175d` adds `internal/proxy/hosted_media_configuration_recovery_internal_test.go`.
-Two normal-runtime scenarios restart queued media with hosted configuration omitted or its accepted scope removed.
-Both reject dispatch, release the unused reservation through reconciliation, and preserve the terminal result after scope restoration.
-Restoration cannot repeat provider work or financial effects. The tests passed in 2.850 seconds and with race checks in 31.603 seconds.
-Go lint and format checks passed. Logs use `/tmp/llm-proxy-b266-media-configuration` as their prefix.
-
-Commit `40082a4f` retains exact numeric charges through reservation calculation and cent rounding.
-It changes `internal/proxy/catalog_rating.go` and `internal/proxy/catalog_money.go`.
-External monetary validation remains in place. Public API and event contracts did not change.
-Three characterization cases cover minimum charges, fractional cents, overflow, repeated calculation, and immutable snapshots.
-
-| Validation after the production change | Result |
-| --- | --- |
-| Rating and funds regression | Passed in 21.556 seconds |
-| Hosted rating regression | Passed in 25.954 seconds |
-| Selected race checks | 48 scenarios passed in 28.643 seconds |
-| Go lint and format | Passed |
-
-Evidence files use `/tmp/llm-proxy-b266-exact-reservation` as their prefix.
-Earlier completed increments include `8b52f058` for media renewal recovery and `c51ddf6d` for financial schema recovery.
-Commit `a7dcb7f8` adds catalog boundary acceptance. B272 and B273 reject explicit empty hosted and payment configuration.
-
-### Validation Still Required
-
-B266 remains open. The current focused diagnostic has 786 uncovered statements across 21145 statements.
-Use `/tmp/llm-proxy-b274-diagnostic.coverprofile` or `/tmp/llm-proxy-b266-diagnostic.coverprofile`.
-The current merge script is `/tmp/llm-proxy-b274-merge.py`.
-It discards all prior counts for `media_operations.go` and `router.go`. Those files use only current focused profiles.
-The prior diagnostic had 437 uncovered statements. The new total reflects discarded coverage. Both changed files require broader current coverage.
-B275 must restore aggregate validation before the current aggregate coverage can be established.
-After another production edit, discard old counts for each changed file before combining profiles.
-
-This diagnostic does not establish aggregate CI success.
-The last full stack run failed with `coverage total 95.3%, want 100.0%`.
-It passed Go, Python, and upstream race checks before that gate. Later stages did not run.
-Evidence uses `/tmp/llm-proxy-f070-b266-coverage.log` and `/tmp/llm-proxy-f070-b266-coverage.out`.
-The repository-root `coverage.out` is stale. Do not use it as current evidence.
-Do not lower the coverage threshold, exclude production code, or create invalid core states to increase coverage.
-Run the complete controlled acceptance target and final `make ci` after the last stack correction.
-
-### Immediate Next Investigation
-
-The configuration-removal investigation found no production defect.
-Continue B266 through public financial boundaries. Keep the complete provider-operation acceptance requirements in scope.
-
-B274 reproduced and corrected the retained-scope startup failure.
-The new regression delays a later storage operation until the media worker finishes.
-It verifies one successful execution, one output, exact funded balances, and unchanged financial records after repeated replay.
-
-After B274, investigate B275 before another aggregate validation attempt.
-The timeout listed `TestMCPDictatorWorkflow (2s)` as the active test.
-The stack dump also contains media maintenance workers from earlier tests after their database cleanup.
-Use `/tmp/llm-proxy-b274-go-test.log` for the complete failure evidence.
-Do not claim current aggregate coverage from the earlier B266 profile.
+B274 is published as `a9258ec3`. It corrected hosted authorization before media execution.
+Earlier published increments include `bc21175d` for removed authorization and `40082a4f` for exact reservation arithmetic.
+Further published increments include `8b52f058` for renewal recovery and `c51ddf6d` for financial schema recovery.
+B272 and B273 reject explicit empty hosted and payment configuration.
 
 Reuse `fundedMediaRecoveryFixture` in `internal/proxy/hosted_media_recovery_internal_test.go`.
-Its actual HTTP admission starts with 500 posted cents and 461 available cents after a 39-cent reservation.
-`newFundedMediaRecoveryFixtureWithResponse` permits a controlled provider response while retaining authorization and call counts.
-Its recovery helper verifies restart behavior and repeated financial reads.
-Related cases are in `internal/proxy/hosted_media_renewal_recovery_internal_test.go`.
-Keep `.mprlab/B266-PLAN.md` and `.mprlab/F070-PLAN.md` while their work remains open.
+Its HTTP admission starts with 500 posted cents and 461 available cents after a 39-cent reservation.
+Its recovery checks use real financial endpoints and controlled provider responses.
+`restartConfiguration` supplies a fresh store over the same database and controlled provider endpoints.
+Successful execution settles balances to 498 posted and available cents. Uncertain execution retains the reservation.
 
-### Remaining Provider And Commercial Work
-
-Complete provider-operation acceptance remains in scope. See `Remaining Provider Measurement Contracts` in `docs/hosted-billing.md`.
-Responses image-tool usage and its combined price bound remain incomplete.
-B265 rejects the incomplete bound before dispatch. That rejection does not complete Responses billing.
-
-ElevenLabs alignment lacks established billed duration. Dictator input-duration operations lack the required native measurement.
-Do not infer billed duration from word timestamps, upload metadata, or output duration.
-Keep the selected models and resolve their measurement contracts.
-
-Account and supplier identity, tax presentation, fee allocation, account exposure, charge policies, and retention remain open before activation.
-Keep these decisions explicit. Controlled fixtures do not establish live provider or payment qualification.
-
-Use repository Make targets for subsequent checks. Keep production edits, validation, and publication states distinct.
-Preserve unrelated checkout work. Do not create draft PRs, worktrees, or history rewrites.
+Use repository Make targets. Keep focused checks, aggregate CI, publication, and production acceptance distinct.
+Preserve unrelated changes. Do not create draft PRs, worktrees, history rewrites, or persistent memory updates.
 Do not use subagents, require physical devices, or examine file permission modes.
-The previous document checks found five existing Governor differences and 72 existing tracker language findings.
-Do not normalize unrelated governance files as part of F070.
+Do not parallelize issues. Keep user progress updates within 60 seconds during resumed work.
+Prior document checks found five existing Governor differences and 72 existing tracker language findings.
+Do not normalize unrelated governance files.
+
+## Historical Evidence
+
+The sections below are retained history. Their resume instructions and coverage totals are superseded by the authoritative section above.
 
 ## Latest Exact Reservation Increment: 2026-09-24
 

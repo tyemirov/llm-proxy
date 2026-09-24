@@ -18,32 +18,21 @@ func TestHostedMediaRecoveryAuthorizesBeforeWorkersStart(t *testing.T) {
 		Provider: "openai", Model: "gpt-image-2", Operation: ModelOperationImageGeneration, MaximumAttempts: 1,
 		Conditions: CatalogPriceConditions{Quality: "low", Resolution: "1024x1024"},
 	}}})
-	// Delay a later startup dependency until the queued worker finishes. This makes
-	// dispatch before initialization observable without relying on scheduler timing.
+	// Observe queued work while a later startup dependency is still initializing.
 	originalLstat := structuredRequestLstat
 	t.Cleanup(func() { structuredRequestLstat = originalLstat })
 	observed := false
 	structuredRequestLstat = func(path string) (os.FileInfo, error) {
 		if path == filepath.Join(configuration.AssetStorePath, structuredRequestDirectoryName) {
 			observed = true
-			deadline := time.After(5 * time.Second)
-			tick := time.NewTicker(10 * time.Millisecond)
-			defer tick.Stop()
-			for {
-				current := hostedMediaWorkerStatus(t, fixture.server, fixture.operationID)
-				if current["state"] != MediaOperationStateQueued && current["state"] != MediaOperationStateRunning {
-					break
-				}
-				select {
-				case <-deadline:
-					t.Fatalf("queued worker did not finish during delayed startup: %v", current)
-				case <-tick.C:
-				}
+			current := hostedMediaWorkerStatus(t, fixture.server, fixture.operationID)
+			if current["state"] != MediaOperationStateQueued || fixture.calls.Load() != 0 {
+				t.Fatalf("media started before runtime initialization: state=%v calls=%d", current, fixture.calls.Load())
 			}
 		}
 		return originalLstat(path)
 	}
-	application, err := buildProxyApplication(configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
+	application, err := buildRouterWithStoreForTest(t, configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
 		return management, nil
 	})
 	structuredRequestLstat = originalLstat
@@ -53,10 +42,24 @@ func TestHostedMediaRecoveryAuthorizesBeforeWorkersStart(t *testing.T) {
 	if !observed {
 		t.Fatal("startup did not reach the controlled storage dependency")
 	}
-	server := httptest.NewServer(application.router)
+	server := httptest.NewServer(application)
 	t.Cleanup(server.Close)
 	server.Client().Transport = hostedMCPBearerTransport{token: hostedIdentityFixtureKey}
-	current := hostedMediaWorkerStatus(t, server, fixture.operationID)
+	deadline := time.After(5 * time.Second)
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	var current map[string]any
+	for {
+		current = hostedMediaWorkerStatus(t, server, fixture.operationID)
+		if current["state"] != MediaOperationStateQueued && current["state"] != MediaOperationStateRunning {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("authorized media did not recover after startup: %v", current)
+		case <-tick.C:
+		}
+	}
 	if current["state"] != MediaOperationStateSucceeded || fixture.calls.Load() != 1 || len(current["outputs"].([]any)) != 1 {
 		t.Fatalf("authorized queued media did not recover: state=%v calls=%d", current, fixture.calls.Load())
 	}
@@ -91,13 +94,13 @@ func TestHostedMediaRecoveryRejectsRemovedRuntimeAuthorization(t *testing.T) {
 		t.Run(scenario.name, func(t *testing.T) {
 			fixture := newFundedMediaRecoveryFixture(t)
 			configuration, management := fixture.restartConfiguration(t, scenario.hosted)
-			application, err := buildProxyApplication(configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
+			application, err := buildRouterWithStoreForTest(t, configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
 				return management, nil
 			})
 			if err != nil {
 				t.Fatal(err)
 			}
-			server := httptest.NewServer(application.router)
+			server := httptest.NewServer(application)
 			t.Cleanup(server.Close)
 			server.Client().Transport = hostedMCPBearerTransport{token: hostedIdentityFixtureKey}
 			deadline := time.After(5 * time.Second)

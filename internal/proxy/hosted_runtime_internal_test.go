@@ -79,11 +79,11 @@ func TestHostedRuntimeFundsAdmissionAndSettlementThroughNormalHTTP(t *testing.T)
 		t.Run(scenario.name, func(t *testing.T) {
 			denied := configuration
 			denied.Hosted = scenario.hosted
-			application, err := buildProxyApplication(denied, zap.NewNop().Sugar(), openStore)
+			application, err := buildRouterWithStoreForTest(t, denied, zap.NewNop().Sugar(), openStore)
 			if err != nil {
 				t.Fatal(err)
 			}
-			server := httptest.NewServer(application.router)
+			server := httptest.NewServer(application)
 			defer server.Close()
 			hostedRuntimeHTTP(t, server.URL, scenario.name, scenario.status)
 			if calls.Load() != 0 {
@@ -91,7 +91,7 @@ func TestHostedRuntimeFundsAdmissionAndSettlementThroughNormalHTTP(t *testing.T)
 			}
 		})
 	}
-	application, err := buildProxyApplication(configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
+	application, err := buildProxyApplicationForTest(t, configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
 		return management.store, nil
 	})
 	if err != nil {

@@ -73,7 +73,7 @@ func TestHostedRuntimeMediaFundsAdmissionAndSettlementThroughNormalHTTP(t *testi
 	}
 	configuration := withInternalUpstreamCapacity(t, Configuration{Management: management.configuration, ProviderCatalog: catalog, AssetStorePath: root,
 		Hosted: &HostedConfiguration{Offerings: []HostedOfferingConfiguration{{Provider: "openai", Model: "gpt-image-2", Operation: ModelOperationImageGeneration, MaximumAttempts: 1, Conditions: CatalogPriceConditions{Quality: "low", Resolution: "1024x1024"}}}}})
-	application, err := buildProxyApplication(configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
+	application, err := buildProxyApplicationForTest(t, configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
 		return management.store, nil
 	})
 	if err != nil {

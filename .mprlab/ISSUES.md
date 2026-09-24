@@ -35,7 +35,7 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
-- [ ] [B275] (P1) Restore aggregate Go validation after the billing acceptance expansion.
+- [x] [B275] (P1) Restore aggregate Go validation after the billing acceptance expansion.
   Evidence:
   The B274 `make go-test` run exhausted the Go package timeout after 601.301 seconds.
   It reported `panic: test timed out after 10m0s` with `TestMCPDictatorWorkflow (2s)` as the active test.
@@ -48,6 +48,27 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   Validation:
   - Use `/tmp/llm-proxy-b274-go-test.log` as the initial failure evidence.
   - Preserve B266 coverage requirements and the final F070 CI checkpoint.
+  Progress:
+  HTTP shutdown acceptance reproduced six later maintenance reads and an active provider request after the listener stopped.
+  The application now starts media workers after initial financial reconciliation and waits for them during shutdown.
+  Embedded callers receive a closable router. Shared fixtures stop its workers before database cleanup.
+  Interrupted execution retains uncertainty and held funds with the public `worker_shutdown` code.
+  Failed financial startup leaves accepted media queued. Restart executes once after the failure is removed.
+  A delayed transport proved that adapter cleanup could outlive service shutdown. Shutdown now also waits for adapter goroutines.
+  Final lifecycle and recovery checks passed in 12.590 seconds. Their race checks passed in 96.067 seconds.
+  Go lint, format, OpenAPI contract, and generated artifact checks passed.
+  The corrected worker lifecycle reduced the timeout dump from 663 maintenance loops and 1952 worker loops to one current service.
+  The aggregate invocation still exhausted ten minutes without an assertion failure. Its active test reported zero elapsed seconds.
+  Canonical coverage now runs hosted tests and all remaining tests in separate passes across every package.
+  Both profiles and executable probes contribute to the unchanged strict coverage gate. Each pass retains the existing timeout.
+  The runner regression verifies both test groups, shared coverage counts, and the explicit client probe input.
+  That regression passed in 2.215 seconds.
+  Resolution:
+  Both complete Go test passes and all executable probes finished. The proxy passes took 452.809 and 274.878 seconds.
+  The current aggregate profile has 438 uncovered statements across 21172 statements.
+  The command then failed the unchanged gate with `coverage total 97.9%, want 100.0%`.
+  B266 retains that coverage work. Final stack CI and hosted CI remain open.
+  Evidence: `/tmp/llm-proxy-b275-go-test.log` and `/tmp/llm-proxy-b275-coverage.out`.
 
 - [x] [B274] (P1) Attach hosted financial admission before media worker startup.
   Evidence:
@@ -314,9 +335,11 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Both scenarios passed in 2.850 seconds. Their race run passed in 31.603 seconds. Go lint and format checks passed.
   - B274 fixes hosted admission assignment after media worker startup. Retained-scope recovery and removed-scope rejection pass through normal HTTP.
   - The B274 component run exhausted the package timeout. B275 records the aggregate validation failure.
-  - The current focused diagnostic has 786 uncovered statements across 21145 statements after discarding old counts for both changed production files.
-  - Those files use only current focused profiles. The prior 437-statement diagnostic cannot establish coverage for the changed files.
-  - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
+  - B275 restored complete Go execution with owned media shutdown and two disjoint test passes.
+  - Both test passes and executable probes finished. The current aggregate profile has 438 uncovered statements across 21172 statements.
+  - The command failed the unchanged gate with `coverage total 97.9%, want 100.0%`.
+  - Use `/tmp/llm-proxy-b275-coverage.out` for current coverage. Earlier focused diagnostics are superseded.
+  - The required coverage gate, complete F070 acceptance, and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
   - Preserve the required coverage threshold and the current provider scope.
