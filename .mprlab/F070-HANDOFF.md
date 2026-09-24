@@ -1,5 +1,126 @@
 # F070 Handoff
 
+## Authoritative Resume State: 2026-09-24
+
+The user requested this handoff because the session has few tokens left. The active goal subsequently resumed.
+This section supersedes all checkout states, coverage totals, and next-step instructions below.
+The remaining sections retain historical evidence. Do not execute their obsolete instructions.
+The resumed increment adds media configuration recovery tests. It does not change production code.
+
+### Current Checkout And Scope
+
+- Repository: `/Users/tyemirov/Development/llm-proxy`.
+- Branch: `feature/F069-prepaid-payments`.
+- Local HEAD and verified PR head: `40082a4f26d83687864f5a0d6c8782355b3ba235`.
+- PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
+- PR 344 is open and ready for review. Its base is `feature/F068-prepaid-balances`.
+- The checkout was clean before the handoff task. The resumed increment includes that local handoff edit.
+- Verify the commit that contains this section before further work. The hash above identifies its parent.
+- No validation or publication process from the previous implementation remains active.
+
+F070 remains incomplete. Preserve its complete scope and the five component PRs: 339, 340, 341, 342, and 344.
+Only PR 344 was checked again for this handoff. Do not infer current hosted CI results for the other PRs.
+Keep F065 through F070 open until their acceptance requirements pass.
+Do not start unrelated I274 work. Do not add native mobile work or new provider capabilities.
+Do not treat this handoff as goal completion or a request to pause the goal.
+
+### Confirmed Decisions And Authority
+
+- Use provider cost multiplied by 1.30. This is a markup.
+- Include all current providers and supported operations in the shared financial contract.
+- Require USD 5 minimum funding. Permit customers to spend down to zero.
+- Use Paddle and its applicable financial policies.
+- Reuse the existing Ledger journal and verify balance conservation. Do not add double-entry accounting.
+- Reuse existing integrations and shared code. Deliver the browser application without a native mobile application.
+- Keep production activation disabled. Application merge and paid provider calls are not authorized.
+- Ledger PR 102 and utils PRs 45 and 47 were approved and released. Dependencies use Ledger v1.1.0 and utils v0.19.0.
+- Do not infer authorization for another shared release from those approvals.
+
+F087 records the separate Paddle setup and actual sandbox qualification. It must not block F069 or F070 development completion.
+Prior read-only authentication used `/Users/tyemirov/Development/PoodleScanner/configs/.env.ps`.
+The account had no LLM Proxy product, USD 5 price, or notification setup.
+F087 owns distinct resources, account and supplier identity, checkout origin, webhook configuration, and actual qualification.
+Do not copy secrets or reuse another application's product or webhook secret.
+PoodleScanner supplies the direct Paddle pattern. Hecate uses RevenueCat for browser commerce.
+
+### Latest Completed Work
+
+The current increment adds `internal/proxy/hosted_media_configuration_recovery_internal_test.go`.
+Two normal-runtime scenarios restart queued media with hosted configuration omitted or its accepted scope removed.
+Both reject dispatch, release the unused reservation through reconciliation, and preserve the terminal result after scope restoration.
+Restoration cannot repeat provider work or financial effects. The tests passed in 2.850 seconds and with race checks in 31.603 seconds.
+Go lint and format checks passed. Logs use `/tmp/llm-proxy-b266-media-configuration` as their prefix.
+
+Commit `40082a4f` retains exact numeric charges through reservation calculation and cent rounding.
+It changes `internal/proxy/catalog_rating.go` and `internal/proxy/catalog_money.go`.
+External monetary validation remains in place. Public API and event contracts did not change.
+Three characterization cases cover minimum charges, fractional cents, overflow, repeated calculation, and immutable snapshots.
+
+| Validation after the production change | Result |
+| --- | --- |
+| Rating and funds regression | Passed in 21.556 seconds |
+| Hosted rating regression | Passed in 25.954 seconds |
+| Selected race checks | 48 scenarios passed in 28.643 seconds |
+| Go lint and format | Passed |
+
+Evidence files use `/tmp/llm-proxy-b266-exact-reservation` as their prefix.
+Earlier completed increments include `8b52f058` for media renewal recovery and `c51ddf6d` for financial schema recovery.
+Commit `a7dcb7f8` adds catalog boundary acceptance. B272 and B273 reject explicit empty hosted and payment configuration.
+
+### Validation Still Required
+
+B266 remains open. The current diagnostic has 437 uncovered statements across 21144 statements.
+Use `/tmp/llm-proxy-b266-media-configuration-diagnostic.coverprofile` or `/tmp/llm-proxy-b266-diagnostic.coverprofile`.
+The current merge script is `/tmp/llm-proxy-b266-merge-media-configuration.py`.
+This increment changes no production files. Duplicate executable blocks use the maximum count.
+After another production edit, discard old counts for each changed file before combining profiles.
+
+This diagnostic does not establish aggregate CI success.
+The last full stack run failed with `coverage total 95.3%, want 100.0%`.
+It passed Go, Python, and upstream race checks before that gate. Later stages did not run.
+Evidence uses `/tmp/llm-proxy-f070-b266-coverage.log` and `/tmp/llm-proxy-f070-b266-coverage.out`.
+The repository-root `coverage.out` is stale. Do not use it as current evidence.
+Do not lower the coverage threshold, exclude production code, or create invalid core states to increase coverage.
+Run the complete controlled acceptance target and final `make ci` after the last stack correction.
+
+### Immediate Next Investigation
+
+The configuration-removal investigation found no production defect.
+Continue B266 through public financial boundaries. Keep the complete provider-operation acceptance requirements in scope.
+
+The source review also identified an initialization order that needs investigation.
+`newMediaOperationService` starts workers and resumes outstanding work before `buildProxyApplication` assigns `hostedAdmission`.
+The passing removed-scope tests do not prove correct restart when the accepted scope remains enabled.
+No retained-scope failure was reproduced in this increment.
+Use a normal-runtime restart test with controlled startup ordering to establish the behavior before changing production code.
+If a contract defect is reproduced, record a separate BugFix issue before the correction.
+
+Reuse `fundedMediaRecoveryFixture` in `internal/proxy/hosted_media_recovery_internal_test.go`.
+Its actual HTTP admission starts with 500 posted cents and 461 available cents after a 39-cent reservation.
+`newFundedMediaRecoveryFixtureWithResponse` permits a controlled provider response while retaining authorization and call counts.
+Its recovery helper verifies restart behavior and repeated financial reads.
+Related cases are in `internal/proxy/hosted_media_renewal_recovery_internal_test.go`.
+Keep `.mprlab/B266-PLAN.md` and `.mprlab/F070-PLAN.md` while their work remains open.
+
+### Remaining Provider And Commercial Work
+
+Complete provider-operation acceptance remains in scope. See `Remaining Provider Measurement Contracts` in `docs/hosted-billing.md`.
+Responses image-tool usage and its combined price bound remain incomplete.
+B265 rejects the incomplete bound before dispatch. That rejection does not complete Responses billing.
+
+ElevenLabs alignment lacks established billed duration. Dictator input-duration operations lack the required native measurement.
+Do not infer billed duration from word timestamps, upload metadata, or output duration.
+Keep the selected models and resolve their measurement contracts.
+
+Account and supplier identity, tax presentation, fee allocation, account exposure, charge policies, and retention remain open before activation.
+Keep these decisions explicit. Controlled fixtures do not establish live provider or payment qualification.
+
+Use repository Make targets for subsequent checks. Keep production edits, validation, and publication states distinct.
+Preserve unrelated checkout work. Do not create draft PRs, worktrees, or history rewrites.
+Do not use subagents, require physical devices, or examine file permission modes.
+The previous document checks found five existing Governor differences and 72 existing tracker language findings.
+Do not normalize unrelated governance files as part of F070.
+
 ## Latest Exact Reservation Increment: 2026-09-24
 
 This section supersedes earlier coverage totals and next-step notes.

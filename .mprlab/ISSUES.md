@@ -276,7 +276,10 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Three characterization cases verify minimum charges, fractional cents, overflow, repeated calculations, and immutable snapshots.
   - Rating and funds regression passed in 21.556 seconds. Hosted rating regression passed in 25.954 seconds.
   - All 48 selected race scenarios passed in 28.643 seconds. Go lint and format checks passed.
-  - The combined diagnostic has 439 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
+  - Two normal-runtime restart scenarios reject queued media after hosted configuration or the accepted offering scope is removed.
+  - Rejected work causes no provider call or output. Reconciliation releases unused funds, and restored authorization cannot repeat the operation.
+  - Both scenarios passed in 2.850 seconds. Their race run passed in 31.603 seconds. Go lint and format checks passed.
+  - The combined diagnostic has 437 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

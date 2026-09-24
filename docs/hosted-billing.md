@@ -419,6 +419,8 @@ Image price conditions for quality and resolution must match the normalized requ
 Other request conditions require a codec-specific mapping before the server can use their rates.
 The request retains the resulting price snapshot and funds reservation in one transaction.
 An omitted hosted configuration or unlisted scope rejects hosted execution.
+After restart, these restrictions also reject queued hosted media before provider dispatch.
+Financial reconciliation releases the unused reservation. Restoring the scope cannot repeat the failed operation or its financial effects.
 Unavailable pricing produces `financial_admission_unavailable`. Insufficient funds produce `insufficient_funds`.
 These rejected requests cause no upstream work.
 
