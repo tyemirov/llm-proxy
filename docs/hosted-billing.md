@@ -796,7 +796,8 @@ An invalid output image keeps the known provider cost but has no final customer 
 
 The Responses surface has no qualified image-tool meter.
 Its response-model totals do not replace the missing image measurements.
-Financial tests keep the reservation and expose an unresolved charge summary for this surface.
+Hosted admission rejects this surface before dispatch because the Images snapshot does not bound the additional response-model cost.
+HTTP tests verify rejection for generation and editing with no provider calls, charges, or funds changes.
 Complete Responses image pricing and provider qualification remain open.
 
 The FAL queue tests use a controlled price of USD 0.02 per reported provider unit.

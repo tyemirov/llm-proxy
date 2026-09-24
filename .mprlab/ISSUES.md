@@ -27,6 +27,24 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B265] (P1) Reject incomplete cost bounds for Responses image requests.
+  Evidence:
+  The funded image fixture accepts a Responses request with only an Images price snapshot and reservation.
+  The response model can incur additional costs outside that bound.
+  Requirements:
+  - Reject hosted requests before dispatch when the selected snapshot cannot bound all paid components.
+  - Keep customer funds unchanged after rejection.
+  - Keep complete Responses billing in F070 scope.
+  Validation:
+  - Verify rejection through HTTP for image generation and editing, with no provider calls or financial effects.
+  - Run image financial and normal runtime regression checks.
+  Resolution:
+  The integration test first returned `202` instead of `503` for generation and editing.
+  Media financial admission now rejects the incomplete Responses cost bound before dispatch.
+  The HTTP checks verify unchanged funds, zero charges, and zero provider calls after repeated rejection.
+  Related image, rating, admission, worker, and normal runtime checks passed in 10.932 seconds. Go lint passed.
+  Complete Responses billing remains open under F070. B266 owns the separate coverage failure.
+
 - [x] [B264] (P1) Correct OpenAPI payment route and authentication fixtures.
   Evidence:
   Stack CI compares the complete route contract with a fixture that disables payments.

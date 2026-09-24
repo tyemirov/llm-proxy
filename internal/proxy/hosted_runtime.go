@@ -132,11 +132,15 @@ func matchHostedMediaPriceConditions(codec string, conditions CatalogPriceCondit
 	conditions.BillingMode, conditions.ServiceTier, conditions.Region = "", "", ""
 	if codec == CatalogProtocolOpenAIImages {
 		var controls struct {
+			Surface string `json:"surface"`
 			Quality string `json:"quality"`
 			Size    string `json:"size"`
 		}
 		if err := json.Unmarshal(operation.NormalizedControls, &controls); err != nil {
 			return fmt.Errorf("decode retained media controls: %w", err)
+		}
+		if controls.Surface == "responses" {
+			return fmt.Errorf("%w: Responses images require a combined response-model and image-tool cost bound", ErrCatalogRatingUnavailable)
 		}
 		if (conditions.Quality != "" && conditions.Quality != controls.Quality) || (conditions.Resolution != "" && conditions.Resolution != controls.Size) {
 			return fmt.Errorf("%w: request differs from selected image price conditions", ErrCatalogRatingUnavailable)

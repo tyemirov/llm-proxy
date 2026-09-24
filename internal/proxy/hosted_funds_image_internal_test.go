@@ -110,6 +110,21 @@ func TestHostedFundsImageGenerationAndEditing(t *testing.T) {
 					surface, extra = "responses", `,"responses_model":"gpt-5"`
 				}
 				intent := fmt.Sprintf(`{"capability":%q,"provider":"openai","model":"gpt-image-2","input":%s,"controls":{"surface":%q%s,"quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1,"stream":%t}}`, capability, input, surface, extra, mode == "stream")
+				if mode == "responses_unknown_meter" {
+					seedHostedFunds(t, database, 500)
+					for range 2 {
+						hostedSpeechHTTP(t, server, "unbounded-responses-image", intent, http.StatusServiceUnavailable)
+					}
+					assertHostedFundsBalance(t, database, 500, 500)
+					if calls.Load() != 0 {
+						t.Fatal("unbounded Responses image dispatched")
+					}
+					charges := ratingHTTPExchange(t, management, http.MethodGet, "/billing-accounts/billing-journal/charges", "", http.StatusOK)["charges"].([]any)
+					if len(charges) != 0 {
+						t.Fatalf("rejected Responses image created charges: %v", charges)
+					}
+					return
+				}
 				hostedSpeechHTTP(t, server, "unfunded-image", intent, http.StatusPaymentRequired)
 				if calls.Load() != 0 {
 					t.Fatal("unfunded image dispatched")
