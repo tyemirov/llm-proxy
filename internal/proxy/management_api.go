@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -940,6 +941,9 @@ func decodeManagementJSON(ginContext *gin.Context, target any) error {
 	jsonDecoder.DisallowUnknownFields()
 	if decodeError := jsonDecoder.Decode(target); decodeError != nil {
 		return fmt.Errorf("%w: %v", errManagementBadRequest, decodeError)
+	}
+	if decodeError := jsonDecoder.Decode(new(any)); decodeError != io.EOF {
+		return fmt.Errorf("%w: request body requires one JSON value", errManagementBadRequest)
 	}
 	return nil
 }

@@ -27,6 +27,25 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B267] (P1) Reject trailing JSON before management writes.
+  Evidence:
+  The funds-resolution HTTP test sent a valid decision followed by a second JSON object.
+  The endpoint returned `200` and settled one cent instead of rejecting the malformed request.
+  The shared management decoder read only the first JSON value.
+  Requirements:
+  - Require one complete JSON value at the shared management boundary.
+  - Reject additional values and trailing non-whitespace bytes before any state change.
+  - Continue to accept trailing whitespace.
+  Validation:
+  - Verify unchanged funds, holds, Ledger history, and audit records after rejection.
+  - Run the management and funds regression tests.
+  Resolution:
+  The shared decoder now requires the end of the request after one JSON value.
+  HTTP tests reject another object, trailing text, and trailing null before financial changes.
+  Valid decisions with trailing whitespace still succeed. Restart replay preserves one settlement and its Ledger effects.
+  Management tests passed in 16.798 seconds. Funds tests passed in 67.332 seconds.
+  Funds-resolution race tests passed in 247.812 seconds. Go lint and format checks pass.
+
 - [ ] [B266] (P1) Restore the required coverage gate for the hosted billing stack.
   Evidence:
   The corrected stack CI run passes all Go tests but reports `coverage total 95.3%, want 100.0%`.
@@ -52,6 +71,13 @@ retain satisfied historical dependencies.
   - The provider reconciliation regression passed in 6.051 seconds. Its race suite passed in 74.472 seconds.
   - Go lint and format checks pass after the provider reconciliation increment.
   - Combined focused profiles cover 212 statements absent from the retained aggregate profile. This diagnostic is not a new CI result.
+  - Added 36 funds-resolution scenarios for financial read and write failures, invalid inputs, and completed receipt reads.
+  - Failed decisions preserve balances, holds, exact remainders, and Ledger history. Recovery and restart replay have one financial effect.
+  - These scenarios exposed B267. Its shared decoder correction rejects trailing input before financial changes.
+  - The resolution regression passed in 18.130 seconds. The complete funds suite passed in 67.332 seconds.
+  - The management regression passed in 16.798 seconds. Go lint and format checks pass.
+  - Funds-resolution race checks passed in 247.812 seconds.
+  - The updated diagnostic has 754 uncovered statements. Unchanged source blocks retain their prior coverage after the decoder edit.
   - The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

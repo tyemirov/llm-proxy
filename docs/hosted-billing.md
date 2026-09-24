@@ -996,6 +996,7 @@ Use this procedure for an approved decision:
 7. Read the same resolution resource with `GET` to verify the retained receipt.
 
 The command rejects customer sessions and active execution.
+Management request bodies must contain one JSON value. Additional values or trailing non-whitespace bytes produce `400` before any state change.
 It does not create a funding credit or change the payment processor records.
 
 An operator can credit a settled request through `PUT /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-credits/{credit_id}`.
