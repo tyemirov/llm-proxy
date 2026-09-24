@@ -1416,6 +1416,9 @@ The worker retains exact evidence and each applied revision in the same transact
 Funding credits and current adjustments commit together, including refunds that precede the initial funding event.
 
 Reconciliation, hold refresh, and receipt reads verify the digest of retained adjustment evidence through one database boundary.
+That boundary compares stored reversal and pending amounts with the exact evidence through the shared cumulative rounding calculation.
+The held amount cannot exceed the pending amount. The hold identity must match its order and revision.
+
 Identical event replay performs this check before it accepts the retained result.
 Changed evidence prevents financial effects, funded dispatch during hold refresh, and receipt publication.
 Restoration of the original evidence permits recovery without repeated financial effects.

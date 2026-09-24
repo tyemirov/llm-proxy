@@ -69,7 +69,27 @@ func (record managedPaymentAdjustmentRecord) decodedEvidence() (paymentAdjustmen
 	if evidence.Totals == nil || sha256Hex(record.Evidence) != record.EvidenceDigest {
 		return paymentAdjustmentEvidence{}, fmt.Errorf("retained adjustment evidence integrity failed for %s", record.OrderID)
 	}
+	reversedExact, reversedOK := new(big.Rat).SetString(evidence.ReversedExact)
+	pendingExact, pendingOK := new(big.Rat).SetString(evidence.PendingExact)
+	if !reversedOK || !pendingOK || reversedExact.Sign() < 0 || pendingExact.Sign() < 0 {
+		return paymentAdjustmentEvidence{}, fmt.Errorf("invalid retained adjustment exact amounts for %s", record.OrderID)
+	}
+	reversed, pending := paymentAdjustmentCents(reversedExact, pendingExact)
+	if reversed.Cmp(big.NewInt(record.ReversedCents)) != 0 || pending.Cmp(big.NewInt(record.PendingCents)) != 0 || record.HeldCents > record.PendingCents || record.HoldID != record.holdIdentifier() {
+		return paymentAdjustmentEvidence{}, fmt.Errorf("retained adjustment projection disagrees with evidence for %s", record.OrderID)
+	}
 	return evidence, nil
+}
+
+func (record managedPaymentAdjustmentRecord) ledgerKey() string {
+	return fmt.Sprintf("payment-adjustment:%s:%d", record.OrderID, record.Revision)
+}
+
+func (record managedPaymentAdjustmentRecord) holdIdentifier() string {
+	if record.HeldCents == 0 {
+		return ""
+	}
+	return record.ledgerKey() + ":hold"
 }
 
 func (worker *paddlePaymentProcessor) readAdjustments(ctx context.Context, payment verifiedCompletedPayment, order managedFundingOrderRecord, checkout managedPaymentCheckoutRecord) (verifiedPaymentAdjustments, error) {
@@ -170,20 +190,25 @@ func verifyPaymentAdjustments(payment verifiedCompletedPayment, order managedFun
 	}
 	reversedExact := new(big.Rat).SetFrac(new(big.Int).Mul(reversed, big.NewInt(order.FundingCents)), original)
 	pendingExact := new(big.Rat).SetFrac(new(big.Int).Mul(pending, big.NewInt(order.FundingCents)), original)
-	// Floor the cumulative debit; round the pending hold up. Retain both exact
-	// ratios so rounding never compounds across partial refunds.
-	debit := new(big.Int).Quo(reversedExact.Num(), reversedExact.Denom()).Int64()
-	hold, remainder := new(big.Int), new(big.Int)
-	hold.QuoRem(pendingExact.Num(), pendingExact.Denom(), remainder)
-	if remainder.Sign() > 0 {
-		hold.Add(hold, big.NewInt(1))
-	}
+	debit, hold := paymentAdjustmentCents(reversedExact, pendingExact)
 	evidence := paymentAdjustmentEvidence{updated.UTC(), totals, adjustments, reversedExact.RatString(), pendingExact.RatString()}
 	encoded, err := json.Marshal(evidence)
 	if err != nil {
 		return verifiedPaymentAdjustments{}, fmt.Errorf("encode payment adjustments: %w", err)
 	}
-	return verifiedPaymentAdjustments{evidence, string(encoded), sha256Hex(string(encoded)), debit, hold.Int64(), disputed}, nil
+	return verifiedPaymentAdjustments{evidence, string(encoded), sha256Hex(string(encoded)), debit.Int64(), hold.Int64(), disputed}, nil
+}
+
+// Floor the cumulative debit and round the pending hold up. Retain exact
+// ratios in the evidence so rounding never compounds across partial refunds.
+func paymentAdjustmentCents(reversedExact, pendingExact *big.Rat) (*big.Int, *big.Int) {
+	debit := new(big.Int).Quo(reversedExact.Num(), reversedExact.Denom())
+	hold, remainder := new(big.Int), new(big.Int)
+	hold.QuoRem(pendingExact.Num(), pendingExact.Denom(), remainder)
+	if remainder.Sign() > 0 {
+		hold.Add(hold, big.NewInt(1))
+	}
+	return debit, hold
 }
 
 func paymentAmountSum(left, right, total string) bool {
@@ -246,7 +271,7 @@ func applyPaymentAdjustments(tx *gorm.DB, order managedFundingOrderRecord, verif
 		}
 	}
 	next := managedPaymentAdjustmentRecord{OrderID: order.ID, BillingAccountID: order.BillingAccountID, Revision: previous.Revision + 1, ReversedCents: verified.reversed, PendingCents: verified.pending, Evidence: verified.encoded, EvidenceDigest: verified.digest, UpdatedAt: now}
-	key := fmt.Sprintf("payment-adjustment:%s:%d", order.ID, next.Revision)
+	key := next.ledgerKey()
 	metadata, err := json.Marshal(map[string]string{"funding_order_id": order.ID, "evidence_digest": verified.digest})
 	if err != nil {
 		return err
@@ -308,7 +333,7 @@ func applyPaymentAdjustments(tx *gorm.DB, order managedFundingOrderRecord, verif
 	}
 	next.HeldCents = min(verified.pending, max(int64(0), balance.AvailableCents.Int64()))
 	if next.HeldCents > 0 {
-		next.HoldID = key + ":hold"
+		next.HoldID = next.holdIdentifier()
 		reservation, err := ledger.NewReservationID(next.HoldID)
 		if err != nil {
 			return err

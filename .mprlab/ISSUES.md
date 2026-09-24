@@ -35,6 +35,30 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B282] (P1) Reject refund projection amounts that disagree with retained evidence.
+  Evidence:
+  Stored reversal and pending amounts could disagree with the retained exact evidence without rejection.
+  A changed reversal amount permitted an incorrect Ledger debit during refund approval.
+  The controlled USD 2 refund left 301 cents instead of 300 cents from the original 500-cent balance.
+  Receipt reads returned HTTP 200 for inconsistent amounts or hold identities.
+  Hold refresh permitted funded work with inconsistent amounts or invalid exact values.
+  Requirements:
+  - Validate retained projection amounts against exact refund evidence at the shared database boundary.
+  - Use one cumulative rounding calculation for processor evidence and retained evidence.
+  - Validate the held amount and its order-bound revision identity before financial use.
+  - Preserve funds after rejection and permit one refund after restoration and restart.
+  Validation:
+  - Reproduce rejection failures through signed payment events and financial HTTP resources.
+  - Verify refund rounding, restoration, replay, and financial conservation.
+  - Run payment regression, race, lint, and formatting checks.
+  Resolution:
+  The shared database reader now checks reversal and pending amounts against exact retained evidence.
+  Incoming and retained evidence use one cumulative rounding calculation. Hold amounts and identities must match the current projection contract.
+  Thirty-three new scenarios verify rejection, restoration, replay, and recovery without repeated financial effects.
+  Focused checks passed in 17.815 seconds. Payment and funds regression passed in 254.333 seconds.
+  Race checks passed in 180.596 seconds. Go lint and formatting passed.
+  No public schema or event contract changed. B266 and complete F070 acceptance remain open.
+
 - [x] [B281] (P1) Reject changed retained refund evidence before financial use.
   Evidence:
   Controlled database changes replaced retained refund evidence or its digest after a pending refund.
@@ -617,6 +641,12 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Race checks passed in 97.840 seconds. Go lint and formatting passed. No public schema or event contract changed.
   - The diagnostic has 349 uncovered statements across 21173 statements. Use `/tmp/llm-proxy-b281-diagnostic.coverprofile`.
   - Old coordinates for both changed production files were discarded.
+  - B282 rejects refund projection amounts and hold identities that disagree with the retained evidence.
+  - Thirty-three new scenarios verify financial rejection, restoration, replay, and recovery with the existing Ledger journal.
+  - Focused checks passed in 17.815 seconds. Payment and funds regression passed in 254.333 seconds.
+  - Race checks passed in 180.596 seconds. Go lint and formatting passed. No public schema or event contract changed.
+  - The diagnostic has 350 uncovered statements across 21180 statements. Use `/tmp/llm-proxy-b282-diagnostic.coverprofile`.
+  - Old adjustment source coordinates were discarded. Earlier validation now intercepts corrupt holds before a Ledger constructor error path.
   - Complete aggregate CI and F070 acceptance remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
