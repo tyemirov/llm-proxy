@@ -27,6 +27,18 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [ ] [B266] (P1) Restore the required coverage gate for the hosted billing stack.
+  Evidence:
+  The corrected stack CI run passes all Go tests but reports `coverage total 95.3%, want 100.0%`.
+  The function report identifies incomplete coverage in 288 functions across 79 files.
+  Requirements:
+  - Cover missing public behaviors and financial failure boundaries with the real service components.
+  - Preserve the required coverage threshold and the current provider scope.
+  - Remove unreachable or obsolete paths only when the current contract does not require them.
+  Validation:
+  - Run focused component checks during correction.
+  - Pass the existing Go coverage gate and final stack CI.
+
 - [x] [B265] (P1) Reject incomplete cost bounds for Responses image requests.
   Evidence:
   The funded image fixture accepts a Responses request with only an Images price snapshot and reservation.
@@ -2924,7 +2936,11 @@ retain satisfied historical dependencies.
   Controlled input checks and payment tests pass.
   B259 rejects recurring prices before checkout and preserves retries after temporary price failures through the existing shared client.
   Payment, checkout, browser, formatting, and lint checks pass after B259.
-  Actual sandbox evidence, final requirement audit, and stack CI remain open.
+  The corrected stack CI run passed all Go tests, Python checks, and upstream race checks.
+  Its coverage gate failed with `coverage total 95.3%, want 100.0%`. B266 owns that failure.
+  B265 now rejects Responses image requests whose accepted snapshot cannot bound both paid components.
+  The related HTTP regression and Go lint passed. Actual sandbox evidence and complete F070 acceptance remain open.
+  `make test-hosted-billing` passed after B265, including clients, backup restoration, and four browser scenarios in 37.1 seconds.
   Goal:
   Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
   Requirements:
@@ -3026,6 +3042,10 @@ retain satisfied historical dependencies.
   - The operator was asked for the sandbox configuration path and selected account and supplier identity.
   - Complete provider-operation qualification, final CI, and the F069 PR remain open.
   - The remaining commercial decisions and F065 through F069 implementation remain open.
+  - The corrected stack CI run passed all Go tests, Python checks, and upstream race checks.
+  - B266 records the remaining gate failure: `coverage total 95.3%, want 100.0%`.
+  - B265 rejects an incomplete Responses image cost bound before dispatch. Complete Responses billing remains required.
+  - `make test-hosted-billing` passed after B265, including clients, backup restoration, and four browser scenarios in 37.1 seconds.
   Goal:
   Give a customer one account, one funded balance, and immediate access to approved services without provider account setup.
   Govern implementation and development acceptance across the five connected billing capabilities.
