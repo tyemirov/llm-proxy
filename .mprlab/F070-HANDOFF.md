@@ -8,7 +8,7 @@ F070 remains incomplete. This handoff does not complete or pause the goal.
 
 B275 and the journal admission increment are published. Publication was verified on September 24, 2026.
 The goal continuation resumed B266 after the handoff request.
-The current increment adds result replay integrity checks and removes duplicate identity validation.
+The current increment resolves B276, which the interrupted journal recovery checks exposed.
 Do not expand the product scope.
 
 ### Checkout And Publication
@@ -19,7 +19,8 @@ Do not expand the product scope.
 - Published cancellation increment: `a3e72246c647b89c2543cb48e2daf81aeeb6237f`.
 - Published media input increment: `bcdbee132afe38afc5ac73deaf31695630f77f4a`.
 - Published journal admission commit: `fefb35796bf9f30083566b4e77a8c2488a448e26`.
-- Local HEAD and the PR head matched that commit before the current replay increment.
+- Published replay integrity commit: `53eeff28729501a8b9460b31a4f27bec7b55f3d9`.
+- Local HEAD and the PR head matched that commit before the current B276 increment.
 - Verify the commit that contains this section in PR 344 before further edits.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
@@ -31,7 +32,35 @@ Do not expand the product scope.
 Application merge, release, and deployment remain outside the current authorization.
 The current production changes have focused validation. Aggregate validation remains incomplete.
 
-### Latest Result Replay Integrity
+### Latest Interrupted Journal Recovery And B276
+
+The increment adds `internal/proxy/hosted_journal_interruption_recovery_internal_test.go`.
+Eight scenarios exercise failed recovery reads and writes for accepted, dispatched, and observed work.
+The fixture creates interrupted states through HTTP and failed database writes. It does not construct invalid journal states.
+Public financial and journal resources prove that failed recovery preserves funds, attempts, observations, and reconciliation cases.
+
+These checks exposed B276. Failed dispatch preparation and terminal journal writes left an accepted journal with a failed response file.
+Recovery then returned `status=409 want=200` despite zero provider calls.
+`hostedTextRequests.executeCompletion` now preserves pending response state while the journal remains accepted or executing.
+Restored accepted work executes once. Work that reached the provider remains uncertain and retains its reservation.
+Repeated restart cannot repeat provider work or financial effects.
+
+The corrected eight scenarios passed in 4.968 seconds. Broad regression passed in 108.118 seconds.
+Race checks passed in 72.123 seconds. Go lint and formatting passed. No test process remains active.
+
+No public API or event contract changed. B276 is resolved. B266 and final F070 acceptance remain open.
+Logs use `/tmp/llm-proxy-b276` as their prefix.
+
+The product failure is in `/tmp/llm-proxy-b266-journal-interruption-before-final.log`.
+Earlier runs exposed fixture errors: a missing attempts route and duplicate reconciliation route registration.
+Those fixture errors are corrected. Their logs use `/tmp/llm-proxy-b266-journal-interruption` as their prefix.
+
+The current diagnostic is `/tmp/llm-proxy-b276-diagnostic.coverprofile`.
+It has 406 uncovered statements across 21172 statements.
+Old counts for `hosted_text_requests.go` were discarded. Only current profiles contribute counts for that changed file.
+This diagnostic does not establish aggregate CI success.
+
+### Previous Result Replay Integrity
 
 The increment adds `internal/proxy/hosted_result_replay_integrity_internal_test.go`.
 Its 14 scenarios cover six saved identity conflicts before and after publication, plus two active publication states.
@@ -58,12 +87,12 @@ The separate failed-completion replay regression passed in 1.033 seconds. Go lin
 The 14 new scenarios passed with race detection in 151.960 seconds. No test process remains active.
 Evidence uses `/tmp/llm-proxy-b266-result-replay` as its prefix.
 
-The latest diagnostic is `/tmp/llm-proxy-b266-result-replay-diagnostic.coverprofile`.
+That increment produced `/tmp/llm-proxy-b266-result-replay-diagnostic.coverprofile`.
 It has 414 uncovered statements across 21170 statements.
 Old counts for `hosted_text_requests.go` and `hosted_text_status.go` were discarded before combination.
 Only current profiles contribute counts for those files. This diagnostic does not establish aggregate CI success.
 
-### Latest Journal Admission Acceptance
+### Previous Journal Admission Acceptance
 
 The latest increment adds `internal/proxy/hosted_journal_admission_recovery_internal_test.go`.
 Its 12 scenarios exercise failed tenant locks, journal writes, authority reads, and identifier generation through real HTTP.
@@ -205,7 +234,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b266-result-replay-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b276-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -221,7 +250,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest replay diagnostic has 414 uncovered statements across 21170 statements after the refactor.
+The latest B276 diagnostic has 406 uncovered statements across 21172 statements.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.
@@ -280,7 +309,8 @@ Use repository Make targets. Keep focused checks, aggregate CI, publication, and
 Preserve unrelated changes. Do not create draft PRs, worktrees, history rewrites, or persistent memory updates.
 Do not use subagents, require physical devices, or examine file permission modes.
 Do not parallelize issues. Keep user progress updates within 60 seconds during resumed work.
-Prior document checks found five existing Governor differences and 72 existing tracker language findings.
+Current document checks found six existing Governor differences and 72 existing tracker language findings.
+The Governor now also reports issue-format drift. That file is unchanged by this work.
 Do not normalize unrelated governance files.
 
 Earlier handoff snapshots remain in Git history. Their resume instructions and coverage totals are superseded by this document.

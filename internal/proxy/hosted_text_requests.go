@@ -181,6 +181,11 @@ func (service *hostedTextRequests) executeCompletion(ctx context.Context, reques
 		// The journal is authoritative if the response store is unavailable.
 		status := statusCodeForError(executionError)
 		persistError := service.publishResponse(ctx, accepted, func(current managedJournalRequestRecord) error {
+			// A failed terminal journal write leaves execution pending. Its
+			// response cannot claim failure before journal recovery decides it.
+			if current.State == journalRequestAccepted || current.State == journalRequestExecuting {
+				return nil
+			}
 			if current.State == journalRequestUncertain {
 				return service.responses.uncertain(identity.tenant, identity.key, accepted.IntentDigest)
 			}

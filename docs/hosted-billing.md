@@ -912,6 +912,11 @@ The result store checks the saved request, intent, tenant, key, provider, and mo
 An identity conflict preserves funds and cannot cause another provider call.
 Before claim expiry, incomplete publication remains pending. After expiry, recovery preserves uncertainty when no completed result exists.
 
+A failed terminal journal write cannot produce a terminal response file.
+The response remains pending until journal recovery decides the execution outcome.
+Recovery can dispatch accepted work only when the journal proves that no attempt reached the provider.
+Interrupted work that reached the provider retains uncertainty and held funds without another dispatch.
+
 Recovery, replay, and status reads require a JSON object with a non-null text string in the saved completion.
 Invalid completion data cannot repair a publication receipt or produce a successful response.
 Failed recovery preserves pending financial evidence and held funds without another provider call.

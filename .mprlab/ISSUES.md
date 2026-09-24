@@ -35,6 +35,26 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B276] (P1) Preserve pending response state after a journal completion failure.
+  Evidence:
+  Controlled HTTP checks failed with `status=409 want=200` after storage recovered for an accepted request with zero provider calls.
+  A failed attempt write and a failed terminal journal write left the journal accepted but the response file failed.
+  The response file then rejected the current worker after the journal authorized recovery.
+  Requirements:
+  - Publish a terminal failure only after the journal records a terminal state.
+  - Preserve accepted or executing response state when the terminal journal write fails.
+  - Permit one dispatch after recovery of accepted work that has no prior provider call.
+  - Preserve uncertainty, financial resources, and evidence for work that already reached the provider.
+  - Verify storage failure and recovery through HTTP, then run focused regression, race, lint, and formatting checks.
+  - Keep B266 coverage and the final F070 CI checkpoint open.
+  Resolution:
+  Response publication now preserves pending state when the terminal journal write fails.
+  Eight HTTP scenarios verify failed recovery, retained financial and journal resources, restored admission, and restart replay.
+  The new checks passed in 4.968 seconds. Broad regression passed in 108.118 seconds.
+  The new scenarios passed with race detection in 72.123 seconds. Go lint and formatting passed.
+  No public API or event contract changed. B266 and final stack CI remain open.
+
+
 - [x] [B275] (P1) Restore aggregate Go validation after the billing acceptance expansion.
   Evidence:
   The B274 `make go-test` run exhausted the Go package timeout after 601.301 seconds.
@@ -366,6 +386,13 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Go lint and formatting passed. No public API or event contract changed.
   - The current diagnostic has 414 uncovered statements across 21170 statements. Changed production files use only current coverage counts.
   - Use `/tmp/llm-proxy-b266-result-replay-diagnostic.coverprofile` for the latest diagnostic. It does not replace aggregate CI.
+  - Added eight interrupted journal scenarios for failed recovery of accepted, dispatched, and observed work.
+  - Failed reads and writes preserve funds, attempts, observations, and reconciliation cases through public HTTP resources.
+  - B276 corrects premature terminal response publication found by these checks. Restored accepted work dispatches once.
+  - Previously dispatched work remains uncertain and retains held funds without another provider call.
+  - Focused checks passed in 4.968 seconds, broad regression in 108.118 seconds, and race checks in 72.123 seconds.
+  - Go lint and formatting passed. The current diagnostic has 406 uncovered statements across 21172 statements.
+  - Use `/tmp/llm-proxy-b276-diagnostic.coverprofile`. The changed production file uses only current coverage counts.
   - The required coverage gate, complete F070 acceptance, and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
