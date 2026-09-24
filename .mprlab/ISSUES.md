@@ -406,6 +406,14 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Focused checks passed in 3.509 seconds and race checks in 46.507 seconds. Go lint and formatting passed.
   - No production code changed. The current diagnostic has 389 uncovered statements across 21172 statements.
   - Use `/tmp/llm-proxy-b266-deferred-payments-diagnostic.coverprofile`. This diagnostic does not replace aggregate CI.
+  - Added five tenant budget scenarios for failed account locks, failed limit writes, corrupt admission usage, and inconsistent credit usage.
+  - Failed writes preserve limits, revisions, and funds. Invalid usage rejects admission before dispatch and rejects credits before negative totals.
+  - Restored storage permits one admission or credit. HTTP replay and restart preserve exact usage and financial effects.
+  - Tenant regression passed in 5.521 seconds. New scenario race checks passed in 39.614 seconds. Go lint and formatting passed.
+  - No production code changed. The current diagnostic has 385 uncovered statements across 21172 statements.
+  - Use `/tmp/llm-proxy-b266-tenant-recovery-diagnostic.coverprofile`. Complete aggregate CI remains open.
+  - The Governor check and a direct retry returned HTTP 404 from `https://issues-api.mprlab.com/api/contracts/issue-format`.
+  - Changed prose and `git diff --check` passed. Preserve the local issue format until its authoritative source is available.
   - The required coverage gate, complete F070 acceptance, and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

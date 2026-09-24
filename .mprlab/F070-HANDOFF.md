@@ -8,7 +8,7 @@ F070 remains incomplete. This handoff does not complete or pause the goal.
 
 B275 and the journal admission increment are published. Publication was verified on September 24, 2026.
 The goal continuation resumed B266 after the handoff request.
-The current increment adds B266 acceptance for deferred payment evidence and bounded refund holds.
+The current increment adds B266 acceptance for tenant budget storage recovery.
 Do not expand the product scope.
 
 ### Checkout And Publication
@@ -22,7 +22,8 @@ Do not expand the product scope.
 - Published replay integrity commit: `53eeff28729501a8b9460b31a4f27bec7b55f3d9`.
 - Published B276 commit: `44676d82310bbbc3891f6f5ffda465a3a480462a`.
 - Published startup recovery commit: `31a41bda792f5b3ad6a627cbab8f497d39a35324`.
-- Local HEAD and the PR head matched that commit before the current payment increment.
+- Published deferred payment commit: `a9a6f35b10316e92dd56495680a6dd5761f2b53a`.
+- Local HEAD and the PR head matched that commit before the current tenant budget increment.
 - Verify the commit that contains this section in PR 344 before further edits.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
@@ -34,7 +35,28 @@ Do not expand the product scope.
 Application merge, release, and deployment remain outside the current authorization.
 The current production changes have focused validation. Aggregate validation remains incomplete.
 
-### Latest Deferred Payment Evidence And Refund Holds
+### Latest Tenant Budget Storage Recovery
+
+The increment adds `internal/proxy/hosted_funds_tenant_recovery_internal_test.go`.
+Five scenarios cover failed account locks, failed limit creation and updates, corrupt admission usage, and inconsistent credit usage.
+Failed writes preserve public limits, revisions, and financial resources.
+Invalid retained usage rejects admission before provider work. Inconsistent usage rejects a credit that would produce a negative total.
+Restored storage permits one admission or credit. HTTP replay and restart preserve exact usage and financial effects.
+
+Tenant regression passed in 5.521 seconds. Race checks for the five new scenarios passed in 39.614 seconds.
+Go lint and formatting passed. No production code or public contract changed. No test process remains active.
+Evidence uses `/tmp/llm-proxy-b266-tenant` as its prefix.
+
+The Governor check cannot retrieve `https://issues-api.mprlab.com/api/contracts/issue-format` because it returns HTTP 404.
+An exact check retry and a direct HTTP read confirmed that result. Preserve the local issue format.
+Evidence is in `/tmp/llm-proxy-b266-tenant-recovery-governor-retry.json`.
+Changed prose has no mechanical findings, and `git diff --check` passed. Do not claim a successful Governor check.
+
+The current diagnostic is `/tmp/llm-proxy-b266-tenant-recovery-diagnostic.coverprofile`.
+It has 385 uncovered statements across 21172 statements. Production source coordinates are unchanged.
+This diagnostic does not establish aggregate CI success. B266 and final F070 acceptance remain open.
+
+### Previous Deferred Payment Evidence And Refund Holds
 
 The increment adds `internal/proxy/hosted_payments_deferred_evidence_internal_test.go`.
 Eight scenarios use signed webhook HTTP requests and the existing local Paddle protocol fixture.
@@ -51,7 +73,7 @@ All eight scenarios passed in 3.509 seconds. Race checks passed in 46.507 second
 Go lint and formatting passed. No production code or public contract changed. No test process remains active.
 Evidence uses `/tmp/llm-proxy-b266-deferred-payments` as its prefix.
 
-The current diagnostic is `/tmp/llm-proxy-b266-deferred-payments-diagnostic.coverprofile`.
+That increment produced `/tmp/llm-proxy-b266-deferred-payments-diagnostic.coverprofile`.
 It has 389 uncovered statements across 21172 statements. Production source coordinates are unchanged.
 This diagnostic does not establish aggregate CI success. B266 and final F070 acceptance remain open.
 
@@ -284,7 +306,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b266-deferred-payments-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b266-tenant-recovery-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -300,7 +322,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest payment diagnostic has 389 uncovered statements across 21172 statements.
+The latest tenant budget diagnostic has 385 uncovered statements across 21172 statements.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.
@@ -359,8 +381,8 @@ Use repository Make targets. Keep focused checks, aggregate CI, publication, and
 Preserve unrelated changes. Do not create draft PRs, worktrees, history rewrites, or persistent memory updates.
 Do not use subagents, require physical devices, or examine file permission modes.
 Do not parallelize issues. Keep user progress updates within 60 seconds during resumed work.
-Current document checks found six existing Governor differences and 72 existing tracker language findings.
-The Governor now also reports issue-format drift. That file is unchanged by this work.
+The last successful Governor inspection found six existing differences. The current check cannot retrieve its issue-format source.
+The tracker retains 72 existing language findings. The local issue format is unchanged by this work.
 Do not normalize unrelated governance files.
 
 Earlier handoff snapshots remain in Git history. Their resume instructions and coverage totals are superseded by this document.
