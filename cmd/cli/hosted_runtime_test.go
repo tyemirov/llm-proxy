@@ -88,3 +88,20 @@ hosted:
 		}
 	}
 }
+
+func TestHostedRuntimeCLIOmittedScopesKeepHostedDisabled(t *testing.T) {
+	directory := t.TempDir()
+	configuration := strings.ReplaceAll(completeManagementYAML(), "/tmp/llm-proxy-test.sqlite", filepath.Join(directory, "hosted.sqlite"))
+	configPath := writeTestConfig(t, directory, configuration)
+	started := false
+	withServeProxy(t, func(configuration proxy.Configuration, _ *zap.SugaredLogger) error {
+		started = true
+		if configuration.Hosted != nil {
+			t.Fatal("omitted hosted configuration enabled hosted execution")
+		}
+		return nil
+	})
+	if err := executeRootCommand(t, "--config", configPath); err != nil || !started {
+		t.Fatalf("omitted hosted configuration prevented startup: started=%t error=%v", started, err)
+	}
+}

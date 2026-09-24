@@ -35,6 +35,27 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B272] (P1) Reject explicit hosted configuration without offering scopes.
+  Evidence:
+  The root command accepts `hosted: {}` and reaches service startup without an error.
+  The configuration decoder drops the empty object and treats hosted configuration as omitted.
+  The committed `missing-list` scenario reports `started=true error=<nil>`.
+  Goal:
+  Reject incomplete explicit hosted configuration before service startup or database creation.
+  Requirements:
+  - Validate explicit hosted scope presence at the configuration file boundary.
+  - Preserve omitted hosted configuration as the disabled state.
+  - Preserve valid scopes and existing condition validation.
+  Validation:
+  - Pass root-command rejection and omitted-configuration checks.
+  - Pass runtime regression, CLI checks, Go lint, and format checks.
+  Resolution:
+  Explicit hosted configuration now requires an offering list before typed decoding.
+  Omitted hosted configuration still reaches service startup with hosted execution disabled.
+  Runtime HTTP checks passed in 36.644 seconds. Final CLI configuration checks passed in 7.389 seconds.
+  Before the final lookup refactor, all 82 selected CLI race scenarios passed in 81.180 seconds.
+  Go lint and format checks passed after the final change. B266 retains the aggregate coverage and final CI requirements.
+
 - [x] [B271] (P1) Reject incomplete retained completion results.
   Evidence:
   An identical funded POST returns HTTP 200 with empty text when its retained result contains JSON `null`.
@@ -212,11 +233,12 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Cancellation cannot reverse verified funding. Conflicting evidence remains in reconciliation until matching completed-payment evidence resolves it.
   - Hosted scopes now retain validated conditions, attempt limits, and transport from the immutable catalog.
   - Media admission no longer repeats service or model resolution. Startup validation and request-specific pricing remain unchanged.
-  - Runtime HTTP checks passed in 42.490 seconds and CLI checks passed in 1.915 seconds.
-  - Media financial checks passed in 74.709 seconds. Both targeted runtime race scenarios passed in 19.718 seconds.
-  - Management tests passed in 24.410 seconds. Go lint and format checks passed.
+  - Eight root-command scenarios reject empty, duplicate, unknown-service, and invalid-condition scopes before startup or database creation.
+  - B272 fixes the empty hosted-object defect found by these checks. Omitted hosted configuration remains disabled.
+  - Runtime HTTP checks passed in 36.644 seconds. Final CLI configuration checks passed in 7.389 seconds.
+  - All 82 selected CLI race scenarios passed before the final lookup refactor. Final CLI, lint, and format checks passed afterward.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 468 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
+  - The combined diagnostic has 464 uncovered statements. Only unchanged source blocks retain prior counts across source edits.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

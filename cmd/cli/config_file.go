@@ -121,8 +121,8 @@ func loadRuntimeConfiguration(rawConfigPath string) (proxy.Configuration, error)
 	if readConfigError := configReader.ReadConfig(strings.NewReader(expandedConfig)); readConfigError != nil {
 		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigFileParse, configPath, readConfigError)
 	}
-	if integerValidationError := validateExplicitPositiveIntegerConfiguration(configReader); integerValidationError != nil {
-		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigInvalid, configPath, integerValidationError)
+	if explicitValidationError := validateExplicitConfiguration(configReader); explicitValidationError != nil {
+		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigInvalid, configPath, explicitValidationError)
 	}
 
 	var parsedConfiguration fileConfiguration
@@ -149,9 +149,13 @@ func loadProviderCatalog(configPath string) (*proxy.ProviderCatalog, error) {
 	return catalog, nil
 }
 
-func validateExplicitPositiveIntegerConfiguration(configReader *viper.Viper) error {
-	if raw := configReader.Get("hosted.offerings"); raw != nil {
-		offerings, ok := raw.([]any)
+func validateExplicitConfiguration(configReader *viper.Viper) error {
+	rawOfferings := configReader.Get("hosted.offerings")
+	if configReader.IsSet("hosted") && rawOfferings == nil {
+		return fmt.Errorf("invalid configuration: hosted explicit offering scopes are required")
+	}
+	if rawOfferings != nil {
+		offerings, ok := rawOfferings.([]any)
 		if !ok {
 			return fmt.Errorf("invalid configuration: hosted.offerings must be a sequence")
 		}

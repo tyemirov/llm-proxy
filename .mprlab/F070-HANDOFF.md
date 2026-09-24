@@ -1,5 +1,29 @@
 # F070 Handoff
 
+## Resume Update: 2026-09-24
+
+This section supersedes the original snapshot below.
+The operator committed the handoff, CLI rejection tests, and media documentation after that snapshot.
+The resumed work started from clean commit `fde0714eb4bacb1ba13c30cd765a519127138bb2` on the same F069 branch.
+
+B272 now rejects `hosted: {}` at the configuration file boundary, before service startup or database creation.
+Omitted hosted configuration still reaches startup with hosted execution disabled.
+The correction changes `cmd/cli/config_file.go` and adds an omitted-configuration check in `cmd/cli/hosted_runtime_test.go`.
+The durable configuration contract is updated in `docs/hosted-billing.md`.
+
+Runtime HTTP checks passed in 36.644 seconds. Final CLI configuration checks passed in 7.389 seconds.
+All 82 selected CLI race scenarios passed in 81.180 seconds before the final lookup refactor.
+Final CLI, lint, and format checks passed afterward.
+Evidence uses `/tmp/llm-proxy-b272-` with suffixes `runtime`, `cli-final`, `cli-race`, and `checks-final`.
+The current diagnostic is `/tmp/llm-proxy-b272-diagnostic.coverprofile`, also copied to `/tmp/llm-proxy-b266-diagnostic.coverprofile`.
+It has 464 uncovered statements across 21143 statements. The decoder uses only current validation counts.
+The merge script is `/tmp/llm-proxy-b272-merge.py`.
+
+Continue B266 and the remaining F070 provider qualification. The aggregate coverage gate and final CI remain open.
+The original failing CLI test no longer needs implementation. B272 records its resolution.
+
+## Original Handoff Snapshot
+
 ## Objective And Current State
 
 Implement F070 in full scope. Deliver F065, F066, F067, F068, and F069 as a ready PR stack.

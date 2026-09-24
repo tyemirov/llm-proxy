@@ -382,6 +382,8 @@ F066 remains open. Tracked runtime configuration keeps hosted execution disabled
 ### Normal Hosted Runtime
 
 The optional `hosted` configuration selects exact offering scopes for financial admission.
+Omit this configuration to keep hosted execution disabled.
+An explicit `hosted` block requires a nonempty offering list. The CLI rejects an empty object before service startup or database creation.
 The normal server connects native text, client protocols, MCP, and dictation to the existing completion coordinator.
 That coordinator retains request identity, reserves Ledger funds, enforces attempt limits, and preserves uncertain outcomes.
 The normal financial worker records charges and settles completed usage.
