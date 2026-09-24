@@ -153,11 +153,14 @@ retain satisfied historical dependencies.
   - Added nine account-creation scenarios for storage failures, entropy failures, cancellation, and competing service instances.
   - Failed creation retains no account or financial effects. Restart recovers one account for the accepted intent.
   - Competing instances share one account for the same intent and reject a different intent.
-  - Account and authority tests passed in 4.971 seconds. Management tests passed in 17.852 seconds.
-  - The new account-creation race suite passed in 24.570 seconds. Go lint and format checks pass.
-  - Production source did not change.
+  - Added 29 financial-signal scenarios for unavailable storage, corrupt amounts, unreadable queue timestamps, and inconsistent comparison evidence.
+  - Failed CLI reads publish no partial report and preserve durable database bytes. Restoration returns the original signals.
+  - Funded checks preserve balances, charges, pending delivery, and provider call counts.
+  - Signal tests passed in 3.849 seconds. CLI signal tests passed in 2.126 seconds.
+  - Signal and CLI race suites passed in 35.621 and 16.495 seconds. Management tests passed in 17.669 seconds.
+  - Go lint and format checks pass. Production source did not change.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 537 uncovered statements. Changed production files use only current validation counts.
+  - The combined diagnostic has 524 uncovered statements. Changed production files use only current validation counts.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
