@@ -635,6 +635,8 @@ They verify voice isolation, accepted credential versions, admission races, and 
 Hosted gRPC speech tests cover dispatch fencing, recovery, artifact transfer, and cancellation.
 Recovery cannot submit another job, even when the grant remains active.
 Cancellation requires a current cancellation request and can proceed after grant revocation.
+A new explicit cancellation request renews requested state after an unsupported outcome on running work.
+Restored authority or provider access can then confirm cancellation. Replays of confirmed cancellation do not repeat provider work.
 Hosted voice discovery reuses the existing HTTP and gRPC adapters with current grant and credential checks.
 Voice pages and previews preserve tenant isolation without creating billable attempts.
 Hosted ElevenLabs discovery exposes default premade voices. Hosted Dictator discovery includes tenant-owned extracted voices.

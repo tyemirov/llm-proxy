@@ -829,7 +829,7 @@ func (service *mediaOperationService) cancel(requestContext context.Context, req
 			record.UpdatedAt = now
 			return service.store.finalizeMediaOperationCancellation(transaction, record, now)
 		case MediaOperationStateRunning:
-			if record.CancellationState == MediaCancellationNotRequested {
+			if record.CancellationState == MediaCancellationNotRequested || record.CancellationState == MediaCancellationUnsupported {
 				record.CancellationState = MediaCancellationRequested
 				record.UpdatedAt = now
 				if saveError := transaction.Save(&record).Error; saveError != nil {

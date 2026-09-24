@@ -68,7 +68,6 @@ func TestHostedDictatorUsagePrecedesArtifactTransfer(t *testing.T) {
 			if scenario.name == "silero" {
 				model = "silero-ru"
 			}
-			engine, _ := dictatorSynthesisEngineForModel(model)
 			upstream := &hostedDictatorUsageUpstream{mode: scenario.name, duration: scenario.duration, failDownload: scenario.name == "artifact_loss"}
 			if scenario.name == "cancelled" {
 				upstream.cancelled.Store(true)
@@ -86,27 +85,7 @@ func TestHostedDictatorUsagePrecedesArtifactTransfer(t *testing.T) {
 				}
 			}()
 			t.Cleanup(grpcServer.Stop)
-			server, service := newHostedVoiceHTTPFixture(t, database, ProviderNameDictator, model, map[string]string{dictatorAddressField: listener.Addr().String(), dictatorTokenField: "hosted-duration-secret", dictatorTLSField: "false"})
-			settings := hostedDictatorFinancialSettings(t, model)
-			service.catalog = settings.catalog
-			service.hostedAdmission = settings.mediaAdmission(service.providers)
-			if err := database.database.Create(&managedHostedGrantRevisionRecord{GrantID: "grant-voices", Revision: 1, State: hostedGrantActive, ActorUserID: "operator", Reason: "Duration acceptance", CreatedAt: service.store.now()}).Error; err != nil {
-				t.Fatal(err)
-			}
-			imageAdapter := service.adapters[mediaOperationAdapterKey(llmproxycontract.MediaCapabilityImageGenerate, "openai", "gpt-image-2")].(*imageGenerationAdapter)
-			provider := service.providers.definitions[ProviderNameDictator]
-			offering, err := service.catalog.ResolveOffering(ProviderNameDictator, model)
-			if err != nil {
-				t.Fatal(err)
-			}
-			service.adapters[mediaOperationAdapterKey(llmproxycontract.MediaCapabilityAudioSpeechGenerate, ProviderNameDictator, model)] = &accountDictatorAdapter{provider: ProviderNameDictator, model: model, transport: provider.transports[offering.Transport], tenants: imageAdapter.tenants, store: service.store, assets: service.assets}
-			authority := "platform-voices:" + mediaSHA256Hex([]byte(listener.Addr().String()+"\x00hosted-duration-secret\x00false"))
-			reference, _ := json.Marshal(dictatorVoiceReference{Binding: authority, Engine: engine, Preset: "native-preset"})
-			voice, err := persistMediaVoice(database.database, "managed-first", ProviderNameDictator, MediaVoiceProviderRecord{Authority: authority, Provider: ProviderNameDictator, Mode: MediaVoiceModePreset, DisplayName: "Duration", SampleRates: []int{24000}, DefaultSampleRate: 24000, ProviderVoiceReference: string(reference)}, service.store.now())
-			if err != nil {
-				t.Fatal(err)
-			}
-			intent := fmt.Sprintf(`{"capability":"audio.speech.generate","provider":"dictator","model":%q,"input":{"text":"A short message.","voice_id":%q},"controls":{"language":"en","text_format":"plain","sample_rate_hz":24000}}`, model, voice.VoiceID)
+			server, service, intent := newHostedDictatorUsageFixture(t, database, model, listener.Addr().String())
 
 			hostedSpeechHTTP(t, server, "unfunded-duration", intent, http.StatusPaymentRequired)
 			if upstream.submissions.Load() != 0 {
@@ -190,6 +169,33 @@ func TestHostedDictatorUsagePrecedesArtifactTransfer(t *testing.T) {
 			assertDictatorFinancialOutcome(t, database, management, scenario.name)
 		})
 	}
+}
+
+func newHostedDictatorUsageFixture(t *testing.T, database *gormManagedTenantDatabase, model, endpoint string) (*httptest.Server, *mediaOperationService, string) {
+	t.Helper()
+	server, service := newHostedVoiceHTTPFixture(t, database, ProviderNameDictator, model, map[string]string{dictatorAddressField: endpoint, dictatorTokenField: "hosted-duration-secret", dictatorTLSField: "false"})
+	settings := hostedDictatorFinancialSettings(t, model)
+	service.catalog = settings.catalog
+	service.hostedAdmission = settings.mediaAdmission(service.providers)
+	if err := database.database.Create(&managedHostedGrantRevisionRecord{GrantID: "grant-voices", Revision: 1, State: hostedGrantActive, ActorUserID: "operator", Reason: "Duration acceptance", CreatedAt: service.store.now()}).Error; err != nil {
+		t.Fatal(err)
+	}
+	imageAdapter := service.adapters[mediaOperationAdapterKey(llmproxycontract.MediaCapabilityImageGenerate, "openai", "gpt-image-2")].(*imageGenerationAdapter)
+	provider := service.providers.definitions[ProviderNameDictator]
+	offering, err := service.catalog.ResolveOffering(ProviderNameDictator, model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.adapters[mediaOperationAdapterKey(llmproxycontract.MediaCapabilityAudioSpeechGenerate, ProviderNameDictator, model)] = &accountDictatorAdapter{provider: ProviderNameDictator, model: model, transport: provider.transports[offering.Transport], tenants: imageAdapter.tenants, store: service.store, assets: service.assets}
+	engine, _ := dictatorSynthesisEngineForModel(model)
+	authority := "platform-voices:" + mediaSHA256Hex([]byte(endpoint+"\x00hosted-duration-secret\x00false"))
+	reference, _ := json.Marshal(dictatorVoiceReference{Binding: authority, Engine: engine, Preset: "native-preset"})
+	voice, err := persistMediaVoice(database.database, "managed-first", ProviderNameDictator, MediaVoiceProviderRecord{Authority: authority, Provider: ProviderNameDictator, Mode: MediaVoiceModePreset, DisplayName: "Duration", SampleRates: []int{24000}, DefaultSampleRate: 24000, ProviderVoiceReference: string(reference)}, service.store.now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	intent := fmt.Sprintf(`{"capability":"audio.speech.generate","provider":"dictator","model":%q,"input":{"text":"A short message.","voice_id":%q},"controls":{"language":"en","text_format":"plain","sample_rate_hz":24000}}`, model, voice.VoiceID)
+	return server, service, intent
 }
 
 func hostedDictatorFinancialSettings(t *testing.T, model string) *hostedRuntimeSettings {

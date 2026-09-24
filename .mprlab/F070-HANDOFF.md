@@ -6,11 +6,39 @@ The user requested this handoff because the session has few tokens left.
 Use this section and the resume procedure below as the current instructions.
 F070 remains incomplete. This handoff does not complete or pause the goal.
 
-B279 corrects incomplete credential reads found during B266 media acceptance.
-The previous media uncertainty increment is published in PR 344.
+B280 corrects failed cancellation retries found during B266 media acceptance.
+The previous B279 credential correction is published in PR 344.
 Do not expand the product scope.
 
-### Latest Credential Read Boundary And B279
+### Latest Cancellation Retry Boundary And B280
+
+Three funded scenarios reproduced failed cancellation retries after dependency restoration.
+Authority read failures, absent authority, and provider outages produced unsupported cancellation state.
+Later explicit requests did not renew requested state, so hosted authorization prevented the provider call.
+The shared operation service now renews requested state for an explicit retry after an unsupported outcome on running work.
+Existing adapter outcomes and cancellation authorization remain unchanged.
+
+Four HTTP scenarios use the existing funded Dictator fixture and shared SDK.
+They cover failed authority reads, absent authority, provider outages, and failed observation writes after provider confirmation.
+Failure preserves the operation and financial resources. Restoration permits confirmation without repeated synthesis.
+Replays and financial recovery preserve 500 posted cents and 448 available cents while usage remains unresolved.
+No public schema, event contract, or shared dependency changed.
+
+The Dictator fixture passed characterization before extraction in 8.590 seconds.
+Targeted checks passed in 11.566 seconds. Broad media regression passed in 165.289 seconds.
+Related financial admission, voice authorization, and router checks passed in 2.117 seconds.
+Race checks passed in 35.442 seconds. Go lint and formatting passed. No validation process remains active.
+The first assertion incorrectly expected requested state after failure. The corrected test preserves the existing unsupported outcome.
+The reproduced retry failures are in `/tmp/llm-proxy-b266-cancel-authority-retry-before.log`.
+Final evidence uses `/tmp/llm-proxy-b280` as its prefix.
+
+All prior coordinates for `internal/proxy/media_operations.go` were discarded.
+Only current regression and boundary profiles contribute coverage for that file.
+The current diagnostic is `/tmp/llm-proxy-b280-diagnostic.coverprofile`.
+It has 350 uncovered statements across 21169 statements. This diagnostic does not replace aggregate CI.
+B280 is resolved. B266 and complete F070 acceptance remain open.
+
+### Previous Credential Read Boundary And B279
 
 Funded media operations with empty or null credential documents reached the provider and returned succeeded results.
 B279 requires rejection before provider calls. The shared loader now requires the complete current catalog field set.
@@ -95,7 +123,8 @@ Verify unused identifiers across the active tracker and archive before assigning
 - Published exact settlement commit: `9094d1c953493f0c08736dcbf8823baa155f464c`.
 - Local HEAD and PR 344 matched this exact settlement commit before the media uncertainty increment.
 - Published media uncertainty commit: `1426d5eed0bc2b5c39b216ba344dc9463fb3404c`.
-- Verify the commit that contains B279 before further edits.
+- Published B279 commit: `c99431c0d61bd1109905f32f5714f319aa983b11`.
+- Verify the commit that contains B280 before further edits.
 - PR 344 reported no hosted checks during this update. Hosted CI success is not established.
 - PR 344: https://github.com/tyemirov/llm-proxy/pull/344.
 - Last verified PR state: open, ready for review, base `feature/F068-prepaid-balances`.
@@ -582,7 +611,7 @@ The remaining timeout caused the two-pass runner change.
 ### Resume Procedure
 
 1. Inspect the checkout and verify the latest commit in ready PR 344.
-2. Continue B266 from `/tmp/llm-proxy-b279-diagnostic.coverprofile`.
+2. Continue B266 from `/tmp/llm-proxy-b280-diagnostic.coverprofile`.
 3. Cover missing financial behavior through public entry points without invalid core states.
 4. Discard old coverage coordinates for each production file that changes.
 5. Keep all remaining provider-operation acceptance requirements in scope.
@@ -598,7 +627,7 @@ Do not claim hosted CI success from local checks. PR 344 has no hosted checks at
 ### B266 And Remaining F070 Scope
 
 The B275 aggregate profile has 438 uncovered statements across 21172 statements.
-The latest B279 diagnostic has 355 uncovered statements across 21169 statements.
+The latest B280 diagnostic has 350 uncovered statements across 21169 statements.
 Do not combine stale source coordinates with new profiles.
 The repository-root `coverage.out` is also stale.
 The last full stack CI failed with `coverage total 95.3%, want 100.0%`.

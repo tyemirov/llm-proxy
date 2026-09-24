@@ -35,6 +35,27 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B280] (P1) Renew cancellation intent after an unconfirmed provider cancellation.
+  Evidence:
+  Three funded HTTP scenarios returned unsupported cancellation after an authority read failure, absent authority, or provider outage.
+  After restoration, explicit cancellation retries could not reach the provider because authorization required requested state.
+  Requirements:
+  - Record requested state for a new cancellation request after an unsupported outcome on running work.
+  - Preserve existing adapter outcomes and cancellation authorization.
+  - Keep funds unchanged after failure and prevent repeated provider work after confirmed cancellation.
+  Validation:
+  - Verify failure, restoration, confirmation, replay, and financial recovery through public HTTP and the shared Dictator SDK.
+  - Run media regression, race, lint, and formatting checks.
+  Resolution:
+  A new cancellation request now renews requested state after an unsupported outcome on running work.
+  Four funded scenarios verify failed authority reads, absent authority, provider outages, and failed observation writes.
+  Restoration permits confirmed cancellation. Replay and financial recovery preserve funds without repeated provider work.
+  Existing Dictator characterization passed before fixture extraction in 8.590 seconds. Targeted checks passed in 11.566 seconds.
+  Broad media regression passed in 165.289 seconds. Related boundary checks passed in 2.117 seconds.
+  Race checks passed in 35.442 seconds. Go lint and formatting passed.
+  No public schema or event contract changed. B266 and complete F070 acceptance remain open.
+
+
 - [x] [B279] (P1) Reject incomplete stored platform credentials before provider calls.
   Evidence:
   Funded media requests with empty or null stored credential documents reached the provider and returned succeeded operations.
@@ -561,6 +582,14 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Race checks passed in 109.660 seconds. Go lint and formatting passed. No public schema or event contract changed.
   - The diagnostic has 355 uncovered statements across 21169 statements. Use `/tmp/llm-proxy-b279-diagnostic.coverprofile`.
   - Old credential loader coordinates were discarded. Complete aggregate CI and F070 acceptance remain open.
+  - B280 restores explicit cancellation retries after an unsupported provider outcome on running work.
+  - Four funded scenarios cover failed authority reads, absent authority, provider errors, and failed observation writes.
+  - Failed cancellation preserves funds. Restoration confirms cancellation without repeated synthesis or financial effects.
+  - Targeted checks passed in 11.566 seconds. Broad media regression passed in 165.289 seconds, and boundary checks passed in 2.117 seconds.
+  - Race checks passed in 35.442 seconds. Go lint and formatting passed. No public schema or event contract changed.
+  - The diagnostic has 350 uncovered statements across 21169 statements. Use `/tmp/llm-proxy-b280-diagnostic.coverprofile`.
+  - Old media service coordinates were discarded. Only current regression and boundary counts contribute coverage for that file.
+  - Complete aggregate CI and F070 acceptance remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
   - Preserve the required coverage threshold and the current provider scope.
