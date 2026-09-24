@@ -117,10 +117,13 @@ retain satisfied historical dependencies.
   - Added 20 settlement scenarios for later read failures, corrupt amounts, and reservation conflicts after Ledger effects.
   - Failed settlement preserves pending delivery, holds, and funds. Restoration settles once without another provider call.
   - B269 fixes the invalid balance response found by these checks and shares the remainder validator across financial boundaries.
-  - Funds and money tests passed in 103.746 seconds. Management tests passed in 18.131 seconds.
-  - The new settlement recovery race suite passed in 128.605 seconds. Go lint and format checks pass.
+  - Added 17 held-reservation scenarios for failed reads and writes before and after provider dispatch.
+  - Failed recovery preserves financial resources, attempts, and reconciliation cases. Restart releases only undispatched holds.
+  - Dispatched work keeps its hold for reconciliation. Repeated restart has no new Ledger effect or provider call.
+  - The full funds regression passed in 115.257 seconds. The new hold recovery race suite passed in 224.140 seconds.
+  - Go lint and format checks pass.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 602 uncovered statements. Unchanged source blocks retain prior counts across source edits.
+  - The combined diagnostic has 596 uncovered statements. Unchanged source blocks retain prior counts across source edits.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
