@@ -415,6 +415,12 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - The Governor check and a direct retry returned HTTP 404 from `https://issues-api.mprlab.com/api/contracts/issue-format`.
   - Changed prose and `git diff --check` passed. Preserve the local issue format until its authoritative source is available.
   - The required coverage gate, complete F070 acceptance, and final stack CI remain open.
+  - Added four search limit scenarios for failed and corrupt price reads before initial dispatch and continuation.
+  - Initial rejection causes zero provider calls. Continuation rejection preserves the prior call and its exact costs.
+  - Restart releases undispatched holds and retains reconciliation holds after prior dispatch. Repeated replay cannot repeat financial effects.
+  - Search regression passed in 7.743 seconds and race checks in 35.912 seconds. Go lint and formatting passed.
+  - No production code changed. No public API or event contract changed.
+  - The diagnostic has 382 uncovered statements across 21172 statements. Use `/tmp/llm-proxy-b266-tool-limit-diagnostic.coverprofile`.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
   - Preserve the required coverage threshold and the current provider scope.
