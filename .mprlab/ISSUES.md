@@ -120,10 +120,13 @@ retain satisfied historical dependencies.
   - Added 17 held-reservation scenarios for failed reads and writes before and after provider dispatch.
   - Failed recovery preserves financial resources, attempts, and reconciliation cases. Restart releases only undispatched holds.
   - Dispatched work keeps its hold for reconciliation. Repeated restart has no new Ledger effect or provider call.
-  - The full funds regression passed in 115.257 seconds. The new hold recovery race suite passed in 224.140 seconds.
+  - Added seven delayed-accounting scenarios after a waiver or partial operator charge.
+  - Later evidence updates provider costs and exposure without changing the decision, balance, remainder, or tenant usage.
+  - Failed delivery preserves the earlier exposure record and pending evidence. Restart retains one exposure record and one case.
+  - Funds and rating tests passed in 139.172 seconds. The new delayed-accounting race suite passed in 54.370 seconds.
   - Go lint and format checks pass.
   - Earlier increments retain their focused regression and race results in PR 344 and its commits.
-  - The combined diagnostic has 596 uncovered statements. Unchanged source blocks retain prior counts across source edits.
+  - The combined diagnostic has 594 uncovered statements. Unchanged source blocks retain prior counts across source edits.
   - The diagnostic is not aggregate CI evidence. The required coverage gate and final stack CI remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.

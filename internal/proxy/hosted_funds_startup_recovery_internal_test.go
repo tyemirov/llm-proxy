@@ -56,6 +56,11 @@ func (fixture fundsStartupFixture) state(t *testing.T) map[string]any {
 
 func (fixture fundsStartupFixture) failStartup(t *testing.T) {
 	t.Helper()
+	failFundsApplication(t, fixture.database, fixture.management)
+}
+
+func failFundsApplication(t *testing.T, database *gormManagedTenantDatabase, management *httptest.Server) {
+	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -63,7 +68,7 @@ func (fixture fundsStartupFixture) failStartup(t *testing.T) {
 	t.Cleanup(func() { _ = listener.Close() })
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	application := &proxyApplication{router: fixture.management.Config.Handler.(*gin.Engine), database: fixture.database, now: ratingTestAcceptanceTime}
+	application := &proxyApplication{router: management.Config.Handler.(*gin.Engine), database: database, now: ratingTestAcceptanceTime}
 	stopped := make(chan error, 1)
 	go func() { stopped <- application.serve(ctx, listener) }()
 	select {
@@ -99,7 +104,19 @@ func (fixture fundsStartupFixture) assertPending(t *testing.T, before map[string
 
 func (fixture fundsStartupFixture) restart(t *testing.T) {
 	t.Helper()
-	database := openJournalTransactionInstance(t, fixture.database)
+	restartFundsApplication(t, fixture.database, fixture.management)
+	var pending int64
+	if err := fixture.database.database.Model(&managedJournalDeliveryRecord{}).Where("delivered_at IS NULL").Count(&pending).Error; err != nil || pending != 0 {
+		t.Fatalf("delivery not acknowledged: pending=%d error=%v", pending, err)
+	}
+	if fixture.calls.Load() != 1 {
+		t.Fatalf("recovery repeated provider work: calls=%d", fixture.calls.Load())
+	}
+}
+
+func restartFundsApplication(t *testing.T, retained *gormManagedTenantDatabase, management *httptest.Server) {
+	t.Helper()
+	database := openJournalTransactionInstance(t, retained)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -107,7 +124,7 @@ func (fixture fundsStartupFixture) restart(t *testing.T) {
 	t.Cleanup(func() { _ = listener.Close() })
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	application := &proxyApplication{router: fixture.management.Config.Handler.(*gin.Engine), database: database, now: ratingTestAcceptanceTime}
+	application := &proxyApplication{router: management.Config.Handler.(*gin.Engine), database: database, now: ratingTestAcceptanceTime}
 	stopped := make(chan error, 1)
 	go func() { stopped <- application.serve(ctx, listener) }()
 	client := &http.Client{Timeout: 5 * time.Second}
@@ -127,13 +144,6 @@ func (fixture fundsStartupFixture) restart(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("recovered service did not stop")
-	}
-	var pending int64
-	if err := fixture.database.database.Model(&managedJournalDeliveryRecord{}).Where("delivered_at IS NULL").Count(&pending).Error; err != nil || pending != 0 {
-		t.Fatalf("delivery not acknowledged: pending=%d error=%v", pending, err)
-	}
-	if fixture.calls.Load() != 1 {
-		t.Fatalf("recovery repeated provider work: calls=%d", fixture.calls.Load())
 	}
 }
 

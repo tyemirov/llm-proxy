@@ -964,6 +964,8 @@ Usage delivery retains positive exposure with a `platform_exposure` reconciliati
 A failed write leaves usage delivery pending and keeps the hold.
 Repeated delivery and recovery retain one exposure record and case for the request.
 Customer credits and financial waivers do not erase provider costs or exposure.
+Delayed accounting adds provider costs and updates exposure after an operator decision.
+It preserves the retained decision, account balance, exact remainder, and tenant usage.
 The browser journal shows the exposure case. Reservation details expose the exact amounts to the owner and operator.
 
 ### Audited Financial Resolution
