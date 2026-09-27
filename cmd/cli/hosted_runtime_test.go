@@ -23,6 +23,10 @@ func TestHostedRuntimeCLIRejectsInvalidScopesBeforeServiceStartup(t *testing.T) 
 	for _, scenario := range []struct{ name, hosted, reason string }{
 		{"empty-list", "\nhosted:\n  offerings: []\n", "explicit offering scopes are required"},
 		{"missing-list", "\nhosted: {}\n", "explicit offering scopes are required"},
+		{"scope-object", "\nhosted:\n  offerings: {provider: openai}\n", "hosted.offerings must be a sequence"},
+		{"scope-scalar", "\nhosted:\n  offerings: enabled\n", "hosted.offerings must be a sequence"},
+		{"scalar-entry", prefix + "    - openai\n", "hosted.offerings[0] must be an object"},
+		{"null-entry", prefix + "    - null\n", "hosted.offerings[0] must be an object"},
 		{"duplicate", prefix + offering + offering, "duplicate offering scope"},
 		{"duplicate-with-other-conditions", prefix + offering + strings.Replace(offering, "conditions: {}", "conditions: {service_tier: priority}", 1), "duplicate offering scope"},
 		{"unknown-service", prefix + strings.Replace(offering, "model: gpt-4.1", "model: ''", 1), "configure hosted service scope"},

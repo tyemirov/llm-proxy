@@ -76,4 +76,35 @@ func TestHostedPaymentsCLIReconcilesProviderEvidence(t *testing.T) {
 	if output.String() != first {
 		t.Fatal("provider CLI replay changed the report")
 	}
+	changedSourcePath := write("changed-invoice.csv", "period,cost\n2026-09-22,1\n")
+	for _, scenario := range []struct {
+		name, config, evidence, source, runID, message string
+	}{
+		{"missing configuration", filepath.Join(directory, "absent.yml"), evidencePath, sourcePath, "provider-cli-run", "absent.yml"},
+		{"missing normalized evidence", configPath, filepath.Join(directory, "absent.json"), sourcePath, "provider-cli-run", "open normalized provider evidence"},
+		{"missing original source", configPath, evidencePath, filepath.Join(directory, "absent.csv"), "provider-cli-run", "open original provider source"},
+		{"changed original source", configPath, evidencePath, changedSourcePath, "provider-cli-run", "provider source digest mismatch"},
+		{"invalid run identifier", configPath, evidencePath, sourcePath, "invalid run", "invalid provider reconciliation run ID"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			before := reconciliationDatabaseBytes(t, configuration.Management.DatabasePath)
+			output.Reset()
+			rootCmd.SetErr(&bytes.Buffer{})
+			err := executeRootCommand(t, "reconcile-provider-costs", "--config", scenario.config, "--run-id", scenario.runID, "--evidence", scenario.evidence, "--source", scenario.source)
+			if err == nil || !strings.Contains(err.Error(), scenario.message) {
+				t.Fatalf("rejected provider reconciliation: %v, want %q", err, scenario.message)
+			}
+			if json.Valid(output.Bytes()) || strings.Contains(output.String(), `"run_id"`) {
+				t.Fatalf("failed reconciliation published a report: %s", output.String())
+			}
+			assertReconciliationDatabaseBytes(t, configuration.Management.DatabasePath, before)
+			output.Reset()
+			if err := executeRootCommand(t, arguments...); err != nil {
+				t.Fatal(err)
+			}
+			if output.String() != first {
+				t.Fatal("failed reconciliation changed completed provider report replay")
+			}
+		})
+	}
 }

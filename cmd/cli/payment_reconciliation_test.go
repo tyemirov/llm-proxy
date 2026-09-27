@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -57,5 +58,61 @@ payments:
 	}
 	if output.String() != first {
 		t.Fatal("completed CLI replay changed its report")
+	}
+	for _, scenario := range []struct {
+		name, config, runID, message string
+	}{
+		{"missing configuration", filepath.Join(directory, "absent.yml"), "scheduled-fixture", "absent.yml"},
+		{"invalid run identifier", configPath, "invalid run", "invalid run ID"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			before := reconciliationDatabaseBytes(t, configuration.Management.DatabasePath)
+			output.Reset()
+			rootCmd.SetErr(&bytes.Buffer{})
+			err := executeRootCommand(t, "reconcile-payments", "--config", scenario.config, "--run-id", scenario.runID)
+			if err == nil || !strings.Contains(err.Error(), scenario.message) {
+				t.Fatalf("rejected reconciliation: %v, want %q", err, scenario.message)
+			}
+			if json.Valid(output.Bytes()) || strings.Contains(output.String(), `"run_id"`) {
+				t.Fatalf("failed reconciliation published a report: %s", output.String())
+			}
+			assertReconciliationDatabaseBytes(t, configuration.Management.DatabasePath, before)
+			output.Reset()
+			if err := executeRootCommand(t, arguments...); err != nil {
+				t.Fatal(err)
+			}
+			if output.String() != first {
+				t.Fatal("failed reconciliation changed completed report replay")
+			}
+		})
+	}
+}
+
+func reconciliationDatabaseBytes(t *testing.T, path string) map[string][]byte {
+	t.Helper()
+	files := make(map[string][]byte)
+	for _, suffix := range []string{"", "-wal"} {
+		contents, err := os.ReadFile(path + suffix)
+		if suffix == "-wal" && os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		files[suffix] = contents
+	}
+	return files
+}
+
+func assertReconciliationDatabaseBytes(t *testing.T, path string, before map[string][]byte) {
+	t.Helper()
+	after := reconciliationDatabaseBytes(t, path)
+	if len(before) != len(after) {
+		t.Fatal("failed reconciliation changed retained database files")
+	}
+	for suffix, original := range before {
+		if !bytes.Equal(original, after[suffix]) {
+			t.Fatalf("failed reconciliation changed database%s", suffix)
+		}
 	}
 }
