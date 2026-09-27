@@ -182,7 +182,11 @@ A desired spending budget does not establish a usage ceiling.
 
 The journal delivery transaction records one charge per attempt and observation.
 The charge, settlement effect, and delivery acknowledgment share one transaction.
-A settlement failure rolls back the charge and leaves the observation pending.
+A storage failure during settlement rolls back the charge and leaves the observation pending.
+Insufficient funds after a payment reversal produce a `settlement_insufficient_funds` reconciliation case.
+The transaction keeps the usage evidence and acknowledges its delivery.
+The reservation and account remainder stay unchanged. No settlement debit or release remains.
+The affected request requires financial resolution. Reconciliation continues, and the HTTP service stays available.
 The accepted attempt limit prevents another attempt from being prepared or dispatched.
 
 Customer usage credits use separate adjustment records. The original rating and incurred provider cost remain unchanged.
@@ -260,6 +264,9 @@ See [Paddle financial responsibilities](https://www.paddle.com/resources/paddle-
 
 Credit a funding order only after verified `transaction.completed` evidence matches its account, amount, and currency.
 Bind each transaction to one funding order before crediting the account.
+Use the latest successful payment `captured_at` as the receipt `paid_at` time.
+Make sure each capture time is not later than the transaction `updated_at` timestamp.
+The transaction contract has no `completed_at` field.
 Retain tax, Paddle fees, customer credit, and payout amounts separately.
 See [completed transactions](https://developer.paddle.com/webhooks/transactions/transaction-completed/).
 
