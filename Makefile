@@ -101,7 +101,9 @@ test-hosted-access:
 
 .PHONY: test-hosted-billing
 test-hosted-billing:
-	$(GO) test ./internal/proxy ./cmd/cli -run '^Test(Hosted|CatalogRating|CatalogService|CatalogPrice|ProviderCatalogExactAmounts|ProviderCatalogRejectsInvalidMonetaryAmounts|RootCommandRunsConfiguredProxyFromConfigFile)' -count=1
+	$(GO) test ./internal/proxy ./cmd/cli -run '^TestHostedFunds' -count=1
+	$(GO) test ./internal/proxy ./cmd/cli -run '^TestHostedPayments' -count=1
+	$(GO) test ./internal/proxy ./cmd/cli -run '^Test(Hosted|CatalogRating|CatalogService|CatalogPrice|ProviderCatalogExactAmounts|ProviderCatalogRejectsInvalidMonetaryAmounts|RootCommandRunsConfiguredProxyFromConfigFile)' -skip '^TestHosted(Funds|Payments)' -count=1
 	$(MAKE) test-hosted-clients
 	$(MAKE) test-managed-database-snapshot
 	$(MAKE) test-management-auth-blackbox BLACKBOX_TEST_ARGS='tests/blackbox/hosted-access.spec.js tests/blackbox/hosted-payments.spec.js tests/blackbox/hosted-service.spec.js'
