@@ -35,6 +35,44 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B296] (P1) Accept documented Paddle payment timestamps.
+  Evidence:
+  Completed transactions without `completed_at` remain pending with `transaction_event_mismatch`.
+  Requirements:
+  - Use successful payment captures for the receipt time.
+  - Examine webhook and API evidence without an undocumented transaction field.
+  - Make sure repeated events and database restarts produce one credit.
+  Resolution:
+  The receipt uses the latest successful `captured_at` value. The transaction `updated_at` value establishes snapshot freshness.
+  Go and browser fixtures use documented Paddle timestamps.
+  The initial HTTP test left the order pending. The corrected payment regression passed in 147.051 seconds.
+  Additional completion tests passed in 8.664 seconds.
+  Logs: `/tmp/llm-proxy-b296-before.log`, `/tmp/llm-proxy-b296-after.log`, and `/tmp/llm-proxy-b296-capture.log`.
+  Focused race checks passed in 25.096 seconds. The log is `/tmp/llm-proxy-review-focused-race.log`.
+  The broader race selection reached the default 10-minute timeout during the existing startup test matrix.
+  It reported no data race. The timeout log is `/tmp/llm-proxy-review-race.log`.
+  All 14 CI gates passed in 1338 seconds. Go statement coverage is 100.0%.
+  The CI log is `/tmp/llm-proxy-review-ci.log`.
+
+- [x] [B297] (P1) Prevent service shutdown after a payment reversal.
+  Evidence:
+  A payment reversal during request execution causes settlement to return `insufficient funds` and stops the listener.
+  Requirements:
+  - Record the deficit as a reconciliation case for the affected account.
+  - Keep the reservation, usage evidence, and account remainder.
+  - Make sure the service stays available and records stay unchanged across restarts.
+  Resolution:
+  The initial refund and chargeback tests stopped the service with `post settled charge ...: insufficient funds`.
+  Settlement now uses an atomic transaction. Insufficient funds produce a `settlement_insufficient_funds` reconciliation case.
+  The hold, usage evidence, and account remainder stay unchanged. Storage errors still propagate.
+  The HTTP regression passed in 3.927 seconds, including service availability and two database restarts.
+  Logs: `/tmp/llm-proxy-b297-before.log` and `/tmp/llm-proxy-b297-after.log`.
+  Focused race checks passed in 25.096 seconds. The log is `/tmp/llm-proxy-review-focused-race.log`.
+  The broader race selection reached the default 10-minute timeout during the existing startup test matrix.
+  It reported no data race. The timeout log is `/tmp/llm-proxy-review-race.log`.
+  All 14 CI gates passed in 1338 seconds. Go statement coverage is 100.0%.
+  The CI log is `/tmp/llm-proxy-review-ci.log`.
+
 - [x] [B295] (P1) Reject corrupt prior usage credits before a funds correction.
   Evidence:
   Public correction requests accept a retained zero credit, an invalid reason, or a missing timestamp.
