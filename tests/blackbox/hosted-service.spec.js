@@ -98,6 +98,26 @@ test('a customer funds hosted access and reads the real settled charge',async({p
     const charges=journal.getByRole('region',{name:'Itemized charges',exact:true});
     await expect(charges.locator('[data-charge-id]')).toHaveCount(1);
     await expect(charges).toContainText('Customer charge: $0.013');
+    const requestID=await journal.locator('[data-journal-request]').getAttribute('data-journal-request');
+    for(const credit of [
+      {id:'browser-partial',numerator:'3',credits:'$0.003',net:'$0.01'},
+      {id:'browser-rest',numerator:'10',credits:'$0.013',net:'$0.00'},
+    ]) {
+      const credited=await operator.request.put(root+'/requests/'+requestID+'/funds-credits/'+credit.id,{
+        headers,data:{credit:{numerator:credit.numerator,denominator:'1000'},reason:'approved_correction',evidence_reference:'controlled-browser-review'},
+      });
+      expect(credited.status(),await credited.text()).toBe(200);
+      await journal.getByRole('button',{name:'View request',exact:true}).click();
+      await expect(summary).toContainText('Credits: '+credit.credits);
+      await expect(summary.getByText('Net charge: '+credit.net,{exact:true})).toBeVisible();
+      await expect(summary).toContainText('Provider cost: $0.01');
+      await expect(summary).toContainText('Customer charge: $0.013');
+    }
+    await journal.getByRole('button',{name:'Refresh charges',exact:true}).click();
+    await expect(charges).toContainText('Customer charge: $0.013');
+    await page.getByRole('region',{name:'Prepaid balance',exact:true}).getByRole('button',{name:'Refresh balance',exact:true}).click();
+    await expect(page.locator('[data-funds-value="available_cents"]')).toHaveText('$5.00');
+    expect(stack.providerRequests).toHaveLength(callsBefore+1);
     const history=page.getByRole('region',{name:'Funding history',exact:true});
     await history.getByRole('button',{name:'Refresh payments',exact:true}).click();
     await history.getByRole('button',{name:'View receipt',exact:true}).click();

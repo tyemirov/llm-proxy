@@ -1345,7 +1345,35 @@ func TestOperationalShellScriptsDoNotUseHeredocs(testingInstance *testing.T) {
 	}
 }
 
-func TestOperationalCoverageIncludesBothTestGroupsAndExplicitClientPrompt(testingInstance *testing.T) {
+func preserveParentCoverageReport(testingInstance *testing.T) {
+	testingInstance.Helper()
+	parentReportPath := filepath.Join(testingInstance.TempDir(), "parent.coverprofile")
+	const parentReport = "mode: count\nparent.go:1.1,1.2 1 9\n"
+	parentFile, createError := os.Create(parentReportPath)
+	if createError != nil {
+		testingInstance.Fatal(createError)
+	}
+	if _, writeError := parentFile.WriteString(parentReport); writeError != nil {
+		parentFile.Close()
+		testingInstance.Fatal(writeError)
+	}
+	if closeError := parentFile.Close(); closeError != nil {
+		testingInstance.Fatal(closeError)
+	}
+	testingInstance.Setenv("COVERAGE_FILE", parentReportPath)
+	testingInstance.Cleanup(func() {
+		retainedReport, readError := os.ReadFile(parentReportPath)
+		if readError != nil {
+			testingInstance.Fatal(readError)
+		}
+		if string(retainedReport) != parentReport {
+			testingInstance.Fatalf("coverage fixture changed the parent report: %s", retainedReport)
+		}
+	})
+}
+
+func TestOperationalCoverageIncludesAllTestGroupsAndExplicitClientPrompt(testingInstance *testing.T) {
+	preserveParentCoverageReport(testingInstance)
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixtureRoot := testingInstance.TempDir()
 	coverageScriptPath := filepath.Join(fixtureRoot, operationalScriptsDirectory, "check_coverage.sh")
@@ -1362,14 +1390,16 @@ case "${command_name}" in
   test)
     coverage_profile=""
     selection=""
+    test_run=""
+    test_skip=""
     all_packages=""
     for argument in "$@"; do
       case "${argument}" in
-        -run=^TestHosted)
-          selection="hosted"
+        -run=*)
+          test_run="${argument#-run=}"
           ;;
-        -skip=^TestHosted)
-          selection="remaining"
+        -skip=*)
+          test_skip="${argument#-skip=}"
           ;;
         ./...)
           all_packages="yes"
@@ -1382,6 +1412,12 @@ case "${command_name}" in
           ;;
       esac
     done
+    case "${test_run}:${test_skip}" in
+      '^TestHostedFunds:') selection="funds" ;;
+      '^TestHostedPayments:') selection="payments" ;;
+      '^TestHosted:^TestHosted(Funds|Payments)') selection="hosted" ;;
+      ':^TestHosted') selection="remaining" ;;
+    esac
     [[ -n "${coverage_profile}" ]]
     if [[ -z "${selection}" || "${all_packages}" != "yes" ]]; then
       builtin printf 'coverage test group missing\n' >&2
@@ -1431,9 +1467,11 @@ case "${command_name}" in
         ;;
       cover)
         coverage_profile="${1#-func=}"
+        [[ "$(awk '$1 == "funds.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
+        [[ "$(awk '$1 == "payments.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
         [[ "$(awk '$1 == "hosted.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
         [[ "$(awk '$1 == "remaining.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
-        [[ "$(awk '$1 == "shared.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "2" ]]
+        [[ "$(awk '$1 == "shared.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "4" ]]
         builtin printf '%s\n' 'total: (statements) 100.0%'
         ;;
       *)
@@ -1447,7 +1485,8 @@ case "${command_name}" in
 esac
 `, 0o755)
 
-	runOperationalCommand(testingInstance, fixtureRoot, append(os.Environ(), "GO="+fakeGoPath), coverageScriptPath)
+	environment := append(os.Environ(), "GO="+fakeGoPath, "COVERAGE_FILE="+filepath.Join(fixtureRoot, "coverage.out"))
+	runOperationalCommand(testingInstance, fixtureRoot, environment, coverageScriptPath)
 }
 
 func TestOperationalProductionLiveTestUsesDefaultTenantSecretOnly(testingInstance *testing.T) {
@@ -2880,15 +2919,62 @@ func TestOperationalLiveHarnessReapsOwnedProxyChildAfterTermination(testingInsta
 		"CURL_PREFLIGHT_BLOCK_PATH="+preflightBlockPath,
 		"CURL_PREFLIGHT_BLOCK_SECONDS=2",
 	)
+	var output bytes.Buffer
+	command.Stdout, command.Stderr = &output, &output
+	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	command.WaitDelay = operationalHelpWaitDelay
 	if startError := command.Start(); startError != nil {
 		testingInstance.Fatalf("start live harness: %v", startError)
 	}
-	waitForOperationalFile(testingInstance, preflightBlockPath, operationalHelpTimeout)
+	completed := make(chan error, 1)
+	go func() { completed <- command.Wait() }()
+	finished := false
+	stop := func() {
+		_ = syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
+		if !finished {
+			<-completed
+			finished = true
+		}
+	}
+	testingInstance.Cleanup(stop)
+	deadline := time.NewTimer(operationalHelpTimeout)
+	defer deadline.Stop()
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+readiness:
+	for {
+		select {
+		case waitError := <-completed:
+			finished = true
+			testingInstance.Fatalf("live harness exited before preflight boundary: %v output=%s", waitError, output.String())
+		case <-deadline.C:
+			stop()
+			testingInstance.Fatalf("live harness did not reach preflight boundary: output=%s", output.String())
+		case <-tick.C:
+			data, readError := os.ReadFile(preflightBlockPath)
+			if readError == nil && len(data) > 0 {
+				break readiness
+			}
+			if readError != nil && !os.IsNotExist(readError) {
+				stop()
+				testingInstance.Fatalf("read live harness boundary: %v output=%s", readError, output.String())
+			}
+		}
+	}
 	if signalError := command.Process.Signal(syscall.SIGTERM); signalError != nil {
 		testingInstance.Fatalf("terminate live harness: %v", signalError)
 	}
-	if waitError := command.Wait(); waitError == nil {
-		testingInstance.Fatal("live harness succeeded after termination")
+	shutdown := time.NewTimer(operationalHelpTimeout)
+	defer shutdown.Stop()
+	select {
+	case waitError := <-completed:
+		finished = true
+		if waitError == nil || command.ProcessState.ExitCode() != 143 {
+			testingInstance.Fatalf("live harness termination: error=%v output=%s", waitError, output.String())
+		}
+	case <-shutdown.C:
+		stop()
+		testingInstance.Fatalf("live harness did not stop after termination: output=%s", output.String())
 	}
 	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
 }
