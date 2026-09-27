@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="33b7c76d3728e4f41a0398ddee26f705d8b68a517245790d0a5383d55564678d">
+    <meta name="openapi-source-sha256" content="579fb8789edddbd3b1ce9af955fa43d2408ce17152aeff615e7620e4c32cdaf9">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="33b7c76d3728e4f41a0398ddee26f705d8b68a517245790d0a5383d55564678d">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="579fb8789edddbd3b1ce9af955fa43d2408ce17152aeff615e7620e4c32cdaf9">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>33b7c76d3728e4f41a0398ddee26f705d8b68a517245790d0a5383d55564678d</code></span>
+          <span>Source SHA-256 <code>579fb8789edddbd3b1ce9af955fa43d2408ce17152aeff615e7620e4c32cdaf9</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -7298,11 +7298,23 @@ components:
           $ref: &#39;#/components/schemas/PublicPriceRate&#39;
         customer_rate:
           $ref: &#39;#/components/schemas/ExactMoney&#39;
+    AcceptedPriceOrigin:
+      type: object
+      additionalProperties: false
+      required: [provider, model, operation, source, last_verified]
+      properties:
+        provider: {type: string, minLength: 1}
+        model: {type: string, minLength: 1, maxLength: 128}
+        operation: {type: string, enum: [text, image_generation, image_editing]}
+        source: {type: string, format: uri}
+        last_verified: {type: string, format: date}
     AcceptedPriceComponent:
       type: object
       additionalProperties: false
       required: [dimension, additional_dimension, rates]
       properties:
+        origin:
+          $ref: &#39;#/components/schemas/AcceptedPriceOrigin&#39;
         dimension: {type: string}
         additional_dimension: {type: string}
         rates:
