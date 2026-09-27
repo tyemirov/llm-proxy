@@ -35,6 +35,289 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B295] (P1) Reject corrupt prior usage credits before a funds correction.
+  Evidence:
+  Public correction requests accept a retained zero credit, an invalid reason, or a missing timestamp.
+  Three integration cases returned `status=200 want=500` and created another credit.
+  The initial log is `/tmp/llm-proxy-b295-before.log`.
+  Requirements:
+  - Share retained credit validation between charge reads and correction authorization.
+  - Reject corrupt records without changes to balances, Ledger entries, receipts, or account remainders.
+  - Restore valid records and verify one correction across repeated requests and reopened databases.
+  Validation:
+  Run public credit regression, race checks, and static checks. Preserve the initial failing result.
+  Resolution:
+  Charge reads and correction authorization now share retained usage credit validation.
+  Six HTTP cases verify rejection without financial effects, restoration, and one correction across repeated requests and reopened databases.
+  Focused checks passed in 3.513 seconds. Credit regression passed in 39.615 seconds. Race checks passed in 59.435 seconds.
+  Go format and static checks passed. Logs use `/tmp/llm-proxy-b295-` as their prefix.
+  The public API and event contracts remain unchanged. F070 still requires final stack validation.
+
+- [x] [B294] (P1) Reject invalid native transcription response shapes.
+  Evidence:
+  A provider JSON array becomes HTTP 200 with `{"text":"[]"}` through the public dictation route.
+  The parser also accepts raw text and substitutes `transcript` or `output_text` for the required `text` field.
+  The initial log is `/tmp/llm-proxy-b266-dictation-boundaries-response.log`.
+  Requirements:
+  - Require a JSON object with a nonempty string `text` field for the multipart transcription protocol.
+  - Preserve provider metadata, retained failed requests, held funds, and replay without another provider call.
+  - Remove alternative response paths.
+  Validation:
+  Run public dictation regression, race checks, and static checks. Retain the initial failing result.
+  Resolution:
+  The parser now requires the canonical JSON text field and preserves provider metadata.
+  Twelve HTTP cases verify rejected responses, retained failed requests, held funds, and stable replay without another provider call.
+  Focused checks passed in 11.559 seconds. Dictation regression passed in 26.631 seconds. Race checks passed in 160.220 seconds.
+  Endpoint construction checks passed in 0.747 seconds. Go format and static checks passed.
+  Logs use `/tmp/llm-proxy-b294-` as their prefix. F070 still requires the shared final stack gate.
+
+- [ ] [B292] (P1) Define unavailable service prices inside the rating test fixture.
+  Evidence:
+  The complete Go target failed in `TestCatalogRatingUnavailableServiceRetainsItsReason` after alignment received its qualified catalog rate.
+  The test still assumes that the canonical alignment price is unavailable.
+  The reported selection has `UnavailableReason:exact_price_unavailable`, but the configured route now has an available price.
+  The initial log is `/tmp/llm-proxy-f070-current-stack-go-test.log`.
+  Progress:
+  The test now constructs an explicit unavailable alignment price and verifies its reason, source, and date.
+  Rating regression passed in 30.337 seconds. Go format and static checks passed.
+  Production pricing remains unchanged. The shared final stack gate remains open.
+  Requirements:
+  - Give the unavailable-price scenario an explicit controlled price and reason before catalog construction.
+  - Verify reason, source, and verification date through the public catalog API.
+  - Keep the qualified alignment rate unchanged.
+  Validation:
+  Run catalog rating regression and static checks before the shared final stack gate.
+
+- [ ] [B293] (P1) Isolate coverage contract output from the parent coverage report.
+  Evidence:
+  The coverage script fixture inherits `COVERAGE_FILE` from the parent process.
+  The complete Go target left synthetic `funds.go`, `fake.go`, and `shared.go` blocks in its requested report after another test failed.
+  The fixture output is `/tmp/llm-proxy-f070-current-stack.coverprofile`.
+  Progress:
+  A retained parent report reproduced the overwrite through the coverage script and two frontend setup scenarios.
+  Both fixtures now set their own report path. Their checks verify that the parent report remains unchanged.
+  Coverage, frontend setup, and CI runner checks passed in 0.970, 4.698, and 2.212 seconds.
+  Go format and static checks passed. The shared final stack gate remains open.
+  Initial logs are `/tmp/llm-proxy-b293-coverage-before.log` and `/tmp/llm-proxy-b293-frontend-before.log`.
+  Requirements:
+  - Keep coverage and frontend setup fixture output inside each temporary directory.
+  - Verify that an inherited report path retains its original contents.
+  - Keep all coverage groups, executable probes, and coverage requirements unchanged.
+  Validation:
+  Run the coverage contract target and static checks before the shared final stack gate.
+
+- [ ] [B291] (P1) Remove inapplicable cache measurements from direct Images usage.
+  Evidence:
+  Complete direct Images measurements retain unknown cache quantities and report incomplete usage.
+  The current OpenAI image guide states that cached input pricing applies only to the Responses image tool.
+  Direct Images requests, including edits, do not use that pricing contract.
+  HTTP generation and editing tests reproduce the incorrect unknown usage state.
+  The initial log is `/tmp/llm-proxy-f070-direct-image-cache-before.log`.
+  Progress:
+  The direct Images meter now omits the inapplicable cache quantities and uses revision `openai_images:2`.
+  Complete native usage reports complete usage. Missing and invalid native counts remain unknown.
+  Combined image, media worker, and financial regression passed in 30.592 seconds.
+  Direct Images usage and financial race checks passed in 133.448 seconds. Go format and static checks passed.
+  B291 remains open for the shared final stack gate.
+  Requirements:
+  - Remove the inapplicable cache quantities from the direct Images meter.
+  - Keep missing and invalid native token measurements unknown.
+  - Keep unknown cache quantities for the Responses image tool.
+  - Verify generation, editing, publication failures, replay, and exact financial effects.
+  Validation:
+  Run image and funds regression, race checks, static checks, and the shared final stack gate.
+
+- [ ] [B290] (P1) Keep dispatched media recovery under the media worker.
+  Evidence:
+  Funded alignment retained its output receipt and released its worker claim during shutdown.
+  Startup funds reconciliation changed the executing journal request to uncertain before the media worker resumed it.
+  The new worker then failed with `usage_journal_claim_lost`. The operation stayed running without another usage read.
+  The public runtime test is `TestHostedAlignmentPendingUsageSurvivesShutdown`.
+  The diagnostic log is `/tmp/llm-proxy-f070-alignment-shutdown-diagnostic.log`.
+  Progress:
+  Funds reconciliation now leaves dispatched media requests under the media worker.
+  The reservation and journal remain available for recovery through the retained receipt.
+  Corrected funded alignment and shutdown tests passed in 3.935 seconds.
+  All 27 alignment financial cases passed in 30.381 seconds. Complete funds regression passed in 166.568 seconds.
+  Expanded financial and catalog race checks passed in 159.478 seconds, including stable settlement after two further restarts.
+  Go format and static checks passed. B290 remains open for the shared final stack gate.
+  Requirements:
+  - Keep dispatched media requests under the existing media worker until the worker records an outcome.
+  - Keep Ledger funds reserved while media recovery remains active.
+  - Keep expiry of undispatched reservations and terminal financial reconciliation unchanged.
+  - Verify restart, exact settlement, and replay without another paid submission.
+  Validation:
+  Run funded runtime recovery, financial regression, race checks, and the shared final stack gate.
+
+- [ ] [B289] (P1) Stop hosted polling retries after a financial boundary failure.
+  Evidence:
+  A provider status response changed the identity retained by its original dispatch.
+  The funded HTTP request returned `504 request_timeout` instead of `409 usage_journal_conflict` after repeated provider polls.
+  Failed polling authorization also returned HTTP 504 instead of the storage failure response.
+  The initial log is `/tmp/llm-proxy-b266-text-boundaries.log`.
+  The diagnostic stack shows retries in `PerformHTTPRequest` and `performResponsesRequest`.
+  The hosted billing contract prohibits another provider call after an identity conflict.
+  Progress:
+  Local execution boundary errors now retain their classification through both retry layers.
+  The correction keeps provider transport retries for read-only status requests.
+  The isolated initial cases returned HTTP 504 instead of HTTP 502 and HTTP 409.
+  Normal polling and transport recovery passed before the correction in 2.519 seconds.
+  Corrected regression passed in 4.776 seconds. All six new cases passed race checks in 69.303 seconds.
+  Text, dictation, recovery, and provider error regression passed in 80.936 seconds.
+  OpenAI lifecycle regression passed in 19.074 seconds. Additional boundary regression passed in 4.090 seconds.
+  Go format and static checks passed. B289 remains open until the shared final stack gate passes.
+  Requirements:
+  - Distinguish local financial boundary errors from provider transport errors.
+  - Stop every retry layer after a local financial boundary error, with the original error classification intact.
+  - Keep existing retry behavior for provider transport failures and supported read-only status requests.
+  - Keep the original provider identity, financial hold, and journal evidence unchanged after rejection.
+  - Verify recovery and replay without another paid dispatch.
+  Validation:
+  - Exercise failed polling authorization and changed provider identities through authenticated funded HTTP requests.
+  - Verify normal polling and a transient provider transport failure through the same public entry point.
+  - Run focused regression, race checks, and the final stack gate.
+
+- [ ] [B288] (P1) Reject resolution receipts that disagree with their settlement.
+  Evidence:
+  A saved resolution amount changed from `3/200` to `999/200` while its settlement remained unchanged.
+  The authenticated GET returned HTTP 200 with `999/200` and one settled cent. The test expected HTTP 500.
+  The initial log is `/tmp/llm-proxy-b288-resolution-initial.log`.
+  Requirements:
+  - Validate the saved resolution and settlement together at the database boundary.
+  - Reject invalid amounts and inconsistent cent effects without a partial financial response.
+  - Keep receipts, Ledger entries, funds, and account remainders unchanged after a rejected read.
+  - Permit reads and idempotent replay after the original evidence is restored.
+  Progress:
+  All 13 invalid receipt cases reproduced HTTP 200 before the database-boundary correction.
+  The corrected regression passed in 21.629 seconds. The corruption matrix passed race checks in 59.440 seconds.
+  The first corrected cent-effect assertion compared intentional corruption with the original account summary.
+  It now compares state before and after the rejected read, then verifies original values after restoration.
+  Corrected stack CI passed all four Go groups, then failed with `coverage total 98.7%, want 100.0%`.
+  B266 retains the coverage correction. B288 remains open until the complete validation gate passes.
+  Validation:
+  Use authenticated HTTP, controlled database corruption, restart, and financial snapshots.
+  Complete the financial regression and final stack validation before closure.
+
+- [x] [B287] (P1) Complete hosted billing acceptance within each package timeout.
+  Evidence:
+  `make test-hosted-billing` failed with `panic: test timed out after 10m0s` and `internal/proxy 600.625s`.
+  The active speech test ran for five seconds before the timeout. The target put every hosted Go test in one package invocation.
+  The CLI checks passed. The log is `/tmp/llm-proxy-f070-dictator-hosted-billing.log`.
+  Requirements:
+  - Divide Go acceptance into disjoint funds, payments, and remaining groups, as B285 does for coverage.
+  - Preserve every selected test and the existing default timeouts.
+  - Preserve client, database backup, and browser acceptance after the Go groups.
+  Validation:
+  The corrected complete target passed. Its three Go groups passed in 136.841, 132.132, and 353.065 seconds.
+  Client and database restoration checks passed. All four browser scenarios passed in 40.4 seconds.
+  Resolution:
+  The Make target now runs three disjoint Go groups with unchanged test selection and timeouts.
+  The billing runbook records this execution contract. No public API or event contract changed.
+  B266 and final F070 stack validation remain open.
+
+- [x] [B286] (P1) Include audited request credits in customer charge totals.
+  Evidence:
+  A public operator command credited USD 0.001 to a completed funded request.
+  The public charge summary still reported zero credits and the original net charge of USD 0.00364.
+  The browser uses these totals. Its controlled summary fixtures did not expose this missing financial read.
+  Requirements:
+  - Include audited request credits and charge-level adjustments in one exact request summary.
+  - Preserve original charges, provider costs, unresolved states, and one database snapshot.
+  - Validate retained credit effects through the existing database decoder.
+  - Preserve replay, restart, account isolation, and financial records during reads.
+  Validation:
+  - Verify partial and full credits through the public operator and customer endpoints.
+  - Verify corrupt evidence, storage failures, concurrent credits, and restored reads.
+  - Run financial regression, race checks, browser checks, Go lint, and formatting.
+  The initial failure is `/tmp/llm-proxy-b266-request-credit-summary-before-verified.log`.
+  Resolution:
+  Customer summaries now include validated request credits in one database snapshot.
+  Financial exposure retains the original usage totals and authorization limits.
+  Financial regression passed in 172.691 seconds. Race checks passed in 392.002 seconds.
+  The funded browser scenario passed in 10.4 seconds. Go lint, frontend lint, and formatting passed.
+  B286 is resolved locally. B266 and final F070 acceptance remain open.
+
+- [x] [B285] (P1) Keep complete coverage groups within the native test deadline.
+  Evidence:
+  After B284, the hosted coverage group timed out after 601.078 seconds without a test assertion failure.
+  The active result-replay test elapsed time was two seconds. The dump retained 27 goroutines.
+  The runner stops before its remaining test group and coverage merge.
+  Progress:
+  - The runner now uses four disjoint complete groups and merges all group profiles with the existing binary probes.
+  - The updated runner contract first failed with `coverage test group missing`, then passed in 2.067 seconds.
+  - Go lint and formatting passed. All three hosted groups passed in 162.280, 158.143, and 298.861 seconds.
+  - The remaining group exposed a cleanup panic in the invalid-catalog fixture. B284 owns that fixture correction.
+  - The complete profile and binary probes remain pending. Session `62984` ended with exit 2.
+  - B284 corrected the fixture. Its complete non-hosted proxy group passed in 278.047 seconds.
+  - The corrected complete runner finished. All four test groups and executable probes passed without a timeout or assertion failure.
+  - The proxy groups passed in 134.146, 129.904, 281.520, and 277.581 seconds.
+  - The complete profile has 335 uncovered statements across 21202 statements. The unchanged 100% gate failed at 98.4%.
+  - B285 is resolved locally. B266 retains coverage completion. The log is `/tmp/llm-proxy-b285-corrected-go-test.log`.
+  Requirements:
+  - Split hosted funds, hosted payments, other hosted tests, and remaining tests into disjoint complete groups.
+  - Preserve every package, test, coverage statement, and binary probe in the aggregate result.
+  - Keep the native timeout and the 100% coverage gate unchanged.
+  - Verify group selection and the complete profile merge through the runner entry point.
+  Validation:
+  - First make the runner contract test reject the incomplete group selection.
+  - Run the corrected runner contract and the complete Go component.
+  The failed run is `/tmp/llm-proxy-b284-go-test.log`.
+
+
+- [x] [B284] (P1) Release managed usage writers and owned databases during shutdown.
+  Evidence:
+  The B266 Go component timed out after 601.139 seconds before the coverage merge.
+  Its goroutine dump retained 635 managed usage writers and 1313 SQL connection openers.
+  The active speech test elapsed time was one second. The dump does not establish a deadlock in that test.
+  `Router.Close()` calls `proxyApplication.close()`, which stops only media workers.
+  `managedUsageWriter.run()` waits on a queue that has no shutdown operation.
+  Progress:
+  - A public HTTP regression reproduced premature close during an accepted usage write.
+  - Router shutdown now drains usage, closes owned storage, and returns cleanup errors. Concurrent close calls share one result.
+  - Failed construction releases owned resources. Shared fixtures close their borrowed resources at the owning boundary.
+  - The resource checks passed in 1.208 seconds. Lifecycle race checks passed in 62.925 seconds.
+  - Runtime and financial recovery regression passed in 81.132 seconds. Go lint and formatting passed.
+  - The later aggregate timeout retained 27 goroutines, including one usage writer and two SQL connection openers.
+  - The active test elapsed time was two seconds. B285 owns coverage groups that exceed the native deadline.
+  - The B285 run passed all three hosted groups, then exposed a missing shutdown dependency in the invalid-catalog fixture.
+  - The corrected fixture uses the normal store constructor and requires the specific catalog error. Its focused check passed in 0.790 seconds.
+  - The complete non-hosted proxy group passed in 278.047 seconds. Go lint and formatting passed after the fixture correction.
+  - B284 is resolved locally. Complete coverage and final stack CI remain open.
+  Requirements:
+  - Reproduce retained resources through the public router lifecycle before a production change.
+  - Stop request admission before shutdown. Complete accepted usage writes before the owned database closes.
+  - Release resources from failed construction and successful shutdown at their owning boundary.
+  - Preserve repeated close, financial evidence, and restart behavior without longer test timeouts.
+  - Close fixture-owned database instances through their shared fixture lifecycle.
+  Validation:
+  - Verify repeated HTTP service creation, usage, shutdown, and restart without retained workers or lost accepted writes.
+  - Run focused lifecycle checks before the next complete Go coverage component.
+  The diagnostic log is `/tmp/llm-proxy-b266-current-go.log`.
+  Its timeout did not produce a new complete profile. The exact effect of retained resources on elapsed time remains unconfirmed.
+
+
+- [x] [B283] (P1) Reject audited credit receipts with inconsistent financial effects.
+  Evidence:
+  Eight HTTP scenarios returned status 200 for credits that did not match their recorded cents or exact remainder transition.
+  A retained USD 0.007 credit could report USD 0.001 or two credited cents without rejection.
+  Invalid, excessive, or changed before and after remainders also passed receipt reads.
+  Requirements:
+  - Validate retained audited credits against their cent and remainder effects at the database boundary.
+  - Reuse this validation for receipt reads, replay, and later credit authorization.
+  - Preserve financial state after rejection and permit recovery after evidence restoration.
+  Validation:
+  - Verify owner and operator reads, replay, subsequent credit requests, and restart through HTTP.
+  - Run focused financial regression, race, lint, and formatting checks.
+  Initial evidence: `/tmp/llm-proxy-b266-credit-effect-before.log`.
+  Resolution:
+  One database decoder now compares the exact audited credit with its recorded cent and remainder effects.
+  Receipt reads, identical replay, and later credit authorization use this decoder.
+  Twelve new HTTP scenarios verify rejection, restoration, replay, and recovery across restart without repeated financial effects.
+  Focused checks passed in 6.273 seconds. Financial regression passed in 205.918 seconds.
+  Race checks passed in 103.461 seconds. Go lint and formatting passed.
+  No public schema, dependency, or event contract changed. B266 and complete F070 acceptance remain open.
+  Final evidence uses `/tmp/llm-proxy-b283-` as its prefix. The validated changes remain local and uncommitted.
+
 - [x] [B282] (P1) Reject refund projection amounts that disagree with retained evidence.
   Evidence:
   Stored reversal and pending amounts could disagree with the retained exact evidence without rejection.
@@ -388,11 +671,364 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   Management tests passed in 18.131 seconds. The new race suite passed in 128.605 seconds.
   Go lint and format checks pass. The public error schema is unchanged.
 
-- [ ] [B266] (P1) Restore the required coverage gate for the hosted billing stack.
+- [x] [B266] (P1) Restore the required coverage gate for the hosted billing stack.
+  Resolution:
+  All 14 final CI gates passed in 1354 seconds. Go coverage is 100.0%, with zero uncovered statements across 21267 statements.
+  All 154 frontend tests and 11 authenticated browser tests passed. Complete billing acceptance also passed, including its four browser scenarios.
+  The unchanged coverage gate now passes after public boundary tests and removal of paths that the current contract cannot reach.
+  Public API and event contracts did not change in this correction.
+  Logs: `/tmp/llm-proxy-f070-takeover-final-ci.log` and `/tmp/llm-proxy-f070-takeover-final-billing.log`.
+  Profile: `/tmp/llm-proxy-b266-takeover-final-complete.coverprofile`.
+  F070 continues with the newly selected advertised Responses image pricing.
+  Latest validation:
+  The complete Go coverage gate passes at 100.0%, with zero uncovered statements across 21267 statements.
+  Go integration, upstream race checks, Python client checks, frontend tests, and authenticated browser gates passed.
+  Profile: `/tmp/llm-proxy-b266-takeover-final-complete.coverprofile`.
+  Log: `/tmp/llm-proxy-f070-takeover-final-ci.log`.
+  Current session recovery:
+  The previous complete billing run passed, including all four browser scenarios in 39.4 seconds.
+  New acceptance tests cover interrupted text recovery, invalid payment timestamps, unusable charges, and failed tenant and media admission writes.
+  HTTP tests reject credits on unresolved charges and media prices without current, bounded costs.
+  The tests check unchanged funds and recovery without duplicate provider work or Ledger effects.
+  Closed JSON values now serialize without impossible error branches. Payment runtime construction uses validated configuration objects.
+  Worker completion uses one cancellation decision. Platform verification uses validated transport references and still rejects disabled models.
+  Database and I/O errors still propagate. The current production changes affect twenty-seven files.
+  Characterization passed in 59.696 seconds. Regression passed in 61.754 seconds. Go format and static checks passed.
+  Payment reconciliation race checks passed in 207.785 seconds. Customer credit race checks passed in 183.178 seconds.
+  The complete Go run passed all tests and probes. Its gate failed with `coverage total 99.6%, want 100.0%`.
+  The report has 81 uncovered statements across 21298 statements, in 81 blocks.
+  Log: `/tmp/llm-proxy-f070-takeover-current-go-test.log`. Profile: `/tmp/llm-proxy-f070-takeover-current.coverprofile`.
+  The current component diagnostic has zero uncovered statements across 21267 statements.
+  Profile: `/tmp/llm-proxy-b266-takeover-zero-diagnostic.coverprofile`. This diagnostic does not replace the complete gate.
+  The last financial and public registry race checks passed in 62.522 seconds. Static checks passed.
+  Final stack CI passed. Log: `/tmp/llm-proxy-f070-takeover-final-ci.log`.
+  Complete billing acceptance passed after the B266 changes. All four browser scenarios passed in 39.6 seconds.
+  Both clients, package installation, and backup restoration passed. Log: `/tmp/llm-proxy-f070-takeover-final-billing.log`.
+  Public registration now verifies both accepted routes through HTTP.
+  Raw invalid credits leave financial resources unchanged. A corrected credit settles once through database reopen and replay.
+  Missing stored search bounds prevent initial dispatch and continuation. Recovery preserves the prior financial evidence.
+  Changed stored prices cannot produce a negative resolution limit. Restored prices preserve the original response.
+  The first fixture failed because GORM changed its saved record. The corrected fixture passed all race checks.
+  Price admission and completion replay use values already validated at their entry points.
+  Stored catalog revision, account identity, and request identity checks remain covered through HTTP recovery.
+  Built-in route registration uses the trusted core. Public registry validation remains atomic.
+  Journal read errors retain their applicable boundary mappings. No public API or event contract changed.
+  New public tests cover ignored admission writes, absent financial resources, incomplete provider evidence, preview authorization, database shutdown, and retained ceilings.
+  Replay also rejects a missing accepted media record without duplicate financial or provider effects.
+  New HTTP tests cover absent identities, submission methods, overlapping result recovery, terminal file conflicts, and provider redirects.
+  Dictator transport failures preserve execution authority and one exact settlement.
+  Replacement workers reject another upload. Dictation cancellation before admission permits a fresh request with the same key.
+  Validated reversal inputs and disjoint reservation bounds no longer repeat constructor checks.
+  Catalog price references now use validated routes without repeated missing-route checks. Media and service race checks pass.
+  Native evidence construction no longer repeats provider-boundary validation of fixed outcomes and source fields.
+  Journal, image, and audio race groups passed in 62.694, 139.275, and 196.477 seconds.
+  Adapter authority checks passed in 8.477 seconds. Unresolved grants, another model, and dictation cannot use accepted text authority.
+  Funded media authority checks passed in 13.846 seconds. Another provider or credential cannot use accepted authority.
+  Empty tenant-owner reads prevent admission. Race checks passed in 9.285 seconds.
+  Completion meters use validated protocol choices. Text and dictation race checks passed in 90.910 seconds.
+  New checks reject unsupported dictation conditions and managed stores without shared financial transactions.
+  The explicit Meta test catalog preserves unknown usage and rejects funded admission. Production activation remains unchanged.
+  Dictation regression passed in 22.165 seconds. Refund-hold account checks passed in 7.427 seconds. Static checks passed.
+  Journal intent construction no longer repeats validation of catalog models, fixed kinds, or serialized JSON.
+  Characterization and regression passed in 14.369 and 14.714 seconds. Race checks passed in 200.802 seconds. Static checks passed.
+  New acceptance checks cover empty stored accounts, invalid reservation and journal reads, search-body failures, and reservation overflow.
+  They also cover retained dispatch, an unset clock, an empty runtime catalog, and financial signal path resolution.
+  Focused acceptance, race checks, Go format, and static checks pass. All validation handles are terminal.
+  The complete billing run passed before the latest database, rating-rule, Ledger amount, media reference, native evidence, journal intent, and meter profile refactors. All four browser scenarios passed in 41.8 seconds.
+  Log: `/tmp/llm-proxy-f070-takeover-current-billing.log`.
+  The previous complete billing run passed. Funds, payments, and broader hosted groups passed in 178.883, 143.164, and 470.105 seconds.
+  Both clients, package installation, backup restoration, and four browser scenarios passed. The browsers passed in 38.6 seconds.
+  Log: `/tmp/llm-proxy-f070-takeover-billing.log`.
+  Logs for the component checks use `/tmp/llm-proxy-b266-takeover-` as their prefix.
+  The coverage gate and final stack CI remain open. No public API or event contract changed.
+  Current payment identity increment:
+  Four cases verify checkout identifier failure, a concurrent customer binding conflict, and two retained receipt conflicts.
+  Checkout failures prevent processor dispatch. Receipt conflicts preserve the refund hold without partial observations or financial effects.
+  Restored dependencies permit recovery through reopened databases. Replay cannot repeat checkout creation, funding, or refunds.
+  Focused checks passed in 2.090 seconds. Payment regression passed in 36.655 seconds. Race checks passed in 28.263 seconds.
+  Go format and static checks passed. Production code remains unchanged.
+  The first receipt test expected `financial_state_conflict` for a changed digest. The earlier boundary returned `transaction_evidence_changed`.
+  The corrected assertion uses the existing reason. The initial log is `/tmp/llm-proxy-b266-payment-identity-focused.log`.
+  The diagnostic has 153 uncovered statements across 21310 statements, in 152 blocks.
+  Profile: `/tmp/llm-proxy-b266-payment-identity-diagnostic.coverprofile`. Complete validation remains open.
+  Logs use `/tmp/llm-proxy-b266-payment-identity-` as their prefix.
+  Current refund increment:
+  Two cases fail Ledger account reads after hold release and after the refund debit.
+  The tests observe Ledger writes before the failure. Rollback preserves public financial resources and the pending event.
+  Recovery through a reopened database applies one refund. Event replay cannot repeat its financial effects.
+  Focused checks passed in 1.339 seconds. Payment adjustment regression passed in 40.007 seconds. Race checks passed in 14.773 seconds.
+  Go format and static checks passed. Production code remains unchanged.
+  The diagnostic has 156 uncovered statements across 21310 statements, in 155 blocks.
+  Profile: `/tmp/llm-proxy-b266-refund-late-reads-diagnostic.coverprofile`. Complete validation remains open.
+  Logs use `/tmp/llm-proxy-b266-refund-late-reads-` as their prefix.
+  Current identifier increment:
+  Two cases fail random reads before dispatch and before terminal evidence creation through the real media worker.
+  The first failure prevents provider work. Recovery releases its unused hold.
+  The second failure rolls back the terminal transaction. Recovery retains the uncertain hold without another provider call.
+  Both cases passed in 2.323 seconds. Media recovery regression passed in 28.227 seconds. Race checks passed in 26.869 seconds.
+  Go format and static checks passed. Production code remains unchanged.
+  The initial test expected zero media usage deliveries after a completed dispatch failure and reported `records=1`.
+  The corrected assertion requires the legitimate failure record without financial observations or settlements.
+  The diagnostic has 157 uncovered statements across 21310 statements, in 156 blocks.
+  Profile: `/tmp/llm-proxy-b266-media-entropy-diagnostic.coverprofile`. Complete validation remains open.
+  Logs use `/tmp/llm-proxy-b266-media-entropy-` as their prefix.
+  Current dispatch increment:
+  Three cases verify the journal read inside the provider dispatch guard through a funded HTTP operation and real worker.
+  A failed read, absent record, or different owner prevents provider calls and preserves reserved funds without outputs or debits.
+  Recovery through reopened databases and HTTP replay cannot repeat the operation or its financial effects.
+  Focused checks passed in 2.879 seconds. Media authority regression passed in 12.731 seconds. Race checks passed in 36.816 seconds.
+  Go format and static checks passed. Production code remains unchanged.
+  The diagnostic has 159 uncovered statements across 21310 statements, in 158 blocks.
+  Profile: `/tmp/llm-proxy-b266-media-dispatch-authority-diagnostic.coverprofile`. Complete validation remains open.
+  Logs use `/tmp/llm-proxy-b266-media-dispatch-authority-` as their prefix.
+  Current amount refactor:
+  Credit commands now retain their validated exact amount through authorization and cent calculation.
+  Database reads still validate stored charges, credits, and account remainders. Public amounts and Ledger effects remain unchanged.
+  Credit characterization passed before the refactor in 37.775 seconds. Public calculation characterization passed in 0.554 seconds.
+  Credit regression passed in 41.614 seconds. Recovery checks passed in 9.378 seconds. Catalog calculations passed in 1.575 seconds.
+  Race checks passed in 302.775 seconds. Go format and static checks passed.
+  Four production files have new coordinates: `catalog_money.go`, `hosted_funds_adjustments.go`, `hosted_funds_corrections.go`, and `hosted_rating_adjustments.go`.
+  The diagnostic replaces their old coordinates. It has 161 uncovered statements across 21310 statements, in 160 blocks.
+  Profile: `/tmp/llm-proxy-b266-credit-amount-diagnostic.coverprofile`. Complete validation remains open.
+  Logs use `/tmp/llm-proxy-b266-credit-amount-` as their prefix.
+  Current recovery increment:
+  Eleven cases verify failed startup with retained charges and credits before settlement.
+  Corrupt records and failed credit or Ledger account reads preserve holds, Ledger entries, and exact remainders.
+  Restored records permit one settlement with the existing credit across repeated application starts.
+  Focused checks passed in 5.178 seconds. Startup and financial read regression passed in 34.727 seconds.
+  Race checks passed in 73.574 seconds. Go format and static checks passed. This increment changes tests only.
+  The diagnostic has 161 uncovered statements across 21313 statements, in 160 blocks.
+  Profile: `/tmp/llm-proxy-b266-retained-settlement-diagnostic.coverprofile`. Complete validation remains open.
+  Logs use `/tmp/llm-proxy-b266-retained-settlement-` as their prefix.
+  Latest correction:
+  B295 rejected corrupt retained usage credits before a public funds correction.
+  Six HTTP cases, broader credit regression, race checks, and static checks passed.
+  Both credit implementation files have new coverage coordinates. Earlier coordinates for these files are obsolete.
+  The updated diagnostic has 166 uncovered statements across 21313 statements, in 165 blocks.
+  Profile: `/tmp/llm-proxy-b295-diagnostic.coverprofile`. Focused profiles do not establish complete coverage.
+  Current complete result:
+  All four Go groups and executable probes passed after B294. The gate failed with `coverage total 99.2%, want 100.0%`.
+  The report has 175 uncovered statements across 21306 statements, in 174 blocks.
+  Profile: `/tmp/llm-proxy-f070-post-b294.coverprofile`. Log: `/tmp/llm-proxy-f070-post-b294-go-test.log`.
+  Complete controlled billing also passed, including both clients, backup restoration, and all four browser scenarios.
+  Latest increment:
+  Fourteen cases fail customer-credit reads and writes through the database boundary. The internal command uses the real Ledger transaction.
+  Public HTTP reads verify unchanged charges, Ledger entries, and exact account remainders without partial credit receipts.
+  Restored storage permits one credit across reopened databases and repeated commands. Original provider costs remain unchanged.
+  Focused checks passed in 8.484 seconds. Broader credit regression passed in 36.630 seconds. Race checks passed in 108.532s.
+  Go format and static checks passed. Production code remains unchanged.
+  The diagnostic has 163 uncovered statements across 21306 statements, in 162 blocks. Complete validation remains open.
+  Logs use `/tmp/llm-proxy-b266-credit-storage-` as their prefix.
+  Previous increment:
+  Five HTTP cases verify initial response-store failures before provider dispatch and stable replay after restart.
+  They preserve saved results and failed identities without charges. Recovery releases unused funds and permits a new request.
+  Focused checks passed in 4.696 seconds. Broader regression passed in 60.133 seconds. Race checks passed in 63.758 seconds.
+  Go format and static checks passed. Production code remains unchanged.
+  The diagnostic has 172 uncovered statements across 21306 statements, in 171 blocks. It does not replace complete validation.
+  Logs use `/tmp/llm-proxy-b266-result-admission-` as their prefix.
   Evidence:
   The corrected stack CI run passed all Go tests but reported `coverage total 95.3%, want 100.0%`.
   The function report identifies incomplete coverage in 288 functions across 79 files.
   Progress:
+  - Two journal helpers with test callers only now reside in test source. Production transactions and financial recovery remain unchanged.
+  - Regression passed in 80.068 seconds. Race checks passed in 222.872 seconds. Go format and static checks passed.
+  - Additional recovery and rating checks passed in 37.248 and 24.315 seconds. Old coordinates for both changed journal files were discarded.
+  - Public startup now has tests for three ignored checkout writes. Failed startup preserves funds and does not publish a checkout.
+  - Recovery creates one transaction. Replayed completion events credit the account only once.
+  - Focused checks passed in 1.965 seconds. Race checks passed in 23.686 seconds. Go format and static checks passed.
+  - The current diagnostic has 199 uncovered statements across 21317 statements, in 198 blocks. Complete aggregate validation remains open.
+  - Voice discovery rejects missing, failed, and malformed grant reads before provider requests. Changed grant revisions invalidate in-flight provider results.
+  - Restored authority permits discovery without paid work or billing evidence. Voice regression passed in 1.545 seconds.
+  - Race checks passed in 12.294 seconds. Go format and static checks passed. Production code remains unchanged in this test increment.
+  - The diagnostic now has 195 uncovered statements across 21317 statements, in 194 blocks. Complete aggregate validation remains open.
+  - Four alignment tests fail storage operations during shutdown after the provider receipt exists.
+  - Each failed transaction preserves the saved operation, both worker claims, and reserved funds.
+  - Recovery uses one provider submission and produces one exact settlement. Two later restarts preserve charges and provider call counts.
+  - Complete alignment and shared-account regression passed in 42.577 seconds. Race checks passed in 56.316 seconds.
+  - Go format and static checks passed. Production code remains unchanged in this test increment.
+  - The diagnostic now has 191 uncovered statements across 21317 statements, in 190 blocks. Complete aggregate validation remains open.
+  - Three alignment receipt cases cover a failed claim lock, a failed attempt read, and an ignored receipt write.
+  - Failed receipt transactions preserve reserved funds without partial provider identity, output, or charges.
+  - Two restarts preserve the uncertain result without usage queries or another provider submission.
+  - Complete alignment regression passed in 37.148 seconds. Race checks passed in 19.217 seconds. Go format and static checks passed.
+  - Production code remains unchanged. The diagnostic now has 184 uncovered statements across 21317 statements, in 188 blocks.
+  - Provider reconciliation now adds the decoded rational provider cost without parsing its public strings again.
+  - Five corruption cases preserve rejected ratings and prevent partial imports. Restored ratings permit exact reconciliation and stable replay.
+  - Characterization passed in 8.461 seconds before the refactor. Regression passed in 9.011 seconds, and race checks in 118.794 seconds.
+  - Financial signal checks and backup restoration passed. Go format and static checks passed.
+  - The diagnostic replaces old provider comparison coordinates. It has 187 uncovered statements across 21314 statements, in 186 blocks.
+  - Creation intent encoding now accepts only the platform connection and grant request types. Canonical bytes and receipt identity remain unchanged.
+  - Characterization passed before the refactor. Regression passed in 6.762 seconds. Race checks passed in 83.724 seconds.
+  - Go format and static checks passed. The diagnostic replaces old coordinates for both changed files.
+  - The diagnostic has 186 uncovered statements across 21312 statements, in 185 blocks. Complete aggregate validation remains open.
+  - Four payment cases now ignore account locks and order updates during cancellation and verified completion.
+  - Failed transitions preserve funds without partial observations, receipts, or Ledger entries. Order conflicts retain the event for reconciliation.
+  - Recovery applies cancellation without a credit, or completion with one 500-cent credit. Restart and event replay preserve the financial effects.
+  - Focused checks passed in 2.594 seconds. Broader regression passed in 27.850 seconds, and race checks in 32.307 seconds.
+  - Go format and static checks passed. Production code remains unchanged in this test increment.
+  - The diagnostic has 182 uncovered statements across 21312 statements, in 181 blocks. Complete aggregate validation remains open.
+  - Seven Dictator stream cases fail upload grant reads and download claim locks through the database boundary.
+  - Upload failures prevent provider job submission. Download failures preserve the exact provider cost already recorded.
+  - Both failures retain reserved funds without public output or a customer debit. Reconciliation and HTTP replay cannot repeat provider submission.
+  - Focused checks passed in 4.737 seconds. Broader regression passed in 72.019 seconds, and race checks in 58.640 seconds.
+  - Go format and static checks passed. Production code remains unchanged in this test increment.
+  - The diagnostic has 179 uncovered statements across 21312 statements, in 178 blocks. Complete aggregate validation remains open.
+  - Five financial boundary cases reject unusable Ledger identifiers and unencodable retained timestamps.
+  - Failed balance reads preserve funds. Failed provider imports preserve charges without partial source records or reports.
+  - Restored values permit stable reads and exact comparison. Restart and replay preserve the financial resources.
+  - Focused checks passed in 2.187 seconds. Broader regression passed in 18.373 seconds, and race checks in 16.072 seconds.
+  - Go format and static checks passed. Production code remains unchanged in this test increment.
+  - The diagnostic has 177 uncovered statements across 21312 statements, in 176 blocks. Complete aggregate validation remains open.
+  - Catalog dictation tests reject empty uploads without accepted requests, financial changes, or provider calls. Valid uploads can reuse rejected keys.
+  - B294 corrects invalid native responses. Twelve HTTP cases preserve failed requests, held funds, and stable replay after two restarts.
+  - Focused checks passed in 11.559 seconds. Regression passed in 26.631 seconds, and race checks in 160.220 seconds.
+  - Go format and static checks passed. The diagnostic replaces old transcription parser coordinates with fresh results.
+  - The diagnostic has 175 uncovered statements across 21306 statements, in 174 blocks. Complete aggregate validation remains open.
+  - Both public reconciliation commands reject failed native connection access without reports, partial records, processor calls, or financial changes.
+  - Restored adapters permit successful reconciliation and stable replay. Broader invalid-input checks passed in 6.140 seconds.
+  - Race checks passed in 9.437 seconds. Go format and static checks passed.
+  - The combined diagnostic has 205 uncovered statements across 21327 statements, in 204 blocks.
+  - Fifteen provider import cases reject invalid route labels, invalid UTC timestamps, and changed sources under one completed run ID.
+  - They preserve charges, retained evidence, and original replay. Focused checks passed in 2.779 seconds, and broader race checks in 112.686 seconds.
+  - Payment completion and refund tests reject invalid UTC evidence without financial effects, then recover exactly once after valid evidence arrives.
+  - Focused payment checks passed in 1.066 seconds. Broader regression passed in 15.544 seconds, and race checks in 15.038 seconds.
+  - Provider import UTC race checks passed in 7.270 seconds. Go format and static checks passed.
+  - Production code remains unchanged. The combined diagnostic has 207 uncovered statements across 21327 statements, in 206 blocks.
+  - The latest complete billing target passed all hosted groups, both clients, and backup restoration.
+  - All four browser scenarios passed in 40.4 seconds. The log is `/tmp/llm-proxy-f070-final-controlled-billing.log`.
+  - Public `Serve` now has funded HTTP acceptance for two startup and SIGTERM shutdown cycles.
+  - Each cycle closes its listener and preserves funds, receipts, and payment creation count.
+  - Focused checks passed in 0.994 seconds. Five race runs passed in 39.359 seconds. Go format and static checks passed.
+  - Financial signal checks reject unusable paths without partial reports or financial writes. Absolute database paths remain readable.
+  - Signal regression passed in 4.355 seconds. Race checks passed in 47.885 seconds. Go format and static checks passed.
+  - The real startup entry point rejects failed assignment constraint reads without changes to funded accounts, receipts, or schema.
+  - Two failed starts and two successful recovery starts preserve the financial resources.
+  - Startup regression passed in 3.198 seconds. The new case passed race checks in 10.070 seconds. Go format and static checks passed.
+  - Five observation transaction cases now cover failed or ignored locks, a failed claim read, and a failed unknown-usage case write.
+  - Funded HTTP requests retain their reservations without partial charges. Recovery does not repeat provider work.
+  - An ignored delivery lock preserves pending accounting through two failed starts and permits exactly one settlement after recovery.
+  - Focused checks passed in 6.344 seconds. Race checks passed in 86.353 seconds. Go format and static checks passed.
+  - The focused profile covers seven previously uncovered error returns. Production code remains unchanged.
+  - The latest complete Go run passed all four test groups and executable probes.
+  - Its gate failed with `coverage total 99.0%, want 100.0%`. The report has 222 uncovered statements across 21327 statements.
+  - The current report is `coverage.out`. Its log is `/tmp/llm-proxy-f070-acceptance-go-test.log`.
+  - Public rating tests now reject incompatible compound bounds, unavailable lower price tiers, and unconstructed snapshots without monetary effects.
+  - Focused checks passed in 0.845 seconds. Complete catalog rating race checks passed in 20.320 seconds.
+  - Go format and static checks passed. These tests cover exported boundaries without changes to production code.
+  - Three public reconciliation cases now cover failed reads after the account lock and an ignored lock update.
+  - Each case keeps financial resources and its incomplete checkpoint unchanged, then resumes the same run with stable replay.
+  - Focused checks passed in 1.594 seconds, broader regression in 15.101 seconds, and race checks in 17.203 seconds.
+  - Go format and static checks passed. Production code remains unchanged in this increment.
+  - Normal HTTP tests now cover two tenants with one billing account, concurrent reservations, tenant-scoped retries, and exact settlement.
+  - Both cases passed in 6.497 seconds. Race checks passed in 20.194 seconds. Go format and static checks passed.
+  - Three charges keep the exact shared remainder after two restarts without more provider work.
+  - The first fixture lacked capacity for its new provider URL. Its current origin declarations correct that fixture error.
+  - Ledger credits now accept typed metadata. One encoder accepts only closed string fields and supplies valid JSON.
+  - Characterization passed in 91.463 seconds, regression in 93.817 seconds, and race checks in 76.542 seconds.
+  - Go format and static checks passed. Shared Ledger transactions, encoded metadata, and public contracts remain unchanged.
+  - The resumed Go run passed all four proxy groups but failed in the operational harness termination test before coverage aggregation.
+  - Its failure was `timed out waiting for operational file: .../preflight-blocked`. That run did not produce current coverage.
+  - The same target passed separately, then passed five more times. The original failure cause remains unknown.
+  - The termination test now captures child output, reports early exit, and stops its owned process group on failure.
+  - Its timeout remains unchanged. Cleanup checks passed in 3.534 seconds, and race checks passed in 4.137 seconds.
+  - Go format and static checks passed. The next complete Go run passed all test groups and executable probes.
+  - Its coverage gate failed at 98.9%, with 232 uncovered statements across 21334 statements, in 231 blocks.
+  - That prior report is saved at `/tmp/llm-proxy-b266-before-metadata.coverprofile`. Its log is `/tmp/llm-proxy-f070-resumed-go-test-diagnostic.log`.
+  - Complete controlled billing passed all Go groups, clients, and backup restoration. Four browser tests passed in 39.2 seconds.
+  - Alignment HTTP tests now cover failed observation writes, failed credential reads, oversized usage responses, and two authenticated customers.
+  - Failures keep funds unchanged. Recovery and two restarts do not cause more provider work or financial effects.
+  - Alignment and service regression passed in 40.833 seconds. Race checks passed in 235.744 seconds.
+  - Two closed JSON encoders no longer have unreachable serialization failures. External read and journal-write errors remain unchanged.
+  - Characterization passed before the refactor. Regression passed in 12.483 seconds, and race checks passed in 161.573 seconds.
+  - Go format and static checks passed after the refactor. No public schema or event contract changed.
+  - The previous complete Go target passed all groups and probes, then failed with `coverage total 98.9%, want 100.0%`.
+  - Its report had 237 uncovered statements across 21333 statements, in 236 blocks. The temporary report is no longer available.
+  - Six runtime cases verify occupied ports, listener failures, and cancellation during funds, checkout, and payment-event reads.
+  - Each case preserves funded accounts and receipts, closes owned resources, and verifies recovery through two fresh service starts.
+  - The occupied-port fixture now uses the same wildcard address as `Serve`. The initial different address family permitted startup.
+  - Focused checks passed in 6.463 seconds. Race checks passed in 50.299 seconds, and related regression passed in 39.241 seconds.
+  - Go format and static checks passed. No production code or public contract changed in this increment.
+  - The complete Go target stopped at B292 before coverage aggregation. B293 also corrected fixture writes into its requested report.
+  - A new complete target must establish current coverage. The earlier requested report contains fixture data and is invalid.
+  - Twelve funded HTTP cases reject mismatched saved result identities without changes to files, journal records, funds, or charges.
+  - Result-read, status-read, and expiry-delete failures keep financial evidence unchanged. Restored dependencies permit recovery or expiry after restart.
+  - Public `Serve` rejects two failed recovery reads through fresh database connections without another provider call.
+  - Result and startup regression passed in 45.133 seconds. The public startup case passed in 1.529 seconds and race checks in 15.343 seconds.
+  - All seventeen result-read cases passed race checks in 206.671 seconds. Go format and static checks passed.
+  - The current diagnostic has 255 uncovered statements across 21190 statements. Production code remains unchanged in this step.
+  - Configuration now retains a private text-price scope with the resolved offering and validated conditions.
+  - Price admission no longer repeats offering lookup, condition validation, or the HTTP output-limit check.
+  - Four HTTP protocols reject negative, zero, and excessive output limits without financial effects or provider calls.
+  - Focused regression passed in 12.656 seconds. Broader regression passed in 86.536 seconds. Race checks passed in 98.168 seconds.
+  - Runtime and CLI checks passed in 58.066 and 3.142 seconds. Go format and static checks passed.
+  - Three production files have new coverage coordinates. The current diagnostic lacks CLI and several recovery counts for those files.
+  - Final stack CI must establish complete current coverage. The 100.0% requirement remains unchanged.
+  - Nine funded HTTP cases reject incomplete text prices and bounds without provider calls or partial financial records.
+  - Catalog correction permits one settlement and stable replay after restart. Production code remains unchanged.
+  - Regression passed in 5.308 seconds. Race checks passed in 75.717 seconds. Go format and static checks passed.
+  - The current diagnostic has 247 uncovered statements across 21195 statements. Complete coverage and final stack CI remain open.
+  - Two funded entropy failure cases verify retained evidence, safe recovery, and replay before and after provider dispatch.
+  - Polling checks reproduced B289. Its correction stops retries after local financial boundary failures while retaining provider transport recovery.
+  - Five routing startup cases reject database read failures without changes to funded accounts or payment receipts.
+  - Failed expiry updates keep undispatched holds and journal records unchanged. Recovery releases the hold and rejects the paused worker before dispatch.
+  - Expiry regression passed in 1.096 seconds. Race checks passed in 9.804 seconds. Go format and static checks passed.
+  - A malformed retained grant scope also rejects startup. Each case verifies repeated rejection and two successful starts after recovery.
+  - Authenticated HTTP rejects an absent hosted profile without partial data or private errors and keeps all financial resources unchanged.
+  - Startup regression passed in 3.358 seconds. Profile regression passed in 1.367 seconds.
+  - All seven cases passed race checks in 53.002 seconds. Go format and static checks passed. Production code remains unchanged.
+  - The resolution read test now injects failures at all 19 reads observed through the successful public operation.
+  - Repeated failures preserve funds, receipts, and remainders. Recovery and restart permit exactly one settlement.
+  - Regression passed in 9.242 seconds. The matrix passed race checks in 133.563 seconds before the next amount refactor.
+  - The validated resolution command now carries its parsed numeric amount into the transaction without repeated validation.
+  - Resolution regression passed in 27.879 seconds. Selected post-refactor race checks passed in 16.953 seconds.
+  - Go format and static checks passed.
+  - Four malformed CLI scope cases reject startup before database creation. Runtime and CLI checks passed.
+  - Public catalog checks reject excessive sibling cache quantities and preserve exact reservation bounds. Rating regression passed.
+  - Full CI passed all Go groups and executable probes, then failed with `coverage total 98.8%, want 100.0%`.
+  - The complete profile has 257 uncovered statements across 21192 statements: `/tmp/llm-proxy-b266-typed-stack-ci.coverprofile`.
+  - Static, protocol, upstream race, and Python checks passed. The later browser stages did not run.
+  - The diagnostic adds the routing and expiry tests over unchanged production code and has 251 uncovered statements.
+  - No validation process remains active. Complete coverage and final stack CI remain open.
+  - Funded HTTP tests cover assignment read and removal failures, invalid financial queries, and processor portal failures.
+  - Eight startup cases reject corrupt usage before settlement and preserve funds through repeated failures and recovery.
+  - Price restoration now carries its validated numeric maximum into exposure. The transaction no longer reads the same price twice.
+  - Financial characterization passed before and after the refactor. Financial and price-integrity race checks passed.
+  - B288 records the separate inconsistent resolution receipt defect.
+  - The first new CI run failed on an obsolete second price-read test. Corrected settlement regression passed in 11.368 seconds.
+  - Corrected CI passed all Go groups and executable probes, then failed with `coverage total 98.7%, want 100.0%`.
+  - Its complete profile has 284 uncovered statements across 21231 statements: `/tmp/llm-proxy-b288-ci-corrected.coverprofile`.
+  - The next refactor removes impossible encoding error branches from closed JSON types. It preserves serialization and real boundary errors.
+  - Its first build found an unused `fmt` import. That import was removed, and the corrected regression passed in 120.192 seconds.
+  - Go format and static checks passed. The refactor changes coverage coordinates in twelve production files.
+  - Three resolution HTTP cases verify missing reservation reads, corrupt retained prices, and later credit-list read failures.
+  - They preserve funds through repeated rejection, recovery, restart, and replay. All three passed in 1.998 seconds.
+  - The selected race check passed in 21.631 seconds. Final stack validation and complete coverage remain open.
+  - Seven production files have new coverage coordinates. The earlier complete profile cannot establish their current coverage.
+  - Five invariant-read cases show repeated startup rejection with the invariant name and database failure in the error.
+  - Three additional schema cases keep funded accounts and receipts unchanged after rejected startup.
+  - Seven schema-creation cases show rollback, database closure, and healthy startup after the failure is removed.
+  - Startup regression passed in 24.679 seconds. Selected startup race checks passed in 101.900 seconds.
+  - Journal HTTP tests now cover storage failures, account isolation, and pagination under the OpenAPI contract.
+  - The shared fixture uses one canonical grant identifier. Financial read regression passed in 3.389 seconds and race checks in 38.046 seconds.
+  - The resumed diagnostic has 298 uncovered statements across 21225 statements. Production code is unchanged in this step.
+  - Final stack CI failed with `coverage total 98.6%, want 100.0%` after all four Go groups and executable probes passed.
+  - Static checks, protocol acceptance, upstream race checks, and Python checks passed. The later browser stages did not run.
+  - The full profile confirms 298 uncovered statements in 290 blocks across 21225 statements: `/tmp/llm-proxy-b266-resume-ci.coverprofile`.
+  - This profile replaces the earlier diagnostics. The log is `/tmp/llm-proxy-b266-resume-ci.log`.
+  - Four additional HTTP search cases verify mixed output, missing tool types, missing actions, and absent tool identities.
+  - They preserve exact counts or explicit unknown quantities, exclude private content, and prevent repeated provider work after replay.
+  - Search regression passed in 4.818 seconds. The new cases passed with race detection in 11.090 seconds.
+  - Go lint and formatting passed. No production code or public contract changed in this increment.
+  - Four startup cases verify rejection for missing primary keys, nullable required columns, and absent check or foreign-key constraints.
+  - Rejected startup preserves funded accounts, receipts, and schema. Restored metadata permits restart with unchanged financial resources.
+  - Regression passed in 6.221 seconds. The four new cases passed with race detection in 27.508 seconds.
+  - Six Dictator financial cases reject unknown native job states without charges, artifact transfer, or repeated provider work.
+  - Those cases passed with race detection in 39.305 seconds. Final Go lint and formatting passed.
+  - The current diagnostic has 323 uncovered statements across 21225 statements. Both changed production files use current coordinates.
+  - The subsequent stack CI run passed all four Go groups, executable probes, upstream race checks, and Python checks.
+  - Its remaining failure is `coverage total 98.5%, want 100.0%`.
+  - The complete native profile has 321 uncovered statements across 21225 statements: `/tmp/llm-proxy-f070-dictator-stack-ci.coverprofile`.
+  - This complete profile supersedes the combined diagnostic. The log is `/tmp/llm-proxy-f070-dictator-stack-ci.log`.
   - Payment checks cover rejected evidence, refund history, tax-inclusive rounding, financial rollback, and unchanged receipts and balances after failure.
   - Authority checks cover atomic writes, failed reads, random-source failures, provider qualification, pagination, and concurrent creation and rotation.
   - Payment reconciliation checks cover exact differences, checkpoint recovery, concurrency, and immutable reports without new Ledger entries.
@@ -535,7 +1171,7 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Unverified events retain reconciliation reasons without credits. Valid completion and restart retain one funding credit and one refund effect.
   - A pending refund cannot hold more than the remaining payment principal. Rejection releases that hold without reversing an approved refund.
   - Focused checks passed in 3.509 seconds and race checks in 46.507 seconds. Go lint and formatting passed.
-  - No production code changed. The current diagnostic has 389 uncovered statements across 21172 statements.
+  - No production code changed. The current diagnostic has 384 uncovered statements across 21172 statements.
   - Use `/tmp/llm-proxy-b266-deferred-payments-diagnostic.coverprofile`. This diagnostic does not replace aggregate CI.
   - Added five tenant budget scenarios for failed account locks, failed limit writes, corrupt admission usage, and inconsistent credit usage.
   - Failed writes preserve limits, revisions, and funds. Invalid usage rejects admission before dispatch and rejects credits before negative totals.
@@ -655,6 +1291,18 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - The diagnostic has 339 uncovered statements across 21159 statements. Use `/tmp/llm-proxy-b266-ledger-inputs-diagnostic.coverprofile`.
   - Old coordinates for all four changed production files were discarded. The new input constructors have complete statement coverage.
   - Complete aggregate CI and F070 acceptance remain open.
+  - Added seven CLI rejection scenarios for missing configuration, missing files, invalid run identifiers, and changed provider source bytes.
+  - Failed commands emit no reconciliation report, preserve database bytes, and leave completed report replay unchanged.
+  - Payment regression passed in 146.234 seconds. CLI regression passed in 2.958 seconds. Go lint and formatting passed.
+  - Initial test assertions rejected normal Cobra usage output and compared a stale WAL snapshot across successful replays.
+  - The corrected tests permit usage text and capture database bytes immediately before each failed command. No production code changed.
+  - The complete Go component timed out after 601.139 seconds without a new merged profile. B284 records retained shutdown resources.
+  - Charge decoding now keeps validated numeric amounts through summaries, settlement, and financial exposure calculations.
+  - Public amounts, unresolved states, customer credits, and authorization limits are unchanged. Database validation remains at the boundary.
+  - HTTP characterization passed before the refactor in 20.635 seconds and after the refactor in 20.547 seconds.
+  - Financial regression passed in 177.904 seconds. Race checks passed in 292.895 seconds. Go lint and formatting passed.
+  - The diagnostic has 329 uncovered statements across 21215 statements. Use `/tmp/llm-proxy-b266-numeric-diagnostic.coverprofile`.
+  - Old coordinates for all seven changed production files were discarded. Complete aggregate CI and F070 acceptance remain open.
   Requirements:
   - Cover missing public behaviors and financial failure boundaries with the real service components.
   - Preserve the required coverage threshold and the current provider scope.
@@ -3387,7 +4035,13 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - `npm run frontend:lint` passes without type or syntax errors.
   - Final local `make ci` passes all quality and coverage gates.
 
-- [ ] [F065] (P1) Add platform connections and explicit hosted access grants.
+- [x] [F065] (P1) Add platform connections and explicit hosted access grants.
+  Resolution:
+  Development implementation and acceptance passed after the advertised Responses image changes.
+  All 14 CI gates passed with 100.0% Go coverage. Complete controlled billing acceptance also passed.
+  Evidence: `docs/hosted-billing.md`, `/tmp/llm-proxy-f070-advertised-final-ci.log`, and `/tmp/llm-proxy-f070-advertised-final-billing.log`.
+  Production activation and actual processor qualification remain separate. F087 owns the processor qualification.
+  Earlier implementation evidence and requirements:
   Goal:
   Let customers use approved provider offerings through platform credentials after account creation.
   Give each customer separate tenant access, usage attribution, and billing ownership.
@@ -3442,7 +4096,13 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Verify onboarding through the real browser and controlled provider endpoints.
   - Run `make ci` after the last application change.
 
-- [ ] [F066] (P1) {F065} Add a durable usage journal for customer billing.
+- [x] [F066] (P1) {F065} Add a durable usage journal for customer billing.
+  Resolution:
+  Development implementation and acceptance passed after the advertised Responses image changes.
+  All 14 CI gates passed with 100.0% Go coverage. Complete controlled billing acceptance also passed.
+  Evidence: `docs/hosted-billing.md`, `/tmp/llm-proxy-f070-advertised-final-ci.log`, and `/tmp/llm-proxy-f070-advertised-final-billing.log`.
+  Production activation and actual processor qualification remain separate. F087 owns the processor qualification.
+  Earlier implementation evidence and requirements:
   Goal:
   Record every hosted request and upstream attempt with enough evidence to explain its financial outcome after a restart.
   Account-owned journal reads and browser client methods are implemented in the development branch.
@@ -3460,9 +4120,14 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   Missing media meters retain unknown usage.
   The Images API adapter records exact token evidence before image validation and asset publication.
   HTTP tests cover completed streams, contradictory totals, missing quantities, evidence write failures, and delayed obsolete responses.
-  Unknown cache measurements prevent complete image usage.
+  B291 removes inapplicable cache quantities from direct Images usage. Complete native counts now establish complete usage for that surface.
   The Responses image adapter retains exact terminal response usage from JSON, polling, and streams before result publication.
-  Separate response quantities preserve cache and reasoning inclusion. Unqualified image tool counters remain unknown.
+  Separate response quantities preserve cache and reasoning inclusion.
+  A second authorized probe established exact image-tool quantities in the top-level `tool_usage.image_gen` object.
+  The meter now retains these counts and source paths through revision `openai_responses:image:2`.
+  Responses cache measurements remain unknown because the provider does not expose them in output.
+  The initial HTTP tests discarded native image-tool counts as `unsupported_meter`.
+  Corrected image and worker regression passed in 11.658 seconds. Expanded Responses and worker race checks passed in 155.616 seconds.
   Controlled HTTP tests verify failed outcomes, missing usage, replay, and evidence write failures across all three response paths.
   B250 resolved missing operator reports for media worker persistence failures.
   B251 prevents adapter recovery content from becoming journal provider identifiers.
@@ -3472,6 +4137,15 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   HTTP and gRPC tests verify private voice isolation, retained tenant voices, obsolete cursors, revocation, and separate metadata permission.
   Hosted grants and journal records now support explicit provider services without model identifiers.
   HTTP tests verify dictionary creation, audio alignment, retained identity, exact service authority, and revocation through existing adapters.
+  Alignment saves its validated output, provider trace, and request interval before result publication.
+  A replacement worker restores the output from the private receipt without another provider request.
+  HTTP tests cover failed receipt writes, failed publication, malformed stored receipts, restoration, and replay.
+  The runtime test closes the original router and verifies the downloaded output after restart.
+  Hosted alignment now reads native usage through its retained trace and request interval.
+  Empty rows remain pending. Exact native minutes become input seconds, with the native cost and request count retained as source fields.
+  Failed reads or invalid measurements leave the outcome uncertain without a charge.
+  A valid receipt permits recovery after shutdown without another paid alignment request. B290 preserves the associated journal state.
+  Funded HTTP tests verify delayed usage, exact settlement, measured zero, invalid evidence, replay, and pending usage recovery.
   The browser displays and assigns service grants at desktop and phone widths.
   Customer journal views now expose bounded attempts, exact usage observations, and safe reconciliation cases through the existing dashboard.
   HTTP tests verify account isolation, pagination, private-field omission, and unchanged journal records.
@@ -3548,7 +4222,13 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Prove journal attribution and access remain isolated across accounts and tenants.
   - Run `make ci` after the last application change.
 
-- [ ] [F067] (P1) {F066} Calculate exact provider costs and customer charges.
+- [x] [F067] (P1) {F066} Calculate exact provider costs and customer charges.
+  Resolution:
+  Development implementation and acceptance passed after the advertised Responses image changes.
+  All 14 CI gates passed with 100.0% Go coverage. Complete controlled billing acceptance also passed.
+  Evidence: `docs/hosted-billing.md`, `/tmp/llm-proxy-f070-advertised-final-ci.log`, and `/tmp/llm-proxy-f070-advertised-final-billing.log`.
+  Production activation and actual processor qualification remain separate. F087 owns the processor qualification.
+  Earlier implementation evidence and requirements:
   Goal:
   Convert measured usage into reproducible provider costs and customer charges with the price selected at request acceptance.
   Evidence:
@@ -3633,7 +4313,13 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Prove every permitted execution path stays within its declared reservation bound.
   - Run `make ci` after the last application change.
 
-- [ ] [F068] (P1) {F067} Enforce prepaid balances with atomic funds reservations.
+- [x] [F068] (P1) {F067} Enforce prepaid balances with atomic funds reservations.
+  Resolution:
+  Development implementation and acceptance passed after the advertised Responses image changes.
+  All 14 CI gates passed with 100.0% Go coverage. Complete controlled billing acceptance also passed.
+  Evidence: `docs/hosted-billing.md`, `/tmp/llm-proxy-f070-advertised-final-ci.log`, and `/tmp/llm-proxy-f070-advertised-final-billing.log`.
+  Production activation and actual processor qualification remain separate. F087 owns the processor qualification.
+  Earlier implementation evidence and requirements:
   Goal:
   Bound hosted provider spending by each customer's available funds across concurrent requests and process restarts.
   Evidence:
@@ -3706,7 +4392,13 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Verify browser balances, tenant limits, and insufficient-funds messages through real public entry points.
   - Run `make ci` after the last application change.
 
-- [ ] [F069] (P1) {F068} Add prepaid payments, receipts, and financial reconciliation.
+- [x] [F069] (P1) {F068} Add prepaid payments, receipts, and financial reconciliation.
+  Resolution:
+  Development implementation and acceptance passed after the advertised Responses image changes.
+  All 14 CI gates passed with 100.0% Go coverage. Complete controlled billing acceptance also passed.
+  Evidence: `docs/hosted-billing.md`, `/tmp/llm-proxy-f070-advertised-final-ci.log`, and `/tmp/llm-proxy-f070-advertised-final-billing.log`.
+  Production activation and actual processor qualification remain separate. F087 owns the processor qualification.
+  Earlier implementation evidence and requirements:
   Status:
   - On 2026-09-22, the operator selected Paddle. The service must obey the applicable Paddle financial policies.
   - F070 requires a USD 5 funding minimum. Customers can spend their balance down to USD 0.
@@ -3855,8 +4547,66 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Verify the complete funding and receipt flow through the real browser.
   - Run `make ci` after the last application change and record sandbox acceptance separately.
 
-- [ ] [F070] (P1) {F065,F066,F067,F068,F069} Deliver the unified prepaid hosted service.
+- [x] [F070] (P1) {F065,F066,F067,F068,F069} Deliver the unified prepaid hosted service.
+  Resolution:
+  Development implementation and acceptance passed after the advertised Responses image changes.
+  All 14 CI gates passed with 100.0% Go coverage. Complete controlled billing acceptance also passed.
+  Evidence: `docs/hosted-billing.md`, `/tmp/llm-proxy-f070-advertised-final-ci.log`, and `/tmp/llm-proxy-f070-advertised-final-billing.log`.
+  Production activation and actual processor qualification remain separate. F087 owns the processor qualification.
+  Earlier implementation evidence and requirements:
   Status:
+  - The latest operator instruction selects advertised pricing for Responses images, with the approved 30% markup.
+  - B266 is resolved. All 14 CI gates passed in 1354 seconds, with 100.0% Go coverage.
+  - All 154 frontend tests and 11 authenticated browser tests passed before the advertised Responses image implementation.
+  - Complete billing acceptance passed after B266. All four browser scenarios passed in 39.6 seconds.
+  - Log: `/tmp/llm-proxy-f070-takeover-final-billing.log`. Advertised Responses image implementation follows this result.
+  - This instruction replaces the earlier actual-discounted-cost decision for this route.
+  - Preserve unknown native cache counts. Keep the published-rate calculation distinct from actual invoice costs.
+  - Implement one snapshot and reservation for both response-model and image-tool charges. Require complete bounds before dispatch.
+  - The new session recovered the previous complete billing result. All groups, both clients, backup restoration, and four browser scenarios passed.
+  - Log: `/tmp/llm-proxy-f070-payment-identity-billing.log`. The browser scenarios passed in 39.4 seconds.
+  - B266 now has more public acceptance tests and refactors for serialization, payment construction, worker completion, and credential verification.
+  - The current component diagnostic has zero uncovered statements. Complete validation remains open.
+  - The previous complete billing run passed, including all four browser scenarios in 38.6 seconds.
+  - The last complete run passed before the database and rating-rule refactors. Log: `/tmp/llm-proxy-f070-takeover-current-billing.log`.
+  - The new complete Go run passed all tests and probes. Its coverage gate failed at 99.6%, with 81 uncovered statements.
+  - Log: `/tmp/llm-proxy-f070-takeover-current-go-test.log`. The required 100.0% gate is unchanged.
+  - Exact discounted Responses image costs, the combined reservation bound, and final stack CI remain open.
+  - Complete controlled billing passed after B294 and the earlier refactors. All four browser scenarios passed in 41.4 seconds.
+  - Funds, payments, and broader hosted checks passed in 165.318, 142.251, and 448.375 seconds.
+  - Both clients, package installation, and backup restoration passed. Log: `/tmp/llm-proxy-f070-post-b294-billing.log`.
+  - The complete Go run after B294 passed all tests and probes. Its gate failed with `coverage total 99.2%, want 100.0%`.
+  - The current complete profile has 175 uncovered statements across 21306 statements, in 174 blocks.
+  - Log: `/tmp/llm-proxy-f070-post-b294-go-test.log`. B266 and exact Responses image billing remain open.
+  - Complete controlled billing passed after the Ledger metadata refactor and the new financial boundary tests.
+  - All hosted groups, both clients, and backup restoration passed. All four browser scenarios passed in 40.4 seconds.
+  - The latest complete Go report remains 99.0%. Its coordinates precede the journal helper move. Final aggregate validation remains open.
+  - The required coverage gate, final stack CI, and exact Responses image billing remain open.
+  - The billing runbook now has the required operator launch checklist. Activation still requires the stated evidence and operator authorization.
+  - Normal service tests now cover concurrent tenants on one billing account, bounded holds, exact settlement, and two restarts.
+  - Component regression, race checks, and static checks passed. The latest complete Go run passed all tests and executable probes.
+  - Coverage is 99.0%, with 222 uncovered statements. B266 and the unchanged 100.0% gate remain open.
+  - Complete controlled billing passed after alignment isolation and the two JSON refactors. All four browser tests passed in 39.2 seconds.
+  - The target also passed all Go groups, both clients, and backup restoration. Final stack CI and exact Responses billing remain open.
+  - On 2026-09-26, the operator confirmed actual discounted provider costs as the Responses image markup basis.
+  - Missing cache measurements must remain unknown. Published standard rates cannot replace the actual discounted cost.
+  - On 2026-09-25, the operator authorized limited paid provider qualification with existing credentials.
+  - The first OpenAI Responses image report did not retain separate image-tool quantities.
+  - Its report omitted top-level `tool_usage` values. A second authorized probe established separate native image-tool quantities there.
+  - The second probe reported 18 text-input tokens and 196 image-output tokens. The stored response was deleted afterward.
+  - The Responses meter now retains these quantities. The official guide confirms that Responses cached-input counts remain absent.
+  - Two ElevenLabs alignment probes qualified native duration retrieval through the usage API's `trace_id` filter.
+  - An unrelated trace returned no rows. Distinct request traces selected distinct durations and costs at USD 0.22/hour.
+  - The immediate query returned no rows for the second probe. A later query supplied its native measurement.
+  - Both alignment responses supplied the same rounded credit header. That header cannot establish exact per-request dollar costs.
+  - Durable alignment output receipt recovery is implemented and passes HTTP regression.
+  - Delayed alignment usage retrieval now supplies exact input duration through the saved provider trace.
+  - The catalog declares USD 0.22/hour and the native ten-hour maximum. Ledger reserves USD 2.86 for one attempt.
+  - Funded HTTP tests verify delayed measurements, exact settlement, measured zero, invalid evidence, replay, and shutdown recovery.
+  - B290 keeps dispatched media recovery under the worker while Ledger preserves its reservation.
+  - All 27 alignment financial cases passed in 30.381 seconds. Complete funds regression passed in 166.568 seconds.
+  - Expanded financial and catalog race checks passed in 159.478 seconds. Go format and static checks passed.
+  - OpenAI Responses image measurements and the shared final stack gate remain open.
   - On 2026-09-22, the operator confirmed a 30% markup: `customer_price = provider_price * 1.30`.
   - The operator selected all providers and their supported operations under one shared billing contract.
   - The minimum funding amount is USD 5. Customers can spend their balance down to USD 0.
@@ -3905,6 +4655,20 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - B266 records the remaining gate failure: `coverage total 95.3%, want 100.0%`.
   - B265 rejects an incomplete Responses image cost bound before dispatch. Complete Responses billing remains required.
   - `make test-hosted-billing` passed after B265, including clients, backup restoration, and four browser scenarios in 37.1 seconds.
+  - Gateway PRs 423 through 426 are merged. Gateway v4.6.3 is published and installed.
+  - The approved Dictator publication completed for SDK v1.12.0 and GPU image `ghcr.io/tyemirov/dictator:2.0.4`.
+  - A fresh Go module cache verified the released SDK and all nine native input-usage responses.
+  - The proxy now retains exact sample counts, sample rates, and input duration through adapter revision `dictator_speech_v1:2`.
+  - Financial acceptance passed all five Dictator input operations and both subtitle modes in 46.488 seconds.
+  - Tests verify exact costs, 30% markup, fractional remainders, replay, worker restart, and rejection before unfunded dispatch.
+  - Missing or invalid measurements retain funds for reconciliation. Measured zero releases funds without a debit.
+  - Go lint and formatting passed. B287 corrected the complete billing target after its package timeout.
+  - The corrected billing target passed all Go groups, clients, database restoration, and four browser scenarios in 40.4 seconds.
+  - Separate Dictator financial, input-usage, and artifact-transfer race checks passed in 449.297, 310.707, and 63.876 seconds.
+  - Unknown native job states preserve held funds without charges or repeated dispatch. Six new cases passed race checks in 39.305 seconds.
+  - Final Go lint and formatting passed. Stack CI passed all Go groups, executable probes, upstream race checks, and Python checks.
+  - Its remaining failure is `coverage total 98.5%, want 100.0%`. B266 remains open.
+  - OpenAI Responses image measurements, B266, and final stack CI remain open.
   Goal:
   Give a customer one account, one funded balance, and immediate access to approved services without provider account setup.
   Govern implementation and development acceptance across the five connected billing capabilities.
