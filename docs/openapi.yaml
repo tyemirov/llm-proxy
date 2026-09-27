@@ -7235,11 +7235,23 @@ components:
           $ref: '#/components/schemas/PublicPriceRate'
         customer_rate:
           $ref: '#/components/schemas/ExactMoney'
+    AcceptedPriceOrigin:
+      type: object
+      additionalProperties: false
+      required: [provider, model, operation, source, last_verified]
+      properties:
+        provider: {type: string, minLength: 1}
+        model: {type: string, minLength: 1, maxLength: 128}
+        operation: {type: string, enum: [text, image_generation, image_editing]}
+        source: {type: string, format: uri}
+        last_verified: {type: string, format: date}
     AcceptedPriceComponent:
       type: object
       additionalProperties: false
       required: [dimension, additional_dimension, rates]
       properties:
+        origin:
+          $ref: '#/components/schemas/AcceptedPriceOrigin'
         dimension: {type: string}
         additional_dimension: {type: string}
         rates:

@@ -10,6 +10,12 @@ On 2026-09-22, the operator confirmed a 30% markup on provider prices.
 The operator selected all providers and their supported operations.
 The implementation must use one shared billing contract across providers.
 
+The latest operator instruction selects advertised pricing for Responses image generation and editing.
+This decision replaces the earlier actual-discounted-cost requirement for this route.
+Apply the 30% markup to the published pricing schedule and reported native quantities.
+Use standard image-input rates when the agreed schedule does not pass through cache discounts.
+Keep absent cache measurements unknown. Do not describe the advertised-rate calculation as an exact provider invoice amount.
+
 The minimum funding amount is USD 5. Customers can spend their balance down to USD 0.
 The service does not require an unspent USD 5 reserve.
 The operator selected Paddle for payments. The service must obey the applicable Paddle financial policies.
@@ -85,10 +91,15 @@ Unavailable service prices retain their declared source and reason.
 Price lookup alone does not qualify a service for hosted execution. Native metering and bounded admission remain required.
 
 Text admission uses the catalog input bound and output-token limit for each authorized attempt.
+Hosted configuration retains the resolved text offering and its validated service conditions for price admission.
+HTTP adapters validate the requested output limit before financial admission.
+Price admission uses the retained scope without repeated offering lookup or condition validation.
+
 The input bound is the smallest fixed input-token or context-token limit.
 Input tokens are part of the total context, so both limits apply.
 The output bound includes increases that a continuation can make after an empty response.
 Each cache quantity uses the input-token limit as its upper bound.
+
 Without a fixed input or context limit, admission fails. Missing output limits also prevent admission.
 Provider search requires a fixed call limit, an exact call price, and a protocol that enforces the limit.
 An exhausted attempt limit returns HTTP 409 with `usage_journal_conflict` before another provider call.
@@ -140,6 +151,8 @@ Search content has a token cost in addition to the tool call cost.
 See [OpenAI tool prices](https://developers.openai.com/api/docs/pricing).
 Model qualification must verify the native token totals and any fixed-block search charges.
 The current search acceptance tests use controlled prices and protocol responses.
+Mixed response output counts only search actions. Missing tool types, actions, or identities retain an invalid quantity without an inferred count.
+HTTP tests verify these cases, private-content exclusion, and replay without another provider call.
 Production search rates and model-specific token rules still require qualification.
 
 Media bindings use the native quantity and an explicit catalog conversion rate.
@@ -149,6 +162,7 @@ Image prices use separate input and output text and image token quantities.
 ElevenLabs `character_cost` and FAL `billable_units` require an explicit `USD/provider_unit` rate.
 Provider units have no implicit currency or duration value.
 Dictator speech can use measured output duration with a catalog time rate.
+Dictator input operations use exact decoded input duration with a per-second, per-minute, or per-hour rate.
 Missing measurements prevent settlement. An unsupported component prevents price admission.
 Controlled HTTP tests cover dictation, ElevenLabs speech, and Images charges.
 Image tests also verify duplicate delivery and usage above the accepted bound.
@@ -159,6 +173,8 @@ A missing limit, an account-dependent limit, or an incompatible unit prevents ad
 The media API returns HTTP 422 with `media_operation_unavailable` in these cases.
 Billing limits do not replace the capability limits that validate request controls.
 The retained snapshot contains all selected bounds and the authorized attempt count.
+The database adapter keeps the calculated maximum as an exact numeric amount after it checks the retained price document.
+Rating and exposure use this amount within the same transaction. Exposure does not read and decode the price a second time.
 Invalid retained prices return HTTP 500 with `usage_journal_unavailable` and prevent settlement until the original data is restored.
 These tests use fixture prices and limits. They do not qualify production prices or provider limit enforcement.
 Publish only verified provider ceilings or enforced request ceilings as billing limits.
@@ -175,6 +191,8 @@ A repeated event has no additional effect. A changed event with the same identit
 The account lock serializes concurrent credits. Total credits cannot exceed the original customer charge.
 Only a resolved charge can receive a usage credit.
 Net charge calculation validates retained amounts and keeps its result as an exact rational through settlement.
+The database decoder keeps validated numeric amounts for charge summaries and financial exposure calculations.
+These calculations reuse the amounts without parsing the public string representation again.
 The HTTP response boundary encodes this result as numerator and denominator strings.
 
 The adjustment record and its settlement callback share one transaction.
@@ -186,10 +204,16 @@ Charge responses retain `customer_charge` as the original charge.
 They also expose `customer_adjustments` and `net_customer_charge` after those credits.
 An unresolved charge has no net amount. A full credit leaves a zero net amount and retains the provider cost.
 HTTP tests verify partial and full credits, event replay, restart recovery, account isolation, settlement failure, and concurrent over-credit rejection.
+Database read and write failures roll back the credit, Ledger entries, receipt, and account remainder together.
+A retry through a reopened database applies the credit once.
 
 Each request has a charge summary across all its attempts.
 The summary reads the request, attempts, charges, and credits from one database snapshot.
 It adds exact amounts without rounding. Customer credits do not change the provider cost or original customer charge.
+The customer summary includes charge-level adjustments and audited request credits from the public `funds-credits` resource.
+Each retained request credit must pass the existing validation for exact amounts, Ledger cents, and account remainders.
+Invalid evidence or a failed credit read prevents publication of a partial customer summary.
+Financial exposure reads use the shared usage totals before later request credits. Those credits do not change the original reservation or authorization limit.
 
 The `pending` state has no final totals.
 It covers active work, unpublished results, and charges that await delivery.
@@ -340,6 +364,9 @@ An admitted text execution records provider attempts through the shared HTTP tra
 Controlled HTTP tests supply the financial authorization operation.
 Each continuation and synthesis call has its own attempt.
 Provider polling keeps the existing attempt and its private provider identifier.
+Local journal and authorization failures stop provider polling without another status request.
+The response keeps the original failure code. A provider identity conflict returns HTTP 409 instead of a timeout.
+Provider transport failures retain the existing retry policy for read-only status requests.
 File staging and cleanup do not create generation attempts.
 
 A lost response leaves an uncertain attempt and a reconciliation case.
@@ -469,7 +496,7 @@ Run `make test-hosted-runtime` for this matrix and the normal text, image, dicti
 This matrix does not establish actual supplier prices, account limits, connectivity, or invoice agreement.
 Other operations and separate live qualification remain subject to the complete F070 acceptance requirements.
 
-The rendered funded usage flow and complete provider-operation qualification remain open under F070.
+The rendered funded usage flow passed controlled browser acceptance. Complete provider-operation qualification remains open under F070.
 All existing providers and supported operations remain in scope.
 The tracked configuration omits `hosted`. Production activation still requires complete acceptance and explicit operator authorization.
 
@@ -600,10 +627,16 @@ It rejects missing or unknown fields before returning provider settings.
 Malformed documents and ciphertext for another connection or version also prevent provider calls.
 
 Provider submission requires the current worker claim and an active grant.
+The dispatch guard also requires the journal record for that worker.
+A failed read, absent record, or different owner prevents the provider call and preserves reserved funds.
+Recovery and HTTP replay preserve the uncertain result without another provider call or customer debit.
 HTTP and gRPC calls use the same dispatch guard and permit one generation per execution attempt.
 The generated Dictator SDK uses explicit roles for job submission, status, cancellation, upload, and download.
 Unknown SDK methods have no hosted execution authority.
 Artifact uploads require the active grant. Artifact streams verify worker authority during transfer.
+Controlled stream tests fail database authorization before stream creation, message transfer, and receipt reads.
+These failures retain reserved funds without public outputs or a customer debit. Retained native usage remains available for reconciliation.
+HTTP replay cannot submit the uncertain operation again after database access returns.
 
 Status reads and transfers require the current worker claim.
 Result and preview publication hold the database writer lock against claim replacement.
@@ -617,6 +650,9 @@ An absent identifier stays absent. Recovery URLs, dictionary content, and adapte
 A replacement worker recovers the accepted provider job without another submission or reservation.
 Grant revocation prevents new provider work but permits recovery through the accepted credential version.
 Unknown provider outcomes remain uncertain and require reconciliation.
+Failure to create a dispatch identifier prevents provider work. Recovery releases the unused hold.
+Failure to create terminal journal evidence rolls back the terminal transaction and preserves the hold for reconciliation.
+Neither failure creates a partial financial observation or settlement. Recovery does not repeat provider work.
 
 Provider observations and their delivery records use one transaction.
 The terminal operation and journal outcome use one transaction.
@@ -663,7 +699,37 @@ An explicit `service_calls` catalog rate in `USD/call` supplies the monetary con
 The existing adapter submits one creation call per attempt. Financial admission uses that fixed bound and the configured maximum attempt count.
 Receipt recovery restores the same observation without another provider call or another charge.
 An invalid or absent receipt leaves the outcome uncertain and does not establish a measured call.
-Other service meters can remain unknown. Complete service metering and live provider qualification remain open.
+An absent service measurement remains unknown until provider evidence establishes its quantity.
+
+Alignment now saves its normalized output, provider trace, and request interval through the existing receipt transaction.
+Receipt recovery after a failed publication restores the output without another paid request.
+Failed receipt writes leave no partial provider identity or published result.
+HTTP tests reject malformed stored receipts and permit recovery after restoration.
+Separate runtime checks verify the downloaded output and replay after restart.
+Hosted alignment reads native usage through `POST /v1/workspace/analytics/query/usage-by-product-over-time`.
+The query uses the saved request interval, with one minute on each side, and an exact `trace_id` equality filter.
+Native `total_minutes` becomes `input_audio_seconds` through exact rational arithmetic.
+The journal retains `total_minutes`, `total_cost`, and `usage_count` as numeric source fields.
+The native table must declare minutes, USD, and one request. Multiple requests or invalid measurements leave the outcome uncertain.
+Empty rows and zero-count empty buckets keep the operation pending. One request with zero duration establishes measured zero.
+
+The catalog rate is USD 0.22/hour, qualified on 2026-09-25. The customer rate includes the 30% markup.
+Admission uses the provider's 36000-second maximum and the configured attempt count.
+One attempt reserves USD 2.86 through Ledger. The proxy does not infer billed duration from output timestamps or the credit header.
+An absent trace records unknown usage. Invalid evidence creates no charge, and the funds reservation remains held.
+
+Shutdown preserves a valid output receipt for another worker and expires the current claim without a terminal journal transition.
+The funds reconciler leaves dispatched media recovery to the media worker. Ledger keeps the funds reserved during recovery.
+The worker reads usage through the retained trace and interval without another paid submission.
+Funded HTTP tests verify delayed usage, exact settlement, measured zero, malformed evidence, replay, and recovery across shutdown.
+The qualified 1.79625-second fixture costs exactly USD `5269/48000000` before the markup.
+Its customer charge is USD `68497/480000000`. Settlement preserves this fraction below the Ledger cent unit.
+
+Alignment acceptance also covers failed observation writes, failed credential reads, and oversized usage responses.
+These failures keep the reservation and prevent output publication without another provider submission.
+Two authenticated customers cannot read or cancel each other's operations, assets, or financial records.
+The isolation checks run before settlement, after settlement, and after two restarts.
+An unfunded customer cannot reuse another customer's idempotency key to obtain service.
 
 The normal HTTP test uses a controlled rate of USD 0.50 per call and verifies a USD 0.65 customer charge.
 Eight calls spend a USD 5.20 balance down to zero. Subsequent admission returns HTTP 402 without another provider call.
@@ -737,16 +803,21 @@ Artifact transfer failures do not erase this evidence. Journal write failures pr
 HTTP tests use the existing adapter and a real gRPC server with controlled native responses.
 The tests verify duration precision, unknown values, terminal states, transaction rollback, artifact loss, and request replay.
 
-Transcription, diarization, alignment, subtitle creation, and voice extraction retain unknown `input_audio_seconds` with `unsupported_meter`.
-The native job responses do not report processed input duration.
-Upload metadata, word timestamps, and job timestamps do not establish this quantity.
+Transcription, diarization, alignment, subtitle creation, and voice extraction use native measurements from published SDK v1.12.0.
+The gRPC boundary retains `input_audio_usage.sample_count` and `input_audio_usage.sample_rate_hz` as exact integer source fields.
+It divides these integers without floating-point conversion and records `input_audio_seconds` with unit `second`.
+A present measurement with zero samples establishes measured zero. An absent measurement remains `not_reported`.
+A zero sample rate produces `invalid_quantity`.
+A duration without a finite decimal representation remains `unsupported_meter`. The journal retains its source integers without rounding.
+
+Upload metadata, word timestamps, and selected output clips do not establish processed input duration.
 Voice extraction also retains `output_audio_seconds` from `sample_artifact.audio_metadata.duration_seconds`.
-This output measurement does not resolve the unknown input quantity.
-The same duration rules apply to synthesis and extracted samples.
+This output quantity remains separate from measured input. The synthesis duration rules also apply to extracted samples.
+The measurement adapter revision is `dictator_speech_v1:2`.
 
 The gRPC boundary records terminal evidence before result parsing, artifact transfer, or voice publication.
-Controlled HTTP tests cover all current Dictator audio input offerings.
-These tests verify explicit unknown usage, reported sample duration, terminal states, invalid results, failed writes, and replay.
+Controlled HTTP tests cover all current Dictator audio input offerings and both subtitle modes.
+They verify exact integers beyond floating-point precision, measured zero, absent usage, invalid rates, terminal states, failed writes, and replay.
 No duration measurement establishes a provider price or customer charge.
 
 ### Dictator Financial Acceptance
@@ -763,7 +834,17 @@ A default zero duration remains unknown and keeps the reservation.
 Invalid durations, cancellation, provider errors, and artifact loss keep funds for reconciliation.
 Usage write errors cannot produce a charge or release the reservation.
 The tests check charge summaries, balances, account remainders, and replay without another synthesis submission.
-These checks do not resolve the missing input-duration contract for other Dictator operations.
+Input financial tests cover transcription, diarization, alignment, subtitles, and voice extraction through the same HTTP and gRPC boundaries.
+They use equivalent per-second, per-minute, and per-hour rates with a ten-second input bound and a 52-cent reservation.
+A measurement of 32001 samples at 16000 Hz establishes 2.0000625 input seconds.
+The controlled rate produces a USD 0.0800025 provider cost and a USD 0.10400325 customer charge.
+Settlement debits ten cents and retains the exact USD 0.00400325 remainder.
+
+Measured zero settles without a charge. Absent, invalid, and unsupported input measurements retain the reservation.
+Input above the accepted bound, failed jobs, cancellation, and artifact loss retain funds for reconciliation.
+Failed evidence writes cannot create a charge or release the reservation.
+The tests verify replay without repeated provider work and stable settlement after the financial worker reopens the database.
+Controlled rates do not qualify production prices.
 
 ### FAL Queue Usage Evidence
 
@@ -790,30 +871,45 @@ Contradictory totals produce invalid measurements while the journal retains the 
 
 The [OpenAI Images API reference](https://developers.openai.com/api/reference/resources/images/methods/generate) defines aggregate tokens and text and image subdivisions.
 It does not establish separate cached text and image measurements.
-The image meter records these cache quantities as `unsupported_meter`.
+The [image generation guide](https://developers.openai.com/api/docs/guides/image-generation#cached-input-pricing) states that cached input pricing does not apply to direct Images requests.
+The direct Images meter omits cache quantities. Its adapter revision is `openai_images:2`.
+
 Absent documented fields remain `not_reported`. Invalid fields remain `invalid_quantity`.
-Known counts do not establish complete billable usage when required cache measurements remain unknown.
+Complete native counts establish complete direct Images usage without an inapplicable cache measurement.
 
 An evidence write failure prevents result publication and retains an uncertain operation.
 The operation exposes `usage_journal_unavailable` through the existing error representation.
 Duplicate requests retain this operation without another provider submission.
 An obsolete worker cannot record new observations or publish its delayed result.
 Controlled HTTP tests cover these boundaries with local provider responses.
-Live image meter qualification remains open.
+Direct Images provider qualification remains separate from these controlled checks.
 
 The Responses image adapter retains terminal usage from JSON, polling, and stream responses before image decoding and publication.
 The meter uses `responses_` quantity names for the response model and separate quantities for its image tool.
 Response totals include input and output tokens. Cache counters remain part of input tokens, and reasoning remains part of output tokens.
 The journal keeps exact reported values, including zero, without converting them to floating-point numbers.
 
-The [OpenAI Responses reference](https://developers.openai.com/api/reference/resources/responses/methods/create) defines response usage but no separate image tool token counters.
-Image tool quantities remain `unsupported_meter` until qualified provider evidence supplies them.
-The adapter does not interpret undeclared tool fields as measured usage.
+The [OpenAI Responses reference](https://developers.openai.com/api/reference/resources/responses/methods/create) does not describe the observed `tool_usage` field.
+Live qualification on 2026-09-25 established `tool_usage.image_gen` as the source of separate image-tool token counts.
+The qualified response reports total, input, and output counts, with text and image subdivisions.
+The adapter retains these quantities and their native source paths through revision `openai_responses:image:2`.
+The model and tool meters validate their token partitions separately. Invalid tool totals do not remove valid response-model evidence.
+An absent image-tool quantity remains `not_reported`. Invalid numeric values and contradictory totals remain `invalid_quantity`.
+
+The image generation guide states that cached image-tool input counts are absent from Responses output, although cache discounts affect billing.
+These cache quantities remain `unsupported_meter`. Neither a missing count nor the top-level `billing.payer` value establishes zero cached usage.
 Partial and queued responses do not produce usage observations.
 Failed, incomplete, and cancelled responses retain reported quantities without establishing charge eligibility.
 
 Controlled HTTP tests verify retained quantities, separate cost layers, missing usage, inconsistent totals, replay, and evidence write failures.
-Complete image cost measurement and live Responses qualification remain open.
+Exact discounted provider cost measurement still requires authoritative cache measurements.
+The operator-selected advertised schedule does not require those cache measurements for the customer price.
+Hosted admission still requires a complete price bound for both paid components.
+
+The [organization Costs API](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage/methods/costs) provides daily cost buckets.
+Its documented filters and groups include project, API key, and line item. They do not include a request identifier.
+These aggregate costs cannot establish one request's exact discounted cost when a bucket contains multiple requests.
+The existing provider reconciliation import keeps aggregate evidence separate from request settlement.
 
 ### Image Financial Acceptance
 
@@ -824,11 +920,33 @@ Settlement debits two cents, releases the reservation, and keeps the exact USD 0
 Zero usage releases funds without a debit. Missing usage keeps funds for reconciliation.
 An invalid output image keeps the known provider cost but has no final customer charge.
 
-The Responses surface has no qualified image-tool meter.
-Its response-model totals do not replace the missing image measurements.
-Hosted admission rejects this surface before dispatch because the Images snapshot does not bound the additional response-model cost.
-HTTP tests verify rejection for generation and editing with no provider calls, charges, or funds changes.
-Complete Responses image pricing and provider qualification remain open.
+Responses image admission uses one price snapshot for the image tool and the selected response model.
+Each component retains its provider, model, operation, source URL, and verification date under `origin`.
+Response-model dimensions and price components use the `responses_` prefix.
+The snapshot fixes both schedules before dispatch. Later catalog changes cannot change an accepted charge.
+
+The catalog contains the advertised standard GPT Image 2 rates per million tokens.
+Text input costs USD 2.50, image input costs USD 4, and image output costs USD 15.
+The GPT-5 rates are USD 1.25 for input, USD 0.125 for reported cached input, and USD 10 for output.
+The [OpenAI pricing page](https://developers.openai.com/api/docs/pricing) supplies these rates.
+The `provider_cost` rating field holds the amount calculated from this accepted schedule. It is not proof of an actual invoice amount.
+Image-tool cache quantities remain unknown. Standard image-input rates apply without an assumed cache discount.
+
+Admission requires fixed token ceilings for both models and an enforced image-tool call limit.
+The reservation includes the response-model passes before and after each permitted tool call.
+The default catalog contains the documented GPT-5 context and output limits. It does not invent image-tool token ceilings.
+An operator must qualify and declare these image limits before hosted admission can succeed.
+Published per-image estimates do not establish token ceilings.
+Combined schedules with request minimums or token tiers remain unavailable because the current advertised schedule has neither.
+
+Controlled funded HTTP tests cover generation and editing through JSON, polling, and stream events.
+The combined advertised cost is USD 0.00501. The 30% markup produces an exact USD 0.006513 charge.
+The controlled token ceilings require a six-cent reservation. Settlement releases it and retains the exact charge remainder.
+Zero usage releases funds. Missing usage, excess usage, and invalid output keep funds for reconciliation.
+Replay and database recovery do not duplicate provider work or financial effects.
+Incomplete prices and limits reject admission without financial changes. The same request succeeds after catalog repair.
+Invalid retained component origins fail at the database boundary without a financial change.
+Actual provider qualification remains separate from these controlled checks.
 
 The FAL queue tests use a controlled price of USD 0.02 per reported provider unit.
 A response with 2.125 units produces a USD 0.0425 provider cost and a USD 0.05525 customer charge.
@@ -839,18 +957,35 @@ Worker replacement and grant revocation preserve one submission and one settleme
 
 ### Remaining Provider Measurement Contracts
 
-On 2026-09-24, a contract review confirmed the following unresolved measurement dependencies.
+The operator authorized limited paid provider qualification on 2026-09-25.
+The following probes used existing credentials. Production activation remains separate.
 
-- The [Responses image-call schema](https://developers.openai.com/api/reference/resources/responses/methods/create) has no image-tool usage field.
-  The [image guide](https://developers.openai.com/api/docs/guides/image-generation) states that Responses requests incur mainline model costs and image generation costs.
+- One OpenAI Responses image request completed with `gpt-4.1-mini` and `gpt-image-2`, low quality, and `1024x1024` output.
+  The response supplied 1968 input tokens and 38 output tokens. Its image call supplied no separate usage or cost field.
+  The first report omitted top-level `tool_usage` and `billing` values, although it listed both field names.
+  A second authorized request preserved these fields. `tool_usage.image_gen` reported 18 text-input tokens and 196 image-output tokens.
+  Image-input and text-output counts were zero. The image-tool total was 214 tokens, separate from the response model's 2006 tokens.
+  The `billing` object contained only `payer: openai`. It supplied no dollar amount or cached-input quantity.
+  The stored response was deleted after qualification. No generated image or secret was retained.
+  The [Responses image-call schema](https://developers.openai.com/api/reference/resources/responses/methods/create) also has no image-tool usage field.
+  The [image guide](https://developers.openai.com/api/docs/guides/image-generation) identifies both response-model costs and image generation costs.
   Complete hosted admission requires one bound for both components and qualified usage for settlement.
-- The [ElevenLabs alignment response](https://elevenlabs.io/docs/api-reference/forced-alignment/create) supplies alignment timestamps and loss values, without a billed-duration field.
-  These timestamps do not establish processed audio duration. The service needs a qualified duration measurement and an applicable supplier rate.
-- The installed Dictator SDK is v1.11.0. Its input-operation responses do not report processed input duration.
-  Complete duration billing requires evidence from the provider contract before settlement.
+- One ElevenLabs alignment request completed for a synthetic clip with 28740 samples at 16000 Hz.
+  Its response supplied `character-cost: 1`. The JSON body supplied no billed duration.
+  The [usage analytics API](https://elevenlabs.io/docs/api-reference/analytics/workspace/usage) reported one `eleven_alignment_v1` request.
+  Its row contained `0.0299375` minutes and `0.00010977083333333333` USD, with charge type `stt_minute`.
+  This result matches the clip duration at USD 0.22/hour, within the reported decimal precision.
+  The [alignment overview](https://elevenlabs.io/docs/overview/capabilities/forced-alignment) gives alignment the speech-to-text rate.
+  The [API pricing page](https://elevenlabs.io/pricing/api) lists USD 0.22/hour for Scribe.
+  The rounded credit header does not establish an exact USD conversion for each request.
+  A `trace_id` equality filter selected this request. An unrelated trace returned no rows.
+  A second probe used twice the audio. Its trace selected twice the native duration and cost, with one request.
+  Both responses supplied the same rounded credit header. The second probe's usage was absent immediately and appeared in a later query.
+  Delayed native measurement retrieval and funded runtime acceptance are implemented as described under Hosted Provider Services.
 
-These dependencies remain in F070 scope. Controlled results do not establish the missing measurements.
-The review does not authorize production activation or paid provider calls.
+The advertised Responses schedule preserves absent cache measurements as unknown. Final stack validation passed after this implementation.
+The alignment probes establish native measurement retrieval. Controlled runtime tests verify its financial integration.
+The Dictator measurement dependency is resolved with published SDK v1.12.0 and the input acceptance described above.
 
 ### Hosted Dictation
 
@@ -859,6 +994,11 @@ The existing provider adapters continue to own transcription requests and respon
 Both `/dictate` and `/v1/audio/transcriptions` require one tenant-scoped `Idempotency-Key` for hosted work.
 The request intent includes the audio digest, byte count, file extension, provider, model, and operation.
 The journal does not retain the audio or transcript as financial evidence.
+
+The multipart transcription protocol requires a JSON object with a nonempty string `text` field.
+Provider metadata can accompany that field. Raw text, alternative text fields, and other JSON shapes fail with HTTP 502.
+The failed result remains available for replay across both interfaces after restart.
+Absent usage preserves the funds reservation without a customer debit. Replay does not repeat the provider request.
 
 Identical requests share one execution across both interfaces and service instances.
 Concurrent requests return HTTP `202`. Changed audio returns HTTP `409`.
@@ -916,6 +1056,11 @@ An interruption after observation retains the measured usage and an uncertain ex
 Neither state permits another paid call without reconciliation.
 The journal keeps a reconciliation case for each unresolved outcome.
 
+Initial response storage must succeed before provider dispatch.
+A directory, read, write, or saved identity failure retains a failed request without a provider call or customer charge.
+Restart releases its unused reservation. Restored storage permits a new request, but the failed identity retains its original outcome.
+HTTP tests verify repeated replay, unchanged saved results, and stable financial effects after restart.
+
 Response publication holds the database writer lock against worker replacement and startup recovery.
 The response file and its database publication receipt remain separate durable effects.
 After an interruption, recovery can repair a missing receipt from the saved result.
@@ -945,7 +1090,7 @@ These tests do not prove funds settlement, provider reconciliation, or recovery 
 
 F068 uses the shared Ledger service in the managed database transaction.
 Admission, settlement, credits, and refund holds share typed Ledger input construction.
-The adapter preserves every constructor error before it calls the Ledger service.
+The adapter reports invalid Ledger amount, reservation, and event identifiers before a service call.
 Metadata, idempotency keys, transaction ownership, and Ledger operations retain their existing contracts.
 
 Admission locks the billing account before it reads funds or creates a reservation.
@@ -977,10 +1122,16 @@ Production activation remains disabled.
 Audited financial decisions use the F068 resolution resources. Commercial charge policies and complete service acceptance remain open under F070.
 
 An audited usage credit uses the existing charge adjustment transaction and its account lock.
+Credit commands retain the exact amount validated at their input boundary.
+Authorization and cent calculation use that amount without another parse of the command.
+Database reads still validate stored charges, credits, and account remainders.
 A compensating Ledger grant restores whole cents when required.
 This supports credits for several fractional charges that shared one settled cent.
 A separate credit record links the Ledger effect to the original adjustment and request.
 Repeated adjustment identifiers cannot change funds twice.
+Charge reads and later correction authorization require valid retained usage credits.
+Each credit must have a positive amount, a valid reason, and a creation timestamp.
+Invalid records prevent another credit without changes to funds, Ledger entries, receipts, or account remainders.
 Before settlement, a credit reduces the pending charge. The settlement record retains the identifiers of those credits.
 
 Controlled tests verify fractional credits, concurrent adjustments, duplicate events, and rollback after a failed financial write.
@@ -990,6 +1141,9 @@ F069 owns payment refunds and funding reversals through Paddle.
 Hosted completion startup reconciles retained funds after journal and result recovery.
 It delivers pending funded observations and reviews held reservations in bounded batches.
 Each financial effect has one transaction. A later run resumes pending records without a process-local checkpoint.
+Invalid retained charges or credits stop settlement before funds change.
+Failed credit or Ledger account reads also preserve the hold and exact account remainder.
+Restored records permit one settlement with the existing credit across repeated application starts.
 
 The HTTP service reconciles funds before it accepts requests and then once per second.
 Its lifecycle owns the financial worker, media workers, and HTTP listener.
@@ -998,8 +1152,15 @@ Shutdown cancels active media execution and waits for media workers, adapters, a
 Interrupted media retains an uncertain outcome with `worker_shutdown`. Its funds remain held until reconciliation establishes the financial result.
 A failed startup leaves queued media and its financial records unchanged.
 
-Embedded Go callers use `BuildRouter` to obtain a `Router` and must call `Router.Close` after HTTP shutdown.
-The shared router fixtures register this cleanup before they release their test databases.
+Embedded Go callers use `BuildRouter` to obtain a `Router`.
+After HTTP shutdown, callers must call `Router.Close()` and handle its error.
+Close stops media workers, drains accepted usage writes, and closes the application-owned database.
+Concurrent and repeated close calls wait for the same cleanup and return the same error.
+Failed construction releases the resources it opened and preserves both the construction error and any cleanup error.
+
+Stores that borrow a database stop their usage writer. The database owner closes its connection separately.
+The shared router fixtures register cleanup before they release their test databases.
+Provisioned fixtures use a temporary database file, so bootstrap shutdown does not discard the tenant records.
 The constructor does not start workers before all router components initialize.
 
 A reconciliation failure stops the listener and returns the financial error to the process owner.
@@ -1021,6 +1182,10 @@ Controlled tests interrupt real service processes before dispatch, after dispatc
 The settlement interruption occurs after Ledger release and spend operations, before the caller commits the transaction.
 Restart tests verify rollback, retained holds, exact remainders, and one financial effect per accepted request.
 Two concurrent service processes share one funded balance and reject excess reservations before provider work.
+Normal HTTP acceptance also covers two tenants with separate credentials and grants on one billing account.
+Concurrent three-cent holds cannot exceed a five-cent balance. With ten cents, both tenants can reserve funds.
+The same idempotency key identifies separate requests for each tenant.
+Three settled requests keep the exact shared remainder and unchanged charges after two restarts.
 Two running service processes also settle new completed work through the shared database without restart.
 Runtime tests verify failed settlement rollback, listener closure, restart recovery, and request cancellation during shutdown.
 
@@ -1059,6 +1224,9 @@ Later credits cannot exceed the amount actually settled for that request.
 Original usage, provider costs, and charges remain unchanged.
 The financial decision does not establish missing provider evidence or close its usage cases.
 The account owner can read the financial receipt. Private operator identity and evidence references remain in the audit record.
+The database adapter checks the receipt against its settlement before it returns the financial response.
+The exact charge, settled cents, and account remainders must agree. Invalid evidence returns HTTP 500 without a partial receipt.
+These reads do not change financial records. Restoring the original evidence permits reads and idempotent replay.
 
 Use this procedure for an approved decision:
 
@@ -1080,6 +1248,9 @@ The request body contains a positive exact `credit`, a `reason`, and an `evidenc
 The account owner or an operator can read the receipt with `GET` at the same resource.
 The audit record retains the operator identity and evidence reference. Customer responses omit these private fields.
 Retained receipts require a positive credit, a valid reason code, and a creation timestamp.
+The exact credit must also match the recorded Ledger cents and before and after account remainders.
+Receipt reads, identical replay, and later credit authorization share this database validation.
+Inconsistent evidence prevents further credit effects. Restored evidence permits recovery without repeated effects.
 Corrupt receipts return HTTP 500 with `billing_account_store_failed` and no partial receipt.
 
 Each request credit has one immutable identifier. A changed repeat produces `409`.
@@ -1289,6 +1460,8 @@ The adjustment boundary separately rejects missing records, older adjustment rev
 Refund hold refresh uses the saved evidence without another processor read.
 
 Controlled HTTP tests cover cancellation, retryable failure, reordered events, concurrent workers, and failed writes.
+Ignored account locks and order updates cannot commit partial observations, receipts, or Ledger entries.
+Recovery applies one cancellation or funding credit. Restart and event replay preserve the financial effects.
 The backup fixture restores observations with payment receipts and Ledger effects.
 The browser shows a failed payment without a change to the existing balance.
 
@@ -1438,6 +1611,9 @@ The service rejects new hosted work when available funds are negative or a pendi
 This payment restriction does not replace an operator suspension.
 New funding and admission checks use available funds to complete retained refund holds.
 Controlled tests cover refund approval, rejection, concurrent processing, chargeback replay, reversal, and failed financial writes.
+Failed Ledger account reads after hold release or refund debit roll back the complete adjustment transaction.
+The original hold, receipt, order, and Ledger entries remain unchanged. The payment event stays pending for recovery.
+Restored reads permit one refund across a reopened database and event replay.
 Payment and provider reconciliation have controlled acceptance. F087 owns actual processor sandbox qualification without blocking F069 or F070 development completion.
 
 ### Audited Payment Reconciliation
@@ -1481,6 +1657,7 @@ One import selects a provider, platform connection, credential version, and half
 Optional model and operation fields restrict this scope. Empty fields include all models and operations in the selected account scope.
 The comparison includes attempts whose dispatch time is at least `period_start` and less than `period_end`.
 It uses retained ratings and does not recalculate accepted prices from the current catalog.
+The database decoder validates each retained charge. The comparison uses its decoded rational provider cost without parsing the public strings again.
 
 ```bash
 make reconcile-provider-costs \
@@ -1835,6 +2012,8 @@ Implement missing shared capabilities in their owning package instead of creatin
 A remote Ledger transaction cannot commit atomically with the LLM Proxy database.
 F068 requires request admission, reservation, and ledger effects in one database transaction.
 The published GORM store supplies this transaction boundary.
+The credit boundary accepts the shared Ledger `MetadataJSON` type.
+A closed set of string fields supplies the metadata for reservations, settlement, credits, and payment adjustments.
 Public tests check transaction recovery and rejection before unauthorized provider dispatch.
 
 ## Current Integration Boundaries
@@ -1882,10 +2061,33 @@ Native HTTP, client protocols, MCP, dictation, and media workers require the sam
 
 ## Development Acceptance
 
-Complete each child issue before F070 acceptance.
+The table shows each child issue with its implementation and selected acceptance tests.
+The tests use public interfaces with controlled dependencies. F065 through F070 development acceptance passed on 2026-09-26.
+
+| Issue | Implementation | Acceptance evidence |
+| --- | --- | --- |
+| F065 | [Accounts](../internal/proxy/hosted_accounts.go), [platform credentials](../internal/proxy/hosted_platform_connections.go), [grants](../internal/proxy/hosted_grants.go), and [assignments](../internal/proxy/hosted_assignments.go) | [Grant isolation and revisions](../internal/proxy/hosted_grants_test.go), [startup integrity](../internal/proxy/hosted_funds_schema_recovery_internal_test.go), and [browser setup](../tests/blackbox/hosted-access.spec.js) |
+| F066 | [Journal](../internal/proxy/hosted_journal.go), [text identity](../internal/proxy/hosted_text_requests.go), and [media execution](../internal/proxy/hosted_media_worker.go) | [Interrupted execution](../internal/proxy/hosted_journal_interruption_recovery_internal_test.go), [journal reads](../internal/proxy/hosted_financial_reads_internal_test.go), and [telemetry independence](../internal/proxy/hosted_telemetry_independence_internal_test.go) |
+| F067 | [Exact rating](../internal/proxy/catalog_rating.go), [price snapshots](../internal/proxy/hosted_rating_snapshot.go), and [charge summaries](../internal/proxy/hosted_rating_summary.go) | [Price integrity](../internal/proxy/hosted_rating_integrity_internal_test.go), [request credits](../internal/proxy/hosted_request_credit_summary_internal_test.go), and [provider acceptance](../internal/proxy/hosted_runtime_text_catalog_internal_test.go) |
+| F068 | [Funds admission](../internal/proxy/hosted_funds.go), [settlement](../internal/proxy/hosted_funds_settlement.go), and [recovery](../internal/proxy/hosted_funds_recovery.go) | [Concurrent processes](../internal/proxy/hosted_funds_process_internal_test.go), [database restoration](../internal/proxy/hosted_funds_backup_internal_test.go), and [funded browser use](../tests/blackbox/hosted-service.spec.js) |
+| F069 | [Payment runtime](../internal/proxy/hosted_payments_runtime.go), [verified credits](../internal/proxy/hosted_payments_processing.go), and [reconciliation](../internal/proxy/hosted_payments_reconciliation.go) | [Payment recovery](../internal/proxy/hosted_payments_credit_recovery_internal_test.go), [reconciliation recovery](../internal/proxy/hosted_payments_reconciliation_recovery_internal_test.go), and [browser payments](../tests/blackbox/hosted-payments.spec.js) |
+
+On 2026-09-26, `make test-hosted-billing` passed all Go groups, client checks, and backup restoration.
+Its four browser scenarios passed in 42.6 seconds after the advertised Responses image implementation.
+These checks use controlled payment and provider protocols.
+
+Final stack CI passed all 14 gates in 1442 seconds, with 100.0% Go coverage and zero uncovered statements across 21318 statements.
+All 164 frontend tests and 11 authenticated browser tests passed.
+The [provider measurement evidence](#remaining-provider-measurement-contracts) records the native sources and their limits.
+The [open decisions](#open-decisions) remain prerequisites for production activation.
+The operator selected advertised pricing for Responses images. Admission requires complete priced quantities and combined price bounds.
+
+F065 through F069 passed development acceptance before F070 closure.
 Use controlled provider and processor protocols for repeatable development tests.
 Run `make test-hosted-billing` for the complete controlled acceptance target.
 This target runs hosted HTTP, exact rating, payments, official clients, database restoration, and authenticated browser checks.
+It runs funds, payments, and the remaining hosted Go checks in separate package invocations with the standard timeout.
+The groups preserve the complete test selection. Client, database restoration, and browser checks follow the Go groups.
 The funded browser test uses the normal server, authentication, database, and Ledger with controlled Paddle and provider HTTP responses.
 It verifies login, hosted model selection, a USD 5 credit, one provider call, and idempotent replay.
 The browser shows a USD 0.01 provider cost and a USD 0.013 customer charge.
@@ -1902,3 +2104,26 @@ Prove account isolation, exact charges, bounded spending, and recovery through t
 
 Production activation and live financial qualification require explicit operator authorization.
 Development completion does not establish deployment, real payment acceptance, or provider invoice reconciliation.
+
+## Operator Launch Checklist
+
+This checklist controls production readiness and activation evidence. It does not authorize deployment or financial operations.
+Keep hosted activation disabled until the applicable prerequisites pass.
+Record the source revision, configuration identity, date, and result for each check.
+
+- [ ] Complete F065 through F070 development acceptance. Attach successful `make ci` and `make test-hosted-billing` results for the selected source.
+- [ ] Resolve the [open decisions](#open-decisions). Record the supplier, Paddle account, tax treatment, fees, exposure limit, failure charges, and retention schedule.
+- [ ] Record commercial authorization and paid capacity for every selected offering.
+- [ ] Qualify native usage, exact provider costs, and maximum authorized costs for every selected provider operation.
+- [ ] Verify the advertised Responses image schedule. Keep absent cache measurements unknown and actual invoice costs separate.
+- [ ] Complete the applicable [processor sandbox qualification](#processor-sandbox-qualification) under F087. Keep actual evidence separate from controlled protocol results.
+- [ ] Examine the [payment runtime configuration](#payment-runtime-configuration), supplier identity, processor account, funding offers, webhook destination, and environment binding.
+- [ ] Keep credentials in the configured private input. Make sure reports and customer responses contain no secret values.
+- [ ] Restore a [consistent financial backup](#financial-backup-and-restore). Compare funds, exact remainders, reservations, payment receipts, and reconciliation records together.
+- [ ] Configure [financial signals](#operational-financial-signals) and assign an operator for unresolved attempts, settlement delays, and reconciliation differences.
+- [ ] Examine explicit platform credentials, tenant grants, and provider assignments. Keep customer-owned provider access separate.
+- [ ] Record explicit operator authorization before deployment, hosted activation, or actual payment acceptance.
+- [ ] At authorized activation, test funding, exact usage charges, receipts, idempotent replay, account isolation, and financial recovery through public interfaces.
+- [ ] Use [audited financial resolution](#audited-financial-resolution) for uncertain outcomes. Keep their reservations until the recorded decision permits settlement or release.
+
+An unsuccessful check leaves its offering or financial operation unqualified. Keep its cause and required corrective action in the activation record.
