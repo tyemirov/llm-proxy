@@ -14,7 +14,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/subosito/gotenv v1.6.0
-	github.com/tyemirov/dictator/sdk/go/dictatorspeechv1 v1.11.0
+	github.com/tyemirov/dictator/sdk/go/dictatorspeechv1 v1.12.0
 	github.com/tyemirov/tauth v1.2.7
 	github.com/tyemirov/utils v0.19.0
 	go.uber.org/zap v1.28.0
