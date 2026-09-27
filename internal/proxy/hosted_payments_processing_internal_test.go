@@ -15,7 +15,7 @@ func completedPaymentFixture(t *testing.T, processor *checkoutProtocolFixture) m
 	defer processor.mutex.Unlock()
 	transaction := processor.transactions[0]
 	transaction["status"] = "completed"
-	transaction["completed_at"] = "2026-09-23T12:00:00Z"
+	transaction["billed_at"] = "2026-09-23T11:59:59Z"
 	transaction["updated_at"] = "2026-09-23T12:00:01Z"
 	transaction["invoice_number"] = "INV-FIXTURE-1"
 	transaction["payments"] = []any{map[string]any{"payment_attempt_id": "pay-fixture-1", "amount": "550", "status": "captured", "captured_at": "2026-09-23T12:00:00Z"}}
@@ -53,6 +53,13 @@ func TestHostedPaymentsCompletedCreditCommitsOnceAcrossEventsAndWorkers(t *testi
 		t.Fatal(err)
 	}
 	transaction := completedPaymentFixture(t, processor)
+	processor.mutex.Lock()
+	transaction["payments"] = []any{
+		map[string]any{"payment_attempt_id": "pay-final", "amount": "350", "status": "captured", "captured_at": "2026-09-23T12:00:00Z"},
+		map[string]any{"payment_attempt_id": "pay-earlier", "amount": "200", "status": "captured", "captured_at": "2026-09-23T11:59:58Z"},
+		map[string]any{"payment_attempt_id": "pay-failed", "amount": "550", "status": "error", "captured_at": nil, "error_code": "declined"},
+	}
+	processor.mutex.Unlock()
 	for sequence := 1; sequence <= 3; sequence++ {
 		sendPaymentEventFixture(t, database, transaction, "transaction.completed", sequence)
 	}
@@ -74,6 +81,13 @@ func TestHostedPaymentsCompletedCreditCommitsOnceAcrossEventsAndWorkers(t *testi
 			t.Fatal(err)
 		}
 	}
+	processor.mutex.Lock()
+	transaction["updated_at"] = "2026-09-23T12:01:00Z"
+	processor.mutex.Unlock()
+	sendPaymentEventFixture(t, database, transaction, "transaction.completed", 4)
+	if err := paymentProcessorFixture(t, checkout, openJournalTransactionInstance(t, database)).reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	paid := paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, paymentOrdersTestPath+"/"+order["id"].(string), "", "", http.StatusOK)
 	if paid["state"] != "paid" {
 		t.Fatalf("order=%v", paid)
@@ -85,6 +99,10 @@ func TestHostedPaymentsCompletedCreditCommitsOnceAcrossEventsAndWorkers(t *testi
 	history := paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, "/billing-accounts/billing-journal/ledger-entries", "", "", http.StatusOK)
 	if len(history["entries"].([]any)) != 1 {
 		t.Fatalf("duplicate credits: %v", history)
+	}
+	publicReceipt := paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, paymentOrdersTestPath+"/"+order["id"].(string)+"/receipt", "", "", http.StatusOK)
+	if publicReceipt["paid_at"] != "2026-09-23T12:00:00Z" {
+		t.Fatalf("receipt capture time=%v", publicReceipt)
 	}
 	var receipts []managedPaymentReceiptRecord
 	if err := database.database.Find(&receipts).Error; err != nil || len(receipts) != 1 {
@@ -99,7 +117,7 @@ func TestHostedPaymentsCompletedCreditCommitsOnceAcrossEventsAndWorkers(t *testi
 func TestHostedPaymentsCompletedRejectsMismatchedEvidence(t *testing.T) {
 	for _, scenario := range []string{
 		"foreign-account", "currency", "amount", "discount", "uncaptured", "paid-only", "event-api-disagreement", "older-api-state",
-		"completion-time", "utc-range", "update-before-completion", "missing-totals", "totals-currency", "negative-amount", "invalid-fee",
+		"update-time", "utc-range", "update-before-capture", "missing-totals", "totals-currency", "negative-amount", "invalid-fee",
 		"inconsistent-total", "wrong-funding-amount", "missing-line", "missing-line-totals", "wrong-line-price",
 		"missing-payment-id", "duplicate-payment", "invalid-payment-amount", "missing-capture-time", "capture-error", "invalid-capture-time",
 		"invalid-payout", "processor-unavailable", "changed-invoice",
@@ -136,11 +154,11 @@ func TestHostedPaymentsCompletedRejectsMismatchedEvidence(t *testing.T) {
 				transaction["payments"].([]any)[0].(map[string]any)["status"] = "authorized"
 			case "paid-only":
 				transaction["status"] = "paid"
-			case "completion-time":
-				transaction["completed_at"] = "not-a-timestamp"
+			case "update-time":
+				transaction["updated_at"] = "not-a-timestamp"
 			case "utc-range":
-				transaction["completed_at"], transaction["updated_at"] = financialUTCOverflowTimestamp, financialUTCOverflowTimestamp
-			case "update-before-completion":
+				payment["captured_at"], transaction["updated_at"] = financialUTCOverflowTimestamp, financialUTCOverflowTimestamp
+			case "update-before-capture":
 				transaction["updated_at"] = "2026-09-23T11:59:59Z"
 			case "missing-totals":
 				details["totals"] = nil

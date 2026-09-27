@@ -170,12 +170,8 @@ func completedPaymentEvidence(transaction billing.PaddleTransactionCompletedWebh
 	if transaction.ID != checkout.TransactionID || transaction.Status != paymentTransactionStatusCompleted || !checkoutMatchesOrder(transaction, job) || transaction.DiscountID != nil {
 		return verifiedCompletedPayment{}, errFundingConflict
 	}
-	completedAt, err := time.Parse(time.RFC3339Nano, transaction.CompletedAt)
-	if err != nil || completedAt.IsZero() {
-		return verifiedCompletedPayment{}, errFundingInvalid
-	}
 	updatedAt, err := time.Parse(time.RFC3339Nano, transaction.UpdatedAt)
-	if err != nil || updatedAt.Before(completedAt) {
+	if err != nil || updatedAt.IsZero() {
 		return verifiedCompletedPayment{}, errFundingInvalid
 	}
 	totals := transaction.Details.Totals
@@ -196,6 +192,7 @@ func completedPaymentEvidence(transaction billing.PaddleTransactionCompletedWebh
 	if line.PriceID != order.PriceID || line.Quantity != 1 || line.Totals == nil || line.Totals.Subtotal != totals.Subtotal || line.Totals.Discount != totals.Discount || line.Totals.Tax != totals.Tax || line.Totals.Total != totals.Total {
 		return verifiedCompletedPayment{}, errFundingConflict
 	}
+	var completedAt time.Time
 	captured := new(big.Int)
 	seen := make(map[string]bool)
 	for _, payment := range transaction.Payments {
@@ -209,13 +206,17 @@ func completedPaymentEvidence(transaction billing.PaddleTransactionCompletedWebh
 		if payment.CapturedAt == nil || payment.ErrorCode != nil {
 			return verifiedCompletedPayment{}, errFundingInvalid
 		}
-		if at, err := time.Parse(time.RFC3339Nano, *payment.CapturedAt); err != nil || at.IsZero() {
+		at, err := time.Parse(time.RFC3339Nano, *payment.CapturedAt)
+		if err != nil || at.IsZero() || at.After(updatedAt) {
 			return verifiedCompletedPayment{}, errFundingInvalid
+		}
+		if at.After(completedAt) {
+			completedAt = at
 		}
 		amount, _ := new(big.Int).SetString(payment.Amount, 10)
 		captured.Add(captured, amount)
 	}
-	if captured.Cmp(total) != 0 {
+	if completedAt.IsZero() || captured.Cmp(total) != 0 {
 		return verifiedCompletedPayment{}, errFundingConflict
 	}
 	if transaction.Details.PayoutTotals != nil && !validPaymentTotals(transaction.Details.PayoutTotals) {

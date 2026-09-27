@@ -2,13 +2,17 @@ package proxy
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
 
+	"github.com/MarkoPoloResearchLab/ledger/pkg/ledger"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+const fundsSettlementInsufficient = "settlement_insufficient_funds"
 
 type managedFundsSettlementRecord struct {
 	RequestID                  string                        `gorm:"primaryKey"`
@@ -98,7 +102,15 @@ func settleHostedFunds(transaction *gorm.DB, requestID string, now time.Time) er
 		}
 		total.Add(total, net)
 	}
-	return commitHostedFundsSettlement(transaction, reservation, total, creditIDs, now)
+	// Roll back the release with the rejected charge before retaining a deficit.
+	// The outer delivery transaction still owns the usage evidence and case.
+	err := transaction.Transaction(func(settlement *gorm.DB) error {
+		return commitHostedFundsSettlement(settlement, reservation, total, creditIDs, now)
+	})
+	if errors.Is(err, ledger.ErrInsufficientFunds) {
+		return retainHostedFundsForReconciliation(transaction, reservation, fundsSettlementInsufficient, now)
+	}
+	return err
 }
 
 func commitHostedFundsSettlement(transaction *gorm.DB, reservation managedFundsReservationRecord, total *big.Rat, creditIDs []string, now time.Time) error {
