@@ -2,6 +2,10 @@
 
 import * as backend from '../core/backendClient.js?v=20260903f037';
 import {profileFailureMessage} from '../core/managementProfile.js?v=20260903f037';
+import './usageJournal.js?v=20260903f037';
+import './prepaidBalance.js?v=20260903f037';
+import './paymentHistory.js?v=20260903f037';
+import './fundingCheckout.js?v=20260903f037';
 
 import {COPY, PROVIDER_CAPABILITY_LABELS, PROVIDER_RESOURCE_LABELS, CAPABILITY_DOMAINS} from '../constants.js?v=20260903f037';
 
@@ -28,6 +32,10 @@ export class ConnectionDashboard extends HTMLElement {
   /** @type {import('../types.d.js').ManagementTenantProfile|null} */ profile = null;
   /** @type {Record<string, string>} */ modelFamilies = {};
   /** @type {import('../types.d.js').DashboardOffering[]} */ offerings = [];
+  /** @type {import('../types.d.js').BillingAccount|null} */ billingAccount = null;
+  /** @type {import('../types.d.js').HostedAccessGrant[]} */ hostedGrants = [];
+  /** @type {import('../types.d.js').ProviderAssignment[]} */ assignments = [];
+  billingCreationKey = crypto.randomUUID();
   tenantID = '';
   connectionID = '';
   modelID = '';
@@ -97,11 +105,12 @@ export class ConnectionDashboard extends HTMLElement {
   }
 
   async reload() {
-    const [account, catalog] = await Promise.all([backend.fetchAccount(this.controller.signal), backend.fetchConnections(this.controller.signal)]);
+    const [account, catalog, billing, grants] = await Promise.all([backend.fetchAccount(this.controller.signal), backend.fetchConnections(this.controller.signal), backend.fetchBillingAccount(this.controller.signal), backend.fetchHostedAccessGrants(this.controller.signal)]);
     this.tenants = account.tenants; this.connections = catalog.connections; this.providers = catalog.providers;
+    this.billingAccount = billing; this.hostedGrants = grants.filter(grant=>grant.billing_account_id===billing?.id);
     if (this.tenantID) {
-      const profile = await backend.fetchTenant(this.tenantID, this.controller.signal);
-      this.profile = profile;
+      const [profile, assignments] = await Promise.all([backend.fetchTenant(this.tenantID, this.controller.signal),backend.fetchProviderAssignments(this.tenantID, this.controller.signal)]);
+      this.profile = profile; this.assignments = assignments;
     }
     this.emitContext();
   }
@@ -116,12 +125,12 @@ export class ConnectionDashboard extends HTMLElement {
   /** @param {string} id */
   async selectTenant(id) {
     const revision = ++this.revision;
-    this.tenantID = id; this.connectionID = ''; this.modelID = ''; this.secret = ''; this.requestExample = ''; this.profile = null;
+    this.tenantID = id; this.connectionID = ''; this.modelID = ''; this.secret = ''; this.requestExample = ''; this.profile = null; this.assignments = [];
     this.message = ''; this.failure = ''; this.render();
     if (id) {
-      const profile = await backend.fetchTenant(id, this.controller.signal);
+      const [profile, assignments] = await Promise.all([backend.fetchTenant(id, this.controller.signal),backend.fetchProviderAssignments(id, this.controller.signal)]);
       if (revision !== this.revision) return;
-      this.profile = profile;
+      this.profile = profile; this.assignments = assignments;
       this.connectionID = this.connections.find(c => c.tenant_ids.includes(id))?.id || '';
       this.adaptCapabilityForConnection();
     }
@@ -166,8 +175,10 @@ export class ConnectionDashboard extends HTMLElement {
       <div class="cw-map" data-map></div><footer class="cw-route" data-route></footer>
       <p class="cw-notice" role="status" aria-live="polite" data-notice></p>
       <section class="cw-details" aria-label="Selection details" data-details></section>
+      <section class="cw-details" aria-label="Hosted access" data-hosted-access></section>
+      ${this.billingAccount?`<prepaid-balance billing-account-id="${escapeHTML(this.billingAccount.id)}" tenant-id="${escapeHTML(this.tenantID)}" tenant-name="${escapeHTML(this.tenantName)}"></prepaid-balance><funding-checkout billing-account-id="${escapeHTML(this.billingAccount.id)}"></funding-checkout><payment-history billing-account-id="${escapeHTML(this.billingAccount.id)}"></payment-history><usage-journal billing-account-id="${escapeHTML(this.billingAccount.id)}"></usage-journal>`:''}
     </section>`;
-    this.renderMap(); this.renderDetails(); this.updateNotice();
+    this.renderMap(); this.renderDetails(); this.renderHostedAccess(); this.updateNotice();
   }
   updateNotice() {
     this.querySelectorAll('[data-notice]').forEach(notice => { notice.textContent = this.failure || (this.busy ? 'Saving…' : this.message); notice.setAttribute('role',this.failure ? 'alert':'status'); });
@@ -184,7 +195,7 @@ export class ConnectionDashboard extends HTMLElement {
       ${this.tenants.filter(t=>matches(t.name)).map(t=>{const count=this.connections.filter(c=>c.tenant_ids.includes(t.id)).length;return `<button class="cw-node ${t.id===this.tenantID?'selected':''}" data-tenant="${escapeHTML(t.id)}" aria-pressed="${t.id===this.tenantID}" ${disabled}><strong>${escapeHTML(t.name)}</strong><small>${count ? `${count} connection${count===1?'':'s'}`:'No connections yet'}</small></button>`;}).join('')}</div></section>
       <section class="cw-column"><header><h3>Connections <span>${this.connections.length}</span></h3><button data-action="create-connection" ${disabled}>Create connection</button></header><div class="cw-list">
       ${this.connections.filter(c=>matches(c.name+' '+c.provider)).map(c=>{
-        const assigned=c.tenant_ids.includes(this.tenantID); const occupied=this.connections.some(other=>other.provider===c.provider && other.tenant_ids.includes(this.tenantID));
+        const assigned=c.tenant_ids.includes(this.tenantID); const occupied=this.assignments.some(assignment=>assignment.provider===c.provider);
         return `<article class="cw-node ${c.id===this.connectionID?(assigned?'selected':'browsing'):''}" data-connection-node="${escapeHTML(c.id)}"><div class="cw-row"><button class="cw-name" data-connection="${escapeHTML(c.id)}">${providerIcon(c.provider)}<strong>${escapeHTML(c.name)}</strong></button>${this.tenantID ? assigned ? '<span class="cw-connected">✓ Connected</span>' : occupied ? '<span class="cw-muted">Provider already connected</span>' : `<button class="cw-connect" data-connect="${escapeHTML(c.id)}" ${disabled}>Connect</button>` : ''}</div><small>${escapeHTML(this.providers.find(p=>p.id===c.provider)?.api_service_label || c.provider)}</small><small>${c.tenant_ids.length ? `Used by ${c.tenant_ids.length} tenant${c.tenant_ids.length===1?'':'s'}`:'Unassigned'}</small>${connectionReady(c)?'':'<small>Credentials needed</small>'}</article>`;
       }).join('') || '<p class="cw-empty">Create a connection to add provider credentials.</p>'}</div></section>
       <section class="cw-column"><header class="cw-model-header"><h3>Models</h3>${renderTaskPicker(this.availableTasks,this.taskIDs,this.busy)}</header><div class="cw-list">
@@ -230,6 +241,43 @@ export class ConnectionDashboard extends HTMLElement {
     }
     if(this.tenantID && c) details.insertAdjacentHTML('beforeend',`<footer class="cw-row"><span>${escapeHTML(this.tenantName)}</span><button data-action="tenant-details">Tenant details and API access</button></footer>`);
   }
+  renderHostedAccess() {
+    const section=this.querySelector('[data-hosted-access]');if(!section)return;
+    const disabled=this.busy?'disabled':'';
+    const grants=this.hostedGrants.filter(grant=>grant.tenant_id===this.tenantID);
+    section.innerHTML=`<header class="cw-row"><h3>Hosted access</h3><button data-action="refresh-hosted" ${disabled}>Refresh hosted access</button></header>
+      <p>Use provider access supplied by LLM Proxy. No provider API key is required.</p>
+      ${this.billingAccount ? '<p>USD billing account</p>' : `<button data-action="create-billing" ${disabled}>Create billing account</button>`}
+      <p>Hosted requests use your prepaid balance. Availability depends on the selected offering.</p>
+      ${grants.map(grant=>{
+        const assignment=this.assignments.find(assignment=>assignment.provider===grant.provider);
+        const assigned=assignment?.kind==='hosted_access_grant' && assignment.resource_id===grant.id;
+        const state={active:'Active',suspended:'Suspended',revoked:'Revoked'}[grant.state];
+        return `<article class="cw-node" data-hosted-grant="${escapeHTML(grant.id)}"><header class="cw-row"><strong>${escapeHTML(this.providers.find(provider=>provider.id===grant.provider)?.label || grant.provider)}</strong><span>${state}</span>${assigned?'<span>Assigned</span>':''}</header>
+          <ul>${grant.offerings.map(offering=>`<li><code>${escapeHTML(offering.model === undefined ? 'Provider services' : offering.model)}</code> · ${escapeHTML(offering.operations.join(', '))}</li>`).join('')}</ul>
+          ${assigned?`<button data-detach-hosted="${escapeHTML(grant.id)}" ${disabled}>Detach hosted access</button>`:assignment?'<p>Detach the current provider assignment to use this grant.</p>':grant.state==='active'?`<button data-use-hosted="${escapeHTML(grant.id)}" ${disabled}>Use hosted access</button>`:''}
+          ${assigned&&grant.state==='active'?this.hostedDefaultForms(grant):''}</article>`;
+      }).join('') || '<p>No hosted grants for this tenant.</p>'}`;
+  }
+  /** @param {import('../types.d.js').HostedAccessGrant} grant */
+  hostedDefaultForms(grant) {
+    const provider=this.profile?.providers.find(provider=>provider.id===grant.provider);
+    const defaults=this.profile?.tenant.defaults;
+    if (!provider || !defaults) return '';
+    const selections=[
+      {domain:CAPABILITY_DOMAINS.TEXT,operation:'text',models:provider.text_models.map(model=>model.id),savedProvider:defaults.provider,savedModel:defaults.model},
+      {domain:CAPABILITY_DOMAINS.TRANSCRIPTION,operation:'dictation',models:provider.transcription_models,savedProvider:defaults.transcription_provider,savedModel:defaults.transcription_model},
+      {domain:CAPABILITY_DOMAINS.SPEECH,operation:'speech_generation',models:provider.speech_models,savedProvider:defaults.speech_provider,savedModel:defaults.speech_model},
+    ];
+    return selections.map(selection=>{
+      const models=selection.models.filter(model=>grant.offerings.some(offering=>offering.model===model&&offering.operations.includes(selection.operation)));
+      if(!models.length)return '';
+      const saved=selection.savedProvider===grant.provider&&models.includes(selection.savedModel)?selection.savedModel:'';
+      return `<form data-hosted-default="${escapeHTML(grant.id)}"><label>Hosted ${selection.domain} model<select name="model" aria-label="Hosted ${selection.domain} model"><option value="">Choose a model</option>${models.map(model=>`<option value="${escapeHTML(model)}" ${model===saved?'selected':''}>${escapeHTML(model)}</option>`).join('')}</select></label>
+        ${saved?`<p>Saved ${selection.domain} default: ${escapeHTML(saved)}</p>`:''}
+        <button type="button" data-save-hosted-default="${selection.domain}" ${this.busy?'disabled':''}>Save hosted ${selection.domain} default</button></form>`;
+    }).join('');
+  }
   modelDetails() {
     const offering=this.offerings.find(o=>o.provider===this.connection?.provider && o.model===this.modelID);
     const offeringDetails=(offering?renderTaskDetails(offering):'')+(this.capability===CAPABILITY_DOMAINS.TEXT?'':`<section data-media-details><h4>${escapeHTML(this.modelID)}</h4><p>Available through this tenant’s API key.</p><ul>${(offering?.capabilities||[]).map(capability=>`<li>${escapeHTML(PROVIDER_CAPABILITY_LABELS[/** @type {keyof typeof PROVIDER_CAPABILITY_LABELS} */(capability)]||capability)}</li>`).join('')}</ul></section>`);
@@ -270,6 +318,23 @@ export class ConnectionDashboard extends HTMLElement {
     }
     const button = event.target.closest('button');
     if (!button) return;
+    if(button.dataset.saveHostedDefault) {
+      const form=button.closest('form[data-hosted-default]');
+      if(form instanceof HTMLFormElement) {
+        const grant=this.hostedGrants.find(grant=>grant.id===form.dataset.hostedDefault);
+        const values=new FormData(form),model=String(values.get('model')||'');
+        if(grant&&model)void this.run(()=>this.saveRoutingDefault(grant.provider,model,/** @type {import('../types.d.js').CapabilityDomain} */(button.dataset.saveHostedDefault),values));
+      }
+      return;
+    }
+    const hostedID=button.dataset.useHosted || button.dataset.detachHosted;
+    if(hostedID) {
+      const grant=this.hostedGrants.find(grant=>grant.id===hostedID);
+      if(!grant)return;
+      if(button.dataset.useHosted) void this.run(async()=>{await backend.assignHostedAccess(this.tenantID,grant,this.controller.signal);await this.reload();this.message='Hosted access assigned.';});
+      else this.confirm('Detach hosted access',`Detach hosted access from ${this.tenantName}? Saved defaults for this provider will be cleared.`,async()=>{await backend.detachConnection(this.tenantID,grant.provider,true,this.controller.signal);await this.reload();this.message='Hosted access detached.';});
+      return;
+    }
     if (button.dataset.tenant) { void this.run(() => this.selectTenant(button.dataset.tenant || '')); return; }
     if (button.dataset.model) { this.modelID = button.dataset.model; this.render(); return; }
     const taskID = button.dataset.task;
@@ -284,6 +349,8 @@ export class ConnectionDashboard extends HTMLElement {
       return;
     }
     switch (button.dataset.action) {
+      case 'refresh-hosted':void this.run(()=>this.reload());break;
+      case 'create-billing':void this.run(async()=>{await backend.createBillingAccount(this.billingCreationKey,this.controller.signal);await this.reload();this.message='Billing account created.';});break;
       case 'copy-mcp':void this.run(async()=>{const runtime=await backend.loadFrontendRuntimeConfig();await navigator.clipboard.writeText(new URL(MCP_PATH,runtime.proxyOrigin).href);this.message='MCP URL copied.';});break;
       case 'tenant-details':this.connectionID='';this.modelID='';this.render();break;
       case 'create-tenant':this.tenantForm(false);break;
@@ -312,11 +379,20 @@ export class ConnectionDashboard extends HTMLElement {
   async saveDefault() {
     if(!this.profile || !this.connection || !this.attached || !this.canSaveDefault)return;
     const form=this.querySelector('[data-default-form]');if(!(form instanceof HTMLFormElement))return;
-    const values=new FormData(form);const defaults={...this.profile.tenant.defaults};
-    if(this.capability==='text') {defaults.provider=this.connection.provider;defaults.model=this.modelID;defaults.reasoning_effort=String(values.get('reasoning_effort')||'');defaults.system_prompt=String(values.get('system_prompt')||'');}
-    else if(this.capability===CAPABILITY_DOMAINS.TRANSCRIPTION) {defaults.transcription_provider=this.connection.provider;defaults.transcription_model=this.modelID;}
-    else {defaults.speech_provider=this.connection.provider;defaults.speech_model=this.modelID;}
-    await backend.updateDefaults(this.tenantID,defaults,this.controller.signal);await this.reload();this.message='Default saved.';this.modelID='';
+    await this.saveRoutingDefault(this.connection.provider,this.modelID,/** @type {import('../types.d.js').CapabilityDomain} */(this.capability),new FormData(form));
+    this.modelID='';
+  }
+  /** @param {string} provider @param {string} model @param {import('../types.d.js').CapabilityDomain} domain @param {FormData} values */
+  async saveRoutingDefault(provider,model,domain,values) {
+    if(!this.profile)return;
+    const defaults={...this.profile.tenant.defaults};
+    if(domain===CAPABILITY_DOMAINS.TEXT) {
+      defaults.provider=provider;defaults.model=model;defaults.reasoning_effort=String(values.get('reasoning_effort')||'');
+      if(values.has('system_prompt'))defaults.system_prompt=String(values.get('system_prompt'));
+    } else if(domain===CAPABILITY_DOMAINS.TRANSCRIPTION) {defaults.transcription_provider=provider;defaults.transcription_model=model;}
+    else if(domain===CAPABILITY_DOMAINS.SPEECH) {defaults.speech_provider=provider;defaults.speech_model=model;}
+    else throw new Error(COPY.appIntegrityError);
+    await backend.updateDefaults(this.tenantID,defaults,this.controller.signal);await this.reload();this.message='Default saved.';
   }
   /** @param {string} title @param {string} body @param {(form: HTMLFormElement)=>Promise<void>} [submit] */
   dialog(title,body,submit) {
@@ -396,7 +472,8 @@ export class ConnectionDashboard extends HTMLElement {
       const url=new URL(profile.proxy.v2_path,config.proxyOrigin);
       url.searchParams.set('key','<generated-secret>');url.searchParams.set('provider',defaults.provider);
       const body=JSON.stringify({model:defaults.model,messages:[{role:'user',content:'Hello'}]});
-      this.requestExample=`curl '${url}' -H 'Content-Type: application/json' -d '${body}'`;
+      const hosted=this.assignments.some(assignment=>assignment.provider===defaults.provider&&assignment.kind==='hosted_access_grant');
+      this.requestExample=`curl '${url}' -H 'Content-Type: application/json'${hosted?" -H 'Idempotency-Key: <unique-request-id>'":''} -d '${body}'`;
     } else this.requestExample='';
     this.dialog('Save your tenant API key',`<p>This key is shown once. Copy it before closing.</p><input readonly aria-label="Tenant API key"><button type="button" data-action="copy-secret">Copy API key</button>${this.requestExample?`<pre>${escapeHTML(this.requestExample)}</pre><button type="button" data-action="copy-example">Copy request example</button>`:'<p>Save a text default to get a request example for this tenant.</p>'}`);
     const keyInput=this.querySelector('input[aria-label="Tenant API key"]');

@@ -117,8 +117,8 @@ func TestGrokCurrentCatalog(t *testing.T) {
 	if len(rates) != 6 {
 		t.Fatalf("rates=%v", rates)
 	}
-	for index, expected := range []float64{2, 6, 0.5, 4, 12, 1} {
-		if rates[index].Rate != expected || rates[index].Currency != "USD" || rates[index].Unit != "USD/1M_tokens" || rates[index].Conditions.BillingMode != "standard" || rates[index].Conditions.Mode != []string{"input_tokens_below_200000", "input_tokens_at_least_200000"}[index/3] {
+	for index, expected := range []proxy.CatalogDecimal{"2", "6", "0.5", "4", "12", "1"} {
+		if rates[index].Rate != expected || rates[index].Currency != "USD" || rates[index].Unit != "USD/1M_tokens" || rates[index].Conditions.BillingMode != "standard" || rates[index].Conditions.InputTokens != []proxy.CatalogTokenRange{{MaximumExclusive: 200000}, {Minimum: 200000}}[index/3] {
 			t.Fatalf("rate=%v", rates[index])
 		}
 	}

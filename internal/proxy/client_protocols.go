@@ -49,12 +49,16 @@ func RegisterClientProtocols(router *gin.Engine, adapters []ClientProtocolAdapte
 			seen[key] = adapter.Name
 		}
 	}
+	registerClientProtocolRoutes(router, adapters)
+	return nil
+}
+
+func registerClientProtocolRoutes(router *gin.Engine, adapters []ClientProtocolAdapter) {
 	for _, adapter := range adapters {
 		for _, route := range adapter.Routes {
 			router.Handle(route.Method, route.Path, route.Handler)
 		}
 	}
-	return nil
 }
 
 type clientErrorEncoder func(*gin.Context, int, string, string)
@@ -105,6 +109,10 @@ func bearerTenantHandler(authenticator tenantAuthenticator, handler gin.HandlerF
 type completionEncoder func(*gin.Context, chatRequestParameters, completionResult)
 
 func nativeCompletionEncoder(c *gin.Context, request chatRequestParameters, result completionResult) {
+	if _, structured := result.content.(completedStructuredData); structured {
+		c.Data(http.StatusOK, structuredJSONContentType, []byte(result.content.text()))
+		return
+	}
 	if len(result.content.toolCalls()) > 0 {
 		c.JSON(http.StatusOK, gin.H{"type": "tool_calls", "tool_calls": result.content.toolCalls(), "text": result.content.text(), "usage": result.usage})
 		return

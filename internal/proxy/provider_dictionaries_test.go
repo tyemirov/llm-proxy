@@ -61,7 +61,7 @@ func TestProviderServicesDictionariesUseOneAccountWithoutModel(t *testing.T) {
 			tenantID := managementDefaultTenantTestID(t, router, owner)
 			secret := generateManagementTenantSecret(t, router, owner, tenantID)
 			connection := accountConnectionExchange(t, router, owner, http.MethodPost, "/connections", map[string]any{"name": "Shared speech account", "provider": provider, "fields": map[string]string{"resource_token": "dictionary-secret"}}, http.StatusCreated)
-			accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+tenantID+"/connections/"+provider, map[string]string{"connection_id": connection["id"].(string)}, http.StatusOK)
+			accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+tenantID+"/connections/"+provider, map[string]string{"kind": "account_connection", "resource_id": connection["id"].(string)}, http.StatusOK)
 			config, _ := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: server.URL, Secret: secret})
 			client, err := llmproxyclient.NewClient(config, server.Client())
 			if err != nil {

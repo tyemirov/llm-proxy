@@ -353,6 +353,7 @@ func (definition textModelDefinition) supportsMediaInput(mediaInput messageMedia
 }
 
 type providerDefinition struct {
+	hostedGrantID             string
 	upstreamScope             upstreamRequestScope
 	identifier                providerID
 	connectionOwnership       string
@@ -434,6 +435,9 @@ func (definition providerDefinition) resolvedTransport(transportIdentifier strin
 }
 
 func (definition providerDefinition) credentialFor(endpoint endpointKind) string {
+	if definition.hostedGrantID != "" {
+		return ""
+	}
 	if endpoint == endpointKindDictation {
 		return strings.TrimSpace(definition.transcriptionAPIKey)
 	}

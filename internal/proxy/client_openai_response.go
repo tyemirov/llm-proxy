@@ -22,6 +22,9 @@ func openAIUsage(usage *tokenUsage, protocol clientTextProtocol) any {
 func encodeOpenAICompletion(c *gin.Context, protocol clientTextProtocol, input decodedClientCompletion, request chatRequestParameters, result completionResult) {
 	created := time.Now().Unix()
 	id := requestIDFromContext(c)
+	if result.receipt != nil {
+		id, created = result.receipt.executionID, result.receipt.createdAt.Unix()
+	}
 	model := request.provider.identifier.string() + "/" + request.model.string()
 	if protocol == clientChatProtocol {
 		finish := "stop"

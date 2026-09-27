@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -81,14 +82,32 @@ type dictationRequestParameters struct {
 	audioReader io.Reader
 }
 
-// BuildRouter constructs the HTTP router used by the proxy. configuration supplies management, routing, upstream capacity, and timeout settings. structuredLogger records structured log messages during routing.
-func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger) (*gin.Engine, error) {
+// Router owns HTTP routes and their background media workers.
+type Router struct {
+	*gin.Engine
+	stop func() error
+}
+
+// Close stops workers, drains accepted usage, and closes the owned database.
+func (router *Router) Close() error { return router.stop() }
+
+// BuildRouter constructs the proxy router. The caller must close it after HTTP shutdown.
+func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger) (*Router, error) {
 	return buildRouter(configuration, structuredLogger, newManagedTenantStore)
 }
 
 type managedTenantStoreOpener func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error)
 
-func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger, openManagedTenantStore managedTenantStoreOpener) (*gin.Engine, error) {
+func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger, openManagedTenantStore managedTenantStoreOpener) (*Router, error) {
+	application, err := buildProxyApplication(configuration, structuredLogger, openManagedTenantStore)
+	if err != nil {
+		return nil, err
+	}
+	application.startMedia()
+	return &Router{Engine: application.router, stop: application.close}, nil
+}
+
+func buildProxyApplication(configuration Configuration, structuredLogger *zap.SugaredLogger, openManagedTenantStore managedTenantStoreOpener) (_ *proxyApplication, buildError error) {
 	configuration, validationError := ensureValidatedConfiguration(configuration)
 	if validationError != nil {
 		return nil, validationError
@@ -123,18 +142,39 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	if storeError != nil {
 		return nil, storeError
 	}
+	application := &proxyApplication{router: router, database: managedTenants.database, address: fmt.Sprintf(":%d", configuration.Port), now: time.Now, closeStore: managedTenants.close}
+	defer func() {
+		if buildError != nil {
+			buildError = errors.Join(buildError, application.close())
+		}
+	}()
 	if err := validateSavedUpstreamCapacityOrigins(context.Background(), managedTenants, providers, configuration.upstreamCapacity); err != nil {
 		return nil, err
 	}
 	tenantAuthenticator := newTenantAuthenticator(managedTenants)
 	assetStore := newTenantAssetStore(configuration.AssetStorePath, configuration.MaxAssetBytes, configuration.AssetRetentionSeconds)
-	mediaOperations, mediaOperationError := newMediaOperationService(configuration, managedTenants, assetStore, providers, upstreamHTTPClient)
+	mediaOperations, mediaOperationError := newMediaOperationService(configuration, managedTenants, assetStore, providers, upstreamHTTPClient, structuredLogger)
+	application.media = mediaOperations
 	if mediaOperationError != nil {
 		return nil, mediaOperationError
 	}
-	structuredRequests, structuredStoreError := newStructuredRequestStore(configuration.AssetStorePath, configuration.AssetRetentionSeconds)
+	journalDatabase, _ := managedTenants.database.(*gormManagedTenantDatabase)
+	structuredRequests, structuredStoreError := newStructuredRequestStore(configuration.AssetStorePath, configuration.AssetRetentionSeconds, journalDatabase)
 	if structuredStoreError != nil {
 		return nil, structuredStoreError
+	}
+	if configuration.hosted != nil {
+		if journalDatabase == nil {
+			return nil, fmt.Errorf("configure hosted execution: managed financial database is required")
+		}
+		var hostedError error
+		upstreamProviders.hostedText, hostedError = newHostedTextRequests(context.Background(), hostedTextRequestDependencies{
+			database: journalDatabase, responses: structuredRequests, cipher: managedTenants.providerKeyCipher,
+			catalogRevision: configuration.ModelCatalog.Revision, authorize: configuration.hosted.authorizeCompletion, now: time.Now, entropy: rand.Reader,
+		})
+		if hostedError != nil {
+			return nil, fmt.Errorf("initialize hosted completion runtime: %w", hostedError)
+		}
 	}
 
 	router.Use(gin.Recovery())
@@ -146,6 +186,16 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 		managedRequestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, managedTenants, usageEndpointText, chatHandler(upstreamProviders, providers, managedTenants, structuredLogger)),
 	)
 	managementService := newManagementService(configuration.Management, configuration.managementSessionValidator, managedTenants, providers, keyVerifier, structuredLogger)
+	payments, err := newPaddlePaymentRuntime(configuration.payments, journalDatabase)
+	if err != nil {
+		return nil, err
+	}
+	if payments != nil {
+		managementService.funding = payments.catalog
+		managementService.paymentPortal = payments.client
+		managementService.paymentClientToken = configuration.payments.clientToken
+		registerPaddlePaymentRoutes(router, payments.inbox)
+	}
 	managementService.registerRoutes(router)
 	if err := registerMCPRoutes(router, configuration, managementService, upstreamProviders, assetStore, mediaOperations); err != nil {
 		return nil, err
@@ -179,16 +229,11 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	}}
 	adapters = append(adapters, openAIClientAdapters(configuration, tenantAuthenticator, providers, upstreamProviders, managedTenants, structuredLogger)...)
 	registerClientMethodErrors(router)
-	return router, RegisterClientProtocols(router, adapters)
-}
-
-// Serve builds the router from the supplied configuration and structuredLogger and starts the HTTP server on the configured port.
-func Serve(configuration Configuration, structuredLogger *zap.SugaredLogger) error {
-	router, buildError := BuildRouter(configuration, structuredLogger)
-	if buildError != nil {
-		return buildError
-	}
-	return router.Run(fmt.Sprintf(":%d", configuration.Port))
+	// Built-in adapters declare fixed, disjoint routes. The public registry
+	// validates external route declarations before using this same core.
+	registerClientProtocolRoutes(router, adapters)
+	application.payments = payments
+	return application, nil
 }
 
 // chatHandler returns a handler that forwards query-string requests to upstream providers.
@@ -285,7 +330,7 @@ func chatV2JSONHandler(upstreamProviders *providerRouter, providers *providerReg
 			return
 		}
 		defer chatRequest.messages.closeMedia()
-		if chatRequest.structuredOutput == nil {
+		if chatRequest.structuredOutput == nil || chatRequest.provider.hostedGrantID != "" {
 			submitChatRequest(ginContext, upstreamProviders, chatRequest, requestTenant, usageEndpointV2, managedTenants, structuredLogger, nativeCompletionEncoder)
 			return
 		}
@@ -541,7 +586,23 @@ func requestReasoningEffortForResolvedTextRoute(provider providerDefinition, mod
 
 func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRouter, chatRequest chatRequestParameters, requestTenant tenant, usageEndpoint string, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, encoder completionEncoder) {
 	requestStart := time.Now()
+	if chatRequest.provider.hostedGrantID != "" {
+		ginContext.Header(headerCacheControl, cacheControlNoStore)
+		key, err := hostedTextKeyValues(ginContext.Request.Header.Values(llmproxycontract.HeaderIdempotencyKey))
+		if err != nil {
+			writeStructuredRequestError(ginContext, http.StatusBadRequest, llmproxycontract.ErrorCodeInvalidIdempotencyKey, "", "", "")
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, requestStart)
+			return
+		}
+		identity := hostedTextIdentity{tenant: requestTenant, key: key, executionID: requestIDFromContext(ginContext)}
+		ginContext.Request = ginContext.Request.WithContext(context.WithValue(ginContext.Request.Context(), hostedTextIdentityContextKey{}, identity))
+	}
 	generation, requestError := executeText(ginContext.Request.Context(), upstreamProviders, chatRequest, structuredLogger)
+	var replay *hostedRequestReplay
+	if errors.As(requestError, &replay) {
+		writeStructuredRequestRecord(ginContext, replay.record, time.Now().UTC())
+		return
+	}
 	if requestError != nil {
 		if requestContextEnded(ginContext) {
 			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, ginContext.Writer.Status(), generation.usage, requestStart)
@@ -572,6 +633,9 @@ func completeChatRequest(ginContext *gin.Context, chatRequest chatRequestParamet
 	markRequestOutcome(ginContext, requestOutcomeSuccess, managedUsageOutcomeSuccess)
 	formattingStartedAt = time.Now()
 	writeTokenUsageHeaders(ginContext.Writer.Header(), generation.usage)
+	if generation.receipt != nil {
+		ginContext.Header(llmproxycontract.HeaderStructuredRequestState, structuredRequestStateSucceeded)
+	}
 	encoder(ginContext, chatRequest, generation)
 	addRequestTelemetryPhase(ginContext.Request.Context(), requestTelemetryPhaseResponseFormatting, formattingStartedAt)
 	recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, http.StatusOK, generation.usage, requestStart)
@@ -658,7 +722,35 @@ func dictateHandler(upstreamProviders *providerRouter, providers *providerRegist
 }
 
 func submitDictationRequest(ginContext *gin.Context, upstreamProviders *providerRouter, dictationRequest dictationRequestParameters, requestTenant tenant, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, requestStart time.Time) {
-	transcribedText, requestError := upstreamProviders.transcribeAudio(ginContext.Request.Context(), dictationRequest, structuredLogger)
+	var transcribedText string
+	var requestError error
+	if dictationRequest.provider.hostedGrantID != "" {
+		ginContext.Header(headerCacheControl, cacheControlNoStore)
+		key, err := hostedTextKeyValues(ginContext.Request.Header.Values(llmproxycontract.HeaderIdempotencyKey))
+		if err != nil {
+			writeStructuredRequestError(ginContext, http.StatusBadRequest, llmproxycontract.ErrorCodeInvalidIdempotencyKey, "", "", "")
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, requestStart)
+			return
+		}
+		if upstreamProviders.hostedText == nil {
+			requestError = errHostedAuthorityDenied
+		} else {
+			identity := hostedTextIdentity{tenant: requestTenant, key: key, executionID: requestIDFromContext(ginContext)}
+			var completion completionResult
+			completion, requestError = upstreamProviders.hostedText.executeDictation(ginContext.Request.Context(), upstreamProviders, dictationRequest, identity, structuredLogger)
+			if requestError == nil {
+				transcribedText = completion.content.text()
+				ginContext.Header(llmproxycontract.HeaderStructuredRequestState, structuredRequestStateSucceeded)
+			}
+		}
+	} else {
+		transcribedText, requestError = upstreamProviders.transcribeAudio(ginContext.Request.Context(), dictationRequest, structuredLogger)
+	}
+	var replay *hostedRequestReplay
+	if errors.As(requestError, &replay) {
+		writeStructuredRequestRecord(ginContext, replay.record, time.Now().UTC())
+		return
+	}
 	if requestError != nil {
 		if requestContextEnded(ginContext) {
 			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, ginContext.Writer.Status(), nil, requestStart)
@@ -793,6 +885,16 @@ func statusCodeForError(requestError error) int {
 		return http.StatusRequestEntityTooLarge
 	case errors.Is(requestError, ErrProviderNotConfigured):
 		return http.StatusConflict
+	case errors.Is(requestError, errUsageJournalConflict), errors.Is(requestError, errJournalClaimLost):
+		return http.StatusConflict
+	case errors.Is(requestError, errHostedAuthorityDenied):
+		return http.StatusForbidden
+	case errors.Is(requestError, errInsufficientFunds):
+		return http.StatusPaymentRequired
+	case errors.Is(requestError, errFinancialAdmissionUnavailable):
+		return http.StatusServiceUnavailable
+	case errors.Is(requestError, errHostedResultExpired):
+		return http.StatusGone
 	case errors.Is(requestError, errQueueFull):
 		return http.StatusServiceUnavailable
 	case errors.Is(requestError, ErrProviderRateLimited):

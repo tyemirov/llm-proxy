@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -16,9 +17,7 @@ import (
 )
 
 type transcriptionResponse struct {
-	Text       string `json:"text"`
-	Transcript string `json:"transcript"`
-	OutputText string `json:"output_text"`
+	Text string `json:"text"`
 }
 
 func (client *OpenAIClient) transcribeAudioWithURL(parentContext context.Context, openAIKey string, transcriptionsURL string, modelFieldName string, modelIdentifier string, fileName string, audioReader io.Reader, structuredLogger *zap.SugaredLogger) (string, error) {
@@ -62,27 +61,15 @@ func (client *OpenAIClient) transcribeAudioWithURL(parentContext context.Context
 }
 
 func parseTranscriptionText(rawPayload []byte) (string, error) {
-	trimmedPayload := strings.TrimSpace(string(rawPayload))
-	if trimmedPayload == constants.EmptyString {
+	var response transcriptionResponse
+	if unmarshalError := json.Unmarshal(rawPayload, &response); unmarshalError != nil {
+		return constants.EmptyString, fmt.Errorf("decode transcription response: %w", unmarshalError)
+	}
+	text := strings.TrimSpace(response.Text)
+	if text == constants.EmptyString {
 		return constants.EmptyString, errors.New(errorOpenAIAPINoText)
 	}
-
-	if strings.HasPrefix(trimmedPayload, "{") {
-		var response transcriptionResponse
-		if unmarshalError := json.Unmarshal(rawPayload, &response); unmarshalError != nil {
-			return constants.EmptyString, unmarshalError
-		}
-
-		for _, candidate := range []string{response.Text, response.Transcript, response.OutputText} {
-			trimmedCandidate := strings.TrimSpace(candidate)
-			if trimmedCandidate != constants.EmptyString {
-				return trimmedCandidate, nil
-			}
-		}
-		return constants.EmptyString, errors.New(errorOpenAIAPINoText)
-	}
-
-	return trimmedPayload, nil
+	return text, nil
 }
 
 func (client *OpenAIClient) performTranscriptionsRequest(httpRequest *http.Request, structuredLogger *zap.SugaredLogger) (int, []byte, http.Header, int64, error) {

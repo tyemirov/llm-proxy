@@ -43,7 +43,7 @@ test("MCP OAuth login, consent, generation, refresh, and revocation", async ({ p
     const created = await context.request.post(`${stack.llmProxyOrigin}/api/management/connections`, { headers: { Origin: stack.frontendOrigin, "Idempotency-Key": "mcp-fixture-connection" }, data: { name: "MCP fixture", provider: "openai", fields: { api_key: "local-mcp-provider-fixture" } } });
     expect(created.status()).toBe(201);
     const connection = await created.json();
-    const assigned = await context.request.put(`${stack.llmProxyOrigin}/api/management/tenants/${tenantID}/connections/openai`, { headers: { Origin: stack.frontendOrigin }, data: { connection_id: connection.id } });
+    const assigned = await context.request.put(`${stack.llmProxyOrigin}/api/management/tenants/${tenantID}/connections/openai`, { headers: { Origin: stack.frontendOrigin }, data: { kind: 'account_connection', resource_id: connection.id } });
     expect(assigned.status()).toBe(200);
     const defaults = await context.request.put(`${stack.llmProxyOrigin}/api/management/tenants/${tenantID}/defaults`, { headers: { Origin: stack.frontendOrigin }, data: { provider: "openai", model: "gpt-4.1", transcription_provider: "", transcription_model: "", system_prompt: "", reasoning_effort: "" } });
     expect(defaults.status()).toBe(200);

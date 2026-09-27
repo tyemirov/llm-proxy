@@ -13,6 +13,8 @@ The request uses bearer authentication at `POST https://api.openai.com/v1/audio/
 The default buffered JSON response contains `text` and detected `languages`.
 The API can report duration usage as `usage.type: duration` and `usage.seconds`.
 The current proxy result remains a complete JSON `text` response.
+The adapter requires a nonempty string `text` field in the provider JSON object.
+It rejects raw text, alternative text fields, arrays, and scalar responses.
 The managed ledger retains its existing request, outcome, latency, and token-estimate contract.
 Provider duration billing remains distinct from those token estimates.
 

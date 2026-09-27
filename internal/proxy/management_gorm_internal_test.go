@@ -346,6 +346,11 @@ func newCanonicalGORMFixture(t *testing.T, now time.Time) *gormManagedTenantData
 	if databaseError != nil {
 		t.Fatalf("open canonical database: %v", databaseError)
 	}
+	t.Cleanup(func() {
+		if err := database.close(); err != nil {
+			t.Error(err)
+		}
+	})
 	user := managedUserRecord{
 		UserID: "owner", UserEmail: "owner@example.com", CreatedAt: now, UpdatedAt: now,
 	}

@@ -2048,3 +2048,18 @@ connection-dashboard button:focus-visible,connection-dashboard input:focus-visib
 @media(prefers-reduced-motion:reduce){connection-dashboard *{transition:none!important;animation:none!important}}
 connection-dashboard *,connection-dashboard *::before,connection-dashboard *::after{box-sizing:border-box}
 .cw-list>.cw-node{min-width:0}
+
+usage-journal{display:block;min-width:0}
+prepaid-balance,payment-history,funding-checkout{display:block;min-width:0}
+.prepaid-balance p{margin:8px 0;overflow-wrap:anywhere}
+.prepaid-balance .funds-totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:12px 0}
+.prepaid-balance dt{color:var(--llm-muted);font-size:12px}.prepaid-balance dd{margin:4px 0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.prepaid-balance .funds-history{list-style:none;display:grid;gap:10px;margin:12px 0;padding:0}
+.prepaid-balance .funds-history>li{display:grid;gap:6px;min-width:0;border:1px solid var(--cw-line);border-radius:8px;padding:12px}
+.prepaid-balance code,.prepaid-balance time{overflow-wrap:anywhere;white-space:normal}
+.usage-journal .journal-list{list-style:none;display:grid;gap:10px;padding:0;margin:12px 0}
+.usage-journal .journal-list>li{display:grid;gap:6px;min-width:0;border:1px solid var(--cw-line);border-radius:8px;padding:12px}
+.usage-journal p{margin:6px 0}.usage-journal code,.usage-journal time{overflow-wrap:anywhere;white-space:normal}
+.usage-journal button{justify-self:start}.usage-journal dl{display:grid;gap:4px;margin:6px 0}
+.usage-journal dt{font-weight:600}.usage-journal dd{margin:0 0 8px;overflow-wrap:anywhere}
+.usage-journal .journal-evidence{border-top:1px solid var(--cw-line);padding-top:12px;margin-top:14px;min-width:0}

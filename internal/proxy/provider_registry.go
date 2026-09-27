@@ -10,6 +10,7 @@ import (
 )
 
 type providerRegistry struct {
+	catalog         *ProviderCatalog
 	definitions     map[providerID]providerDefinition
 	order           []providerID
 	aliases         map[string]providerID
@@ -213,6 +214,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 	applyDefaultEndpointOverrides(configuration.ProviderCatalog.runtimeSchema, definitions, configuration.Endpoints)
 
 	registry := &providerRegistry{
+		catalog:         configuration.ProviderCatalog,
 		definitions:     definitions,
 		order:           order,
 		aliases:         map[string]providerID{},
@@ -283,6 +285,7 @@ func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegis
 	for identifier, definition := range registry.definitions {
 		definition.connectionValues = cloneStringMap(definition.connectionValues)
 		definition.upstreamScope.tenant = requestTenant.identifier.string()
+		definition.hostedGrantID = requestTenant.providerSettings[identifier].hostedGrantID
 		if providerSettings, configured := requestTenant.providerSettings[identifier]; configured && definition.connectionOwnership == CatalogProviderConnectionTenant {
 			definition.upstreamScope.account = providerSettings.connectionID
 			for fieldIdentifier, value := range providerSettings.connectionValues {
@@ -292,6 +295,7 @@ func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegis
 		definitions[identifier] = definition
 	}
 	return &providerRegistry{
+		catalog:         registry.catalog,
 		definitions:     definitions,
 		order:           registry.order,
 		aliases:         registry.aliases,
@@ -394,7 +398,7 @@ func (registry *providerRegistry) resolveTextRequest(rawProvider string, rawMode
 	if resolutionError != nil {
 		return providerDefinition{}, textModelDefinition{}, resolutionError
 	}
-	if definition.credentialFor(endpointKindText) == constants.EmptyString || definition.textEndpointURL == constants.EmptyString {
+	if definition.hostedGrantID == "" && (definition.credentialFor(endpointKindText) == constants.EmptyString || definition.textEndpointURL == constants.EmptyString) {
 		return definition, resolvedModel, fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, definition.identifier.string(), endpointKindText)
 	}
 	return definition, resolvedModel, nil
@@ -433,7 +437,7 @@ func (registry *providerRegistry) resolveDictationRequest(rawProvider string, ra
 	if !slices.Contains(model.operations, ModelOperationDictation) {
 		return definition, resolvedModel, fmt.Errorf("%w: provider=%s model=%s endpoint=%s", ErrUnsupportedEndpoint, definition.identifier.string(), resolvedModel.string(), endpointKindDictation)
 	}
-	if definition.credentialFor(endpointKindDictation) == constants.EmptyString || definition.transcriptionsURL == constants.EmptyString {
+	if definition.hostedGrantID == "" && (definition.credentialFor(endpointKindDictation) == constants.EmptyString || definition.transcriptionsURL == constants.EmptyString) {
 		return definition, resolvedModel, fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, definition.identifier.string(), endpointKindDictation)
 	}
 	return definition, resolvedModel, nil

@@ -44,7 +44,7 @@ func TestOpenAITranscriptionRetirementOwnershipMigration(t *testing.T) {
 			management := managedRouterTestManagementConfiguration()
 			management.DatabaseDialector = database.Dialector
 			configuration := Configuration{ProviderCatalog: internalCanonicalProviderCatalog(), Management: management, AssetStorePath: t.TempDir()}
-			router, err := BuildRouter(withInternalUpstreamCapacity(t, configuration), zap.NewNop().Sugar())
+			router, err := buildRouterForTest(t, withInternalUpstreamCapacity(t, configuration), zap.NewNop().Sugar())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -71,7 +71,7 @@ func TestOpenAITranscriptionRetirementOwnershipMigration(t *testing.T) {
 			if historical.ModelID != model || historical.ProviderID != ProviderNameOpenAI || historical.TotalTokens != 9 {
 				t.Fatal("ownership migration changed historical usage")
 			}
-			if _, err := BuildRouter(withInternalUpstreamCapacity(t, configuration), zap.NewNop().Sugar()); err != nil {
+			if _, err := buildRouterForTest(t, withInternalUpstreamCapacity(t, configuration), zap.NewNop().Sugar()); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -152,7 +152,7 @@ func TestOpenAITranscriptionRetirementStartup(t *testing.T) {
 			management := managedRouterTestManagementConfiguration()
 			management.DatabaseDialector = database.Dialector
 			configuration := Configuration{Endpoints: endpoints, ProviderCatalog: internalCanonicalProviderCatalog(), Management: management, AssetStorePath: t.TempDir()}
-			router, err := BuildRouter(withInternalUpstreamCapacity(t, configuration), zap.NewNop().Sugar())
+			router, err := buildRouterForTest(t, withInternalUpstreamCapacity(t, configuration), zap.NewNop().Sugar())
 			if scenario != "success" {
 				if err == nil || !strings.Contains(err.Error(), "rejected") {
 					t.Fatalf("rollback error=%v", err)
@@ -161,7 +161,7 @@ func TestOpenAITranscriptionRetirementStartup(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err = BuildRouter(withInternalUpstreamCapacity(t, configuration), zap.NewNop().Sugar()); err != nil {
+				if _, err = buildRouterForTest(t, withInternalUpstreamCapacity(t, configuration), zap.NewNop().Sugar()); err != nil {
 					t.Fatal(err)
 				}
 			}

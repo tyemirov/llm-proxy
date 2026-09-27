@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 )
 
 const queueImageResponseBytes = 1 << 20
@@ -105,6 +107,11 @@ func (adapter *queueImageAdapter) Execute(ctx context.Context, request MediaOper
 	var handle queueImageHandle
 	status := response.StatusCode
 	err = readQueueJSON(response, &handle)
+	if status < 200 || status >= 300 {
+		if err := request.recordQueueUsage(response.Header); err != nil {
+			return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ErrorCode: llmproxycontract.ErrorCodeUsageJournalUnavailable}
+		}
+	}
 	if status >= 400 && status < 500 && status != http.StatusRequestTimeout {
 		return MediaOperationExecutionResult{State: MediaOperationStateFailed, ErrorCode: "provider_error"}
 	}
@@ -113,7 +120,7 @@ func (adapter *queueImageAdapter) Execute(ctx context.Context, request MediaOper
 	}
 	encoded, _ := json.Marshal(handle)
 	request.ProviderHandle = string(encoded)
-	if err := request.PersistProviderHandle(request.ProviderHandle); err != nil {
+	if err := request.PersistProviderReceipt(MediaOperationProviderReceipt{Handle: request.ProviderHandle, RequestID: handle.RequestID}); err != nil {
 		return imageGenerationUncertain()
 	}
 	return adapter.poll(ctx, request, provider, handle, controls)
@@ -216,6 +223,9 @@ func (adapter *queueImageAdapter) poll(ctx context.Context, request MediaOperati
 		switch status.Status {
 		case "COMPLETED":
 			if status.Error != "" || status.ErrorType != "" {
+				if err := request.recordQueueUsage(response.Header); err != nil {
+					return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ErrorCode: llmproxycontract.ErrorCodeUsageJournalUnavailable}
+				}
 				return MediaOperationExecutionResult{State: MediaOperationStateFailed, ErrorCode: "provider_error"}
 			}
 			return adapter.result(ctx, request, provider, handle.ResponseURL, controls)
@@ -239,6 +249,10 @@ func (adapter *queueImageAdapter) result(ctx context.Context, request MediaOpera
 	response, err := request.HTTP.Status.Do(req)
 	if err != nil {
 		return imageGenerationUncertain()
+	}
+	if err := request.recordQueueUsage(response.Header); err != nil {
+		response.Body.Close()
+		return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ErrorCode: llmproxycontract.ErrorCodeUsageJournalUnavailable}
 	}
 	var result struct {
 		Images []struct {

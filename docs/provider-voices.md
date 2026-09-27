@@ -2,7 +2,7 @@
 
 One provider resource defines voice discovery in `configs/providers.yml`.
 Dictator and ElevenLabs use the same tenant voice API.
-ElevenLabs uses the existing provider connection and `api_key` field.
+ElevenLabs uses the selected account or platform connection and its `api_key` field.
 Voice observations do not create model offerings.
 
 ## Collection Contract
@@ -37,6 +37,30 @@ The public API does not accept the private native value.
 Dictator discovery includes preset voices and retained extracted voices under the current account authority.
 Its local pages support name search, name sorting, direction, page size, and total count.
 Dictator rejects provider-specific category, voice type, and creation-time filters.
+
+## Hosted Voice Access
+
+Hosted voice reads require an active assigned grant for speech generation or speech conversion.
+The grant must use the current catalog revision and a qualified platform credential version.
+Hosted voice reads remain disabled while hosted admission is disabled.
+Metadata reads do not create billable attempts or funds reservations.
+
+The service checks authority before provider dispatch and after discovery.
+A grant or credential change during discovery rejects the result.
+Hosted cursors bind the grant identifier, grant revision, and credential version in addition to the existing page authority.
+An obsolete cursor returns `400` before provider discovery.
+A denied collection read returns `403`. An inaccessible voice or preview returns `404`.
+
+Hosted ElevenLabs discovery uses native `voice_type=default` and `category=premade` filters.
+Other voice types and categories return `400` for hosted access.
+An unexpected private voice in the native response rejects the complete page before persistence or publication.
+Account-owned connections retain their existing voice filters.
+
+Hosted Dictator discovery combines provider presets with extracted voices retained for the requesting tenant and current credential authority.
+Another tenant cannot list or read those extracted voices, even when both tenants share platform credentials.
+Metadata permission cannot submit a provider job or upload an artifact.
+Preview requests retain the existing origin restrictions and never send platform credentials to preview storage.
+The service checks current hosted authority again before returning preview audio.
 
 ## Voice Observations
 
@@ -77,6 +101,7 @@ The CLI `media voices` command accepts the same query fields as flags and prints
 
 Local tests use the real gateway, local HTTP and gRPC servers, and both official clients.
 They verify native queries, pagination, private references, account authority, previews, and retained Dictator records.
+Hosted tests also verify grant restrictions, credential versions, private voice isolation, and rejection of paid dispatch through metadata permission.
 These tests do not establish live ElevenLabs connectivity or MediaOps consumer acceptance.
 
 ## Native References

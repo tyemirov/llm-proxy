@@ -55,34 +55,40 @@ type CatalogLimit struct {
 
 // CatalogPriceConditions identifies one exact published billing condition set.
 type CatalogPriceConditions struct {
-	Resolution     string `json:"resolution" mapstructure:"resolution" yaml:"resolution,omitempty"`
-	GeneratedAudio string `json:"generated_audio" mapstructure:"generated_audio" yaml:"generated_audio,omitempty"`
-	InputMedia     string `json:"input_media" mapstructure:"input_media" yaml:"input_media,omitempty"`
-	OutputMedia    string `json:"output_media" mapstructure:"output_media" yaml:"output_media,omitempty"`
-	Duration       string `json:"duration" mapstructure:"duration" yaml:"duration,omitempty"`
-	Quantity       string `json:"quantity" mapstructure:"quantity" yaml:"quantity,omitempty"`
-	Quality        string `json:"quality" mapstructure:"quality" yaml:"quality,omitempty"`
-	Mode           string `json:"mode" mapstructure:"mode" yaml:"mode,omitempty"`
-	APIVersion     string `json:"api_version" mapstructure:"api_version" yaml:"api_version,omitempty"`
-	AvatarType     string `json:"avatar_type" mapstructure:"avatar_type" yaml:"avatar_type,omitempty"`
-	BillingMode    string `json:"billing_mode" mapstructure:"billing_mode" yaml:"billing_mode,omitempty"`
-	BillingOutcome string `json:"billing_outcome" mapstructure:"billing_outcome" yaml:"billing_outcome,omitempty"`
+	InputTokens    CatalogTokenRange `json:"input_tokens" mapstructure:"input_tokens" yaml:"input_tokens,omitempty"`
+	CacheClass     string            `json:"cache_class" mapstructure:"cache_class" yaml:"cache_class,omitempty"`
+	ServiceTier    string            `json:"service_tier" mapstructure:"service_tier" yaml:"service_tier,omitempty"`
+	Region         string            `json:"region" mapstructure:"region" yaml:"region,omitempty"`
+	EffectiveFrom  string            `json:"effective_from" mapstructure:"effective_from" yaml:"effective_from,omitempty"`
+	EffectiveUntil string            `json:"effective_until" mapstructure:"effective_until" yaml:"effective_until,omitempty"`
+	Resolution     string            `json:"resolution" mapstructure:"resolution" yaml:"resolution,omitempty"`
+	GeneratedAudio string            `json:"generated_audio" mapstructure:"generated_audio" yaml:"generated_audio,omitempty"`
+	InputMedia     string            `json:"input_media" mapstructure:"input_media" yaml:"input_media,omitempty"`
+	OutputMedia    string            `json:"output_media" mapstructure:"output_media" yaml:"output_media,omitempty"`
+	Duration       string            `json:"duration" mapstructure:"duration" yaml:"duration,omitempty"`
+	Quantity       string            `json:"quantity" mapstructure:"quantity" yaml:"quantity,omitempty"`
+	Quality        string            `json:"quality" mapstructure:"quality" yaml:"quality,omitempty"`
+	Mode           string            `json:"mode" mapstructure:"mode" yaml:"mode,omitempty"`
+	APIVersion     string            `json:"api_version" mapstructure:"api_version" yaml:"api_version,omitempty"`
+	AvatarType     string            `json:"avatar_type" mapstructure:"avatar_type" yaml:"avatar_type,omitempty"`
+	BillingMode    string            `json:"billing_mode" mapstructure:"billing_mode" yaml:"billing_mode,omitempty"`
+	BillingOutcome string            `json:"billing_outcome" mapstructure:"billing_outcome" yaml:"billing_outcome,omitempty"`
 }
 
 // CatalogPriceRate is one exact published billing component.
 type CatalogPriceRate struct {
 	Component  string                 `json:"component" mapstructure:"component" yaml:"component"`
 	Currency   string                 `json:"currency" mapstructure:"currency" yaml:"currency"`
-	Rate       float64                `json:"rate" mapstructure:"rate" yaml:"rate"`
+	Rate       CatalogDecimal         `json:"rate" mapstructure:"rate" yaml:"rate"`
 	Unit       string                 `json:"unit" mapstructure:"unit" yaml:"unit"`
 	Conditions CatalogPriceConditions `json:"conditions" mapstructure:"conditions" yaml:"conditions"`
 }
 
 // CatalogMinimumCharge declares one published request minimum.
 type CatalogMinimumCharge struct {
-	Currency string  `json:"currency" mapstructure:"currency" yaml:"currency"`
-	Amount   float64 `json:"amount" mapstructure:"amount" yaml:"amount"`
-	Unit     string  `json:"unit" mapstructure:"unit" yaml:"unit"`
+	Currency string         `json:"currency" mapstructure:"currency" yaml:"currency"`
+	Amount   CatalogDecimal `json:"amount" mapstructure:"amount" yaml:"amount"`
+	Unit     string         `json:"unit" mapstructure:"unit" yaml:"unit"`
 }
 
 // CatalogPriceDescriptor owns pricing for one provider, model, and operation.
@@ -446,6 +452,16 @@ func validateCatalogPrices(prices []CatalogPriceDescriptor, catalog validatedMod
 			}
 		}
 	}
+	// Services own their price declarations beside their operation contract.
+	// Index those validated declarations with an empty model so all consumers
+	// use the same exact selection and rating machinery.
+	for _, provider := range catalog.providers {
+		for _, service := range provider.Services {
+			descriptor := servicePriceDescriptor(service.Price)
+			descriptor.Provider = provider.ID
+			catalog.prices[catalogPriceIdentifier(provider.ID, "", service.Operation)] = descriptor
+		}
+	}
 	return nil
 }
 
@@ -453,12 +469,19 @@ func catalogPriceIdentifier(provider string, model string, operation string) str
 	return strings.TrimSpace(provider) + "\x00" + strings.TrimSpace(model) + "\x00" + strings.TrimSpace(operation)
 }
 
-func validateCatalogPriceValues(descriptor CatalogPriceDescriptor, field string) error {
-	if !strings.HasPrefix(descriptor.Source, "https://") || descriptor.Source != strings.TrimSpace(descriptor.Source) {
+func validateCatalogPriceSource(source, verified, field string) error {
+	if !strings.HasPrefix(source, "https://") || source != strings.TrimSpace(source) {
 		return fmt.Errorf("%w: field=%s.source", ErrInvalidModelCatalog, field)
 	}
-	if verifiedAt, parseError := time.Parse(time.DateOnly, descriptor.LastVerified); parseError != nil || verifiedAt.Format(time.DateOnly) != descriptor.LastVerified {
+	if verifiedAt, parseError := time.Parse(time.DateOnly, verified); parseError != nil || verifiedAt.Format(time.DateOnly) != verified {
 		return fmt.Errorf("%w: field=%s.last_verified", ErrInvalidModelCatalog, field)
+	}
+	return nil
+}
+
+func validateCatalogPriceValues(descriptor CatalogPriceDescriptor, field string) error {
+	if err := validateCatalogPriceSource(descriptor.Source, descriptor.LastVerified, field); err != nil {
+		return err
 	}
 	if descriptor.Available {
 		if len(descriptor.Rates) == 0 || descriptor.UnavailableReason != constants.EmptyString {
@@ -469,16 +492,24 @@ func validateCatalogPriceValues(descriptor CatalogPriceDescriptor, field string)
 	}
 	seenRates := map[string]struct{}{}
 	for rateIndex, rate := range descriptor.Rates {
-		if strings.TrimSpace(rate.Component) == constants.EmptyString || rate.Component != strings.TrimSpace(rate.Component) || rate.Currency != CatalogCurrencyUSD || math.IsNaN(rate.Rate) || math.IsInf(rate.Rate, 0) || rate.Rate < 0 || strings.TrimSpace(rate.Unit) == constants.EmptyString || rate.Unit != strings.TrimSpace(rate.Unit) {
+		if strings.TrimSpace(rate.Component) == constants.EmptyString || rate.Component != strings.TrimSpace(rate.Component) || rate.Currency != CatalogCurrencyUSD || !validCatalogDecimal(rate.Rate) || strings.TrimSpace(rate.Unit) == constants.EmptyString || rate.Unit != strings.TrimSpace(rate.Unit) {
 			return fmt.Errorf("%w: field=%s.rates[%d]", ErrInvalidModelCatalog, field, rateIndex)
+		}
+		if err := validateCatalogPriceConditions(rate.Conditions); err != nil {
+			return fmt.Errorf("%s.rates[%d]: %w", field, rateIndex, err)
 		}
 		rateIdentifier := fmt.Sprintf("%s\x00%#v", rate.Component, rate.Conditions)
 		if _, duplicate := seenRates[rateIdentifier]; duplicate {
 			return fmt.Errorf("%w: field=%s.rates[%d] reason=ambiguous", ErrInvalidModelCatalog, field, rateIndex)
 		}
 		seenRates[rateIdentifier] = struct{}{}
+		for _, previous := range descriptor.Rates[:rateIndex] {
+			if previous.Component == rate.Component && catalogPriceConditionsOverlap(previous.Conditions, rate.Conditions) {
+				return fmt.Errorf("%w: field=%s.rates[%d] reason=overlapping_conditions", ErrInvalidModelCatalog, field, rateIndex)
+			}
+		}
 	}
-	if descriptor.MinimumCharge != nil && (descriptor.MinimumCharge.Currency != CatalogCurrencyUSD || math.IsNaN(descriptor.MinimumCharge.Amount) || math.IsInf(descriptor.MinimumCharge.Amount, 0) || descriptor.MinimumCharge.Amount < 0 || strings.TrimSpace(descriptor.MinimumCharge.Unit) == constants.EmptyString || descriptor.MinimumCharge.Unit != strings.TrimSpace(descriptor.MinimumCharge.Unit)) {
+	if descriptor.MinimumCharge != nil && (descriptor.MinimumCharge.Currency != CatalogCurrencyUSD || !validCatalogDecimal(descriptor.MinimumCharge.Amount) || strings.TrimSpace(descriptor.MinimumCharge.Unit) == constants.EmptyString || descriptor.MinimumCharge.Unit != strings.TrimSpace(descriptor.MinimumCharge.Unit)) {
 		return fmt.Errorf("%w: field=%s.minimum_charge", ErrInvalidModelCatalog, field)
 	}
 	return nil

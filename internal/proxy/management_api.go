@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -43,12 +44,15 @@ var (
 )
 
 type managementService struct {
-	configuration    ManagementConfiguration
-	sessionValidator *managementSessionValidator
-	store            *managedTenantStore
-	providers        *providerRegistry
-	keyVerifier      providerKeyVerifier
-	structuredLogger *zap.SugaredLogger
+	funding            *fundingCatalog
+	paymentPortal      paddlePortalClient
+	paymentClientToken string
+	configuration      ManagementConfiguration
+	sessionValidator   *managementSessionValidator
+	store              *managedTenantStore
+	providers          *providerRegistry
+	keyVerifier        providerKeyVerifier
+	structuredLogger   *zap.SugaredLogger
 }
 
 type managementAccountResponse struct {
@@ -323,6 +327,44 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	managementGroup.Use(service.sessionMiddleware())
 	managementGroup.Use(service.managementMutationMiddleware())
 	managementGroup.GET(managementAccountPath, service.accountHandler())
+	managementGroup.GET(managementBillingAccountsPath, service.listBillingAccountsHandler())
+	managementGroup.POST(managementBillingAccountsPath, service.createBillingAccountHandler())
+	managementGroup.GET(managementBillingAccountPath, service.getBillingAccountHandler())
+	managementGroup.GET(managementPaymentCheckoutPath, service.paymentCheckoutHandler())
+	managementGroup.GET(managementPaymentReceiptPath, service.paymentReceiptHandler())
+	managementGroup.POST(managementPaymentPortalSessionsPath, service.createPaymentPortalSessionHandler())
+	managementGroup.GET(managementFundingOffersPath, service.fundingOffersHandler())
+	managementGroup.POST(managementFundingOrdersPath, service.createFundingOrderHandler())
+	managementGroup.GET(managementFundingOrdersPath, service.listFundingOrdersHandler())
+	managementGroup.GET(managementFundingOrderPath, service.getFundingOrderHandler())
+	managementGroup.GET(managementFundsBalancePath, service.getFundsBalanceHandler())
+	managementGroup.GET(managementFundsReservationsPath, service.listFundsReservationsHandler())
+	managementGroup.GET(managementFundsReservationPath, service.getFundsReservationHandler())
+	managementGroup.GET(managementFundsEntriesPath, service.listFundsEntriesHandler())
+	managementGroup.GET(managementFundsTenantLimitPath, service.fundsTenantLimitHandler())
+	managementGroup.PUT(managementFundsTenantLimitPath, service.fundsTenantLimitHandler())
+	managementGroup.GET(managementChargesPath, service.listChargesHandler())
+	managementGroup.GET(managementChargePath, service.getChargeHandler())
+	managementGroup.GET(managementPriceSnapshotPath, service.getPriceSnapshotHandler())
+	managementGroup.GET(managementJournalRequestsPath, service.listJournalRequestsHandler())
+	managementGroup.GET(managementJournalRequestPath, service.getJournalRequestHandler())
+	managementGroup.GET(managementRequestChargeSummaryPath, service.getRequestChargeSummaryHandler())
+	managementGroup.GET(managementJournalAttemptsPath, service.listJournalAttemptsHandler())
+	managementGroup.GET(managementJournalObservationsPath, service.listJournalObservationsHandler())
+	managementGroup.GET(managementJournalCasesPath, service.listJournalCasesHandler())
+	managementGroup.GET(managementFundsResolutionPath, service.fundsResolutionHandler())
+	managementGroup.PUT(managementFundsResolutionPath, service.fundsResolutionHandler())
+	managementGroup.GET(managementFundsCreditPath, service.fundsCorrectionHandler())
+	managementGroup.PUT(managementFundsCreditPath, service.fundsCorrectionHandler())
+	managementGroup.GET(managementPlatformConnectionsPath, service.listPlatformConnectionsHandler())
+	managementGroup.POST(managementPlatformConnectionsPath, service.createPlatformConnectionHandler())
+	managementGroup.GET(managementPlatformConnectionPath, service.getPlatformConnectionHandler())
+	managementGroup.PUT(managementPlatformConnectionPath, service.rotatePlatformConnectionHandler())
+	managementGroup.GET(managementHostedGrantsPath, service.listHostedGrantsHandler())
+	managementGroup.POST(managementHostedGrantsPath, service.createHostedGrantHandler())
+	managementGroup.GET(managementHostedGrantPath, service.getHostedGrantHandler())
+	managementGroup.PATCH(managementHostedGrantPath, service.changeHostedGrantHandler())
+	managementGroup.GET(managementHostedGrantRevisionsPath, service.listHostedGrantRevisionsHandler())
 	managementGroup.GET(managementUsagePath, service.accountUsageHandler())
 	managementGroup.GET(managementUsageFailuresPath, service.accountUsageDetailsHandler(managedUsageDispositionFailed))
 	managementGroup.GET(managementUsageRejectionsPath, service.accountUsageDetailsHandler(managedUsageDispositionRejected))
@@ -342,6 +384,7 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	tenantGroup.GET(managementUsageFailuresPath, service.usageDetailsHandler(managedUsageDispositionFailed))
 	tenantGroup.GET(managementUsageRejectionsPath, service.usageDetailsHandler(managedUsageDispositionRejected))
 	tenantGroup.PUT("/provider-profiles/:provider", service.saveTenantProviderProfileHandler())
+	tenantGroup.GET(managementConnectionsPath, service.listProviderAssignmentsHandler())
 	tenantGroup.PUT(managementTenantConnectionPath, service.assignConnectionHandler())
 	tenantGroup.DELETE(managementTenantConnectionPath, service.detachConnectionHandler())
 	tenantGroup.PUT(managementDefaultsPath, service.updateDefaultsHandler())
@@ -413,7 +456,7 @@ func (service *managementService) applyCORSHeaders(ginContext *gin.Context) {
 	ginContext.Header(headerAccessControlAllowOrigin, requestOrigin)
 	ginContext.Header(headerAccessControlAllowCredentials, "true")
 	ginContext.Header(headerAccessControlAllowHeaders, headerContentType+", "+managementIdempotencyHeader)
-	ginContext.Header(headerAccessControlAllowMethods, "GET, PUT, POST, DELETE, OPTIONS")
+	ginContext.Header(headerAccessControlAllowMethods, "GET, PUT, PATCH, POST, DELETE, OPTIONS")
 	ginContext.Header(headerVary, headerOrigin)
 }
 
@@ -745,7 +788,7 @@ func writeManagementStoreError(ginContext *gin.Context, storeError error) {
 	switch {
 	case errors.Is(storeError, errManagedTenantNotFound):
 		ginContext.AbortWithStatus(http.StatusNotFound)
-	case errors.Is(storeError, errManagedTenantNameConflict), errors.Is(storeError, errManagedFinalTenantDeletion), errors.Is(storeError, errManagedProviderKeyConflict):
+	case errors.Is(storeError, errManagedTenantNameConflict), errors.Is(storeError, errManagedFinalTenantDeletion), errors.Is(storeError, errManagedProviderKeyConflict), errors.Is(storeError, errManagedTenantHostedHistory):
 		ginContext.String(http.StatusConflict, storeError.Error())
 	case errors.Is(storeError, errManagedTenantNameInvalid), errors.Is(storeError, errManagedProviderKeyInvalid), errors.Is(storeError, errManagedProviderBaseURLInvalid), errors.Is(storeError, errManagementDefaults):
 		ginContext.String(http.StatusBadRequest, storeError.Error())
@@ -802,7 +845,7 @@ func (service *managementService) providerResponses(providerSettings map[provide
 			Resources:                 providerResourceKinds(summary.resources),
 			Services:                  cloneProviderServices(summary.services),
 			ModelFamilies:             modelFamilies,
-			Configured:                configured && settings.hasRequiredConnectionFields(definition),
+			Configured:                configured && (settings.hostedGrantID != "" || settings.hasRequiredConnectionFields(definition)),
 			Fields:                    make([]managementProviderFieldResponse, 0, len(definition.fieldOrder)),
 			TextModel:                 summary.textDefaultModel,
 			SystemPrompt:              constants.EmptyString,
@@ -898,6 +941,9 @@ func decodeManagementJSON(ginContext *gin.Context, target any) error {
 	jsonDecoder.DisallowUnknownFields()
 	if decodeError := jsonDecoder.Decode(target); decodeError != nil {
 		return fmt.Errorf("%w: %v", errManagementBadRequest, decodeError)
+	}
+	if decodeError := jsonDecoder.Decode(new(any)); decodeError != io.EOF {
+		return fmt.Errorf("%w: request body requires one JSON value", errManagementBadRequest)
 	}
 	return nil
 }

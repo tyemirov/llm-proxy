@@ -105,9 +105,9 @@ await renderPublicSite(options);
 /** @typedef {{id: string, kind: string, values: string[], minimum: number | null, maximum: number | null, account_dependent: boolean, image_size?: PublicImageSizeConstraints}} PublicCatalogControl */
 /** @typedef {{id: string, value: number | null, unit: string, account_dependent: boolean}} PublicCatalogLimit */
 /** @typedef {{id: string, media_type: string, transport: string, status: string, value: number | null, unit: string, scope: string, source: string, last_verified: string}} PublicCatalogMediaLimit */
-/** @typedef {{resolution: string, generated_audio: string, input_media: string, output_media: string, duration: string, quantity: string, quality: string, mode: string, api_version: string, avatar_type: string, billing_mode: string, billing_outcome: string}} PublicPriceConditions */
-/** @typedef {{component: string, currency: string, rate: number, unit: string, conditions: PublicPriceConditions}} PublicPriceRate */
-/** @typedef {{currency: string, amount: number, unit: string}} PublicMinimumCharge */
+/** @typedef {{input_tokens: {minimum:string,maximum_exclusive:string,unresolved_reason:string},cache_class:string,service_tier:string,region:string,effective_from:string,effective_until:string,resolution: string, generated_audio: string, input_media: string, output_media: string, duration: string, quantity: string, quality: string, mode: string, api_version: string, avatar_type: string, billing_mode: string, billing_outcome: string}} PublicPriceConditions */
+/** @typedef {{component: string, currency: string, rate: string, unit: string, conditions: PublicPriceConditions}} PublicPriceRate */
+/** @typedef {{currency: string, amount: string, unit: string}} PublicMinimumCharge */
 /** @typedef {{provider: string, model: string, operation: string, available: boolean, rates: PublicPriceRate[], minimum_charge: PublicMinimumCharge | null, source: string, last_verified: string, unavailable_reason: string}} PublicPriceDescriptor */
 /**
  * @typedef {{
@@ -656,7 +656,7 @@ function parsePriceValues(rawPrice,field) {
     return {
       component: requiredString(rate.component, `${rateField}.component`),
       currency: requiredString(rate.currency, `${rateField}.currency`),
-      rate: requiredNonnegativeNumber(rate.rate, `${rateField}.rate`),
+      rate: requiredExactDecimal(rate.rate, `${rateField}.rate`),
       unit: requiredString(rate.unit, `${rateField}.unit`),
       conditions: parsePriceConditions(rate.conditions, `${rateField}.conditions`),
     };
@@ -667,7 +667,7 @@ function parsePriceValues(rawPrice,field) {
     requireExactKeys(minimum, ["currency", "amount", "unit"], `${field}.minimum_charge`);
     minimumCharge = {
       currency: requiredString(minimum.currency, `${field}.minimum_charge.currency`),
-      amount: requiredNonnegativeNumber(minimum.amount, `${field}.minimum_charge.amount`),
+      amount: requiredExactDecimal(minimum.amount, `${field}.minimum_charge.amount`),
       unit: requiredString(minimum.unit, `${field}.minimum_charge.unit`),
     };
   }
@@ -689,14 +689,32 @@ function parsePriceValues(rawPrice,field) {
  */
 function parsePriceConditions(rawConditions, field) {
   const conditions = requiredRecord(rawConditions, field);
-  const keys = [
+  const strings = [
     "resolution", "generated_audio", "input_media", "output_media", "duration", "quantity",
     "quality", "mode", "api_version", "avatar_type", "billing_mode", "billing_outcome",
+    "cache_class", "service_tier", "region", "effective_from", "effective_until",
   ];
-  requireExactKeys(conditions, keys, field);
-  return /** @type {PublicPriceConditions} */ (Object.fromEntries(
-    keys.map((key) => [key, requiredString(conditions[key], `${field}.${key}`, true)]),
-  ));
+  requireExactKeys(conditions, [...strings,"input_tokens"], field);
+  const range = requiredRecord(conditions.input_tokens, `${field}.input_tokens`);
+  requireExactKeys(range,["minimum","maximum_exclusive","unresolved_reason"],`${field}.input_tokens`);
+  const minimum = requiredTokenBoundary(range.minimum,`${field}.input_tokens.minimum`);
+  const maximum = requiredTokenBoundary(range.maximum_exclusive,`${field}.input_tokens.maximum_exclusive`);
+  const unresolved = requiredString(range.unresolved_reason,`${field}.input_tokens.unresolved_reason`,true);
+  if ((maximum!=="0" && BigInt(minimum)>=BigInt(maximum)) || (unresolved!=="" && (minimum!=="0" || maximum!=="0"))) {
+    throw new Error(`public_capabilities_invalid: ${field}.input_tokens`);
+  }
+  return /** @type {PublicPriceConditions} */ ({
+    ...Object.fromEntries(strings.map(key=>[key,requiredString(conditions[key],`${field}.${key}`,true)])),
+    input_tokens:{minimum,maximum_exclusive:maximum,unresolved_reason:unresolved},
+  });
+}
+
+/** @param {unknown} value @param {string} field */
+function requiredTokenBoundary(value,field) {
+  if (typeof value!=="string" || !/^(0|[1-9][0-9]*)$/.test(value) || value.length>20 || BigInt(value)>18446744073709551615n) {
+    throw new Error(`public_capabilities_invalid: ${field} must be an exact token boundary`);
+  }
+  return value;
 }
 
 /**
@@ -1219,9 +1237,9 @@ function requiredFiniteNumber(value, field) {
  * @param {unknown} value
  * @param {string} field
  */
-function requiredNonnegativeNumber(value, field) {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    throw new Error(`public_capabilities_invalid: ${field} must be a nonnegative number`);
+function requiredExactDecimal(value, field) {
+  if (typeof value !== "string" || value.length > 128 || !/^(0|[1-9][0-9]*)(\.[0-9]*[1-9])?$/.test(value)) {
+    throw new Error(`public_capabilities_invalid: ${field} must be an exact decimal string`);
   }
   return value;
 }

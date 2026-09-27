@@ -39,6 +39,9 @@ func structuredRequestStatusHandler(store *structuredRequestStore) gin.HandlerFu
 			writeStructuredRequestError(ginContext, http.StatusBadRequest, llmproxycontract.ErrorCodeInvalidIdempotencyKey, "", "", "")
 			return
 		}
+		if store.hosted != nil && store.hosted.writeStatus(ginContext, authenticatedTenantFromContext(ginContext), idempotencyKey) {
+			return
+		}
 		record, lookupError := store.lookup(authenticatedTenantFromContext(ginContext), idempotencyKey)
 		if errors.Is(lookupError, errStructuredRequestNotFound) {
 			writeStructuredRequestError(ginContext, http.StatusNotFound, llmproxycontract.ErrorCodeStructuredRequestNotFound, "", "", "")
@@ -90,6 +93,10 @@ func writeStructuredRequestRecord(ginContext *gin.Context, record structuredRequ
 }
 
 func writeStructuredRequestError(ginContext *gin.Context, statusCode int, code string, state string, cause string, proxyRequestID string) {
+	if _, clientProtocol := ginContext.Get(contextKeyClientErrorEncoder); clientProtocol {
+		writeOpenAIError(ginContext, statusCode, code, "The durable request could not complete. Reconcile the same idempotency key.")
+		return
+	}
 	ginContext.JSON(statusCode, structuredRequestErrorEnvelope{Error: structuredRequestError{
 		Code: code, State: state, Cause: cause, ProxyRequestID: proxyRequestID,
 	}})

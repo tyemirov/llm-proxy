@@ -218,7 +218,7 @@ func TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer(testingInstance 
 	}, http.StatusCreated)
 	connectionID := connection["id"].(string)
 	tenantID := managementDefaultTenantTestID(testingInstance, router, sessionCookie)
-	accountConnectionExchange(testingInstance, router, sessionCookie, http.MethodPut, "/tenants/"+tenantID+"/connections/"+testCatalogProviderID, map[string]string{"connection_id": connectionID}, http.StatusOK)
+	accountConnectionExchange(testingInstance, router, sessionCookie, http.MethodPut, "/tenants/"+tenantID+"/connections/"+testCatalogProviderID, map[string]string{"kind": "account_connection", "resource_id": connectionID}, http.StatusOK)
 	profile := accountConnectionExchange(testingInstance, router, sessionCookie, http.MethodPut, "/tenants/"+tenantID+"/provider-profiles/"+testCatalogProviderID, map[string]string{"text_model": testCatalogModelID, "system_prompt": testCatalogProviderSystem}, http.StatusOK)
 	profileBytes, marshalError := json.Marshal(profile)
 	if marshalError != nil {

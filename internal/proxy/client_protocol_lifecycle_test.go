@@ -122,6 +122,37 @@ func TestClientProtocolsRegistryIsAtomic(t *testing.T) {
 	}
 }
 
+func TestClientProtocolsRegistryServesAcceptedRoutes(t *testing.T) {
+	router := gin.New()
+	handler := func(c *gin.Context) { c.String(http.StatusOK, c.Request.Method+" "+c.Request.URL.Path) }
+	adapters := []proxy.ClientProtocolAdapter{
+		{Name: "query", Routes: []proxy.ClientProtocolRoute{{Method: http.MethodGet, Path: "/query", Handler: handler}}},
+		{Name: "command", Routes: []proxy.ClientProtocolRoute{{Method: http.MethodPost, Path: "/command", Handler: handler}}},
+	}
+	if err := proxy.RegisterClientProtocols(router, adapters); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(router)
+	defer server.Close()
+	for _, adapter := range adapters {
+		for _, route := range adapter.Routes {
+			request, err := http.NewRequest(route.Method, server.URL+route.Path, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response, err := server.Client().Do(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, err := io.ReadAll(response.Body)
+			response.Body.Close()
+			if err != nil || response.StatusCode != http.StatusOK || string(body) != route.Method+" "+route.Path {
+				t.Fatalf("registered route status=%d body=%s error=%v", response.StatusCode, body, err)
+			}
+		}
+	}
+}
+
 func TestClientProtocolsCancellationAndTimeout(t *testing.T) {
 	for _, protocol := range []struct{ path, body string }{{"/v1/chat/completions", `{"model":"openai/gpt-5.6","messages":[{"role":"user","content":"hello"}],"stream":true}`}, {"/v1/responses", `{"model":"openai/gpt-5.6","input":"hello","stream":true}`}} {
 		t.Run(protocol.path, func(t *testing.T) {

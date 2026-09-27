@@ -41,7 +41,10 @@ The adapter streams the owned audio asset and transcript to the configured nativ
 The current native contract is `POST /v1/forced-alignment` with multipart fields `file` and `text`.
 It does not send a native model identifier.
 The effective input limit is the lower of the catalog service limit and the proxy asset limit.
-The catalog native limit is 1,000,000,000 bytes.
+The catalog byte limit is 1,000,000,000 bytes.
+The catalog also declares the provider duration bound of 36000 seconds.
+Financial admission reserves this duration because the proxy does not decode audio duration before submission.
+The alignment catalog requires both limits. A lower duration bound cannot limit the actual provider work.
 
 The output is one tenant-owned JSON asset with `characters`, `words`, and an optional `loss`.
 Each segment has `text`, `start`, and `end`. Optional segment loss values remain in the output.
@@ -56,7 +59,18 @@ Accepted input assets remain referenced while work is active.
 A repeated idempotency key with the same intent returns the same operation.
 An uncertain submission is never sent again during recovery.
 Native alignment has no recovery or cancellation endpoint in this contract.
+The adapter saves the validated output, provider trace, and request interval before result publication.
+The private receipt uses adapter revision `elevenlabs_alignment:2` in the execution binding.
+After a failed publication, a replacement worker validates this receipt and restores the output without another provider request.
+An absent or invalid receipt leaves the outcome uncertain. A failed receipt write does not publish the output.
+The provider trace is a private journal identifier. The receipt and request interval remain outside public responses.
 Queued work can be cancelled. Running work reports unsupported cancellation.
+
+Hosted execution reads native usage with the saved trace and request interval before result publication.
+Empty usage rows keep the operation pending. One measured request supplies the exact input duration.
+Shutdown preserves a valid receipt and releases the worker claim for recovery.
+The replacement worker reads usage without another paid submission. Ledger keeps the funds reservation until settlement.
+See [Hosted provider services](hosted-billing.md#hosted-provider-services) for the native measurement and price contracts.
 
 ## Validation
 

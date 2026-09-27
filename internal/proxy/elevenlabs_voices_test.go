@@ -60,7 +60,7 @@ func TestElevenLabsVoicesPreservePagesAndPrivateAccountAuthority(t *testing.T) {
 			tenant := managementDefaultTenantTestID(t, router, owner)
 			key := generateManagementTenantSecret(t, router, owner, tenant)
 			conn := accountConnectionExchange(t, router, owner, "POST", "/connections", map[string]any{"name": "Voices", "provider": provider, "fields": map[string]string{"resource_token": "voice-secret"}}, 201)
-			accountConnectionExchange(t, router, owner, "PUT", "/tenants/"+tenant+"/connections/"+provider, map[string]string{"connection_id": conn["id"].(string)}, 200)
+			accountConnectionExchange(t, router, owner, "PUT", "/tenants/"+tenant+"/connections/"+provider, map[string]string{"kind": "account_connection", "resource_id": conn["id"].(string)}, 200)
 			server := httptest.NewServer(router)
 			defer server.Close()
 			read := func(query string, want int) map[string]any {
@@ -121,7 +121,7 @@ func TestElevenLabsVoicesPreservePagesAndPrivateAccountAuthority(t *testing.T) {
 			}
 			otherTenant := createManagementTenant(t, router, owner, "Other voices").Tenant.ID
 			otherKey := generateManagementTenantSecret(t, router, owner, otherTenant)
-			accountConnectionExchange(t, router, owner, "PUT", "/tenants/"+otherTenant+"/connections/"+provider, map[string]string{"connection_id": conn["id"].(string)}, 200)
+			accountConnectionExchange(t, router, owner, "PUT", "/tenants/"+otherTenant+"/connections/"+provider, map[string]string{"kind": "account_connection", "resource_id": conn["id"].(string)}, 200)
 			foreignRead := func(path, key string, want int) {
 				t.Helper()
 				request, _ := http.NewRequestWithContext(t.Context(), "GET", server.URL+path, nil)
@@ -195,7 +195,7 @@ func TestElevenLabsVoicesRejectInvalidNativePagesAndQueries(t *testing.T) {
 	tenant := managementDefaultTenantTestID(t, router, owner)
 	key := generateManagementTenantSecret(t, router, owner, tenant)
 	connection := accountConnectionExchange(t, router, owner, "POST", "/connections", map[string]any{"name": "Voices", "provider": "elevenlabs", "fields": map[string]string{"resource_token": "secret"}}, 201)
-	accountConnectionExchange(t, router, owner, "PUT", "/tenants/"+tenant+"/connections/elevenlabs", map[string]string{"connection_id": connection["id"].(string)}, 200)
+	accountConnectionExchange(t, router, owner, "PUT", "/tenants/"+tenant+"/connections/elevenlabs", map[string]string{"kind": "account_connection", "resource_id": connection["id"].(string)}, 200)
 	server := httptest.NewServer(router)
 	defer server.Close()
 	read := func(query string, status int) {

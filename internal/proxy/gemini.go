@@ -292,6 +292,7 @@ func (client *geminiInteractionsClient) createInteraction(parentContext context.
 }
 
 func (client *geminiInteractionsClient) getInteraction(parentContext context.Context, apiKey string, baseURL string, interactionIdentifier string, structuredLogger *zap.SugaredLogger) (geminiInteractionSnapshot, error) {
+	parentContext = contextWithHostedProviderRole(parentContext, hostedProviderObservation)
 	responseBytes, requestError := client.performInteractionRequest(
 		parentContext,
 		http.MethodGet,
@@ -342,6 +343,7 @@ func (client *geminiInteractionsClient) releaseInteraction(parentContext context
 }
 
 func (client *geminiInteractionsClient) performInteractionCleanupRequest(parentContext context.Context, method string, requestURL string, apiKey string, structuredLogger *zap.SugaredLogger) error {
+	parentContext = contextWithHostedProviderRole(parentContext, hostedProviderAuxiliary)
 	cleanupContext, cancelCleanup := context.WithTimeout(parentContext, geminiInteractionCleanupTimeout)
 	defer cancelCleanup()
 	_, requestError := client.performInteractionRequest(cleanupContext, method, requestURL, apiKey, nil, structuredLogger)
@@ -639,12 +641,20 @@ func validatedGeminiFileObject(file geminiFile, attachment *messageMedia, baseUR
 }
 
 func (client *geminiInteractionsClient) performGeminiFileRequest(request *http.Request) ([]byte, http.Header, error) {
+	role := hostedProviderAuxiliary
+	if request.Method == http.MethodPost {
+		role = hostedProviderStaging
+	}
+	request = request.Clone(contextWithHostedProviderRole(request.Context(), role))
 	response, requestError := client.httpClient.Do(request)
 	if requestError != nil {
 		if contextError := request.Context().Err(); contextError != nil {
 			return nil, nil, contextError
 		}
 		if errors.Is(requestError, errQueueFull) {
+			return nil, nil, requestError
+		}
+		if _, hostedFailure := hostedRequestErrorCode(requestError); hostedFailure {
 			return nil, nil, requestError
 		}
 		return nil, nil, ErrProviderAPI

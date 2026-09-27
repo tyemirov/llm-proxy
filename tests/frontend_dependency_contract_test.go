@@ -123,6 +123,7 @@ func TestOperationalFrontendValidationPreparesPinnedDependencies(testingInstance
 
 	for _, scenario := range scenarios {
 		testingInstance.Run(scenario.name, func(testingInstance *testing.T) {
+			preserveParentCoverageReport(testingInstance)
 			fixtureRoot := testingInstance.TempDir()
 			prepareFrontendDependencyFixture(testingInstance, repositoryRoot, fixtureRoot)
 			npmLogPath := filepath.Join(fixtureRoot, "npm.log")
@@ -147,6 +148,7 @@ func TestOperationalFrontendValidationPreparesPinnedDependencies(testingInstance
 			command.Dir = fixtureRoot
 			command.Env = append(
 				frontendDependencyFixtureEnvironment(),
+				"COVERAGE_FILE="+filepath.Join(fixtureRoot, "coverage.out"),
 				"FRONTEND_NPM_LOG="+npmLogPath,
 				"FRONTEND_PLAYWRIGHT_FIXTURE="+filepath.Join(fixtureRoot, "playwright"),
 			)

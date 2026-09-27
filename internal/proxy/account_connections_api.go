@@ -354,10 +354,8 @@ func (service *managementService) assignConnectionHandler() gin.HandlerFunc {
 			writeConnectionError(ctx, errManagedConnectionInvalid)
 			return
 		}
-		var request struct {
-			ConnectionID string `json:"connection_id"`
-		}
-		if err := decodeManagementJSON(ctx, &request); err != nil || request.ConnectionID == "" {
+		var request managementAssignmentRequest
+		if err := decodeManagementJSON(ctx, &request); err != nil || request.validate() != nil {
 			writeConnectionError(ctx, errManagedConnectionInvalid)
 			return
 		}
@@ -366,7 +364,12 @@ func (service *managementService) assignConnectionHandler() gin.HandlerFunc {
 			writeConnectionError(ctx, err)
 			return
 		}
-		err = service.store.database.assignAccountConnection(ctx.Request.Context(), principal.userID, tenantID.string(), providerID.string(), request.ConnectionID, service.providers.definitions[providerID].defaultTextModel.string(), service.store.now())
+		switch request.Kind {
+		case assignmentAccountConnection:
+			err = service.store.database.assignAccountConnection(ctx.Request.Context(), principal.userID, tenantID.string(), providerID.string(), request.ResourceID, service.providers.definitions[providerID].defaultTextModel.string(), service.store.now())
+		case assignmentHostedGrant:
+			err = service.store.database.assignHostedGrant(ctx.Request.Context(), principal.userID, tenantID.string(), providerID.string(), request.ResourceID, service.providers.definitions[providerID].defaultTextModel.string(), service.store.now())
+		}
 		service.store.mutex.Unlock()
 		if err != nil {
 			writeConnectionError(ctx, err)
@@ -404,7 +407,7 @@ func (service *managementService) detachConnectionHandler() gin.HandlerFunc {
 			writeConnectionError(ctx, err)
 			return
 		}
-		err = service.store.database.detachAccountConnection(ctx.Request.Context(), managementPrincipalFromContext(ctx).userID, tenantID.string(), providerID.string(), clearDefaults, service.store.now())
+		err = service.store.database.detachProviderAssignment(ctx.Request.Context(), managementPrincipalFromContext(ctx).userID, tenantID.string(), providerID.string(), clearDefaults, service.store.now())
 		service.store.mutex.Unlock()
 		if err != nil {
 			writeConnectionError(ctx, err)

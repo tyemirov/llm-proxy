@@ -249,7 +249,7 @@ func imageResponsesDurableClient(t *testing.T, upstream *httptest.Server) (llmpr
 		for _, change := range changes {
 			change(&configuration)
 		}
-		router, err := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+		router, err := testfixtures.BuildRouter(t, configuration, zap.NewNop().Sugar())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -270,7 +270,7 @@ func imageResponsesDurableClient(t *testing.T, upstream *httptest.Server) (llmpr
 			if err := database.Table("managed_tenant_connection_records").Where("provider_id = ?", "openai").First(&assignment).Error; err != nil {
 				t.Fatal(err)
 			}
-			accountConnectionExchange(t, router, cookie, http.MethodPut, "/tenants/"+otherTenant+"/connections/openai", map[string]string{"connection_id": assignment.ConnectionID}, http.StatusOK)
+			accountConnectionExchange(t, router, cookie, http.MethodPut, "/tenants/"+otherTenant+"/connections/openai", map[string]string{"kind": "account_connection", "resource_id": assignment.ConnectionID}, http.StatusOK)
 			foreignSecret = generateManagementTenantSecret(t, router, cookie, otherTenant)
 		}
 		foreignConfig, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: server.URL, Secret: foreignSecret})
@@ -796,5 +796,50 @@ func TestImageGenerationResponsesClassifiesProviderOutcomesWithoutResubmission(t
 				t.Fatalf("result=%+v error=%+v calls=%d", result, result.Error, calls.Load())
 			}
 		})
+	}
+}
+
+func TestImageGenerationResponsesLostPollPreservesAcceptedOperation(t *testing.T) {
+	var creates, polls atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodPost && request.URL.Path == "/responses" {
+			creates.Add(1)
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprint(writer, `{"id":"resp_lost_poll","status":"queued"}`)
+			return
+		}
+		if request.Method == http.MethodGet && request.URL.Path == "/responses/resp_lost_poll" {
+			polls.Add(1)
+			connection, _, err := writer.(http.Hijacker).Hijack()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			_ = connection.Close()
+			return
+		}
+		t.Errorf("unexpected provider request: %s %s", request.Method, request.URL.Path)
+		writer.WriteHeader(http.StatusBadRequest)
+	}))
+	defer upstream.Close()
+	client := imageGenerationTestClient(t, upstream, testfixtures.ProviderCatalog(t), "openai")
+	input := imageGenerationTestIntent()
+	input.Surface, input.ResponsesModel = "responses", "gpt-5"
+	accepted, err := client.CreateImageGeneration(t.Context(), "lost-image-poll", input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := waitForImageGeneration(t, client, accepted)
+	if result.State != "uncertain" || result.Error == nil || result.Error.Code != "provider_outcome_unknown" || len(result.Outputs) != 0 {
+		t.Fatalf("lost poll result=%+v error=%+v", result, result.Error)
+	}
+	for range 2 {
+		replayed, err := client.CreateImageGeneration(t.Context(), "lost-image-poll", input)
+		if err != nil || replayed.OperationID != accepted.OperationID || replayed.State != "uncertain" {
+			t.Fatalf("replayed=%+v error=%v", replayed, err)
+		}
+	}
+	if creates.Load() != 1 || polls.Load() == 0 {
+		t.Fatalf("submissions=%d polls=%d", creates.Load(), polls.Load())
 	}
 }

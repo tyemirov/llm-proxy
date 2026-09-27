@@ -18,7 +18,7 @@ const dictatorArtifactChunkBytes = 64 * 1024
 type dictatorGRPCProtocol struct {
 	provider      string
 	model         string
-	connection    *grpc.ClientConn
+	connection    grpc.ClientConnInterface
 	token         string
 	binding       string
 	maxAssetBytes int64

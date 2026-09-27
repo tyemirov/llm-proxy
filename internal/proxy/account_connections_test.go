@@ -121,8 +121,8 @@ func TestAccountConnectionEditsRequireCurrentAssignmentPreview(t *testing.T) {
 		body   any
 		status int
 	}{
-		{http.MethodPut, "/tenants/" + tenantID + "/connections/openai", map[string]string{"connection_id": id}, http.StatusOK},
-		{http.MethodPut, "/tenants/" + secondTenant + "/connections/openai", map[string]string{"connection_id": id}, http.StatusOK},
+		{http.MethodPut, "/tenants/" + tenantID + "/connections/openai", map[string]string{"kind": "account_connection", "resource_id": id}, http.StatusOK},
+		{http.MethodPut, "/tenants/" + secondTenant + "/connections/openai", map[string]string{"kind": "account_connection", "resource_id": id}, http.StatusOK},
 		{http.MethodDelete, "/tenants/" + tenantID + "/connections/openai", nil, http.StatusNoContent},
 		{http.MethodDelete, "/tenants/" + secondTenant, nil, http.StatusNoContent},
 	}
@@ -179,7 +179,7 @@ func TestAccountConnectionSharedRoutingAndTenantUsage(t *testing.T) {
 	connection := exchange(http.MethodPost, "/connections", map[string]any{"name": "Production", "provider": "openai", "fields": map[string]string{"api_key": "shared-original-key"}}, http.StatusCreated)
 	id := connection["id"].(string)
 	for _, tenantID := range []string{first, second} {
-		exchange(http.MethodPut, "/tenants/"+tenantID+"/connections/openai", map[string]string{"connection_id": id}, http.StatusOK)
+		exchange(http.MethodPut, "/tenants/"+tenantID+"/connections/openai", map[string]string{"kind": "account_connection", "resource_id": id}, http.StatusOK)
 	}
 	saveManagementDefaults(t, router, owner, first, proxy.ModelNameGPT41, "First tenant prompt")
 	saveManagementDefaults(t, router, owner, second, proxy.ModelNameGPT55, "Second tenant prompt")
@@ -355,21 +355,21 @@ func TestAccountConnectionLifecycle(t *testing.T) {
 		t.Fatal("new connection was implicitly assigned")
 	}
 	assignment := "/tenants/" + tenantID + "/connections/openai"
-	request(http.MethodPut, assignment, `{"connection_id":"`+id+`"}`, owner, http.StatusOK)
-	request(http.MethodPut, assignment, `{"connection_id":"`+id+`"}`, owner, http.StatusOK)
+	request(http.MethodPut, assignment, `{"kind":"account_connection","resource_id":"`+id+`"}`, owner, http.StatusOK)
+	request(http.MethodPut, assignment, `{"kind":"account_connection","resource_id":"`+id+`"}`, owner, http.StatusOK)
 	profile := request(http.MethodGet, "/tenants/"+tenantID, "", owner, http.StatusOK)
 	defaults := profile["tenant"].(map[string]any)["defaults"].(map[string]any)
 	if defaults["provider"] != "" || defaults["model"] != "" {
 		t.Fatalf("attachment selected defaults: %v", defaults)
 	}
 	request(http.MethodGet, "/connections/"+id, "", other, http.StatusNotFound)
-	request(http.MethodPut, assignment, `{"connection_id":"`+id+`"}`, other, http.StatusNotFound)
+	request(http.MethodPut, assignment, `{"kind":"account_connection","resource_id":"`+id+`"}`, other, http.StatusNotFound)
 	request(http.MethodDelete, "/connections/"+id, `{}`, owner, http.StatusConflict)
 	second := request(http.MethodPost, "/connections", `{"name":"Other","provider":"openai","fields":{"api_key":"`+testManagementOpenAIKey+`"}}`, owner, http.StatusCreated)
-	request(http.MethodPut, assignment, `{"connection_id":"`+second["id"].(string)+`"}`, owner, http.StatusConflict)
+	request(http.MethodPut, assignment, `{"kind":"account_connection","resource_id":"`+second["id"].(string)+`"}`, owner, http.StatusConflict)
 	tenant := request(http.MethodPost, "/tenants", `{"name":"Social Threader"}`, owner, http.StatusCreated)
 	secondTenantID := tenant["tenant"].(map[string]any)["id"].(string)
-	request(http.MethodPut, "/tenants/"+secondTenantID+"/connections/openai", `{"connection_id":"`+id+`"}`, owner, http.StatusOK)
+	request(http.MethodPut, "/tenants/"+secondTenantID+"/connections/openai", `{"kind":"account_connection","resource_id":"`+id+`"}`, owner, http.StatusOK)
 	shared := request(http.MethodGet, "/connections/"+id, "", owner, http.StatusOK)
 	if len(shared["tenant_ids"].([]any)) != 2 {
 		t.Fatalf("assignments=%v", shared)

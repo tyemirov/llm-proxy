@@ -158,14 +158,9 @@ func (adapter *imageGenerationAdapter) resolveImageProvider(ctx context.Context,
 }
 
 func resolveMediaProvider(ctx context.Context, request MediaOperationExecutionRequest, providerID, transportID string, definition providerDefinition, tenants *managedTenantStore, store *mediaOperationStore) (providerDefinition, error) {
-	var assignment managedTenantConnectionRecord
-	err := store.database.WithContext(ctx).Preload("Connection.Fields").Where("tenant_id = ? AND provider_id = ?", request.TenantID, providerID).First(&assignment).Error
-	if err != nil || assignment.ConnectionID+":v"+strconv.FormatUint(assignment.Connection.Version, 10) != request.CredentialReference {
-		return providerDefinition{}, errMediaOperationUnavailable
-	}
-	settings, err := tenants.accountConnectionSettings(assignment.Connection)
+	settings, _, err := mediaConnectionSettings(ctx, request.TenantID, providerID, request.CredentialReference, tenants, store)
 	if err != nil {
-		return providerDefinition{}, errMediaOperationUnavailable
+		return providerDefinition{}, err
 	}
 	provider := definition
 	provider.connectionValues = cloneStringMap(provider.connectionValues)
@@ -222,21 +217,27 @@ func (adapter *imageGenerationAdapter) executeImages(ctx context.Context, reques
 	if controls.Stream {
 		return adapter.decodeStream(response.Body, controls, request)
 	}
-	return adapter.decodeOutputs(response.Body, controls)
+	return adapter.decodeOutputs(response.Body, controls, request)
 }
 
-func (adapter *imageGenerationAdapter) decodeOutputs(body io.Reader, controls imageGenerationControls) MediaOperationExecutionResult {
+func (adapter *imageGenerationAdapter) decodeOutputs(body io.Reader, controls imageGenerationControls, request MediaOperationExecutionRequest) MediaOperationExecutionResult {
 	maximumBodyBytes := ((adapter.maximumOutputBytes+2)/3*4+1024)*int64(controls.OutputCount) + 65536
 	encoded, err := io.ReadAll(io.LimitReader(body, maximumBodyBytes+1))
 	if err != nil {
 		return imageGenerationUncertain()
+	}
+	if int64(len(encoded)) > maximumBodyBytes {
+		return MediaOperationExecutionResult{State: MediaOperationStateFailed, ErrorCode: "provider_result_invalid"}
+	}
+	if err := request.recordImageUsage(encoded); err != nil {
+		return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ErrorCode: llmproxycontract.ErrorCodeUsageJournalUnavailable}
 	}
 	var result struct {
 		Data []struct {
 			Base64 string `json:"b64_json"`
 		} `json:"data"`
 	}
-	if int64(len(encoded)) > maximumBodyBytes || json.Unmarshal(encoded, &result) != nil || len(result.Data) != controls.OutputCount {
+	if json.Unmarshal(encoded, &result) != nil || len(result.Data) != controls.OutputCount {
 		return MediaOperationExecutionResult{State: MediaOperationStateFailed, ErrorCode: "provider_result_invalid"}
 	}
 	outputs := make([]MediaOperationOutput, 0, controls.OutputCount)

@@ -46,9 +46,12 @@ The catalog records the provider's two input context tiers under `pay_as_you_go_
 | Up to 512k | 0.30 | 1.20 | 0.06 |
 | Above 512k | 0.60 | 2.40 | 0.12 |
 
-Each rate retains its tier in `conditions.mode`.
-The tier identifiers are `input_tokens_up_to_512k` and `input_tokens_above_512k`.
-The provider's standard service tier applies to these requests.
+Each rate retains the standard service tier in `conditions.service_tier`.
+The published `512k` boundary remains in `conditions.input_tokens.unresolved_reason`.
+The official pricing page does not state the exact integer for that boundary.
+The 2026-09-23 review did not establish whether it means 512,000 or 524,288 tokens.
+Hosted admission rejects this unresolved condition. The catalog retains both published rates for comparison.
+The M3 candidate remains disabled under F045.
 
 ## Qualification
 

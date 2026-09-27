@@ -113,7 +113,8 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `price snapshot`: The immutable rates, conditions, effective time, and revision selected for one accepted request.
 - `customer charge`: The monetary amount assigned to customer usage under the selected price snapshot.
 - `provider cost`: The monetary amount attributed to upstream work, with its evidence and reconciliation state.
-- `credit ledger`: An append-only record of balanced monetary entries for customer funds, reservations, charges, and adjustments.
+- `credit ledger`: The existing Ledger journal of monetary effects for one account, including funds, reservations, charges, and adjustments.
+- `balance conservation`: The equality between an account balance and its recorded financial effects, with exact remainders and holds accounted for.
 - `funds reservation`: A durable hold that reduces available customer funds before provider work starts.
 - `payment receipt`: A retained record of a processor payment and its verified financial state.
 - `payment inbox`: A durable collection of verified processor events awaiting application to financial records.

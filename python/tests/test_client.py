@@ -19,6 +19,7 @@ import yaml
 
 from llm_proxy_client import (
     Client,
+    ClientHTTPResponse,
     ClientConfig,
     ClientAspectRatioImageInput,
     ClientMessage,
@@ -96,13 +97,13 @@ def test_client_upload_asset_validates_exact_response_without_exposing_bytes() -
 
     data = b"asset-image"
 
-    def opener(request: urllib.request.Request, *, timeout: float | None = None) -> str:
+    def opener(request: urllib.request.Request, *, timeout: float | None = None) -> ClientHTTPResponse:
         assert request.full_url.endswith("/model/v1/assets")
         assert request.data == data
         assert request.headers["Content-type"] == "image/png"
         assert request.headers["Authorization"] == "Bearer sekret"
         assert set(request.headers) == {"Content-type", "Authorization"}
-        return json.dumps(
+        return ClientHTTPResponse(201, json.dumps(
             {
                 "asset_id": "ast_0123456789abcdef0123456789abcdef",
                 "mime_type": "image/png",
@@ -111,7 +112,7 @@ def test_client_upload_asset_validates_exact_response_without_exposing_bytes() -
                 "created_at": "2026-08-11T10:00:00Z",
                 "expires_at": "2026-08-13T10:00:00Z",
             }
-        )
+        ))
 
     client = Client(ClientConfig(base_url="https://proxy.example/v2", secret="sekret"), opener=opener)
     asset = client.upload_asset(data, " IMAGE/PNG ")
@@ -283,9 +284,9 @@ def test_client_uses_typed_durable_media_and_voice_resources() -> None:
     )
     requests: list[urllib.request.Request] = []
 
-    def opener(request: urllib.request.Request, *, timeout: float | None = None) -> str:
+    def opener(request: urllib.request.Request, *, timeout: float | None = None) -> ClientHTTPResponse:
         requests.append(request)
-        return next(responses)
+        return ClientHTTPResponse(200, next(responses))
 
     client = Client(ClientConfig(base_url="https://proxy.example/v2", secret="sekret"), opener=opener)
     operation = client.create_media_operation(
@@ -406,9 +407,9 @@ def test_client_reads_media_capabilities_and_waits_for_terminal_operation() -> N
     )
     requests: list[urllib.request.Request] = []
 
-    def opener(request: urllib.request.Request, *, timeout: float | None = None) -> str:
+    def opener(request: urllib.request.Request, *, timeout: float | None = None) -> ClientHTTPResponse:
         requests.append(request)
-        return next(responses)
+        return ClientHTTPResponse(200, next(responses))
 
     client = Client(ClientConfig(base_url="https://proxy.example/v2", secret="sekret"), opener=opener)
     capabilities = client.get_media_capabilities()
@@ -583,7 +584,7 @@ def assert_python_v2_request_conforms_to_openapi(captured_request: CapturedReque
     client_body_fields = {
         client_field.name
         for client_field in fields(ClientMessagesRequest)
-        if client_field.name != "request_timeout_seconds"
+        if client_field.name not in {"request_timeout_seconds", "idempotency_key"}
     }
     assert client_body_fields == contract_body_fields
     assert captured_request.body is not None
@@ -922,7 +923,6 @@ def test_client_posts_schema_constrained_request_with_idempotency_header(running
             "required": ["decision"],
             "properties": {"decision": {"type": "string", "enum": ["pass", "return"]}},
         },
-        idempotency_key="review:story-1",
     )
     client = Client(ClientConfig(base_url=running_server.url, secret="test-secret", provider="openai"))
 
@@ -931,6 +931,7 @@ def test_client_posts_schema_constrained_request_with_idempotency_header(running
             messages=(ClientMessage(role="user", content="Review"),),
             model="gpt-5.5",
             structured_output=structured_output,
+            idempotency_key="review:story-1",
         )
     )
 
@@ -1065,7 +1066,8 @@ def test_config_validation_errors(config_kwargs: dict[str, object], expected_err
             {
                 "messages": (ClientMessage(role="user", content="prompt"),),
                 "web_search": True,
-                "structured_output": ClientStructuredOutput(schema={}, idempotency_key="request-1"),
+                "structured_output": ClientStructuredOutput(schema={}),
+                "idempotency_key": "request-1",
             },
             "structured output conflicts with web_search",
         ),
@@ -1079,20 +1081,19 @@ def test_messages_request_validation_errors(request_kwargs: dict[str, object], e
 
 
 @pytest.mark.parametrize(
-    ("schema", "idempotency_key", "expected_error"),
+    ("schema", "expected_error"),
     [
-        ([], "request-1", "schema must be an object"),
-        ({"const": float("nan")}, "request-1", "schema must be valid JSON"),
-        ({}, " bad", "invalid idempotency key"),
+        ([], "schema must be an object"),
+        ({"const": float("nan")}, "schema must be valid JSON"),
     ],
 )
 def test_structured_output_validation_errors(
-    schema: object, idempotency_key: str, expected_error: str
+    schema: object, expected_error: str
 ) -> None:
     """Invalid structured-output input fails before HTTP work."""
 
     with pytest.raises(LLMProxyClientError, match=expected_error):
-        ClientStructuredOutput(schema=schema, idempotency_key=idempotency_key)  # type: ignore[arg-type]
+        ClientStructuredOutput(schema=schema)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
@@ -1140,7 +1141,7 @@ def test_http_error_exposes_status_and_body(running_server: RunningServer) -> No
 def test_transport_error_is_typed() -> None:
     """Transport errors are surfaced separately from HTTP status errors."""
 
-    def failing_opener(request: urllib.request.Request, *, timeout: float | None = None) -> str:
+    def failing_opener(request: urllib.request.Request, *, timeout: float | None = None) -> ClientHTTPResponse:
         raise urllib.error.URLError("network unavailable")
 
     client = Client(
@@ -1167,7 +1168,7 @@ def test_transport_error_is_typed() -> None:
 def test_transport_owned_timeout_is_typed_transport_error() -> None:
     """An injected transport may still enforce its independently owned cancellation policy."""
 
-    def timing_out_opener(request: urllib.request.Request, *, timeout: float | None = None) -> str:
+    def timing_out_opener(request: urllib.request.Request, *, timeout: float | None = None) -> ClientHTTPResponse:
         raise TimeoutError("transport timed out")
 
     client = Client(
@@ -1185,7 +1186,7 @@ def test_transport_owned_timeout_is_typed_transport_error() -> None:
 def test_ssl_failure_is_typed_transport_error() -> None:
     """Raw socket and SSL style failures are surfaced through the transport-error contract."""
 
-    def failing_opener(request: urllib.request.Request, *, timeout: float | None = None) -> str:
+    def failing_opener(request: urllib.request.Request, *, timeout: float | None = None) -> ClientHTTPResponse:
         raise OSError("record layer failure")
 
     client = Client(

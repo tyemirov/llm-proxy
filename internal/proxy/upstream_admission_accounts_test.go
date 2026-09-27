@@ -82,7 +82,7 @@ func TestUpstreamAdmissionSharesAccountCapacityAcrossTenants(t *testing.T) {
 	shared, independent := connection("shared"), connection("independent")
 	secrets := map[string]string{}
 	for tenant, id := range map[string]string{tenantA: shared, tenantB: shared, tenantC: independent} {
-		accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+tenant+"/connections/deepseek", map[string]string{"connection_id": id}, http.StatusOK)
+		accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+tenant+"/connections/deepseek", map[string]string{"kind": "account_connection", "resource_id": id}, http.StatusOK)
 		secrets[tenant] = generateManagementTenantSecret(t, router, owner, tenant)
 	}
 	for _, event := range logs.FilterMessage("upstream HTTP admission").All() {

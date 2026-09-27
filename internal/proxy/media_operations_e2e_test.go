@@ -210,7 +210,7 @@ func TestMediaVoiceResourcesAreTenantOwnedAndProviderPrivate(testingInstance *te
 	if provisionError != nil {
 		testingInstance.Fatal(provisionError)
 	}
-	router, routerError := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+	router, routerError := testfixtures.BuildRouter(testingInstance, configuration, zap.NewNop().Sugar())
 	if routerError != nil {
 		testingInstance.Fatal(routerError)
 	}
@@ -239,7 +239,7 @@ func TestMediaVoiceResourcesAreTenantOwnedAndProviderPrivate(testingInstance *te
 			testingInstance.Fatal(err)
 		}
 	}
-	restartedRouter, restartError := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+	restartedRouter, restartError := testfixtures.BuildRouter(testingInstance, configuration, zap.NewNop().Sugar())
 	if restartError != nil {
 		testingInstance.Fatal(restartError)
 	}
@@ -370,7 +370,7 @@ func TestMediaOperationRestartRecoversDispatchedWorkAndDeduplicatesUsage(testing
 		testingInstance.Fatal(databaseError)
 	}
 	adapter.database = database
-	firstRouter, firstBuildError := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+	firstRouter, firstBuildError := testfixtures.BuildRouter(testingInstance, configuration, zap.NewNop().Sugar())
 	if firstBuildError != nil {
 		testingInstance.Fatal(firstBuildError)
 	}
@@ -404,7 +404,7 @@ func TestMediaOperationRestartRecoversDispatchedWorkAndDeduplicatesUsage(testing
 		testingInstance.Fatalf("execute calls=%d", adapter.executeCalls.Load())
 	}
 
-	secondRouter, secondBuildError := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+	secondRouter, secondBuildError := testfixtures.BuildRouter(testingInstance, configuration, zap.NewNop().Sugar())
 	if secondBuildError != nil {
 		testingInstance.Fatal(secondBuildError)
 	}
@@ -422,7 +422,7 @@ func TestMediaOperationRestartRecoversDispatchedWorkAndDeduplicatesUsage(testing
 	if updateError := database.Table("media_operation_records").Where("operation_id = ?", accepted.OperationID).Update("terminal_at", time.Now().Add(-49*time.Hour)).Error; updateError != nil {
 		testingInstance.Fatal(updateError)
 	}
-	thirdRouter, thirdBuildError := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+	thirdRouter, thirdBuildError := testfixtures.BuildRouter(testingInstance, configuration, zap.NewNop().Sugar())
 	if thirdBuildError != nil || thirdRouter == nil {
 		testingInstance.Fatalf("third router=%v error=%v", thirdRouter, thirdBuildError)
 	}

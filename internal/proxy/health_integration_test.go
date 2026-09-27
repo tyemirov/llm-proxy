@@ -39,12 +39,12 @@ func TestPublicHealthChecksDatastoreWithoutUsage(t *testing.T) {
 	}
 	invalidConfig := config
 	invalidConfig.Management.TAuthURL = ""
-	if _, err := buildRouter(invalidConfig, zap.NewNop().Sugar(), newManagedTenantStore); err == nil || !strings.Contains(err.Error(), "mcp.configure") {
+	if _, err := buildRouterWithStoreForTest(t, invalidConfig, zap.NewNop().Sugar(), newManagedTenantStore); err == nil || !strings.Contains(err.Error(), "mcp.configure") {
 		t.Fatalf("invalid OAuth startup error=%v", err)
 	}
 	core, logs := observer.New(zap.InfoLevel)
 	var store *managedTenantStore
-	router, err := buildRouter(config, zap.New(core).Sugar(), func(configuration ManagementConfiguration, providers *providerRegistry) (*managedTenantStore, error) {
+	router, err := buildRouterWithStoreForTest(t, config, zap.New(core).Sugar(), func(configuration ManagementConfiguration, providers *providerRegistry) (*managedTenantStore, error) {
 		var openError error
 		store, openError = newManagedTenantStore(configuration, providers)
 		return store, openError

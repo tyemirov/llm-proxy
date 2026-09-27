@@ -6,7 +6,7 @@ P001 defines the dashboard design. F063 implements that design.
 
 An account owns tenants and named provider connections.
 A connection contains one provider identity, its credentials, and its required settings.
-Each tenant can assign one connection per provider.
+Each tenant can assign one account connection or one hosted access grant per provider.
 The same connection can serve multiple tenants within its account.
 A tenant can also leave a provider unconfigured.
 
@@ -103,6 +103,29 @@ Creation receipts remain after connection deletion, so a delayed retry cannot re
 Read the connection resource for its current state.
 The canonical [OpenAPI contract](openapi.yaml) defines each management operation and its request shape.
 
+## Hosted Access
+
+F065 adds hosted access to the dashboard.
+The Hosted access section shows grants for the selected tenant and the customer's billing account.
+Each grant shows its state and permitted models and operations.
+An assigned grant remains visible after suspension or revocation.
+The service does not expose platform credentials in customer responses.
+Hosted execution remains disabled until the shared F070 acceptance requirements pass.
+
+1. Select `Create billing account` to create the USD account.
+2. Select `Refresh hosted access` after an operator provisions a grant.
+3. Select `Use hosted access` on an active grant.
+4. Select `API access` to create the tenant key.
+
+This flow does not require customer provider credentials.
+The assignment API requires `kind` and `resource_id`.
+The permitted kinds are `account_connection` and `hosted_access_grant`.
+The service rejects the obsolete `connection_id` request field.
+`GET /api/management/tenants/{tenant_id}/connections` returns the saved selections.
+The customer must detach an assignment before selecting another resource for that provider.
+Provider profiles retain the tenant's model and prompt settings for either assignment kind.
+See [hosted billing](hosted-billing.md) for pricing decisions, payment integration reuse, and the remaining work.
+
 ## Dictator speech connections
 
 An account can connect its own Dictator server.
@@ -143,6 +166,8 @@ The assignment removal and default updates occur in one database transaction.
 The transaction clears only defaults that use the removed connection.
 The service rejects connection deletion while assignments remain.
 The existing final-tenant deletion constraint remains in effect.
+Tenant deletion also returns a conflict when hosted grant history exists, including revoked grants.
+This restriction preserves the tenant identity and grant audit.
 
 ## Current database schema
 
@@ -150,6 +175,10 @@ The current schema is versionless.
 Fresh databases create the current tables directly, without a migration-version table or intermediate provider-key tables.
 Current account-connection databases validate their records on startup.
 Historical version records do not control this validation and remain unchanged.
+Production SQLite connections enforce foreign keys.
+Hosted tables and assignment constraints are created together when no hosted schema exists.
+Startup rejects partial hosted schemas and altered assignment constraints without repair.
+Startup also rejects broken foreign keys, credential histories, grant audits, ownership relations, and hosted assignments.
 Startup rejects predecessor credential and temporary transfer tables beside the current account connections.
 It preserves the rejected records for operator action.
 
@@ -196,7 +225,9 @@ Default-route validation and connection detachment use the same mutation lock.
 
 1. Run `make test-account-connections` for connection ownership, assignment, versionless startup, restart, and remaining transfer checks.
 2. Run `make test-management-auth-blackbox BLACKBOX_TEST_ARGS='connection-dashboard.spec.js'` for the real browser flow.
-3. Run the remaining repository checks required by the current validation policy.
+3. Run `make test-hosted-access` for hosted account, grant, assignment, authority, and database checks.
+4. Run `make test-management-auth-blackbox BLACKBOX_TEST_ARGS='hosted-access.spec.js'` for hosted browser setup.
+5. Run the remaining repository checks required by the current validation policy.
 
 The browser fixture uses local TAuth and the real LLM Proxy server.
 Its controlled upstream responses prove the local interaction contract.

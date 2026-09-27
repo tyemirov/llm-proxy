@@ -116,7 +116,7 @@ func TestStructuredMessagesRequestValidation(testingInstance *testing.T) {
 		{Messages: []MessageInput{{Role: "user", Content: "review"}}, StructuredOutput: &StructuredOutputInput{JSONSchema: []byte(`{} {}`)}, IdempotencyKey: "key"},
 		{Messages: []MessageInput{{Role: "user", Content: "review"}}, StructuredOutput: &StructuredOutputInput{JSONSchema: []byte(`{"type":"missing"}`)}, IdempotencyKey: "key"},
 		{Messages: []MessageInput{{Role: "user", Content: "review"}}, StructuredOutput: &StructuredOutputInput{JSONSchema: validSchema}},
-		{Messages: []MessageInput{{Role: "user", Content: "review"}}, IdempotencyKey: "key"},
+		{Messages: []MessageInput{{Role: "user", Content: "review"}}, IdempotencyKey: " key "},
 		{Messages: []MessageInput{{Role: "user", Content: "review"}}, StructuredOutput: &StructuredOutputInput{JSONSchema: validSchema}, IdempotencyKey: strings.Repeat("x", 129)},
 		{Messages: []MessageInput{{Role: "user", Content: "review"}}, WebSearch: true, StructuredOutput: &StructuredOutputInput{JSONSchema: validSchema}, IdempotencyKey: "key"},
 	}

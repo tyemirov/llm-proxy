@@ -118,7 +118,7 @@ func TestAstraCatalog(t *testing.T) {
 	if len(rates) != 8 {
 		t.Fatalf("rates=%v", rates)
 	}
-	for index, expected := range []float64{10, 50, 1, 12.5, 20, 75, 2, 25} {
+	for index, expected := range []proxy.CatalogDecimal{"10", "50", "1", "12.5", "20", "75", "2", "25"} {
 		if rates[index].Rate != expected || rates[index].Conditions.BillingMode != "standard" {
 			t.Fatalf("rate=%v", rates[index])
 		}

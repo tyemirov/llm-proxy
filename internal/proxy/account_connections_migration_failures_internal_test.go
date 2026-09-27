@@ -124,7 +124,7 @@ func TestAccountConnectionStartupRejectsInvalidSchemaAndRelations(t *testing.T) 
 		t.Run(scenario, func(t *testing.T) {
 			service, database, server := newAccountConnectionHTTPFixture(t)
 			created := accountConnectionHTTPExchange(t, server, http.MethodPost, managementConnectionsPath, `{"name":"Startup","provider":"openai","fields":{"api_key":"sk-original"}}`, http.StatusCreated)
-			accountConnectionHTTPExchange(t, server, http.MethodPut, "/tenants/managed-first/connections/openai", fmt.Sprintf(`{"connection_id":%q}`, created["id"]), http.StatusOK)
+			accountConnectionHTTPExchange(t, server, http.MethodPut, "/tenants/managed-first/connections/openai", fmt.Sprintf(`{"kind":"account_connection","resource_id":%q}`, created["id"]), http.StatusOK)
 			var changeError error
 			switch scenario {
 			case "missing-table":

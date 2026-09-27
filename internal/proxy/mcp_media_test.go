@@ -24,7 +24,7 @@ func TestMCPDictatorWorkflow(t *testing.T) {
 	owner := managementSessionCookie(t, "speech-owner")
 	tenantID := requestManagementAccount(t, fixture.router, owner).Tenants[0].ID
 	connection := accountConnectionExchange(t, fixture.router, owner, http.MethodPost, "/connections", map[string]any{"name": "Speech", "provider": "dictator", "fields": map[string]string{"grpc_address": listener.Addr().String(), "grpc_auth_token": native.token, "grpc_tls": "false"}}, http.StatusCreated)
-	accountConnectionExchange(t, fixture.router, owner, http.MethodPut, "/tenants/"+tenantID+"/connections/dictator", map[string]any{"connection_id": connection["id"]}, http.StatusOK)
+	accountConnectionExchange(t, fixture.router, owner, http.MethodPut, "/tenants/"+tenantID+"/connections/dictator", map[string]any{"kind": "account_connection", "resource_id": connection["id"]}, http.StatusOK)
 	config, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: fixture.server.URL, Secret: generateManagementTenantSecret(t, fixture.router, owner, tenantID)})
 	if err != nil {
 		t.Fatal(err)

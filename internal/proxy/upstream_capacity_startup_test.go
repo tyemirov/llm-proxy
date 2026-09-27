@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"go.uber.org/zap"
 )
 
@@ -27,11 +28,11 @@ func TestUpstreamCapacityRejectsUndeclaredSavedConnectionOrigin(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("save connection: status=%d body=%s", response.Code, response.Body.String())
 	}
-	if _, err = proxy.BuildRouter(configuration, zap.NewNop().Sugar()); err != nil {
+	if _, err = testfixtures.BuildRouter(t, configuration, zap.NewNop().Sugar()); err != nil {
 		t.Fatalf("declared saved origin: %v", err)
 	}
 	configuration.UpstreamCapacity.Origins = slices.DeleteFunc(configuration.UpstreamCapacity.Origins, func(rule proxy.UpstreamOriginCapacity) bool { return rule.Origin == origin })
-	if _, err = proxy.BuildRouter(configuration, zap.NewNop().Sugar()); !errors.Is(err, proxy.ErrInvalidUpstreamCapacity) {
+	if _, err = testfixtures.BuildRouter(t, configuration, zap.NewNop().Sugar()); !errors.Is(err, proxy.ErrInvalidUpstreamCapacity) {
 		t.Fatalf("undeclared saved origin startup error=%v", err)
 	}
 }

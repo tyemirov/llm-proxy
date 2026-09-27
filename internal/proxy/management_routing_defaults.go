@@ -3,6 +3,7 @@ package proxy
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -101,11 +102,36 @@ func validatePersistedManagedRoutingDefaults(providers *providerRegistry, provid
 	if defaultsError != nil {
 		return managedRoutingDefaults{}, defaultsError
 	}
-	reconciled, reconciliationError := reconcileManagedRoutingDefaults(providers, providerSettings, defaults)
+	// A saved hosted route is a preference within the assigned grant. It does
+	// not supply a provider key or authorize execution while a grant is inactive.
+	currentValue := defaults.value()
+	for _, route := range []struct {
+		provider, model *string
+		operation       string
+	}{
+		{&currentValue.Provider, &currentValue.Model, ModelOperationText},
+		{&currentValue.TranscriptionProvider, &currentValue.TranscriptionModel, ModelOperationDictation},
+		{&currentValue.SpeechProvider, &currentValue.SpeechModel, ModelOperationSpeechGeneration},
+	} {
+		settings := providerSettings[providerID(*route.provider)]
+		if settings.hostedGrantID == "" {
+			continue
+		}
+		if !slices.ContainsFunc(settings.hostedOfferings, func(offering hostedGrantOffering) bool {
+			return offering.Model == *route.model && slices.Contains(offering.Operations, route.operation)
+		}) {
+			return managedRoutingDefaults{}, fmt.Errorf("%w: reason=hosted_scope_ineligible", errManagedRoutingDefaultsInvalid)
+		}
+		*route.provider, *route.model = "", ""
+		if route.operation == ModelOperationText {
+			currentValue.ReasoningEffort = ""
+		}
+	}
+	reconciled, reconciliationError := reconcileManagedRoutingDefaults(providers, providerSettings, managedRoutingDefaults{tenantDefaults: currentValue})
 	if reconciliationError != nil {
 		return managedRoutingDefaults{}, reconciliationError
 	}
-	currentValue, reconciledValue := defaults.value(), reconciled.value()
+	reconciledValue := reconciled.value()
 	// Connection assignment does not select a tenant default route.
 	if currentValue.Provider == constants.EmptyString {
 		reconciledValue.Provider = constants.EmptyString

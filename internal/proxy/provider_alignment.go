@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -19,6 +20,7 @@ import (
 const (
 	CatalogProtocolElevenLabsAlignment = "elevenlabs_alignment"
 	alignmentInputLimit                = "input_audio_bytes"
+	alignmentAdapterRevision           = CatalogProtocolElevenLabsAlignment + ":2"
 )
 
 type providerAlignmentInput struct {
@@ -37,6 +39,13 @@ type providerAlignmentOutput struct {
 	Loss       *float64                   `json:"loss,omitempty"`
 }
 
+type providerAlignmentReceipt struct {
+	TraceID     string          `json:"trace_id"`
+	StartedAt   time.Time       `json:"started_at"`
+	CompletedAt time.Time       `json:"completed_at"`
+	Output      json.RawMessage `json:"output"`
+}
+
 type providerAlignmentAdapter struct {
 	route             ProviderCatalogService
 	provider          providerDefinition
@@ -48,7 +57,13 @@ type providerAlignmentAdapter struct {
 }
 
 func newProviderAlignmentAdapter(route ProviderCatalogService, provider providerDefinition, tenants *managedTenantStore, store *mediaOperationStore, assets *tenantAssetStore) *providerAlignmentAdapter {
-	return &providerAlignmentAdapter{route: route, provider: provider, tenants: tenants, store: store, assets: assets, binding: providerServiceBinding(route, provider, CatalogProtocolElevenLabsAlignment), maximumInputBytes: int64(*route.Limits[0].Value)}
+	var maximumInputBytes int64
+	for _, limit := range route.Limits {
+		if limit.ID == alignmentInputLimit {
+			maximumInputBytes = int64(*limit.Value)
+		}
+	}
+	return &providerAlignmentAdapter{route: route, provider: provider, tenants: tenants, store: store, assets: assets, binding: providerServiceBinding(route, provider, alignmentAdapterRevision), maximumInputBytes: maximumInputBytes}
 }
 
 func providerServiceBinding(route ProviderCatalogService, provider providerDefinition, codec string) string {
@@ -114,6 +129,7 @@ func (adapter *providerAlignmentAdapter) Execute(ctx context.Context, request Me
 	native.ContentLength = int64(body.Len()) + metadata.SizeBytes
 	native.Header.Set("Content-Type", form.FormDataContentType())
 	authorizeQueueRequest(native, provider)
+	startedAt := adapter.store.now().UTC()
 	response, err := request.HTTP.Submission.Do(native)
 	if err != nil {
 		return imageSubmissionFailure(err)
@@ -134,11 +150,39 @@ func (adapter *providerAlignmentAdapter) Execute(ctx context.Context, request Me
 		return imageGenerationUncertain()
 	}
 	encoded, _ := json.Marshal(output)
-	return MediaOperationExecutionResult{State: MediaOperationStateSucceeded, Outputs: []MediaOperationOutput{{MIMEType: "application/json", Data: encoded}}}
+	receipt := providerAlignmentReceipt{TraceID: strings.TrimSpace(response.Header.Get("x-trace-id")), StartedAt: startedAt, CompletedAt: adapter.store.now().UTC(), Output: encoded}
+	handle, _ := json.Marshal(receipt)
+	if err := request.PersistProviderReceipt(MediaOperationProviderReceipt{Handle: string(handle), RequestID: receipt.TraceID}); err != nil {
+		return imageGenerationUncertain()
+	}
+	return adapter.alignmentResult(ctx, request, receipt)
 }
 
-func (*providerAlignmentAdapter) Recover(context.Context, MediaOperationExecutionRequest) MediaOperationExecutionResult {
-	return imageGenerationUncertain()
+func (adapter *providerAlignmentAdapter) Recover(ctx context.Context, request MediaOperationExecutionRequest) MediaOperationExecutionResult {
+	receipt, valid := adapter.decodeRecoveryReceipt(request.ExecutionBinding, request.ProviderHandle)
+	if !valid {
+		return imageGenerationUncertain()
+	}
+	return adapter.alignmentResult(ctx, request, receipt)
+}
+
+func (adapter *providerAlignmentAdapter) canRecoverAfterShutdown(binding, handle string) bool {
+	_, valid := adapter.decodeRecoveryReceipt(binding, handle)
+	return valid
+}
+
+func (adapter *providerAlignmentAdapter) decodeRecoveryReceipt(binding, handle string) (providerAlignmentReceipt, bool) {
+	var receipt providerAlignmentReceipt
+	if binding != adapter.binding || !decodeImageRequestObject([]byte(handle), &receipt) || receipt.StartedAt.IsZero() || receipt.CompletedAt.Before(receipt.StartedAt) || strings.TrimSpace(receipt.TraceID) != receipt.TraceID {
+		return providerAlignmentReceipt{}, false
+	}
+	output, valid := decodeProviderAlignment(receipt.Output)
+	if !valid {
+		return providerAlignmentReceipt{}, false
+	}
+	encoded, _ := json.Marshal(output)
+	receipt.Output = encoded
+	return receipt, true
 }
 func (*providerAlignmentAdapter) Cancel(context.Context, MediaOperationExecutionRequest) MediaOperationCancellationResult {
 	return MediaOperationCancellationResult{State: MediaCancellationUnsupported}

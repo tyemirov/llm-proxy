@@ -1,5 +1,7 @@
 # ISSUES
 
+[repo:MediaOps]: https://github.com/MarcoPoloResearchLab/MediaOps
+
 Entries record newly discovered requests or changes.
 
 Read @AGENTS.md (Workflow section), @POLICY.md, and relevant stack guides before implementing changes.
@@ -25,7 +27,1620 @@ initial `v0.2.43` index and complete entries from later archive passes.
 Current dependencies name unresolved prerequisites only. Archived issue bodies
 retain satisfied historical dependencies.
 
+Migration scope (2026-09-23):
+LLM Proxy owns all media-provider API access. MediaOps provides one API and processing service.
+TelePrompter is the separate timeline and prompt website. Frame Picker and other retained interfaces stay in MediaOps.
+Umbrellas coordinate executable dependencies. Complete dependency issues before closing their umbrella.
+Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I092 owns final acceptance.
+
 ## BugFixes
+
+- [x] [B296] (P1) Accept documented Paddle payment timestamps.
+  Evidence:
+  Completed transactions without `completed_at` remain pending with `transaction_event_mismatch`.
+  Requirements:
+  - Use successful payment captures for the receipt time.
+  - Examine webhook and API evidence without an undocumented transaction field.
+  - Make sure repeated events and database restarts produce one credit.
+  Resolution:
+  The receipt uses the latest successful `captured_at` value. The transaction `updated_at` value establishes snapshot freshness.
+  Go and browser fixtures use documented Paddle timestamps.
+  The initial HTTP test left the order pending. The corrected payment regression passed in 147.051 seconds.
+  Additional completion tests passed in 8.664 seconds.
+  Logs: `/tmp/llm-proxy-b296-before.log`, `/tmp/llm-proxy-b296-after.log`, and `/tmp/llm-proxy-b296-capture.log`.
+  Focused race checks passed in 25.096 seconds. The log is `/tmp/llm-proxy-review-focused-race.log`.
+  The broader race selection reached the default 10-minute timeout during the existing startup test matrix.
+  It reported no data race. The timeout log is `/tmp/llm-proxy-review-race.log`.
+  All 14 CI gates passed in 1338 seconds. Go statement coverage is 100.0%.
+  The CI log is `/tmp/llm-proxy-review-ci.log`.
+
+- [x] [B297] (P1) Prevent service shutdown after a payment reversal.
+  Evidence:
+  A payment reversal during request execution causes settlement to return `insufficient funds` and stops the listener.
+  Requirements:
+  - Record the deficit as a reconciliation case for the affected account.
+  - Keep the reservation, usage evidence, and account remainder.
+  - Make sure the service stays available and records stay unchanged across restarts.
+  Resolution:
+  The initial refund and chargeback tests stopped the service with `post settled charge ...: insufficient funds`.
+  Settlement now uses an atomic transaction. Insufficient funds produce a `settlement_insufficient_funds` reconciliation case.
+  The hold, usage evidence, and account remainder stay unchanged. Storage errors still propagate.
+  The HTTP regression passed in 3.927 seconds, including service availability and two database restarts.
+  Logs: `/tmp/llm-proxy-b297-before.log` and `/tmp/llm-proxy-b297-after.log`.
+  Focused race checks passed in 25.096 seconds. The log is `/tmp/llm-proxy-review-focused-race.log`.
+  The broader race selection reached the default 10-minute timeout during the existing startup test matrix.
+  It reported no data race. The timeout log is `/tmp/llm-proxy-review-race.log`.
+  All 14 CI gates passed in 1338 seconds. Go statement coverage is 100.0%.
+  The CI log is `/tmp/llm-proxy-review-ci.log`.
+
+- [x] [B295] (P1) Reject corrupt prior usage credits before a funds correction.
+  Evidence:
+  Public correction requests accept a retained zero credit, an invalid reason, or a missing timestamp.
+  Three integration cases returned `status=200 want=500` and created another credit.
+  The initial log is `/tmp/llm-proxy-b295-before.log`.
+  Requirements:
+  - Share retained credit validation between charge reads and correction authorization.
+  - Reject corrupt records without changes to balances, Ledger entries, receipts, or account remainders.
+  - Restore valid records and verify one correction across repeated requests and reopened databases.
+  Validation:
+  Run public credit regression, race checks, and static checks. Preserve the initial failing result.
+  Resolution:
+  Charge reads and correction authorization now share retained usage credit validation.
+  Six HTTP cases verify rejection without financial effects, restoration, and one correction across repeated requests and reopened databases.
+  Focused checks passed in 3.513 seconds. Credit regression passed in 39.615 seconds. Race checks passed in 59.435 seconds.
+  Go format and static checks passed. Logs use `/tmp/llm-proxy-b295-` as their prefix.
+  The public API and event contracts remain unchanged. F070 still requires final stack validation.
+
+- [x] [B294] (P1) Reject invalid native transcription response shapes.
+  Evidence:
+  A provider JSON array becomes HTTP 200 with `{"text":"[]"}` through the public dictation route.
+  The parser also accepts raw text and substitutes `transcript` or `output_text` for the required `text` field.
+  The initial log is `/tmp/llm-proxy-b266-dictation-boundaries-response.log`.
+  Requirements:
+  - Require a JSON object with a nonempty string `text` field for the multipart transcription protocol.
+  - Preserve provider metadata, retained failed requests, held funds, and replay without another provider call.
+  - Remove alternative response paths.
+  Validation:
+  Run public dictation regression, race checks, and static checks. Retain the initial failing result.
+  Resolution:
+  The parser now requires the canonical JSON text field and preserves provider metadata.
+  Twelve HTTP cases verify rejected responses, retained failed requests, held funds, and stable replay without another provider call.
+  Focused checks passed in 11.559 seconds. Dictation regression passed in 26.631 seconds. Race checks passed in 160.220 seconds.
+  Endpoint construction checks passed in 0.747 seconds. Go format and static checks passed.
+  Logs use `/tmp/llm-proxy-b294-` as their prefix. F070 still requires the shared final stack gate.
+
+- [ ] [B292] (P1) Define unavailable service prices inside the rating test fixture.
+  Evidence:
+  The complete Go target failed in `TestCatalogRatingUnavailableServiceRetainsItsReason` after alignment received its qualified catalog rate.
+  The test still assumes that the canonical alignment price is unavailable.
+  The reported selection has `UnavailableReason:exact_price_unavailable`, but the configured route now has an available price.
+  The initial log is `/tmp/llm-proxy-f070-current-stack-go-test.log`.
+  Progress:
+  The test now constructs an explicit unavailable alignment price and verifies its reason, source, and date.
+  Rating regression passed in 30.337 seconds. Go format and static checks passed.
+  Production pricing remains unchanged. The shared final stack gate remains open.
+  Requirements:
+  - Give the unavailable-price scenario an explicit controlled price and reason before catalog construction.
+  - Verify reason, source, and verification date through the public catalog API.
+  - Keep the qualified alignment rate unchanged.
+  Validation:
+  Run catalog rating regression and static checks before the shared final stack gate.
+
+- [ ] [B293] (P1) Isolate coverage contract output from the parent coverage report.
+  Evidence:
+  The coverage script fixture inherits `COVERAGE_FILE` from the parent process.
+  The complete Go target left synthetic `funds.go`, `fake.go`, and `shared.go` blocks in its requested report after another test failed.
+  The fixture output is `/tmp/llm-proxy-f070-current-stack.coverprofile`.
+  Progress:
+  A retained parent report reproduced the overwrite through the coverage script and two frontend setup scenarios.
+  Both fixtures now set their own report path. Their checks verify that the parent report remains unchanged.
+  Coverage, frontend setup, and CI runner checks passed in 0.970, 4.698, and 2.212 seconds.
+  Go format and static checks passed. The shared final stack gate remains open.
+  Initial logs are `/tmp/llm-proxy-b293-coverage-before.log` and `/tmp/llm-proxy-b293-frontend-before.log`.
+  Requirements:
+  - Keep coverage and frontend setup fixture output inside each temporary directory.
+  - Verify that an inherited report path retains its original contents.
+  - Keep all coverage groups, executable probes, and coverage requirements unchanged.
+  Validation:
+  Run the coverage contract target and static checks before the shared final stack gate.
+
+- [ ] [B291] (P1) Remove inapplicable cache measurements from direct Images usage.
+  Evidence:
+  Complete direct Images measurements retain unknown cache quantities and report incomplete usage.
+  The current OpenAI image guide states that cached input pricing applies only to the Responses image tool.
+  Direct Images requests, including edits, do not use that pricing contract.
+  HTTP generation and editing tests reproduce the incorrect unknown usage state.
+  The initial log is `/tmp/llm-proxy-f070-direct-image-cache-before.log`.
+  Progress:
+  The direct Images meter now omits the inapplicable cache quantities and uses revision `openai_images:2`.
+  Complete native usage reports complete usage. Missing and invalid native counts remain unknown.
+  Combined image, media worker, and financial regression passed in 30.592 seconds.
+  Direct Images usage and financial race checks passed in 133.448 seconds. Go format and static checks passed.
+  B291 remains open for the shared final stack gate.
+  Requirements:
+  - Remove the inapplicable cache quantities from the direct Images meter.
+  - Keep missing and invalid native token measurements unknown.
+  - Keep unknown cache quantities for the Responses image tool.
+  - Verify generation, editing, publication failures, replay, and exact financial effects.
+  Validation:
+  Run image and funds regression, race checks, static checks, and the shared final stack gate.
+
+- [ ] [B290] (P1) Keep dispatched media recovery under the media worker.
+  Evidence:
+  Funded alignment retained its output receipt and released its worker claim during shutdown.
+  Startup funds reconciliation changed the executing journal request to uncertain before the media worker resumed it.
+  The new worker then failed with `usage_journal_claim_lost`. The operation stayed running without another usage read.
+  The public runtime test is `TestHostedAlignmentPendingUsageSurvivesShutdown`.
+  The diagnostic log is `/tmp/llm-proxy-f070-alignment-shutdown-diagnostic.log`.
+  Progress:
+  Funds reconciliation now leaves dispatched media requests under the media worker.
+  The reservation and journal remain available for recovery through the retained receipt.
+  Corrected funded alignment and shutdown tests passed in 3.935 seconds.
+  All 27 alignment financial cases passed in 30.381 seconds. Complete funds regression passed in 166.568 seconds.
+  Expanded financial and catalog race checks passed in 159.478 seconds, including stable settlement after two further restarts.
+  Go format and static checks passed. B290 remains open for the shared final stack gate.
+  Requirements:
+  - Keep dispatched media requests under the existing media worker until the worker records an outcome.
+  - Keep Ledger funds reserved while media recovery remains active.
+  - Keep expiry of undispatched reservations and terminal financial reconciliation unchanged.
+  - Verify restart, exact settlement, and replay without another paid submission.
+  Validation:
+  Run funded runtime recovery, financial regression, race checks, and the shared final stack gate.
+
+- [ ] [B289] (P1) Stop hosted polling retries after a financial boundary failure.
+  Evidence:
+  A provider status response changed the identity retained by its original dispatch.
+  The funded HTTP request returned `504 request_timeout` instead of `409 usage_journal_conflict` after repeated provider polls.
+  Failed polling authorization also returned HTTP 504 instead of the storage failure response.
+  The initial log is `/tmp/llm-proxy-b266-text-boundaries.log`.
+  The diagnostic stack shows retries in `PerformHTTPRequest` and `performResponsesRequest`.
+  The hosted billing contract prohibits another provider call after an identity conflict.
+  Progress:
+  Local execution boundary errors now retain their classification through both retry layers.
+  The correction keeps provider transport retries for read-only status requests.
+  The isolated initial cases returned HTTP 504 instead of HTTP 502 and HTTP 409.
+  Normal polling and transport recovery passed before the correction in 2.519 seconds.
+  Corrected regression passed in 4.776 seconds. All six new cases passed race checks in 69.303 seconds.
+  Text, dictation, recovery, and provider error regression passed in 80.936 seconds.
+  OpenAI lifecycle regression passed in 19.074 seconds. Additional boundary regression passed in 4.090 seconds.
+  Go format and static checks passed. B289 remains open until the shared final stack gate passes.
+  Requirements:
+  - Distinguish local financial boundary errors from provider transport errors.
+  - Stop every retry layer after a local financial boundary error, with the original error classification intact.
+  - Keep existing retry behavior for provider transport failures and supported read-only status requests.
+  - Keep the original provider identity, financial hold, and journal evidence unchanged after rejection.
+  - Verify recovery and replay without another paid dispatch.
+  Validation:
+  - Exercise failed polling authorization and changed provider identities through authenticated funded HTTP requests.
+  - Verify normal polling and a transient provider transport failure through the same public entry point.
+  - Run focused regression, race checks, and the final stack gate.
+
+- [ ] [B288] (P1) Reject resolution receipts that disagree with their settlement.
+  Evidence:
+  A saved resolution amount changed from `3/200` to `999/200` while its settlement remained unchanged.
+  The authenticated GET returned HTTP 200 with `999/200` and one settled cent. The test expected HTTP 500.
+  The initial log is `/tmp/llm-proxy-b288-resolution-initial.log`.
+  Requirements:
+  - Validate the saved resolution and settlement together at the database boundary.
+  - Reject invalid amounts and inconsistent cent effects without a partial financial response.
+  - Keep receipts, Ledger entries, funds, and account remainders unchanged after a rejected read.
+  - Permit reads and idempotent replay after the original evidence is restored.
+  Progress:
+  All 13 invalid receipt cases reproduced HTTP 200 before the database-boundary correction.
+  The corrected regression passed in 21.629 seconds. The corruption matrix passed race checks in 59.440 seconds.
+  The first corrected cent-effect assertion compared intentional corruption with the original account summary.
+  It now compares state before and after the rejected read, then verifies original values after restoration.
+  Corrected stack CI passed all four Go groups, then failed with `coverage total 98.7%, want 100.0%`.
+  B266 retains the coverage correction. B288 remains open until the complete validation gate passes.
+  Validation:
+  Use authenticated HTTP, controlled database corruption, restart, and financial snapshots.
+  Complete the financial regression and final stack validation before closure.
+
+- [x] [B287] (P1) Complete hosted billing acceptance within each package timeout.
+  Evidence:
+  `make test-hosted-billing` failed with `panic: test timed out after 10m0s` and `internal/proxy 600.625s`.
+  The active speech test ran for five seconds before the timeout. The target put every hosted Go test in one package invocation.
+  The CLI checks passed. The log is `/tmp/llm-proxy-f070-dictator-hosted-billing.log`.
+  Requirements:
+  - Divide Go acceptance into disjoint funds, payments, and remaining groups, as B285 does for coverage.
+  - Preserve every selected test and the existing default timeouts.
+  - Preserve client, database backup, and browser acceptance after the Go groups.
+  Validation:
+  The corrected complete target passed. Its three Go groups passed in 136.841, 132.132, and 353.065 seconds.
+  Client and database restoration checks passed. All four browser scenarios passed in 40.4 seconds.
+  Resolution:
+  The Make target now runs three disjoint Go groups with unchanged test selection and timeouts.
+  The billing runbook records this execution contract. No public API or event contract changed.
+  B266 and final F070 stack validation remain open.
+
+- [x] [B286] (P1) Include audited request credits in customer charge totals.
+  Evidence:
+  A public operator command credited USD 0.001 to a completed funded request.
+  The public charge summary still reported zero credits and the original net charge of USD 0.00364.
+  The browser uses these totals. Its controlled summary fixtures did not expose this missing financial read.
+  Requirements:
+  - Include audited request credits and charge-level adjustments in one exact request summary.
+  - Preserve original charges, provider costs, unresolved states, and one database snapshot.
+  - Validate retained credit effects through the existing database decoder.
+  - Preserve replay, restart, account isolation, and financial records during reads.
+  Validation:
+  - Verify partial and full credits through the public operator and customer endpoints.
+  - Verify corrupt evidence, storage failures, concurrent credits, and restored reads.
+  - Run financial regression, race checks, browser checks, Go lint, and formatting.
+  The initial failure is `/tmp/llm-proxy-b266-request-credit-summary-before-verified.log`.
+  Resolution:
+  Customer summaries now include validated request credits in one database snapshot.
+  Financial exposure retains the original usage totals and authorization limits.
+  Financial regression passed in 172.691 seconds. Race checks passed in 392.002 seconds.
+  The funded browser scenario passed in 10.4 seconds. Go lint, frontend lint, and formatting passed.
+  B286 is resolved locally. B266 and final F070 acceptance remain open.
+
+- [x] [B285] (P1) Keep complete coverage groups within the native test deadline.
+  Evidence:
+  After B284, the hosted coverage group timed out after 601.078 seconds without a test assertion failure.
+  The active result-replay test elapsed time was two seconds. The dump retained 27 goroutines.
+  The runner stops before its remaining test group and coverage merge.
+  Progress:
+  - The runner now uses four disjoint complete groups and merges all group profiles with the existing binary probes.
+  - The updated runner contract first failed with `coverage test group missing`, then passed in 2.067 seconds.
+  - Go lint and formatting passed. All three hosted groups passed in 162.280, 158.143, and 298.861 seconds.
+  - The remaining group exposed a cleanup panic in the invalid-catalog fixture. B284 owns that fixture correction.
+  - The complete profile and binary probes remain pending. Session `62984` ended with exit 2.
+  - B284 corrected the fixture. Its complete non-hosted proxy group passed in 278.047 seconds.
+  - The corrected complete runner finished. All four test groups and executable probes passed without a timeout or assertion failure.
+  - The proxy groups passed in 134.146, 129.904, 281.520, and 277.581 seconds.
+  - The complete profile has 335 uncovered statements across 21202 statements. The unchanged 100% gate failed at 98.4%.
+  - B285 is resolved locally. B266 retains coverage completion. The log is `/tmp/llm-proxy-b285-corrected-go-test.log`.
+  Requirements:
+  - Split hosted funds, hosted payments, other hosted tests, and remaining tests into disjoint complete groups.
+  - Preserve every package, test, coverage statement, and binary probe in the aggregate result.
+  - Keep the native timeout and the 100% coverage gate unchanged.
+  - Verify group selection and the complete profile merge through the runner entry point.
+  Validation:
+  - First make the runner contract test reject the incomplete group selection.
+  - Run the corrected runner contract and the complete Go component.
+  The failed run is `/tmp/llm-proxy-b284-go-test.log`.
+
+
+- [x] [B284] (P1) Release managed usage writers and owned databases during shutdown.
+  Evidence:
+  The B266 Go component timed out after 601.139 seconds before the coverage merge.
+  Its goroutine dump retained 635 managed usage writers and 1313 SQL connection openers.
+  The active speech test elapsed time was one second. The dump does not establish a deadlock in that test.
+  `Router.Close()` calls `proxyApplication.close()`, which stops only media workers.
+  `managedUsageWriter.run()` waits on a queue that has no shutdown operation.
+  Progress:
+  - A public HTTP regression reproduced premature close during an accepted usage write.
+  - Router shutdown now drains usage, closes owned storage, and returns cleanup errors. Concurrent close calls share one result.
+  - Failed construction releases owned resources. Shared fixtures close their borrowed resources at the owning boundary.
+  - The resource checks passed in 1.208 seconds. Lifecycle race checks passed in 62.925 seconds.
+  - Runtime and financial recovery regression passed in 81.132 seconds. Go lint and formatting passed.
+  - The later aggregate timeout retained 27 goroutines, including one usage writer and two SQL connection openers.
+  - The active test elapsed time was two seconds. B285 owns coverage groups that exceed the native deadline.
+  - The B285 run passed all three hosted groups, then exposed a missing shutdown dependency in the invalid-catalog fixture.
+  - The corrected fixture uses the normal store constructor and requires the specific catalog error. Its focused check passed in 0.790 seconds.
+  - The complete non-hosted proxy group passed in 278.047 seconds. Go lint and formatting passed after the fixture correction.
+  - B284 is resolved locally. Complete coverage and final stack CI remain open.
+  Requirements:
+  - Reproduce retained resources through the public router lifecycle before a production change.
+  - Stop request admission before shutdown. Complete accepted usage writes before the owned database closes.
+  - Release resources from failed construction and successful shutdown at their owning boundary.
+  - Preserve repeated close, financial evidence, and restart behavior without longer test timeouts.
+  - Close fixture-owned database instances through their shared fixture lifecycle.
+  Validation:
+  - Verify repeated HTTP service creation, usage, shutdown, and restart without retained workers or lost accepted writes.
+  - Run focused lifecycle checks before the next complete Go coverage component.
+  The diagnostic log is `/tmp/llm-proxy-b266-current-go.log`.
+  Its timeout did not produce a new complete profile. The exact effect of retained resources on elapsed time remains unconfirmed.
+
+
+- [x] [B283] (P1) Reject audited credit receipts with inconsistent financial effects.
+  Evidence:
+  Eight HTTP scenarios returned status 200 for credits that did not match their recorded cents or exact remainder transition.
+  A retained USD 0.007 credit could report USD 0.001 or two credited cents without rejection.
+  Invalid, excessive, or changed before and after remainders also passed receipt reads.
+  Requirements:
+  - Validate retained audited credits against their cent and remainder effects at the database boundary.
+  - Reuse this validation for receipt reads, replay, and later credit authorization.
+  - Preserve financial state after rejection and permit recovery after evidence restoration.
+  Validation:
+  - Verify owner and operator reads, replay, subsequent credit requests, and restart through HTTP.
+  - Run focused financial regression, race, lint, and formatting checks.
+  Initial evidence: `/tmp/llm-proxy-b266-credit-effect-before.log`.
+  Resolution:
+  One database decoder now compares the exact audited credit with its recorded cent and remainder effects.
+  Receipt reads, identical replay, and later credit authorization use this decoder.
+  Twelve new HTTP scenarios verify rejection, restoration, replay, and recovery across restart without repeated financial effects.
+  Focused checks passed in 6.273 seconds. Financial regression passed in 205.918 seconds.
+  Race checks passed in 103.461 seconds. Go lint and formatting passed.
+  No public schema, dependency, or event contract changed. B266 and complete F070 acceptance remain open.
+  Final evidence uses `/tmp/llm-proxy-b283-` as its prefix. The validated changes remain local and uncommitted.
+
+- [x] [B282] (P1) Reject refund projection amounts that disagree with retained evidence.
+  Evidence:
+  Stored reversal and pending amounts could disagree with the retained exact evidence without rejection.
+  A changed reversal amount permitted an incorrect Ledger debit during refund approval.
+  The controlled USD 2 refund left 301 cents instead of 300 cents from the original 500-cent balance.
+  Receipt reads returned HTTP 200 for inconsistent amounts or hold identities.
+  Hold refresh permitted funded work with inconsistent amounts or invalid exact values.
+  Requirements:
+  - Validate retained projection amounts against exact refund evidence at the shared database boundary.
+  - Use one cumulative rounding calculation for processor evidence and retained evidence.
+  - Validate the held amount and its order-bound revision identity before financial use.
+  - Preserve funds after rejection and permit one refund after restoration and restart.
+  Validation:
+  - Reproduce rejection failures through signed payment events and financial HTTP resources.
+  - Verify refund rounding, restoration, replay, and financial conservation.
+  - Run payment regression, race, lint, and formatting checks.
+  Resolution:
+  The shared database reader now checks reversal and pending amounts against exact retained evidence.
+  Incoming and retained evidence use one cumulative rounding calculation. Hold amounts and identities must match the current projection contract.
+  Thirty-three new scenarios verify rejection, restoration, replay, and recovery without repeated financial effects.
+  Focused checks passed in 17.815 seconds. Payment and funds regression passed in 254.333 seconds.
+  Race checks passed in 180.596 seconds. Go lint and formatting passed.
+  No public schema or event contract changed. B266 and complete F070 acceptance remain open.
+
+- [x] [B281] (P1) Reject changed retained refund evidence before financial use.
+  Evidence:
+  Controlled database changes replaced retained refund evidence or its digest after a pending refund.
+  Reconciliation accepted these records. Identical event replay also bypassed malformed JSON.
+  Hold refresh returned HTTP 200 and executed funded work instead of rejecting the changed evidence.
+  Receipt reads returned HTTP 200 for changed totals or a changed digest instead of HTTP 503.
+  Requirements:
+  - Verify retained adjustment evidence at one shared database boundary.
+  - Reject changed evidence before reconciliation, hold refresh, receipt publication, and identical event replay.
+  - Preserve funds and immutable revisions after failure. Permit recovery after the original evidence is restored.
+  Validation:
+  - Use signed payment events, financial HTTP resources, and controlled provider protocols.
+  - Verify restoration and replay across a database restart without repeated financial effects.
+  - Run payment regression, race, lint, and formatting checks.
+  Resolution:
+  Reconciliation, hold refresh, and receipt reads now share retained adjustment evidence validation.
+  The reader verifies the saved digest and required totals before use, including identical event replay.
+  Fifteen new scenarios verify rejection, restoration, and recovery without repeated financial effects.
+  Focused checks passed in 6.544 seconds. Payment and funds regression passed in 243.435 seconds.
+  Race checks passed in 97.840 seconds. Go lint and formatting passed.
+  No public schema or event contract changed. B266 and complete F070 acceptance remain open.
+
+- [x] [B280] (P1) Renew cancellation intent after an unconfirmed provider cancellation.
+  Evidence:
+  Three funded HTTP scenarios returned unsupported cancellation after an authority read failure, absent authority, or provider outage.
+  After restoration, explicit cancellation retries could not reach the provider because authorization required requested state.
+  Requirements:
+  - Record requested state for a new cancellation request after an unsupported outcome on running work.
+  - Preserve existing adapter outcomes and cancellation authorization.
+  - Keep funds unchanged after failure and prevent repeated provider work after confirmed cancellation.
+  Validation:
+  - Verify failure, restoration, confirmation, replay, and financial recovery through public HTTP and the shared Dictator SDK.
+  - Run media regression, race, lint, and formatting checks.
+  Resolution:
+  A new cancellation request now renews requested state after an unsupported outcome on running work.
+  Four funded scenarios verify failed authority reads, absent authority, provider outages, and failed observation writes.
+  Restoration permits confirmed cancellation. Replay and financial recovery preserve funds without repeated provider work.
+  Existing Dictator characterization passed before fixture extraction in 8.590 seconds. Targeted checks passed in 11.566 seconds.
+  Broad media regression passed in 165.289 seconds. Related boundary checks passed in 2.117 seconds.
+  Race checks passed in 35.442 seconds. Go lint and formatting passed.
+  No public schema or event contract changed. B266 and complete F070 acceptance remain open.
+
+
+- [x] [B279] (P1) Reject incomplete stored platform credentials before provider calls.
+  Evidence:
+  Funded media requests with empty or null stored credential documents reached the provider and returned succeeded operations.
+  The public test expected failed operations and zero provider calls.
+  Requirements:
+  - Validate stored credential fields at the shared database read boundary.
+  - Reject incomplete field sets and unreadable credentials before provider calls.
+  - Preserve accepted identity and financial resources after rejection.
+  - Preserve replay and restart without repeated provider work.
+  - Keep B266 coverage and complete F070 acceptance open.
+  Validation:
+  - Run public credential failure scenarios and relevant hosted execution regression.
+  - Run race, lint, and formatting checks.
+  Resolution:
+  The shared credential loader now rejects incomplete field sets before returning provider settings.
+  Eight media scenarios and two text scenarios verify rejection, funds conservation, and restart without repeated provider work.
+  Catalog fixtures now validate complete fields before encryption and supply the required DashScope workspace URL.
+  Targeted checks passed in 7.611 seconds. Catalog checks passed in 36.865 seconds.
+  Broad hosted regression passed in 187.425 seconds. Race checks passed in 109.660 seconds. Go lint and formatting passed.
+  No public schema or event contract changed. B266 and complete F070 acceptance remain open.
+
+
+- [x] [B278] (P1) Reject corrupt account remainders before paid admission.
+  Evidence:
+  Five HTTP scenarios returned `status=200 want=503 body=funded result` after storage supplied an invalid retained account remainder.
+  Admission accepted zero denominators, negative amounts, malformed numbers, and remainders at or above one cent.
+  Balance reads and settlement already reject these values through the shared remainder validator.
+  Requirements:
+  - Validate the retained account remainder at the financial admission boundary before holds or provider dispatch.
+  - Reuse the current remainder validator and shared Ledger model.
+  - Return the existing financial admission error without private storage details.
+  - Preserve request, price, reservation, balance, and Ledger records after rejection.
+  - Verify restored admission, exact settlement, and restart replay through HTTP.
+  - Run financial regression, race, lint, and formatting checks.
+  - Keep B266 coverage and final F070 acceptance open.
+  Resolution:
+  Financial admission now validates the account remainder before payment holds or provider dispatch.
+  The five corruption scenarios reject with HTTP 503, make zero provider calls, and preserve all financial resources.
+  Restored storage admits the original request once. Replay and restart preserve exact settlement without another provider call.
+  Targeted checks passed in 2.739 seconds. Financial regression passed in 144.422 seconds.
+  Race checks passed in 35.706 seconds. Go lint and formatting passed.
+  No public schema or event contract changed. B266 and final F070 acceptance remain open.
+
+- [x] [B277] (P1) Reject unreadable grant scope before a transition commits.
+  Evidence:
+  A grant PATCH returned HTTP 500 for unreadable stored offerings but committed the requested suspension and a new audit revision.
+  The public regression failed with `failed transition on unreadable scope changed accepted authority or audit history`.
+  Requirements:
+  - Decode stored grant scope at the database boundary before a transition commits.
+  - Preserve grant state and audit history after a failed read or decode.
+  - Return typed scope to response code without another decode after the transaction.
+  - Reuse validated request scope for creation responses without an encode and decode cycle.
+  - Verify rejection, restoration, stale revision retries, and restart through authenticated HTTP.
+  - Run grant and authority regression, race, lint, and formatting checks.
+  - Keep B266 coverage and final F070 acceptance open.
+  Resolution:
+  The database boundary now returns grants with decoded scope. A transition decodes its result before transaction commit.
+  Failed reads and corrupt scope preserve state, audit history, assignments, and funds.
+  Creation responses reuse validated request scope without decoding newly encoded data.
+  Public HTTP checks reproduce the original defect and verify restoration and stale revision retries across restart.
+  Targeted checks passed in 2.865 seconds. Grant, authority, and assignment regression passed in 10.690 seconds.
+  Race checks passed in 38.900 seconds. Go lint and formatting passed.
+  No public schema or event contract changed. B266 and final F070 acceptance remain open.
+
+- [x] [B276] (P1) Preserve pending response state after a journal completion failure.
+  Evidence:
+  Controlled HTTP checks failed with `status=409 want=200` after storage recovered for an accepted request with zero provider calls.
+  A failed attempt write and a failed terminal journal write left the journal accepted but the response file failed.
+  The response file then rejected the current worker after the journal authorized recovery.
+  Requirements:
+  - Publish a terminal failure only after the journal records a terminal state.
+  - Preserve accepted or executing response state when the terminal journal write fails.
+  - Permit one dispatch after recovery of accepted work that has no prior provider call.
+  - Preserve uncertainty, financial resources, and evidence for work that already reached the provider.
+  - Verify storage failure and recovery through HTTP, then run focused regression, race, lint, and formatting checks.
+  - Keep B266 coverage and the final F070 CI checkpoint open.
+  Resolution:
+  Response publication now preserves pending state when the terminal journal write fails.
+  Eight HTTP scenarios verify failed recovery, retained financial and journal resources, restored admission, and restart replay.
+  The new checks passed in 4.968 seconds. Broad regression passed in 108.118 seconds.
+  The new scenarios passed with race detection in 72.123 seconds. Go lint and formatting passed.
+  No public API or event contract changed. B266 and final stack CI remain open.
+
+
+- [x] [B275] (P1) Restore aggregate Go validation after the billing acceptance expansion.
+  Evidence:
+  The B274 `make go-test` run exhausted the Go package timeout after 601.301 seconds.
+  It reported `panic: test timed out after 10m0s` with `TestMCPDictatorWorkflow (2s)` as the active test.
+  The log contains no preceding assertion failure. The coverage script removed its temporary profile after the aborted run.
+  The stack dump also retains media maintenance workers from earlier tests after their database cleanup.
+  Requirements:
+  - Diagnose aggregate test duration and retained workers through the canonical validation target.
+  - Correct the owning test or runtime lifecycle without weakening assertions or the coverage threshold.
+  - Complete the Go test and executable coverage phases with a current aggregate profile.
+  Validation:
+  - Use `/tmp/llm-proxy-b274-go-test.log` as the initial failure evidence.
+  - Preserve B266 coverage requirements and the final F070 CI checkpoint.
+  Progress:
+  HTTP shutdown acceptance reproduced six later maintenance reads and an active provider request after the listener stopped.
+  The application now starts media workers after initial financial reconciliation and waits for them during shutdown.
+  Embedded callers receive a closable router. Shared fixtures stop its workers before database cleanup.
+  Interrupted execution retains uncertainty and held funds with the public `worker_shutdown` code.
+  Failed financial startup leaves accepted media queued. Restart executes once after the failure is removed.
+  A delayed transport proved that adapter cleanup could outlive service shutdown. Shutdown now also waits for adapter goroutines.
+  Final lifecycle and recovery checks passed in 12.590 seconds. Their race checks passed in 96.067 seconds.
+  Go lint, format, OpenAPI contract, and generated artifact checks passed.
+  The corrected worker lifecycle reduced the timeout dump from 663 maintenance loops and 1952 worker loops to one current service.
+  The aggregate invocation still exhausted ten minutes without an assertion failure. Its active test reported zero elapsed seconds.
+  Canonical coverage now runs hosted tests and all remaining tests in separate passes across every package.
+  Both profiles and executable probes contribute to the unchanged strict coverage gate. Each pass retains the existing timeout.
+  The runner regression verifies both test groups, shared coverage counts, and the explicit client probe input.
+  That regression passed in 2.215 seconds.
+  Resolution:
+  Both complete Go test passes and all executable probes finished. The proxy passes took 452.809 and 274.878 seconds.
+  The current aggregate profile has 438 uncovered statements across 21172 statements.
+  The command then failed the unchanged gate with `coverage total 97.9%, want 100.0%`.
+  B266 retains that coverage work. Final stack CI and hosted CI remain open.
+  Evidence: `/tmp/llm-proxy-b275-go-test.log` and `/tmp/llm-proxy-b275-coverage.out`.
+
+- [x] [B274] (P1) Attach hosted financial admission before media worker startup.
+  Evidence:
+  A normal-runtime restart rejects funded queued media while its accepted offering scope remains enabled.
+  A controlled storage delay exposes `state=failed`, `media_operation_unavailable`, and zero provider calls.
+  The media constructor starts workers before the router assigns hosted admission.
+  Requirements:
+  - Attach validated financial admission before workers resume accepted operations.
+  - Preserve rejection when hosted configuration or the accepted scope is removed.
+  - Preserve exact settlement, operation identity, and replay without duplicate provider work.
+  Validation:
+  - Run public HTTP restart acceptance, related media and runtime checks, race checks, lint, and formatting.
+  - Keep B266 and final stack CI requirements open.
+  Resolution:
+  The media constructor now attaches validated financial admission before worker startup and queued recovery.
+  The router no longer assigns this dependency after workers start.
+  Retained and removed-scope restart checks passed in 2.825 seconds. Their race run passed in 39.399 seconds.
+  Media and runtime regression passed in 71.957 seconds. Go lint and format checks passed.
+  B275 records the subsequent aggregate package timeout. B266 and final stack CI remain open.
+
+- [x] [B273] (P1) Reject explicit empty payment configuration.
+  Evidence:
+  The root command accepts `payments: {}` and reaches service startup without an error.
+  Viper drops the empty object during typed decoding and disables payment processing.
+  The new root-command scenario reports `started=true error=<nil>`.
+  Goal:
+  Preserve explicit payment configuration for validation before service startup or database access.
+  Requirements:
+  - Reject incomplete explicit payment configuration through the existing payment validator.
+  - Preserve omitted payment configuration as the disabled state.
+  - Preserve valid payment configuration and existing environment validation.
+  Validation:
+  - Pass root-command checks for omitted, empty, incomplete, and valid payment configuration.
+  - Pass CLI regression, race, lint, and format checks.
+  Resolution:
+  The configuration decoder preserves explicit payment presence for the existing payment validator.
+  Empty and incomplete objects are rejected before startup. Omitted configuration keeps payments disabled.
+  CLI regression passed in 8.578 seconds. All 87 selected CLI race scenarios passed in 95.615 seconds.
+  Go lint and format checks passed. B266 retains the aggregate coverage and final CI requirements.
+
+- [x] [B272] (P1) Reject explicit hosted configuration without offering scopes.
+  Evidence:
+  The root command accepts `hosted: {}` and reaches service startup without an error.
+  The configuration decoder drops the empty object and treats hosted configuration as omitted.
+  The committed `missing-list` scenario reports `started=true error=<nil>`.
+  Goal:
+  Reject incomplete explicit hosted configuration before service startup or database creation.
+  Requirements:
+  - Validate explicit hosted scope presence at the configuration file boundary.
+  - Preserve omitted hosted configuration as the disabled state.
+  - Preserve valid scopes and existing condition validation.
+  Validation:
+  - Pass root-command rejection and omitted-configuration checks.
+  - Pass runtime regression, CLI checks, Go lint, and format checks.
+  Resolution:
+  Explicit hosted configuration now requires an offering list before typed decoding.
+  Omitted hosted configuration still reaches service startup with hosted execution disabled.
+  Runtime HTTP checks passed in 36.644 seconds. Final CLI configuration checks passed in 7.389 seconds.
+  Before the final lookup refactor, all 82 selected CLI race scenarios passed in 81.180 seconds.
+  Go lint and format checks passed after the final change. B266 retains the aggregate coverage and final CI requirements.
+
+- [x] [B271] (P1) Reject incomplete retained completion results.
+  Evidence:
+  An identical funded POST returns HTTP 200 with empty text when its retained result contains JSON `null`.
+  Recovery also records a publication receipt for that invalid result.
+  The status GET returns HTTP 200 with JSON `null` or null text from the same file.
+  Goal:
+  Reject invalid completion data before result replay, status reads, or publication recovery.
+  Requirements:
+  - Require a JSON object with a non-null text string at the stored-result boundary.
+  - Preserve valid empty text and optional tool calls and usage.
+  - Return the existing service error for invalid stored results.
+  - Preserve funds and pending evidence without another provider call.
+  Validation:
+  - Exercise result corruption through HTTP before and after publication.
+  - Restore the original result and verify replay and one financial settlement after repeated restart.
+  - Run focused result, text, funds, management, race, lint, and format checks.
+  Resolution:
+  The shared decoder requires a text string before recovery, replay, and status publication.
+  Invalid files return the existing errors without a successful result or a new publication receipt.
+  Seventeen HTTP scenarios verify storage failures, corrupt results, financial preservation, and repeated restart.
+  Valid tool-only results retain empty text, tool calls, usage, and one provider call.
+  Text, funds, rating, and financial regression checks passed in 176.130 seconds.
+  All 17 focused race scenarios passed in 157.728 seconds. Management tests passed in 17.515 seconds.
+  Go lint and format checks passed. B266 retains the open aggregate coverage and final CI requirements.
+
+- [x] [B270] (P1) Reject corrupt retained financial credit receipts.
+  Evidence:
+  Authenticated credit reads return HTTP 200 with invalid, negative, or zero credit amounts and invalid denominators.
+  The same reads expose invalid reason codes and missing receipt timestamps.
+  Goal:
+  Validate retained credit receipts before publication through the financial API.
+  Requirements:
+  - Validate the stored amount, reason, and timestamp at the database boundary.
+  - Return the existing service error without partial financial data or private details.
+  - Preserve balances, Ledger history, tenant usage, and the original financial decision.
+  Validation:
+  - Verify corrupt receipts through owner and operator HTTP sessions.
+  - Restore the original record and verify identical reads and idempotent command replay.
+  - Run credit, management, race, lint, and format checks.
+  Resolution:
+  Retained credit receipts now validate the amount, reason code, and timestamp before publication.
+  Invalid records return HTTP 500 with `billing_account_store_failed` and no partial receipt.
+  All 18 scenarios passed, including storage failures and corrupt usage credits. Restoration preserves the original receipt and financial effects.
+  Funds, rating, and financial-read tests passed in 145.282 seconds. Management tests passed in 18.359 seconds.
+  The new credit-read race suite passed in 34.426 seconds. Go lint and format checks pass.
+
+
+- [x] [B267] (P1) Reject trailing JSON before management writes.
+  Evidence:
+  The funds-resolution HTTP test sent a valid decision followed by a second JSON object.
+  The endpoint returned `200` and settled one cent instead of rejecting the malformed request.
+  The shared management decoder read only the first JSON value.
+  Requirements:
+  - Require one complete JSON value at the shared management boundary.
+  - Reject additional values and trailing non-whitespace bytes before any state change.
+  - Continue to accept trailing whitespace.
+  Validation:
+  - Verify unchanged funds, holds, Ledger history, and audit records after rejection.
+  - Run the management and funds regression tests.
+  Resolution:
+  The shared decoder now requires the end of the request after one JSON value.
+  HTTP tests reject another object, trailing text, and trailing null before financial changes.
+  Valid decisions with trailing whitespace still succeed. Restart replay preserves one settlement and its Ledger effects.
+  Management tests passed in 16.798 seconds. Funds tests passed in 67.332 seconds.
+  Funds-resolution race tests passed in 247.812 seconds. Go lint and format checks pass.
+
+- [x] [B268] (P1) Classify corrupt retained prices as service failures.
+  Evidence:
+  A valid price-snapshot GET returns HTTP 400 with `usage_journal_invalid` when the stored usage bound is not numeric.
+  The integration test reports `status=400 expected=500`.
+  Goal:
+  Keep stored price corruption separate from malformed customer requests.
+  Requirements:
+  - Use the existing internal-service error response for retained price validation failures.
+  - Preserve the original error cause without exposing private details.
+  - Preserve pending usage delivery and customer funds until the original price is restored.
+  Validation:
+  - Verify the public price resource and startup settlement with corrupt retained prices.
+  - Verify recovery settles once with the original accepted prices.
+  Resolution:
+  Retained price validation failures now return HTTP 500 with `usage_journal_unavailable`.
+  The wrapped error preserves its cause. The public response excludes private validation details.
+  The 32 scenarios verify price reads, unchanged funds after failure, and one settlement after restoration.
+  Rating tests passed in 25.214 seconds. Management tests passed in 17.905 seconds.
+  Price integrity race tests passed in 199.411 seconds. Go lint and format checks pass.
+
+- [x] [B269] (P1) Reject invalid stored fractions from balance reads.
+  Evidence:
+  A valid balance GET returns HTTP 200 when the stored remainder has a zero denominator, invalid text, or a negative numerator.
+  It also returns a remainder of USD 1 although the account fraction must stay below one cent.
+  Goal:
+  Apply the same remainder contract to public balances and financial transactions.
+  Requirements:
+  - Validate the stored remainder at the database boundary.
+  - Use the existing service error response without private data.
+  - Share remainder validation with settlement and credit calculations.
+  - Preserve pending delivery and customer funds until the original data is restored.
+  Validation:
+  - Reject each corrupt balance through the authenticated HTTP resource.
+  - Verify one settlement after restoration and restart.
+  Resolution:
+  Balance reads now reject invalid stored fractions with HTTP 500 and `billing_account_store_failed`.
+  The public response excludes private data. Settlement, credits, and balance reads share one remainder validator.
+  All 20 recovery scenarios passed. Funds and money tests passed in 103.746 seconds.
+  Management tests passed in 18.131 seconds. The new race suite passed in 128.605 seconds.
+  Go lint and format checks pass. The public error schema is unchanged.
+
+- [x] [B266] (P1) Restore the required coverage gate for the hosted billing stack.
+  Resolution:
+  All 14 final CI gates passed in 1354 seconds. Go coverage is 100.0%, with zero uncovered statements across 21267 statements.
+  All 154 frontend tests and 11 authenticated browser tests passed. Complete billing acceptance also passed, including its four browser scenarios.
+  The unchanged coverage gate now passes after public boundary tests and removal of paths that the current contract cannot reach.
+  Public API and event contracts did not change in this correction.
+  Logs: `/tmp/llm-proxy-f070-takeover-final-ci.log` and `/tmp/llm-proxy-f070-takeover-final-billing.log`.
+  Profile: `/tmp/llm-proxy-b266-takeover-final-complete.coverprofile`.
+  F070 continues with the newly selected advertised Responses image pricing.
+  Latest validation:
+  The complete Go coverage gate passes at 100.0%, with zero uncovered statements across 21267 statements.
+  Go integration, upstream race checks, Python client checks, frontend tests, and authenticated browser gates passed.
+  Profile: `/tmp/llm-proxy-b266-takeover-final-complete.coverprofile`.
+  Log: `/tmp/llm-proxy-f070-takeover-final-ci.log`.
+  Current session recovery:
+  The previous complete billing run passed, including all four browser scenarios in 39.4 seconds.
+  New acceptance tests cover interrupted text recovery, invalid payment timestamps, unusable charges, and failed tenant and media admission writes.
+  HTTP tests reject credits on unresolved charges and media prices without current, bounded costs.
+  The tests check unchanged funds and recovery without duplicate provider work or Ledger effects.
+  Closed JSON values now serialize without impossible error branches. Payment runtime construction uses validated configuration objects.
+  Worker completion uses one cancellation decision. Platform verification uses validated transport references and still rejects disabled models.
+  Database and I/O errors still propagate. The current production changes affect twenty-seven files.
+  Characterization passed in 59.696 seconds. Regression passed in 61.754 seconds. Go format and static checks passed.
+  Payment reconciliation race checks passed in 207.785 seconds. Customer credit race checks passed in 183.178 seconds.
+  The complete Go run passed all tests and probes. Its gate failed with `coverage total 99.6%, want 100.0%`.
+  The report has 81 uncovered statements across 21298 statements, in 81 blocks.
+  Log: `/tmp/llm-proxy-f070-takeover-current-go-test.log`. Profile: `/tmp/llm-proxy-f070-takeover-current.coverprofile`.
+  The current component diagnostic has zero uncovered statements across 21267 statements.
+  Profile: `/tmp/llm-proxy-b266-takeover-zero-diagnostic.coverprofile`. This diagnostic does not replace the complete gate.
+  The last financial and public registry race checks passed in 62.522 seconds. Static checks passed.
+  Final stack CI passed. Log: `/tmp/llm-proxy-f070-takeover-final-ci.log`.
+  Complete billing acceptance passed after the B266 changes. All four browser scenarios passed in 39.6 seconds.
+  Both clients, package installation, and backup restoration passed. Log: `/tmp/llm-proxy-f070-takeover-final-billing.log`.
+  Public registration now verifies both accepted routes through HTTP.
+  Raw invalid credits leave financial resources unchanged. A corrected credit settles once through database reopen and replay.
+  Missing stored search bounds prevent initial dispatch and continuation. Recovery preserves the prior financial evidence.
+  Changed stored prices cannot produce a negative resolution limit. Restored prices preserve the original response.
+  The first fixture failed because GORM changed its saved record. The corrected fixture passed all race checks.
+  Price admission and completion replay use values already validated at their entry points.
+  Stored catalog revision, account identity, and request identity checks remain covered through HTTP recovery.
+  Built-in route registration uses the trusted core. Public registry validation remains atomic.
+  Journal read errors retain their applicable boundary mappings. No public API or event contract changed.
+  New public tests cover ignored admission writes, absent financial resources, incomplete provider evidence, preview authorization, database shutdown, and retained ceilings.
+  Replay also rejects a missing accepted media record without duplicate financial or provider effects.
+  New HTTP tests cover absent identities, submission methods, overlapping result recovery, terminal file conflicts, and provider redirects.
+  Dictator transport failures preserve execution authority and one exact settlement.
+  Replacement workers reject another upload. Dictation cancellation before admission permits a fresh request with the same key.
+  Validated reversal inputs and disjoint reservation bounds no longer repeat constructor checks.
+  Catalog price references now use validated routes without repeated missing-route checks. Media and service race checks pass.
+  Native evidence construction no longer repeats provider-boundary validation of fixed outcomes and source fields.
+  Journal, image, and audio race groups passed in 62.694, 139.275, and 196.477 seconds.
+  Adapter authority checks passed in 8.477 seconds. Unresolved grants, another model, and dictation cannot use accepted text authority.
+  Funded media authority checks passed in 13.846 seconds. Another provider or credential cannot use accepted authority.
+  Empty tenant-owner reads prevent admission. Race checks passed in 9.285 seconds.
+  Completion meters use validated protocol choices. Text and dictation race checks passed in 90.910 seconds.
+  New checks reject unsupported dictation conditions and managed stores without shared financial transactions.
+  The explicit Meta test catalog preserves unknown usage and rejects funded admission. Production activation remains unchanged.
+  Dictation regression passed in 22.165 seconds. Refund-hold account checks passed in 7.427 seconds. Static checks passed.
+  Journal intent construction no longer repeats validation of catalog models, fixed kinds, or serialized JSON.
+  Characterization and regression passed in 14.369 and 14.714 seconds. Race checks passed in 200.802 seconds. Static checks passed.
+  New acceptance checks cover empty stored accounts, invalid reservation and journal reads, search-body failures, and reservation overflow.
+  They also cover retained dispatch, an unset clock, an empty runtime catalog, and financial signal path resolution.
+  Focused acceptance, race checks, Go format, and static checks pass. All validation handles are terminal.
+  The complete billing run passed before the latest database, rating-rule, Ledger amount, media reference, native evidence, journal intent, and meter profile refactors. All four browser scenarios passed in 41.8 seconds.
+  Log: `/tmp/llm-proxy-f070-takeover-current-billing.log`.
+  The previous complete billing run passed. Funds, payments, and broader hosted groups passed in 178.883, 143.164, and 470.105 seconds.
+  Both clients, package installation, backup restoration, and four browser scenarios passed. The browsers passed in 38.6 seconds.
+  Log: `/tmp/llm-proxy-f070-takeover-billing.log`.
+  Logs for the component checks use `/tmp/llm-proxy-b266-takeover-` as their prefix.
+  The coverage gate and final stack CI remain open. No public API or event contract changed.
+  Current payment identity increment:
+  Four cases verify checkout identifier failure, a concurrent customer binding conflict, and two retained receipt conflicts.
+  Checkout failures prevent processor dispatch. Receipt conflicts preserve the refund hold without partial observations or financial effects.
+  Restored dependencies permit recovery through reopened databases. Replay cannot repeat checkout creation, funding, or refunds.
+  Focused checks passed in 2.090 seconds. Payment regression passed in 36.655 seconds. Race checks passed in 28.263 seconds.
+  Go format and static checks passed. Production code remains unchanged.
+  The first receipt test expected `financial_state_conflict` for a changed digest. The earlier boundary returned `transaction_evidence_changed`.
+  The corrected assertion uses the existing reason. The initial log is `/tmp/llm-proxy-b266-payment-identity-focused.log`.
+  The diagnostic has 153 uncovered statements across 21310 statements, in 152 blocks.
+  Profile: `/tmp/llm-proxy-b266-payment-identity-diagnostic.coverprofile`. Complete validation remains open.
+  Logs use `/tmp/llm-proxy-b266-payment-identity-` as their prefix.
+  Current refund increment:
+  Two cases fail Ledger account reads after hold release and after the refund debit.
+  The tests observe Ledger writes before the failure. Rollback preserves public financial resources and the pending event.
+  Recovery through a reopened database applies one refund. Event replay cannot repeat its financial effects.
+  Focused checks passed in 1.339 seconds. Payment adjustment regression passed in 40.007 seconds. Race checks passed in 14.773 seconds.
+  Go format and static checks passed. Production code remains unchanged.
+  The diagnostic has 156 uncovered statements across 21310 statements, in 155 blocks.
+  Profile: `/tmp/llm-proxy-b266-refund-late-reads-diagnostic.coverprofile`. Complete validation remains open.
+  Logs use `/tmp/llm-proxy-b266-refund-late-reads-` as their prefix.
+  Current identifier increment:
+  Two cases fail random reads before dispatch and before terminal evidence creation through the real media worker.
+  The first failure prevents provider work. Recovery releases its unused hold.
+  The second failure rolls back the terminal transaction. Recovery retains the uncertain hold without another provider call.
+  Both cases passed in 2.323 seconds. Media recovery regression passed in 28.227 seconds. Race checks passed in 26.869 seconds.
+  Go format and static checks passed. Production code remains unchanged.
+  The initial test expected zero media usage deliveries after a completed dispatch failure and reported `records=1`.
+  The corrected assertion requires the legitimate failure record without financial observations or settlements.
+  The diagnostic has 157 uncovered statements across 21310 statements, in 156 blocks.
+  Profile: `/tmp/llm-proxy-b266-media-entropy-diagnostic.coverprofile`. Complete validation remains open.
+  Logs use `/tmp/llm-proxy-b266-media-entropy-` as their prefix.
+  Current dispatch increment:
+  Three cases verify the journal read inside the provider dispatch guard through a funded HTTP operation and real worker.
+  A failed read, absent record, or different owner prevents provider calls and preserves reserved funds without outputs or debits.
+  Recovery through reopened databases and HTTP replay cannot repeat the operation or its financial effects.
+  Focused checks passed in 2.879 seconds. Media authority regression passed in 12.731 seconds. Race checks passed in 36.816 seconds.
+  Go format and static checks passed. Production code remains unchanged.
+  The diagnostic has 159 uncovered statements across 21310 statements, in 158 blocks.
+  Profile: `/tmp/llm-proxy-b266-media-dispatch-authority-diagnostic.coverprofile`. Complete validation remains open.
+  Logs use `/tmp/llm-proxy-b266-media-dispatch-authority-` as their prefix.
+  Current amount refactor:
+  Credit commands now retain their validated exact amount through authorization and cent calculation.
+  Database reads still validate stored charges, credits, and account remainders. Public amounts and Ledger effects remain unchanged.
+  Credit characterization passed before the refactor in 37.775 seconds. Public calculation characterization passed in 0.554 seconds.
+  Credit regression passed in 41.614 seconds. Recovery checks passed in 9.378 seconds. Catalog calculations passed in 1.575 seconds.
+  Race checks passed in 302.775 seconds. Go format and static checks passed.
+  Four production files have new coordinates: `catalog_money.go`, `hosted_funds_adjustments.go`, `hosted_funds_corrections.go`, and `hosted_rating_adjustments.go`.
+  The diagnostic replaces their old coordinates. It has 161 uncovered statements across 21310 statements, in 160 blocks.
+  Profile: `/tmp/llm-proxy-b266-credit-amount-diagnostic.coverprofile`. Complete validation remains open.
+  Logs use `/tmp/llm-proxy-b266-credit-amount-` as their prefix.
+  Current recovery increment:
+  Eleven cases verify failed startup with retained charges and credits before settlement.
+  Corrupt records and failed credit or Ledger account reads preserve holds, Ledger entries, and exact remainders.
+  Restored records permit one settlement with the existing credit across repeated application starts.
+  Focused checks passed in 5.178 seconds. Startup and financial read regression passed in 34.727 seconds.
+  Race checks passed in 73.574 seconds. Go format and static checks passed. This increment changes tests only.
+  The diagnostic has 161 uncovered statements across 21313 statements, in 160 blocks.
+  Profile: `/tmp/llm-proxy-b266-retained-settlement-diagnostic.coverprofile`. Complete validation remains open.
+  Logs use `/tmp/llm-proxy-b266-retained-settlement-` as their prefix.
+  Latest correction:
+  B295 rejected corrupt retained usage credits before a public funds correction.
+  Six HTTP cases, broader credit regression, race checks, and static checks passed.
+  Both credit implementation files have new coverage coordinates. Earlier coordinates for these files are obsolete.
+  The updated diagnostic has 166 uncovered statements across 21313 statements, in 165 blocks.
+  Profile: `/tmp/llm-proxy-b295-diagnostic.coverprofile`. Focused profiles do not establish complete coverage.
+  Current complete result:
+  All four Go groups and executable probes passed after B294. The gate failed with `coverage total 99.2%, want 100.0%`.
+  The report has 175 uncovered statements across 21306 statements, in 174 blocks.
+  Profile: `/tmp/llm-proxy-f070-post-b294.coverprofile`. Log: `/tmp/llm-proxy-f070-post-b294-go-test.log`.
+  Complete controlled billing also passed, including both clients, backup restoration, and all four browser scenarios.
+  Latest increment:
+  Fourteen cases fail customer-credit reads and writes through the database boundary. The internal command uses the real Ledger transaction.
+  Public HTTP reads verify unchanged charges, Ledger entries, and exact account remainders without partial credit receipts.
+  Restored storage permits one credit across reopened databases and repeated commands. Original provider costs remain unchanged.
+  Focused checks passed in 8.484 seconds. Broader credit regression passed in 36.630 seconds. Race checks passed in 108.532s.
+  Go format and static checks passed. Production code remains unchanged.
+  The diagnostic has 163 uncovered statements across 21306 statements, in 162 blocks. Complete validation remains open.
+  Logs use `/tmp/llm-proxy-b266-credit-storage-` as their prefix.
+  Previous increment:
+  Five HTTP cases verify initial response-store failures before provider dispatch and stable replay after restart.
+  They preserve saved results and failed identities without charges. Recovery releases unused funds and permits a new request.
+  Focused checks passed in 4.696 seconds. Broader regression passed in 60.133 seconds. Race checks passed in 63.758 seconds.
+  Go format and static checks passed. Production code remains unchanged.
+  The diagnostic has 172 uncovered statements across 21306 statements, in 171 blocks. It does not replace complete validation.
+  Logs use `/tmp/llm-proxy-b266-result-admission-` as their prefix.
+  Evidence:
+  The corrected stack CI run passed all Go tests but reported `coverage total 95.3%, want 100.0%`.
+  The function report identifies incomplete coverage in 288 functions across 79 files.
+  Progress:
+  - Two journal helpers with test callers only now reside in test source. Production transactions and financial recovery remain unchanged.
+  - Regression passed in 80.068 seconds. Race checks passed in 222.872 seconds. Go format and static checks passed.
+  - Additional recovery and rating checks passed in 37.248 and 24.315 seconds. Old coordinates for both changed journal files were discarded.
+  - Public startup now has tests for three ignored checkout writes. Failed startup preserves funds and does not publish a checkout.
+  - Recovery creates one transaction. Replayed completion events credit the account only once.
+  - Focused checks passed in 1.965 seconds. Race checks passed in 23.686 seconds. Go format and static checks passed.
+  - The current diagnostic has 199 uncovered statements across 21317 statements, in 198 blocks. Complete aggregate validation remains open.
+  - Voice discovery rejects missing, failed, and malformed grant reads before provider requests. Changed grant revisions invalidate in-flight provider results.
+  - Restored authority permits discovery without paid work or billing evidence. Voice regression passed in 1.545 seconds.
+  - Race checks passed in 12.294 seconds. Go format and static checks passed. Production code remains unchanged in this test increment.
+  - The diagnostic now has 195 uncovered statements across 21317 statements, in 194 blocks. Complete aggregate validation remains open.
+  - Four alignment tests fail storage operations during shutdown after the provider receipt exists.
+  - Each failed transaction preserves the saved operation, both worker claims, and reserved funds.
+  - Recovery uses one provider submission and produces one exact settlement. Two later restarts preserve charges and provider call counts.
+  - Complete alignment and shared-account regression passed in 42.577 seconds. Race checks passed in 56.316 seconds.
+  - Go format and static checks passed. Production code remains unchanged in this test increment.
+  - The diagnostic now has 191 uncovered statements across 21317 statements, in 190 blocks. Complete aggregate validation remains open.
+  - Three alignment receipt cases cover a failed claim lock, a failed attempt read, and an ignored receipt write.
+  - Failed receipt transactions preserve reserved funds without partial provider identity, output, or charges.
+  - Two restarts preserve the uncertain result without usage queries or another provider submission.
+  - Complete alignment regression passed in 37.148 seconds. Race checks passed in 19.217 seconds. Go format and static checks passed.
+  - Production code remains unchanged. The diagnostic now has 184 uncovered statements across 21317 statements, in 188 blocks.
+  - Provider reconciliation now adds the decoded rational provider cost without parsing its public strings again.
+  - Five corruption cases preserve rejected ratings and prevent partial imports. Restored ratings permit exact reconciliation and stable replay.
+  - Characterization passed in 8.461 seconds before the refactor. Regression passed in 9.011 seconds, and race checks in 118.794 seconds.
+  - Financial signal checks and backup restoration passed. Go format and static checks passed.
+  - The diagnostic replaces old provider comparison coordinates. It has 187 uncovered statements across 21314 statements, in 186 blocks.
+  - Creation intent encoding now accepts only the platform connection and grant request types. Canonical bytes and receipt identity remain unchanged.
+  - Characterization passed before the refactor. Regression passed in 6.762 seconds. Race checks passed in 83.724 seconds.
+  - Go format and static checks passed. The diagnostic replaces old coordinates for both changed files.
+  - The diagnostic has 186 uncovered statements across 21312 statements, in 185 blocks. Complete aggregate validation remains open.
+  - Four payment cases now ignore account locks and order updates during cancellation and verified completion.
+  - Failed transitions preserve funds without partial observations, receipts, or Ledger entries. Order conflicts retain the event for reconciliation.
+  - Recovery applies cancellation without a credit, or completion with one 500-cent credit. Restart and event replay preserve the financial effects.
+  - Focused checks passed in 2.594 seconds. Broader regression passed in 27.850 seconds, and race checks in 32.307 seconds.
+  - Go format and static checks passed. Production code remains unchanged in this test increment.
+  - The diagnostic has 182 uncovered statements across 21312 statements, in 181 blocks. Complete aggregate validation remains open.
+  - Seven Dictator stream cases fail upload grant reads and download claim locks through the database boundary.
+  - Upload failures prevent provider job submission. Download failures preserve the exact provider cost already recorded.
+  - Both failures retain reserved funds without public output or a customer debit. Reconciliation and HTTP replay cannot repeat provider submission.
+  - Focused checks passed in 4.737 seconds. Broader regression passed in 72.019 seconds, and race checks in 58.640 seconds.
+  - Go format and static checks passed. Production code remains unchanged in this test increment.
+  - The diagnostic has 179 uncovered statements across 21312 statements, in 178 blocks. Complete aggregate validation remains open.
+  - Five financial boundary cases reject unusable Ledger identifiers and unencodable retained timestamps.
+  - Failed balance reads preserve funds. Failed provider imports preserve charges without partial source records or reports.
+  - Restored values permit stable reads and exact comparison. Restart and replay preserve the financial resources.
+  - Focused checks passed in 2.187 seconds. Broader regression passed in 18.373 seconds, and race checks in 16.072 seconds.
+  - Go format and static checks passed. Production code remains unchanged in this test increment.
+  - The diagnostic has 177 uncovered statements across 21312 statements, in 176 blocks. Complete aggregate validation remains open.
+  - Catalog dictation tests reject empty uploads without accepted requests, financial changes, or provider calls. Valid uploads can reuse rejected keys.
+  - B294 corrects invalid native responses. Twelve HTTP cases preserve failed requests, held funds, and stable replay after two restarts.
+  - Focused checks passed in 11.559 seconds. Regression passed in 26.631 seconds, and race checks in 160.220 seconds.
+  - Go format and static checks passed. The diagnostic replaces old transcription parser coordinates with fresh results.
+  - The diagnostic has 175 uncovered statements across 21306 statements, in 174 blocks. Complete aggregate validation remains open.
+  - Both public reconciliation commands reject failed native connection access without reports, partial records, processor calls, or financial changes.
+  - Restored adapters permit successful reconciliation and stable replay. Broader invalid-input checks passed in 6.140 seconds.
+  - Race checks passed in 9.437 seconds. Go format and static checks passed.
+  - The combined diagnostic has 205 uncovered statements across 21327 statements, in 204 blocks.
+  - Fifteen provider import cases reject invalid route labels, invalid UTC timestamps, and changed sources under one completed run ID.
+  - They preserve charges, retained evidence, and original replay. Focused checks passed in 2.779 seconds, and broader race checks in 112.686 seconds.
+  - Payment completion and refund tests reject invalid UTC evidence without financial effects, then recover exactly once after valid evidence arrives.
+  - Focused payment checks passed in 1.066 seconds. Broader regression passed in 15.544 seconds, and race checks in 15.038 seconds.
+  - Provider import UTC race checks passed in 7.270 seconds. Go format and static checks passed.
+  - Production code remains unchanged. The combined diagnostic has 207 uncovered statements across 21327 statements, in 206 blocks.
+  - The latest complete billing target passed all hosted groups, both clients, and backup restoration.
+  - All four browser scenarios passed in 40.4 seconds. The log is `/tmp/llm-proxy-f070-final-controlled-billing.log`.
+  - Public `Serve` now has funded HTTP acceptance for two startup and SIGTERM shutdown cycles.
+  - Each cycle closes its listener and preserves funds, receipts, and payment creation count.
+  - Focused checks passed in 0.994 seconds. Five race runs passed in 39.359 seconds. Go format and static checks passed.
+  - Financial signal checks reject unusable paths without partial reports or financial writes. Absolute database paths remain readable.
+  - Signal regression passed in 4.355 seconds. Race checks passed in 47.885 seconds. Go format and static checks passed.
+  - The real startup entry point rejects failed assignment constraint reads without changes to funded accounts, receipts, or schema.
+  - Two failed starts and two successful recovery starts preserve the financial resources.
+  - Startup regression passed in 3.198 seconds. The new case passed race checks in 10.070 seconds. Go format and static checks passed.
+  - Five observation transaction cases now cover failed or ignored locks, a failed claim read, and a failed unknown-usage case write.
+  - Funded HTTP requests retain their reservations without partial charges. Recovery does not repeat provider work.
+  - An ignored delivery lock preserves pending accounting through two failed starts and permits exactly one settlement after recovery.
+  - Focused checks passed in 6.344 seconds. Race checks passed in 86.353 seconds. Go format and static checks passed.
+  - The focused profile covers seven previously uncovered error returns. Production code remains unchanged.
+  - The latest complete Go run passed all four test groups and executable probes.
+  - Its gate failed with `coverage total 99.0%, want 100.0%`. The report has 222 uncovered statements across 21327 statements.
+  - The current report is `coverage.out`. Its log is `/tmp/llm-proxy-f070-acceptance-go-test.log`.
+  - Public rating tests now reject incompatible compound bounds, unavailable lower price tiers, and unconstructed snapshots without monetary effects.
+  - Focused checks passed in 0.845 seconds. Complete catalog rating race checks passed in 20.320 seconds.
+  - Go format and static checks passed. These tests cover exported boundaries without changes to production code.
+  - Three public reconciliation cases now cover failed reads after the account lock and an ignored lock update.
+  - Each case keeps financial resources and its incomplete checkpoint unchanged, then resumes the same run with stable replay.
+  - Focused checks passed in 1.594 seconds, broader regression in 15.101 seconds, and race checks in 17.203 seconds.
+  - Go format and static checks passed. Production code remains unchanged in this increment.
+  - Normal HTTP tests now cover two tenants with one billing account, concurrent reservations, tenant-scoped retries, and exact settlement.
+  - Both cases passed in 6.497 seconds. Race checks passed in 20.194 seconds. Go format and static checks passed.
+  - Three charges keep the exact shared remainder after two restarts without more provider work.
+  - The first fixture lacked capacity for its new provider URL. Its current origin declarations correct that fixture error.
+  - Ledger credits now accept typed metadata. One encoder accepts only closed string fields and supplies valid JSON.
+  - Characterization passed in 91.463 seconds, regression in 93.817 seconds, and race checks in 76.542 seconds.
+  - Go format and static checks passed. Shared Ledger transactions, encoded metadata, and public contracts remain unchanged.
+  - The resumed Go run passed all four proxy groups but failed in the operational harness termination test before coverage aggregation.
+  - Its failure was `timed out waiting for operational file: .../preflight-blocked`. That run did not produce current coverage.
+  - The same target passed separately, then passed five more times. The original failure cause remains unknown.
+  - The termination test now captures child output, reports early exit, and stops its owned process group on failure.
+  - Its timeout remains unchanged. Cleanup checks passed in 3.534 seconds, and race checks passed in 4.137 seconds.
+  - Go format and static checks passed. The next complete Go run passed all test groups and executable probes.
+  - Its coverage gate failed at 98.9%, with 232 uncovered statements across 21334 statements, in 231 blocks.
+  - That prior report is saved at `/tmp/llm-proxy-b266-before-metadata.coverprofile`. Its log is `/tmp/llm-proxy-f070-resumed-go-test-diagnostic.log`.
+  - Complete controlled billing passed all Go groups, clients, and backup restoration. Four browser tests passed in 39.2 seconds.
+  - Alignment HTTP tests now cover failed observation writes, failed credential reads, oversized usage responses, and two authenticated customers.
+  - Failures keep funds unchanged. Recovery and two restarts do not cause more provider work or financial effects.
+  - Alignment and service regression passed in 40.833 seconds. Race checks passed in 235.744 seconds.
+  - Two closed JSON encoders no longer have unreachable serialization failures. External read and journal-write errors remain unchanged.
+  - Characterization passed before the refactor. Regression passed in 12.483 seconds, and race checks passed in 161.573 seconds.
+  - Go format and static checks passed after the refactor. No public schema or event contract changed.
+  - The previous complete Go target passed all groups and probes, then failed with `coverage total 98.9%, want 100.0%`.
+  - Its report had 237 uncovered statements across 21333 statements, in 236 blocks. The temporary report is no longer available.
+  - Six runtime cases verify occupied ports, listener failures, and cancellation during funds, checkout, and payment-event reads.
+  - Each case preserves funded accounts and receipts, closes owned resources, and verifies recovery through two fresh service starts.
+  - The occupied-port fixture now uses the same wildcard address as `Serve`. The initial different address family permitted startup.
+  - Focused checks passed in 6.463 seconds. Race checks passed in 50.299 seconds, and related regression passed in 39.241 seconds.
+  - Go format and static checks passed. No production code or public contract changed in this increment.
+  - The complete Go target stopped at B292 before coverage aggregation. B293 also corrected fixture writes into its requested report.
+  - A new complete target must establish current coverage. The earlier requested report contains fixture data and is invalid.
+  - Twelve funded HTTP cases reject mismatched saved result identities without changes to files, journal records, funds, or charges.
+  - Result-read, status-read, and expiry-delete failures keep financial evidence unchanged. Restored dependencies permit recovery or expiry after restart.
+  - Public `Serve` rejects two failed recovery reads through fresh database connections without another provider call.
+  - Result and startup regression passed in 45.133 seconds. The public startup case passed in 1.529 seconds and race checks in 15.343 seconds.
+  - All seventeen result-read cases passed race checks in 206.671 seconds. Go format and static checks passed.
+  - The current diagnostic has 255 uncovered statements across 21190 statements. Production code remains unchanged in this step.
+  - Configuration now retains a private text-price scope with the resolved offering and validated conditions.
+  - Price admission no longer repeats offering lookup, condition validation, or the HTTP output-limit check.
+  - Four HTTP protocols reject negative, zero, and excessive output limits without financial effects or provider calls.
+  - Focused regression passed in 12.656 seconds. Broader regression passed in 86.536 seconds. Race checks passed in 98.168 seconds.
+  - Runtime and CLI checks passed in 58.066 and 3.142 seconds. Go format and static checks passed.
+  - Three production files have new coverage coordinates. The current diagnostic lacks CLI and several recovery counts for those files.
+  - Final stack CI must establish complete current coverage. The 100.0% requirement remains unchanged.
+  - Nine funded HTTP cases reject incomplete text prices and bounds without provider calls or partial financial records.
+  - Catalog correction permits one settlement and stable replay after restart. Production code remains unchanged.
+  - Regression passed in 5.308 seconds. Race checks passed in 75.717 seconds. Go format and static checks passed.
+  - The current diagnostic has 247 uncovered statements across 21195 statements. Complete coverage and final stack CI remain open.
+  - Two funded entropy failure cases verify retained evidence, safe recovery, and replay before and after provider dispatch.
+  - Polling checks reproduced B289. Its correction stops retries after local financial boundary failures while retaining provider transport recovery.
+  - Five routing startup cases reject database read failures without changes to funded accounts or payment receipts.
+  - Failed expiry updates keep undispatched holds and journal records unchanged. Recovery releases the hold and rejects the paused worker before dispatch.
+  - Expiry regression passed in 1.096 seconds. Race checks passed in 9.804 seconds. Go format and static checks passed.
+  - A malformed retained grant scope also rejects startup. Each case verifies repeated rejection and two successful starts after recovery.
+  - Authenticated HTTP rejects an absent hosted profile without partial data or private errors and keeps all financial resources unchanged.
+  - Startup regression passed in 3.358 seconds. Profile regression passed in 1.367 seconds.
+  - All seven cases passed race checks in 53.002 seconds. Go format and static checks passed. Production code remains unchanged.
+  - The resolution read test now injects failures at all 19 reads observed through the successful public operation.
+  - Repeated failures preserve funds, receipts, and remainders. Recovery and restart permit exactly one settlement.
+  - Regression passed in 9.242 seconds. The matrix passed race checks in 133.563 seconds before the next amount refactor.
+  - The validated resolution command now carries its parsed numeric amount into the transaction without repeated validation.
+  - Resolution regression passed in 27.879 seconds. Selected post-refactor race checks passed in 16.953 seconds.
+  - Go format and static checks passed.
+  - Four malformed CLI scope cases reject startup before database creation. Runtime and CLI checks passed.
+  - Public catalog checks reject excessive sibling cache quantities and preserve exact reservation bounds. Rating regression passed.
+  - Full CI passed all Go groups and executable probes, then failed with `coverage total 98.8%, want 100.0%`.
+  - The complete profile has 257 uncovered statements across 21192 statements: `/tmp/llm-proxy-b266-typed-stack-ci.coverprofile`.
+  - Static, protocol, upstream race, and Python checks passed. The later browser stages did not run.
+  - The diagnostic adds the routing and expiry tests over unchanged production code and has 251 uncovered statements.
+  - No validation process remains active. Complete coverage and final stack CI remain open.
+  - Funded HTTP tests cover assignment read and removal failures, invalid financial queries, and processor portal failures.
+  - Eight startup cases reject corrupt usage before settlement and preserve funds through repeated failures and recovery.
+  - Price restoration now carries its validated numeric maximum into exposure. The transaction no longer reads the same price twice.
+  - Financial characterization passed before and after the refactor. Financial and price-integrity race checks passed.
+  - B288 records the separate inconsistent resolution receipt defect.
+  - The first new CI run failed on an obsolete second price-read test. Corrected settlement regression passed in 11.368 seconds.
+  - Corrected CI passed all Go groups and executable probes, then failed with `coverage total 98.7%, want 100.0%`.
+  - Its complete profile has 284 uncovered statements across 21231 statements: `/tmp/llm-proxy-b288-ci-corrected.coverprofile`.
+  - The next refactor removes impossible encoding error branches from closed JSON types. It preserves serialization and real boundary errors.
+  - Its first build found an unused `fmt` import. That import was removed, and the corrected regression passed in 120.192 seconds.
+  - Go format and static checks passed. The refactor changes coverage coordinates in twelve production files.
+  - Three resolution HTTP cases verify missing reservation reads, corrupt retained prices, and later credit-list read failures.
+  - They preserve funds through repeated rejection, recovery, restart, and replay. All three passed in 1.998 seconds.
+  - The selected race check passed in 21.631 seconds. Final stack validation and complete coverage remain open.
+  - Seven production files have new coverage coordinates. The earlier complete profile cannot establish their current coverage.
+  - Five invariant-read cases show repeated startup rejection with the invariant name and database failure in the error.
+  - Three additional schema cases keep funded accounts and receipts unchanged after rejected startup.
+  - Seven schema-creation cases show rollback, database closure, and healthy startup after the failure is removed.
+  - Startup regression passed in 24.679 seconds. Selected startup race checks passed in 101.900 seconds.
+  - Journal HTTP tests now cover storage failures, account isolation, and pagination under the OpenAPI contract.
+  - The shared fixture uses one canonical grant identifier. Financial read regression passed in 3.389 seconds and race checks in 38.046 seconds.
+  - The resumed diagnostic has 298 uncovered statements across 21225 statements. Production code is unchanged in this step.
+  - Final stack CI failed with `coverage total 98.6%, want 100.0%` after all four Go groups and executable probes passed.
+  - Static checks, protocol acceptance, upstream race checks, and Python checks passed. The later browser stages did not run.
+  - The full profile confirms 298 uncovered statements in 290 blocks across 21225 statements: `/tmp/llm-proxy-b266-resume-ci.coverprofile`.
+  - This profile replaces the earlier diagnostics. The log is `/tmp/llm-proxy-b266-resume-ci.log`.
+  - Four additional HTTP search cases verify mixed output, missing tool types, missing actions, and absent tool identities.
+  - They preserve exact counts or explicit unknown quantities, exclude private content, and prevent repeated provider work after replay.
+  - Search regression passed in 4.818 seconds. The new cases passed with race detection in 11.090 seconds.
+  - Go lint and formatting passed. No production code or public contract changed in this increment.
+  - Four startup cases verify rejection for missing primary keys, nullable required columns, and absent check or foreign-key constraints.
+  - Rejected startup preserves funded accounts, receipts, and schema. Restored metadata permits restart with unchanged financial resources.
+  - Regression passed in 6.221 seconds. The four new cases passed with race detection in 27.508 seconds.
+  - Six Dictator financial cases reject unknown native job states without charges, artifact transfer, or repeated provider work.
+  - Those cases passed with race detection in 39.305 seconds. Final Go lint and formatting passed.
+  - The current diagnostic has 323 uncovered statements across 21225 statements. Both changed production files use current coordinates.
+  - The subsequent stack CI run passed all four Go groups, executable probes, upstream race checks, and Python checks.
+  - Its remaining failure is `coverage total 98.5%, want 100.0%`.
+  - The complete native profile has 321 uncovered statements across 21225 statements: `/tmp/llm-proxy-f070-dictator-stack-ci.coverprofile`.
+  - This complete profile supersedes the combined diagnostic. The log is `/tmp/llm-proxy-f070-dictator-stack-ci.log`.
+  - Payment checks cover rejected evidence, refund history, tax-inclusive rounding, financial rollback, and unchanged receipts and balances after failure.
+  - Authority checks cover atomic writes, failed reads, random-source failures, provider qualification, pagination, and concurrent creation and rotation.
+  - Payment reconciliation checks cover exact differences, checkpoint recovery, concurrency, and immutable reports without new Ledger entries.
+  - Provider reconciliation checks cover invalid imports, failed reads and writes, retained evidence, and unchanged customer charges.
+  - Funds-resolution checks cover financial rollback, completed receipt reads, restart replay, and one monetary effect.
+  - B267 fixes the shared decoder defect found by these checks. Trailing JSON cannot trigger management writes.
+  - Startup checks preserve pending delivery and financial resources after failure. Restart does not repeat provider work.
+  - Admission checks reject before dispatch and preserve funds without partial request, price, or reservation records.
+  - Added 20 adjustment scenarios for refund-hold refresh, failed reads, corrupt records, processor outages, and retry checkpoint failures.
+  - Refund-hold refresh reserves the pending refund before later usage. Failed refresh leaves no admitted request or provider call.
+  - Unapplied adjustments preserve balances, holds, receipts, and Ledger history. Restart and repeated evidence have one refund effect.
+  - Added 17 checkout scenarios for failed reads and writes, processor outages, and customer creation recovery.
+  - Checkout restart creates one transaction. Repeated payment events credit USD 5 once without additional Ledger entries.
+  - Added 22 text execution scenarios for failed reads and writes, truncated responses, and uncertainty recovery.
+  - Restart releases undispatched holds and preserves holds for unresolved usage. Replays do not repeat provider work.
+  - Added 25 funded media scenarios for failed claims, dispatch, evidence reads, and completion checkpoints.
+  - Failed media completion leaves outputs unpublished. Recovery preserves operation identity and prevents repeated provider work.
+  - Added 28 credit scenarios for failed reads and writes, corrupt retained amounts, and invalid commands.
+  - Failed credits preserve balances, remainders, tenant usage, and settlement records. Recovery applies one credit through the same HTTP resource.
+  - Added 32 retained-price scenarios for corrupt data, invalid bounds, and prices that do not match the accepted request.
+  - Invalid prices preserve pending delivery and customer funds. Restoration settles once without another provider call.
+  - B268 fixes the stored-price error response found by these checks.
+  - Added 20 settlement scenarios for later read failures, corrupt amounts, and reservation conflicts after Ledger effects.
+  - Failed settlement preserves pending delivery, holds, and funds. Restoration settles once without another provider call.
+  - B269 fixes the invalid balance response found by these checks and shares the remainder validator across financial boundaries.
+  - Added 17 held-reservation scenarios for failed reads and writes before and after provider dispatch.
+  - Failed recovery preserves financial resources, attempts, and reconciliation cases. Restart releases only undispatched holds.
+  - Dispatched work keeps its hold for reconciliation. Repeated restart has no new Ledger effect or provider call.
+  - Added seven delayed-accounting scenarios after a waiver or partial operator charge.
+  - Later evidence updates provider costs and exposure without changing the decision, balance, remainder, or tenant usage.
+  - Failed delivery preserves the earlier exposure record and pending evidence. Restart retains one exposure record and one case.
+  - Added 76 financial-read scenarios for storage failures, corrupt charges and prices, invalid queries, missing resources, and account isolation.
+  - Failed reads return no partial financial data. Restored storage returns the original resources without new provider work.
+  - A new billing account reads zero funds without creating Ledger or financial account records.
+  - Added 18 credit-read scenarios for corrupt receipts, corrupt usage credits, storage failures, and restoration.
+  - B270 fixes corrupt credit receipt publication. Restored records preserve financial resources and idempotent command replay.
+  - Added nine account-creation scenarios for storage failures, entropy failures, cancellation, and competing service instances.
+  - Failed creation retains no account or financial effects. Restart recovers one account for the accepted intent.
+  - Competing instances share one account for the same intent and reject a different intent.
+  - Added 29 financial-signal scenarios for unavailable storage, corrupt amounts, unreadable queue timestamps, and inconsistent comparison evidence.
+  - Failed CLI reads publish no partial report and preserve durable database bytes. Restoration returns the original signals.
+  - Funded checks preserve balances, charges, pending delivery, and provider call counts.
+  - Balance reads now retain numeric cents and validated fractions until output. Financial signals no longer parse validated API strings again.
+  - Database validation and public response fields remain unchanged. The refactor removes two unreachable parsing errors.
+  - Characterization verifies two maximum int64 account balances and their exact aggregate through HTTP and public signal reads.
+  - Added 17 result-publication scenarios for storage failures, corrupt completion data, and valid tool-only results.
+  - B271 rejects incomplete saved completions before recovery, replay, and status output.
+  - Failed recovery preserves held funds and pending evidence. Restoration permits one settlement without another provider call.
+  - Added 20 inbox scenarios for malformed HTTP inputs, incomplete bodies, replay read failures, and exact large-number identity.
+  - Rejected inputs preserve the original event, receipt, balance, and Ledger history. Restart does not repeat an applied credit.
+  - Signed event replay preserves exact JSON numbers and rejects a one-unit difference above the exact integer range of float64.
+  - Added 16 startup scenarios for failed environment reads and writes, mixed environments, incomplete schemas, and invalid processor URLs.
+  - The public service rejects invalid startup before HTTP admission. Restoration permits two normal starts with unchanged financial resources.
+  - Added 12 funding-credit scenarios for account locks, Ledger writes, receipt reads, refund records, and balance reads.
+  - Failed credit stops HTTP startup and preserves the pending event without partial financial records.
+  - Restoration and completion replay retain one USD 5 credit, one receipt, and unchanged Ledger history.
+  - Payment worker assembly now consumes the validated database, catalog, and shared client without duplicate dependency checks.
+  - The refactor removes two duplicate checks and their unreachable caller error paths. External configuration and database errors remain unchanged.
+  - Added 10 funding-order scenarios for failed admission, replay reads, authorization, invalid queries, and restart recovery.
+  - Failed admission preserves existing orders, delivery records, receipts, and funds. Recovery retains one order and delivery for the request.
+  - Added 10 payment-state scenarios for failed storage, malformed events, processor outages, incomplete evidence, and cancellation after verified funding.
+  - Failed startup closes the listener and preserves the pending event. Recovery applies cancellation once without partial financial records.
+  - Cancellation cannot reverse verified funding. Conflicting evidence remains in reconciliation until matching completed-payment evidence resolves it.
+  - Hosted scopes now retain validated conditions, attempt limits, and transport from the immutable catalog.
+  - Media admission no longer repeats service or model resolution. Startup validation and request-specific pricing remain unchanged.
+  - Eight root-command scenarios reject empty, duplicate, unknown-service, and invalid-condition scopes before startup or database creation.
+  - B272 fixes the empty hosted-object defect found by these checks. Omitted hosted configuration remains disabled.
+  - B273 preserves explicit payment configuration for validation. Empty objects no longer silently disable payments.
+  - Payment presence and CLI regression passed in 8.578 seconds. All 87 selected CLI race scenarios passed in 95.615 seconds.
+  - Runtime HTTP checks passed in 36.644 seconds. Final CLI configuration checks passed in 7.389 seconds.
+  - All 82 selected CLI race scenarios passed before the final lookup refactor. Final CLI, lint, and format checks passed afterward.
+  - Earlier increments retain their focused regression and race results in PR 344 and its commits.
+  - Public catalog checks reject fractional tokens, excessive quantities, incompatible units, incomplete selections, and invalid imported conditions.
+  - Missing supplier prices and tier gaps remain unavailable. Rejected inputs and caller mutations cannot change accepted prices.
+  - Catalog regression passed in 1.624 seconds. All 43 selected catalog race scenarios passed in 17.570 seconds.
+  - Go lint and format checks passed after the final test change. No production code changed in this increment.
+  - Ten public startup scenarios reject incomplete funds storage, incorrect Ledger indexes, and unavailable metadata.
+  - Rejected startup preserves the schema and financial resources. Restored storage permits two normal starts without repeated financial effects.
+  - All ten startup scenarios passed in 4.752 seconds. Their race run passed in 68.107 seconds. Lint and format checks passed.
+  - Five funded media scenarios cover failed claim renewal and failed authorization after dispatch intent.
+  - Rejected provider calls and interrupted work retain funds without partial output. Restart cannot repeat the provider submission.
+  - Media recovery and the new scenarios passed in 22.151 seconds. No production code changed.
+  - All five new race scenarios passed in 57.154 seconds. Go lint and format checks passed.
+  - Reservation calculation now retains the exact numeric charge instead of parsing its generated output representation.
+  - External monetary inputs still pass boundary validation. Integer-cent overflow and rounding remain unchanged.
+  - Three characterization cases verify minimum charges, fractional cents, overflow, repeated calculations, and immutable snapshots.
+  - Rating and funds regression passed in 21.556 seconds. Hosted rating regression passed in 25.954 seconds.
+  - All 48 selected race scenarios passed in 28.643 seconds. Go lint and format checks passed.
+  - Two normal-runtime restart scenarios reject queued media after hosted configuration or the accepted offering scope is removed.
+  - Rejected work causes no provider call or output. Reconciliation releases unused funds, and restored authorization cannot repeat the operation.
+  - Both scenarios passed in 2.850 seconds. Their race run passed in 31.603 seconds. Go lint and format checks passed.
+  - B274 fixes hosted admission assignment after media worker startup. Retained-scope recovery and removed-scope rejection pass through normal HTTP.
+  - The B274 component run exhausted the package timeout. B275 records the aggregate validation failure.
+  - B275 restored complete Go execution with owned media shutdown and two disjoint test passes.
+  - Both test passes and executable probes finished. The current aggregate profile has 438 uncovered statements across 21172 statements.
+  - The command failed the unchanged gate with `coverage total 97.9%, want 100.0%`.
+  - Use `/tmp/llm-proxy-b275-coverage.out` for current coverage. Earlier focused diagnostics are superseded.
+  - Added 14 funded media cancellation scenarios for failed storage before and after provider dispatch.
+  - Failed queued cancellation preserves the operation and funds. Recovery releases unused funds once without provider calls.
+  - Failed or unsupported cancellation after dispatch preserves the reservation. Uncertain provider results cannot trigger another submission after restart.
+  - The new checks passed in 11.929 seconds. Their race run passed in 166.327 seconds. Go lint and formatting passed.
+  - The combined diagnostic has 434 uncovered statements across 21172 statements. No production code changed in this increment.
+  - Use `/tmp/llm-proxy-b266-media-cancellation-diagnostic.coverprofile` for the updated diagnostic. It does not replace aggregate CI.
+  - Extended the normal catalog runtime fixture with ordered image, audio, and mixed input acceptance.
+  - Image checks cover 37 offerings across seven providers. Audio and mixed checks each cover eight offerings across two providers.
+  - The text regression retains all 67 offerings across 13 providers and four HTTP interfaces.
+  - Each media case verifies exact charges, settlement, replay, and rejection of changed media without another provider call.
+  - The complete matrix passed in 28.715 seconds. Media input race checks passed in 61.995 seconds. Go lint and formatting passed.
+  - The combined diagnostic now has 433 uncovered statements across 21172 statements. Production code is unchanged.
+  - Use `/tmp/llm-proxy-b266-multimodal-diagnostic.coverprofile` for the latest diagnostic. Earlier totals are superseded.
+  - Added 12 journal admission scenarios for failed tenant locks, request writes, authority reads, and identifier generation.
+  - Malformed grant scope and absent or future credential qualification reject admission before reservation.
+  - Rejected requests preserve funds without journal, price, reservation, or provider effects. Restored dependencies admit once and preserve restart replay.
+  - The new checks passed in 6.143 seconds. Their race run passed in 77.700 seconds. Go lint and formatting passed.
+  - The latest combined diagnostic has 422 uncovered statements across 21172 statements. Production code is unchanged.
+  - Use `/tmp/llm-proxy-b266-journal-admission-diagnostic.coverprofile` for the latest diagnostic. It does not replace aggregate CI.
+  - Added 14 result replay scenarios for saved identity conflicts and incomplete publication before claim expiry.
+  - Conflicts preserve financial resources. Missing results remain pending before expiry and become uncertain after recovery without another provider call.
+  - Replay and status reuse all six identity checks at the filesystem boundary. Duplicate checks after that boundary are removed.
+  - Characterization passed before the refactor in 9.677 seconds. Broad regression passed in 101.679 seconds.
+  - Failed-completion replay passed in 1.033 seconds. The new scenarios passed with race detection in 151.960 seconds.
+  - Go lint and formatting passed. No public API or event contract changed.
+  - The current diagnostic has 414 uncovered statements across 21170 statements. Changed production files use only current coverage counts.
+  - Use `/tmp/llm-proxy-b266-result-replay-diagnostic.coverprofile` for the latest diagnostic. It does not replace aggregate CI.
+  - Added eight interrupted journal scenarios for failed recovery of accepted, dispatched, and observed work.
+  - Failed reads and writes preserve funds, attempts, observations, and reconciliation cases through public HTTP resources.
+  - B276 corrects premature terminal response publication found by these checks. Restored accepted work dispatches once.
+  - Previously dispatched work remains uncertain and retains held funds without another provider call.
+  - Focused checks passed in 4.968 seconds, broad regression in 108.118 seconds, and race checks in 72.123 seconds.
+  - Go lint and formatting passed. The current diagnostic has 406 uncovered statements across 21172 statements.
+  - Use `/tmp/llm-proxy-b276-diagnostic.coverprofile`. The changed production file uses only current coverage counts.
+  - Added 12 normal application startup scenarios for interrupted dispatch, unpublished result, and funds recovery failures.
+  - Failed construction preserves financial and journal resources. Restored storage permits HTTP replay without another provider call.
+  - A later funds failure retains the recovered result receipt. Subsequent startup settles once.
+  - All 12 scenarios passed in 7.069 seconds. Race checks passed in separate groups of 11 and one scenario.
+  - The race groups passed in 88.835 and 13.080 seconds. Go lint and formatting passed after formatting the new test file.
+  - The diagnostic has 396 uncovered statements across 21172 statements. No production code changed.
+  - Use `/tmp/llm-proxy-b266-completion-startup-diagnostic.coverprofile`. Complete aggregate CI remains open.
+  - Added eight payment scenarios for malformed events, unknown checkouts, supplier changes, missing adjustment evidence, and refund timing.
+  - Unverified events retain reconciliation reasons without credits. Valid completion and restart retain one funding credit and one refund effect.
+  - A pending refund cannot hold more than the remaining payment principal. Rejection releases that hold without reversing an approved refund.
+  - Focused checks passed in 3.509 seconds and race checks in 46.507 seconds. Go lint and formatting passed.
+  - No production code changed. The current diagnostic has 384 uncovered statements across 21172 statements.
+  - Use `/tmp/llm-proxy-b266-deferred-payments-diagnostic.coverprofile`. This diagnostic does not replace aggregate CI.
+  - Added five tenant budget scenarios for failed account locks, failed limit writes, corrupt admission usage, and inconsistent credit usage.
+  - Failed writes preserve limits, revisions, and funds. Invalid usage rejects admission before dispatch and rejects credits before negative totals.
+  - Restored storage permits one admission or credit. HTTP replay and restart preserve exact usage and financial effects.
+  - Tenant regression passed in 5.521 seconds. New scenario race checks passed in 39.614 seconds. Go lint and formatting passed.
+  - No production code changed. The current diagnostic has 385 uncovered statements across 21172 statements.
+  - Use `/tmp/llm-proxy-b266-tenant-recovery-diagnostic.coverprofile`. Complete aggregate CI remains open.
+  - The Governor check and a direct retry returned HTTP 404 from `https://issues-api.mprlab.com/api/contracts/issue-format`.
+  - Changed prose and `git diff --check` passed. Preserve the local issue format until its authoritative source is available.
+  - The required coverage gate, complete F070 acceptance, and final stack CI remain open.
+  - Added four search limit scenarios for failed and corrupt price reads before initial dispatch and continuation.
+  - Initial rejection causes zero provider calls. Continuation rejection preserves the prior call and its exact costs.
+  - Restart releases undispatched holds and retains reconciliation holds after prior dispatch. Repeated replay cannot repeat financial effects.
+  - Search regression passed in 7.743 seconds and race checks in 35.912 seconds. Go lint and formatting passed.
+  - No production code changed. No public API or event contract changed.
+  - The diagnostic has 382 uncovered statements across 21172 statements. Use `/tmp/llm-proxy-b266-tool-limit-diagnostic.coverprofile`.
+  - Added six assignment mutation scenarios and two collection read scenarios through authenticated HTTP.
+  - Failed storage operations preserve tenant profiles, selected grants, and balances. Restoration applies one assignment across restart and replay.
+  - A separate scenario verifies ordered hosted and customer-owned assignments across providers. A conflicting grant cannot change the original selection.
+  - Assignment regression passed in 4.031 seconds and race checks in 41.997 seconds. Go lint and formatting passed.
+  - No production code or public contract changed.
+  - The diagnostic has 373 uncovered statements across 21172 statements. Use `/tmp/llm-proxy-b266-assignment-diagnostic.coverprofile`.
+  - Added four signed webhook scenarios for older and conflicting transaction and adjustment revisions.
+  - Conflicts preserve the refund hold and retained evidence. Valid evidence after restart applies one refund without repeated financial effects.
+  - Transaction revision checks remain at the processor observation boundary. The duplicate timestamp check in adjustment comparison is removed.
+  - Separate adjustment identity and revision checks remain. Hold refresh reuses its saved evidence without a processor read.
+  - Characterization passed before the refactor in 2.294 seconds. Full payment regression passed in 121.207 seconds.
+  - Race checks passed in 29.844 seconds. Admission and balance checks passed in 5.056 and 0.961 seconds.
+  - Go lint and formatting passed. No public API or event contract changed.
+  - The diagnostic has 372 uncovered statements across 21170 statements. The changed production file uses only current coverage counts.
+  - Use `/tmp/llm-proxy-b266-payment-revisions-diagnostic.coverprofile`. Complete aggregate CI and F070 acceptance remain open.
+  - Net charge calculation now returns its exact rational after validation of retained charges and credits.
+  - Settlement consumes that rational directly. Charge responses encode numerator and denominator strings at the HTTP boundary.
+  - Stored amount validation and rounding are unchanged. No public API or event contract changed.
+  - Existing characterization passed before the refactor in 3.181 seconds. Financial regression passed in 149.702 seconds.
+  - Race checks passed in 36.926 seconds. Go lint and formatting passed.
+  - The diagnostic has 371 uncovered statements across 21168 statements. Changed production files use only current financial regression counts.
+  - Use `/tmp/llm-proxy-b266-net-charge-diagnostic.coverprofile`. Complete aggregate CI and F070 acceptance remain open.
+  - Added three grant transition scenarios for a failed read after grant and audit writes inside the transaction.
+  - Suspension, reactivation, and revocation failures preserve grant history, assignments, and funds through authenticated HTTP.
+  - Restoration applies one transition after restart. Stale revision retries cannot repeat the transition or change prior audit records.
+  - Grant and authority regression passed in 4.519 seconds. Race checks passed in 18.680 seconds. Go lint and formatting passed.
+  - Initial test errors concerned typed grant states and owner sessions. The corrected fixture uses the existing authorization contract.
+  - No production code or public contract changed. The diagnostic has 370 uncovered statements across 21168 statements.
+  - Use `/tmp/llm-proxy-b266-grant-transition-diagnostic.coverprofile`. Complete aggregate CI and F070 acceptance remain open.
+  - B277 fixes a failed grant transition that committed state and audit history before scope decoding returned an error.
+  - Stored grants now return typed scope from the database boundary. Transition result decoding occurs before commit.
+  - Creation responses reuse validated request scope. Response code does not decode stored bytes again.
+  - Four new corruption scenarios verify rejection before and after transaction writes, restoration, and restart without repeated audit effects.
+  - Targeted checks passed in 2.865 seconds. Grant, authority, and assignment regression passed in 10.690 seconds.
+  - Race checks passed in 38.900 seconds. Go lint and formatting passed. No public schema or event contract changed.
+  - The diagnostic has 366 uncovered statements across 21165 statements. Use `/tmp/llm-proxy-b277-diagnostic.coverprofile`.
+  - Old grant coverage coordinates were discarded. The store interface change preserves executable source and coverage coordinates.
+  - Complete aggregate CI and F070 acceptance remain open.
+  - B278 rejects invalid retained account remainders before payment holds or provider dispatch.
+  - Five corruption scenarios previously returned HTTP 200. They now return HTTP 503 with zero provider calls and no partial financial effects.
+  - The admission boundary reuses the existing remainder validator. Restoration, replay, and restart preserve one exact settlement.
+  - Targeted checks passed in 2.739 seconds. Financial regression passed in 144.422 seconds, and race checks passed in 35.706 seconds.
+  - Go lint and formatting passed. No public schema or event contract changed.
+  - The diagnostic has 366 uncovered statements across 21167 statements. Use `/tmp/llm-proxy-b278-diagnostic.coverprofile`.
+  - Old coverage coordinates for `hosted_funds.go` were discarded. Complete aggregate CI and F070 acceptance remain open.
+  - Added seven admission scenarios for corrupt retained prices, an ignored account lock, and conflicting prices or reservations before dispatch.
+  - Failed initial admission preserves all financial resources. Conflicting attempts retain the original hold and create no provider work or observations.
+  - Replay leaves funds unchanged. Restart releases holds for undispatched work once and preserves the failed result.
+  - Focused checks passed in 4.052 seconds. Admission and text regression passed in 25.819 seconds.
+  - Race checks passed in 55.554 seconds. Go lint and formatting passed. No production code or public contract changed.
+  - The diagnostic has 362 uncovered statements across 21167 statements. Use `/tmp/llm-proxy-b266-reservation-integrity-diagnostic.coverprofile`.
+  - Production source coordinates are unchanged. Complete aggregate CI and F070 acceptance remain open.
+  - Settlement now consumes its calculated rational directly and preserves the original total for persistence and tenant usage.
+  - Credit calculation retains its parsed amount with the cent effect and next remainder. Tenant accounting no longer parses it after posting.
+  - Public amount validation, stored remainder validation, rounding, overflow checks, and representations are unchanged.
+  - Existing characterization passed before the refactor in 4.950 seconds and after the final change in 5.101 seconds.
+  - Catalog and financial regression passed in 161.064 seconds. Race checks passed in 68.909 seconds. Go lint and formatting passed.
+  - No new tests, shared package changes, public schema changes, or event changes were required.
+  - The diagnostic has 361 uncovered statements across 21167 statements. Use `/tmp/llm-proxy-b266-exact-settlement-diagnostic.coverprofile`.
+  - Old coordinates for all three changed production files were discarded. Complete aggregate CI and F070 acceptance remain open.
+  - Added four media scenarios for failed uncertainty writes and an ignored journal claim.
+  - Failed writes preserve funds and running work without partial observations or cases. Restart records uncertainty without repeated provider work.
+  - Ignored claims preserve queued work without provider calls. Restoration executes once and preserves exact settlement across restart.
+  - Focused checks passed in 3.949 seconds. Hosted media regression passed in 58.936 seconds, and race checks passed in 60.825 seconds.
+  - Go lint and formatting passed. No production code or public contract changed.
+  - Initial test errors concerned the worker log event and the HTTP response validator. Both fixture errors are corrected.
+  - The diagnostic has 359 uncovered statements across 21167 statements. Use `/tmp/llm-proxy-b266-media-uncertainty-diagnostic.coverprofile`.
+  - Production source coordinates are unchanged. Complete aggregate CI and F070 acceptance remain open.
+  - B279 fixes incomplete credential documents that permitted funded media provider calls.
+  - The shared read boundary now requires the complete catalog field set before returning provider settings.
+  - Eight media scenarios and two text scenarios verify corrupt records, foreign credential bindings, unchanged funds, and restart replay.
+  - Existing catalog fixtures now validate complete fields before encryption and explicitly supply the DashScope workspace URL.
+  - Targeted checks passed in 7.611 seconds. Catalog checks passed in 36.865 seconds, and broad hosted regression passed in 187.425 seconds.
+  - Race checks passed in 109.660 seconds. Go lint and formatting passed. No public schema or event contract changed.
+  - The diagnostic has 355 uncovered statements across 21169 statements. Use `/tmp/llm-proxy-b279-diagnostic.coverprofile`.
+  - Old credential loader coordinates were discarded. Complete aggregate CI and F070 acceptance remain open.
+  - B280 restores explicit cancellation retries after an unsupported provider outcome on running work.
+  - Four funded scenarios cover failed authority reads, absent authority, provider errors, and failed observation writes.
+  - Failed cancellation preserves funds. Restoration confirms cancellation without repeated synthesis or financial effects.
+  - Targeted checks passed in 11.566 seconds. Broad media regression passed in 165.289 seconds, and boundary checks passed in 2.117 seconds.
+  - Race checks passed in 35.442 seconds. Go lint and formatting passed. No public schema or event contract changed.
+  - The diagnostic has 350 uncovered statements across 21169 statements. Use `/tmp/llm-proxy-b280-diagnostic.coverprofile`.
+  - Old media service coordinates were discarded. Only current regression and boundary counts contribute coverage for that file.
+  - B281 rejects changed retained refund evidence before reconciliation, hold refresh, receipt reads, and identical event replay.
+  - Fifteen new scenarios verify rejection, restoration, financial conservation, and recovery without repeated effects.
+  - Focused checks passed in 6.544 seconds. Payment and funds regression passed in 243.435 seconds.
+  - Race checks passed in 97.840 seconds. Go lint and formatting passed. No public schema or event contract changed.
+  - The diagnostic has 349 uncovered statements across 21173 statements. Use `/tmp/llm-proxy-b281-diagnostic.coverprofile`.
+  - Old coordinates for both changed production files were discarded.
+  - B282 rejects refund projection amounts and hold identities that disagree with the retained evidence.
+  - Thirty-three new scenarios verify financial rejection, restoration, replay, and recovery with the existing Ledger journal.
+  - Focused checks passed in 17.815 seconds. Payment and funds regression passed in 254.333 seconds.
+  - Race checks passed in 180.596 seconds. Go lint and formatting passed. No public schema or event contract changed.
+  - The diagnostic has 350 uncovered statements across 21180 statements. Use `/tmp/llm-proxy-b282-diagnostic.coverprofile`.
+  - Old adjustment source coordinates were discarded. Earlier validation now intercepts corrupt holds before a Ledger constructor error path.
+  - Admission, settlement, credits, and refund holds now share typed Ledger input construction.
+  - The shared constructors preserve all errors. Metadata, idempotency keys, service calls, transaction ownership, and Ledger v1.1.0 remain unchanged.
+  - Existing public characterization passed before the refactor in 27.396 seconds and after the final change in 28.453 seconds.
+  - Payment and funds regression passed in 258.262 seconds. Race checks passed in 118.602 seconds. Go lint and formatting passed.
+  - No new tests, shared dependency changes, public schemas, or event contracts were required.
+  - The diagnostic has 339 uncovered statements across 21159 statements. Use `/tmp/llm-proxy-b266-ledger-inputs-diagnostic.coverprofile`.
+  - Old coordinates for all four changed production files were discarded. The new input constructors have complete statement coverage.
+  - Complete aggregate CI and F070 acceptance remain open.
+  - Added seven CLI rejection scenarios for missing configuration, missing files, invalid run identifiers, and changed provider source bytes.
+  - Failed commands emit no reconciliation report, preserve database bytes, and leave completed report replay unchanged.
+  - Payment regression passed in 146.234 seconds. CLI regression passed in 2.958 seconds. Go lint and formatting passed.
+  - Initial test assertions rejected normal Cobra usage output and compared a stale WAL snapshot across successful replays.
+  - The corrected tests permit usage text and capture database bytes immediately before each failed command. No production code changed.
+  - The complete Go component timed out after 601.139 seconds without a new merged profile. B284 records retained shutdown resources.
+  - Charge decoding now keeps validated numeric amounts through summaries, settlement, and financial exposure calculations.
+  - Public amounts, unresolved states, customer credits, and authorization limits are unchanged. Database validation remains at the boundary.
+  - HTTP characterization passed before the refactor in 20.635 seconds and after the refactor in 20.547 seconds.
+  - Financial regression passed in 177.904 seconds. Race checks passed in 292.895 seconds. Go lint and formatting passed.
+  - The diagnostic has 329 uncovered statements across 21215 statements. Use `/tmp/llm-proxy-b266-numeric-diagnostic.coverprofile`.
+  - Old coordinates for all seven changed production files were discarded. Complete aggregate CI and F070 acceptance remain open.
+  Requirements:
+  - Cover missing public behaviors and financial failure boundaries with the real service components.
+  - Preserve the required coverage threshold and the current provider scope.
+  - Remove unreachable or obsolete paths only when the current contract does not require them.
+  Validation:
+  - Run focused component checks during correction.
+  - Pass the existing Go coverage gate and final stack CI.
+
+- [x] [B265] (P1) Reject incomplete cost bounds for Responses image requests.
+  Evidence:
+  The funded image fixture accepts a Responses request with only an Images price snapshot and reservation.
+  The response model can incur additional costs outside that bound.
+  Requirements:
+  - Reject hosted requests before dispatch when the selected snapshot cannot bound all paid components.
+  - Keep customer funds unchanged after rejection.
+  - Keep complete Responses billing in F070 scope.
+  Validation:
+  - Verify rejection through HTTP for image generation and editing, with no provider calls or financial effects.
+  - Run image financial and normal runtime regression checks.
+  Resolution:
+  The integration test first returned `202` instead of `503` for generation and editing.
+  Media financial admission now rejects the incomplete Responses cost bound before dispatch.
+  The HTTP checks verify unchanged funds, zero charges, and zero provider calls after repeated rejection.
+  Related image, rating, admission, worker, and normal runtime checks passed in 10.932 seconds. Go lint passed.
+  Complete Responses billing remains open under F070. B266 owns the separate coverage failure.
+
+- [x] [B264] (P1) Correct OpenAPI payment route and authentication fixtures.
+  Evidence:
+  Stack CI compares the complete route contract with a fixture that disables payments.
+  The authentication test expects `TAuthSession` for the Paddle webhook, which requires `PaddleSignature`.
+  Requirements:
+  - Configure controlled payments in the complete route inventory fixture.
+  - Verify the Paddle signature header scheme and webhook authentication requirement.
+  - Preserve disabled payment behavior.
+  Validation:
+  - Run focused OpenAPI and payment checks, then the final stack CI checkpoint under F070.
+  Status:
+  The complete route fixture now configures controlled payments. Authentication expectations now include the Paddle signature scheme.
+  `make test-openapi-contract` passed in 5.467 seconds. Format checks passed.
+  The subsequent stack run passed all Go tests, including both OpenAPI checks. B266 owns its separate coverage failure.
+
+- [x] [B263] (P1) Correct the CLI catalog rejection fixture.
+  Evidence:
+  Stack CI rejects catalog schema version 7, but the test expects an error for version 6.
+  The production loader reports the submitted invalid value correctly.
+  The fixture now derives its values from the canonical version. Focused catalog checks and format checks pass.
+  The subsequent stack run passed all Go tests, including CLI catalog rejection. B266 owns its separate coverage failure.
+  Requirements:
+  - Derive the invalid schema value and expected error from the canonical version.
+  - Include CLI catalog rejection tests in the existing provider catalog target.
+  Validation:
+  - Run the focused provider catalog checks and the final stack CI checkpoint.
+
+- [x] [B262] (P1) Admit and settle priced dictionary services without a model.
+  Goal:
+  Use the shared financial contract for the existing dictionary creation service.
+  Evidence:
+  Normal HTTP admission returns `financial_admission_unavailable` with HTTP 503 instead of HTTP 402 for an unfunded, explicitly priced service.
+  Financial admission resolves only model offerings. Dictionary execution does not retain a measured call quantity.
+  Requirements:
+  - Resolve declared services without an invented model.
+  - Bound each dictionary attempt to its single native creation call.
+  - Retain a successful call from a validated provider receipt, including receipt recovery.
+  - Require an explicit catalog rate per call before financial admission.
+  - Preserve unknown financial outcomes when no valid receipt exists.
+  Validation:
+  - Verify exact provider costs, customer charges, funds release, and replay through normal HTTP execution.
+  - Reject unfunded requests without provider work.
+  - Keep controlled fixture rates separate from supplier rate qualification.
+  Resolution:
+  Service admission now resolves the declared service and uses the adapter's single-call bound.
+  Dictionary receipts supply exact call evidence through the existing usage journal, including receipt recovery.
+  Normal HTTP acceptance passed exact markup, automatic settlement, replay, zero balance, and rejection without provider work.
+  Recovery checks passed after failed usage and terminal writes. Invalid receipts remain uncertain without measured usage.
+  Related service, media rating, and normal runtime checks passed. Go lint passed.
+
+- [x] [B261] (P1) Include provider service prices in the shared pricing index.
+  Goal:
+  Use declared service prices through the same exact pricing API as model offerings.
+  Evidence:
+  Public catalog tests returned `price_not_cataloged` for declared alignment and dictionary service rates.
+  The same lookup also lost the reason and source for unavailable service prices.
+  Requirements:
+  - Index validated service prices by provider and operation with an empty model.
+  - Keep the service declaration as the only price source.
+  - Preserve exact markup, charge bounds, snapshot immutability, and unavailable price evidence.
+  - Reject invented model identifiers and retain unknown usage without a charge.
+  Validation:
+  - Verify both existing provider services through the public catalog API.
+  - Run catalog and hosted rating regression checks.
+  - Keep actual provider rate and metering qualification separate from controlled calculation tests.
+  Resolution:
+  The shared price index now includes validated service declarations without an invented model.
+  Public API tests passed exact markup, charge bounds, immutable snapshots, unknown usage, and unavailable price evidence for both services.
+  Catalog, provider service, hosted rating, and runtime regression checks passed. Go lint also passed.
+
+- [x] [B260] (P1) Accept explicit routing defaults within assigned hosted grants.
+  Goal:
+  Let a customer select a model from an assigned hosted grant without customer-owned provider credentials.
+  Evidence:
+  The funded browser test assigned an active OpenAI grant and selected `gpt-4.1`.
+  The defaults resource returned HTTP 400 with `managed_routing_defaults_invalid: reason=provider_key_ineligible`.
+  Requirements:
+  - Validate hosted defaults against the assigned grant model and operation scope.
+  - Preserve explicit model selection through reload and restart.
+  - Keep provider credentials private and enforce execution authority at admission.
+  - Reject defaults outside the grant scope without a default route substitution.
+  Validation:
+  - Save and read an allowed default through authenticated HTTP and the browser.
+  - Reject another model, another operation, and another account.
+  - Verify suspended grants retain the saved selection but cannot execute.
+  Resolution:
+  The server validates hosted defaults against the assigned grant scope at request time and startup.
+  Browser profiles identify assigned hosted providers without exposing credentials.
+  Authenticated HTTP checks passed for allowed defaults, rejected scope, account isolation, restart, and connection conflicts.
+  The funded browser test passed saved selection, suspension, and zero dispatch after suspension.
+  Routing, startup, account connection, hosted browser, Go lint, and frontend lint checks passed.
+
+- [x] [B259] (P1) Reject recurring Paddle prices before prepaid checkout.
+  Goal:
+  Enforce the F069 one-time funding contract before the service creates or exposes a checkout.
+  Evidence:
+  A controlled recurring price returns a checkout through the authenticated funding resource.
+  The public HTTP test reports `status=200 want=404` and retains a processor transaction.
+  The shared transaction representation does not retain the price billing cycle.
+  Resolution:
+  The worker now reads the price through the existing shared client before transaction creation or uncertain recovery.
+  It rejects recurring prices and incompatible amounts without a checkout. Unavailable reads remain retryable without dispatch intent.
+  Payment, checkout, browser, Go lint, frontend lint, and formatting checks passed.
+  The checkout suite passed in 6.271 seconds. Both payment browser scenarios passed in 22.6 seconds.
+  Requirements:
+  - Read the selected price through the existing shared Paddle commerce client.
+  - Require the retained price identity, funding amount, and a nonrecurring billing cycle before transaction creation.
+  - Keep unavailable price reads retryable without a transaction dispatch intent.
+  - Preserve uncertain checkout recovery without another transaction creation request.
+  Validation:
+  - Reject the recurring price through the real authenticated checkout resource with zero processor transaction creations.
+  - Verify normal checkout, payment transitions, lost responses, and browser funding through controlled protocols.
+
+- [ ] [B258] (P1) Reject unsupported Dictator alignment languages and preserve typed failure evidence.
+  Goal:
+  Make language discovery, request validation, and provider failures obey the actual alignment contract.
+  Evidence (2026-09-23):
+  - Creative Director B073 requested Bulgarian source alignment after successful original-audio review for Kamu F001.
+  - Gateway operation `mop_d70826f8327790380bcbbf2dab6d31f2` used `audio.align`, `dictator`, `whisper-medium`, language `bg`, and `remove_punctuation=true`.
+  - Input asset: `ast_c6b8bc61647a663a30a5a8b1f5b24b3d`.
+  - The gateway accepted the operation at `2026-09-23T19:22:39.805937619Z` and reported terminal `provider_error` without outputs.
+  - Retained gateway logs identify native job `4e4cd4a7b0b448fd898d04d2a4bc2d17` and native input `24aabf6a77994eb2ab0f6ceb52ecbf85`.
+  - The native job records `dictator.alignment.input.invalid_language` with `unsupported language: 'bg'`.
+  - The native job failed approximately 16 milliseconds after execution started, before model loading or alignment.
+  - Deployed Dictator alignment languages exclude `bg`. Both installed WhisperX default model maps also exclude `bg`.
+  - Successful diarization `mop_51b12ff8a363772f37d8ee988391adfb` does not establish forced-alignment language support.
+  Failing boundary:
+  - `dictator_adapter.go` accepts any nonempty alignment language.
+  - `dictator_grpc_protocol.go` forwards the language to `SubmitAlignTranscriptJob`.
+  - `dictatorExecutionResult` reduces the native terminal failure to `provider_error` without the specific validation reason.
+  Requirements:
+  - Declare supported alignment languages through the current provider capability contract.
+  - Validate the selected language before operation acceptance, provider upload, and native job submission.
+  - Reject unsupported languages with a stable, actionable public error and zero provider dispatch.
+  - Preserve safe typed provider failure evidence when a native job still rejects an accepted request.
+  - Keep native handles, credentials, private endpoints, and raw provider details outside public responses.
+  - Keep transcription, diarization, and forced-alignment language sets distinct.
+  - Preserve this terminal operation, input asset, original audio, checked transcript, and prior accepted recognition.
+  Deliverables:
+  - Capability metadata, edge validation, safe error mapping, official client documentation, and public HTTP regression coverage.
+  Validation:
+  - Prove `bg` rejection against the currently unsupported route before any native upload or submission.
+  - Prove a declared supported language still reaches alignment.
+  - Prove a native invalid-language failure produces retained typed evidence without another submission.
+  - Prove terminal reads preserve the original operation and asset references.
+  Provider follow-up:
+  - Dictator F003 owns new Bulgarian forced-alignment support and exact model qualification.
+  - B258 can close with truthful rejection before F003. Bulgarian production acceptance requires F003 and a qualified gateway route.
+  Diagnosis scope:
+  - Inspection used retained logs, the native job file, and installed source. It submitted no new operation.
+  - No release, deployment, artifact replacement, or accepted-content change occurred.
+
+
+- [x] [B257] (P1) Document retained native completion failures.
+  Resolution: The shared native HTTP 502 schema now includes the current durable failure envelope.
+  Text, dictation, and client protocol replay tests pass without repeated provider work.
+  Generated API pages, artifact validation, shared regression, race checks, lint, and formatting pass.
+  Evidence: A hosted continuation failure replays as HTTP 502 with `structured_request_failed`.
+  The shared native response schema rejects this current durable failure representation.
+  Requirements:
+  - Include retained completion failures in the shared HTTP 502 response contract.
+  - Preserve the existing failure identifier, safe cause, and replay behavior.
+  - Verify native text, dictation, and client protocol failures through HTTP.
+  - Regenerate the API pages and run the artifact check.
+
+- [x] [B256] (P1) Report media maintenance persistence failures.
+  Resolution: All six maintenance phases report database failures through the configured logger.
+  HTTP tests verify rollback, retry, duplicate suppression, and retained financial evidence after operational deletion.
+  Media regression, focused race checks, Go lint, and formatting pass.
+  Evidence: Controlled database failures leave no operator report in six maintenance paths after HTTP operation admission.
+  Requirements:
+  - Report failures during queue selection, recovery scans, usage delivery, and terminal retention.
+  - Include the maintenance phase and operation identifier when available.
+  - Preserve transaction rollback and retry through the next maintenance pass.
+  - Keep financial journal records independent of operational retention.
+  Validation:
+  - Exercise admitted HTTP operations with controlled database read and transaction failures.
+  - Verify safe reports, unchanged public state after failure, successful recovery, and duplicate suppression.
+  - Run media regression and applicable checks.
+
+- [x] [B255] (P1) Stop hosted file staging after authority loss.
+  Evidence: A hosted dictation request completes its file upload after grant revocation during upload initialization.
+  Evidence: The generation guard rejects the later model call, but the upload bypasses the authority check.
+  Requirements:
+  - Assign a staging role to provider file uploads.
+  - Require the current worker claim and active grant before each staging request.
+  - Preserve read and cleanup operations for accepted work after grant revocation.
+  - Reject provider transfers from an obsolete worker.
+  - Preserve safe authority error codes through the existing adapter.
+  Validation:
+  - Exercise upload initialization, finalization, generation, cleanup, and duplicate requests through hosted HTTP dictation.
+  - Verify grant revocation and claim expiry before file transmission.
+  - Run shared completion regression and applicable checks.
+  Resolution: Shared completion authority now guards each provider upload, file read, cleanup, and completion poll.
+  Resolution: Staging requires an active grant. Cleanup remains available to the current worker after grant revocation.
+  Validation: Hosted upload and process-interruption tests, shared adapter regression, race checks, Go lint, and formatting pass.
+  Validation: Final stack CI remains the F070 completion checkpoint.
+
+- [x] [B254] (P1) Expose reconciliation cases for missing hosted results.
+  Evidence: A real process restart creates `execution_result_unknown`, but the customer journal returns HTTP 500 for that case.
+  Evidence: The browser rejects the same case reason and removes the request evidence view.
+  Requirements:
+  - Keep all canonical reconciliation reasons in the journal contract.
+  - Accept result-recovery cases in the API, OpenAPI schema, and browser client.
+  - Preserve private resolution data and rejection of unrecognized reasons.
+  Validation:
+  - Read the case created after process interruption and result recovery through HTTP.
+  - Verify the complete case contract and browser rendering at desktop and phone widths.
+  - Run focused regression and applicable checks before final stack CI.
+  Resolution: The journal, API schema, and browser accept `execution_result_unknown` and preserve private evidence.
+  Validation: Process recovery, journal HTTP tests, browser acceptance, lint, formatting, and generated API checks pass.
+  Validation: Final stack CI remains the F070 completion checkpoint.
+
+- [x] [B253] (P1) Enforce hosted worker authority at the gRPC transport boundary.
+  Evidence: Controlled gRPC tests submit speech after grant revocation and worker claim expiry.
+  Requirements:
+  - Use the shared media dispatch guard for HTTP and gRPC provider calls.
+  - Reject new work after authority loss and during recovery.
+  - Preserve authorized status reads, artifact transfers, and cancellation.
+  Validation:
+  - Exercise the generated Dictator SDK through hosted HTTP operations.
+  - Verify rejection before provider submission and retention of accepted request identity.
+  - Run focused regression and race checks before final stack CI.
+  Resolution: HTTP and generated Dictator SDK calls use the same media dispatch guard.
+  Resolution: The SDK wrapper uses explicit method roles and checks authority for artifact streams.
+  Validation: Hosted HTTP and gRPC tests reject revoked or expired authority before submission and prevent submission during recovery.
+  Validation: Recovery and cancellation after revocation retain one provider submission and the accepted request identity.
+  Validation: Broad regression tests, focused race checks, Go lint, and formatting pass. Final stack CI remains the F070 completion checkpoint.
+
+- [x] [B252] (P1) Use hosted authority during speech admission validation.
+  Evidence: A hosted Dictator speech request returns HTTP 400 because validation reads an absent customer connection.
+  Requirements:
+  - Supply the selected hosted authority to the existing adapter validator.
+  - Keep voice ownership and credential checks in their current adapters.
+  - Recheck grant and credential authority in the admission transaction.
+  Validation:
+  - Exercise hosted speech through HTTP and the current Dictator gRPC adapter.
+  - Verify accepted credential versions, voice isolation, replay, rotation, and revocation.
+  - Run focused regression and race checks before final stack CI.
+  Resolution: The shared admission boundary supplies hosted authority to the existing adapter validator.
+  Validation: HTTP and gRPC tests verify voice isolation, accepted credential versions, replay, and rejection after admission authority changes.
+  Validation: Broad regression tests, focused race checks, Go lint, and formatting pass. Final stack CI remains the F070 completion checkpoint.
+
+- [x] [B251] (P1) Keep provider recovery content outside the usage journal.
+  Evidence: Hosted dictionary HTTP tests retain the dictionary name and description in the journal provider identifier.
+  Requirements:
+  - Give each adapter separate recovery data and provider request identifier fields.
+  - Keep the recovery data in the media operation.
+  - Commit the recovery data and explicit provider identifier in one transaction.
+  - Preserve an absent provider identifier without a substitute value.
+  Validation:
+  - Verify journal contents after real hosted service requests with present and absent provider identifiers.
+  - Verify recovery, worker fencing, and transaction rollback through existing integration tests.
+  - Run focused regression and race checks before the final stack CI checkpoint.
+  Resolution: Adapters supply a typed receipt with separate recovery data and provider request identifiers.
+  Resolution: The worker stores recovery data with the operation and explicit identifiers with the journal in one transaction.
+  Validation: HTTP tests verify present and absent identifiers, private dictionary content, and rollback after an identifier write failure.
+  Validation: Broad adapter regression, focused race checks, Go lint, and formatting pass. Final stack CI remains the F070 completion checkpoint.
+
+- [x] [B250] (P1) Report media worker persistence failures.
+  Evidence: HTTP tests in F066 reproduced missing operator reports after claim, dispatch, and final result write failures.
+  Requirements:
+  - Return transaction errors to the worker boundary.
+  - Preserve the original database cause with the operation and worker identifiers.
+  - Report failures from usage, provider handle, preview, output, voice, dictionary, and claim renewal writes.
+  - Preserve retained request identity and prevent duplicate provider work after uncertain outcomes.
+  Validation:
+  - Inject database failures through real HTTP operation flows and the configured logger.
+  - Verify operator reports and caller-visible states through the official client.
+  - Run focused regression and race checks before the final stack CI checkpoint.
+  Resolution: The worker returns transaction failures and records their cause through the configured logger.
+  Resolution: Adapter persistence failures include the operation identifier and execution phase.
+  Validation: HTTP reporting tests and broad hosted and media regression tests pass. Focused race checks, Go lint, and formatting pass.
+  Validation: Final stack CI remains the F070 completion checkpoint.
 
 - [x] [B249] (P1) Keep browser screenshot output outside tracked files.
   Evidence: Release CI changes five tracked PNG files in `artifacts/` and fails with `app_release.source_drift`.
@@ -336,6 +1951,170 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [ ] [I288] (P0) Simplify installation of the official Python client.
+  Goal: Make the official client easy to install in external applications.
+  Requirements:
+  - Use the PAL integration evidence in https://github.com/BeehiveInnovations/pal-mcp-server/pull/483.
+  - Replace the required Git checkout and GitHub release lookup with a standard Python package installation.
+  - Supply wheel and source packages through the repository release process.
+  - State the supported Python versions and the current release selection policy.
+  - Keep the client optional when a host supports older Python versions or other providers.
+  - Coordinate client installation examples with I292 and the Node.js package scope in F016.
+  Deliverables:
+  - Package metadata, release automation, installation instructions, and package tests.
+  - A separate operational record for package publication and package registry access.
+  Validation:
+  - Install the built package in a clean environment without Git or GitHub CLI.
+  - Send a request through the installed official client to a local protocol server.
+  - Verify host startup without the optional client.
+  - Run the applicable repository checks and record package publication separately.
+
+- [ ] [I289] (P0) Preserve completion metadata through official client results.
+  Goal: Let integrations report the actual route, usage, and completion status.
+  Requirements:
+  - Use the PAL integration evidence in https://github.com/BeehiveInnovations/pal-mcp-server/pull/483.
+  - Replace text-only information loss with one typed result contract for the official clients.
+  - Include output text, request identifier, actual provider and model, completion status, and available token usage.
+  - Represent unavailable usage explicitly. Keep measured usage separate from estimates and calculated cost.
+  - Reuse the canonical result from F038 and attribution semantics from F083.
+  - Keep durable connection history in F083 and charge calculation in F067.
+  - Keep provider credentials and native response bodies outside public results.
+  - Update the server, OpenAPI, applicable clients, and examples as one current contract.
+  Deliverables:
+  - Typed completion results and a reference adapter that uses their metadata.
+  Validation:
+  - Verify explicit routes, tenant-selected routes, available usage, absent usage, and provider termination through public interfaces.
+  - Verify that the reference adapter reports actual results without invented token counts.
+  - Run the applicable repository checks.
+
+- [ ] [I290] (P0) Make executable text capabilities usable through official clients.
+  Goal: Remove duplicate model catalogs from external integrations.
+  Requirements:
+  - Use the PAL integration evidence in https://github.com/BeehiveInnovations/pal-mcp-server/pull/483.
+  - Inspect existing discovery from F038 and the authoritative provider catalog before changing public interfaces.
+  - Expose tenant-authorized executable text offerings through the official clients.
+  - Include exact model identity, route eligibility, context limits, output limits, supported controls, and allowed reasoning values.
+  - Keep account-visible provider observations distinct from executable tenant offerings.
+  - Keep host aliases and subjective model scores in the host application.
+  - Preserve one catalog authority and one documented public discovery contract.
+  Deliverables:
+  - SDK discovery methods, capability types, current API documentation, and a reference adapter example.
+  Validation:
+  - Enumerate tenant offerings through a real public interface with controlled provider connections.
+  - Verify tenant isolation and exclusion of unavailable offerings.
+  - Configure valid requests from discovered capabilities without a copied provider catalog.
+  - Run the applicable repository checks.
+
+- [ ] [I291] (P0) Unify tenant authentication across official client operations.
+  Goal: Use one header-based credential contract for text and media requests.
+  Requirements:
+  - Use the PAL integration evidence in https://github.com/BeehiveInnovations/pal-mcp-server/pull/483.
+  - Replace text query credentials with the canonical bearer key contract already used by media and F038 interfaces.
+  - Update the server, OpenAPI, official clients, CLI, examples, and affected consumers together.
+  - Remove obsolete query credential handling from the changed interfaces.
+  - Preserve tenant authorization and the server-owned provider credential boundary.
+  - Keep tenant key creation and retrieval in F081.
+  - Remove raw credentials from generated URLs, errors, traces, and access logs.
+  Deliverables:
+  - One current authentication contract, consumer update instructions, and public boundary tests.
+  Validation:
+  - Verify text and media authorization with valid, invalid, missing, and cross-tenant credentials.
+  - Verify rejection of obsolete credential inputs on the changed interfaces.
+  - Inspect captured request URLs and diagnostic output for test credential values.
+  - Run the applicable repository checks.
+
+- [ ] [I292] (P0) Make integration guidance fit each language and host.
+  Goal: Let external applications use the official clients within their existing architecture.
+  Requirements:
+  - Use the PAL integration evidence in https://github.com/BeehiveInnovations/pal-mcp-server/pull/483.
+  - Separate shared security and validation requirements from language-specific configuration instructions.
+  - Supply Go application and Python plugin examples with each host's canonical configuration surface.
+  - Preserve PAL environment settings and JSON model metadata without a second YAML hierarchy.
+  - Distinguish configured defaults from model and reasoning choices owned by an operation.
+  - Define package installation and release selection for each supported language.
+  - Align the mpr-integration skill, client guides, and repository examples with the same contract.
+  - Coordinate installation instructions with I288 and Node.js documentation with F016.
+  - Keep website presentation work in I218.
+  Deliverables:
+  - Revised integration contracts, skill instructions, and executable examples.
+  Validation:
+  - Run Go and Python examples through official clients against local protocol servers.
+  - Verify startup validation, secret ownership, explicit routing, tenant defaults, and request budgets.
+  - Verify that examples use only the host's existing configuration hierarchy.
+  - Run the applicable repository and documentation checks.
+
+- [ ] [I293] (P0) Clarify request recovery and retry ownership for integrations.
+  Goal: Let callers recover accepted work without duplicate provider execution.
+  Requirements:
+  - Use the PAL integration evidence in https://github.com/BeehiveInnovations/pal-mcp-server/pull/483.
+  - Inspect I229 recovery and current hosted request behavior before extending ordinary text recovery.
+  - Define server work budgets, client deadlines, cancellation, request identity, and result retrieval in one contract.
+  - Supply typed errors for validation, authentication, throttling, transport failure, and uncertain execution.
+  - State when a caller can safely repeat a request and when it must retrieve existing work.
+  - Preserve uncertainty when provider execution cannot be established.
+  - Reuse F082 configuration error codes rather than creating competing error meanings.
+  - Apply the same recovery semantics to all applicable official clients.
+  Deliverables:
+  - Current recovery documentation, typed client results and errors, and deterministic protocol fixtures.
+  Validation:
+  - Verify failures before dispatch and lost responses after dispatch through public interfaces.
+  - Verify server restart, result retrieval, repeated request identity, and conflicting request content.
+  - Prove one provider execution for recoverable repeated requests.
+  - Verify the distinction between the server work budget and client transport deadline.
+  - Run the applicable repository checks.
+
+- [ ] [I294] (P0) {I288,I289,I290,I291,I292,I293} Qualify official clients through external reference integrations.
+  Goal: Detect client integration failures before consumers adopt a release.
+  Requirements:
+  - Use the PAL integration evidence in https://github.com/BeehiveInnovations/pal-mcp-server/pull/483.
+  - Maintain a small reference adapter and shared conformance fixtures for each official client.
+  - Extend the I029 conformance checks instead of creating another API authority.
+  - Verify installation from built packages and declared dependency ranges in clean supported environments.
+  - Cover optional client absence, authentication, route selection, capabilities, result metadata, limits, and recovery.
+  - Do a test of the actual client transport against local protocol servers.
+  - Keep external model quality checks and production acceptance separate from deterministic integration checks.
+  - Record PAL's MCP and Black dependency failures as examples of clean-install qualification requirements.
+  Deliverables:
+  - Reference integrations, reusable protocol fixtures, runtime matrices, and release qualification checks.
+  Validation:
+  - Run all applicable client examples from packaged artifacts in clean environments.
+  - Verify enabled and disabled optional integrations.
+  - Prove that incompatible dependencies or contract changes fail with actionable diagnostics.
+  - Run the applicable repository checks and record each tested client version.
+
+- [ ] [I287] (P2) {F028,F029,F030} Umbrella: deliver additional media providers after the retained-provider migration.
+  Goal:
+  Keep approved provider extensions separate from migration of existing capabilities.
+  Execution:
+  - Complete F028, F029, and F030 after their retained-provider prerequisites.
+  - Hand F028 to MediaOps F022, F029 to MediaOps F023, and F030 to MediaOps F024.
+  - Deliver each provider contract and official client before its product integration.
+  Validation:
+  - Verify each exact provider offering through the public gateway and then its MediaOps consumer.
+  - Record provider acceptance and product acceptance separately.
+  Scope:
+  - This umbrella does not block I274 or MediaOps I092.
+
+- [ ] [I286] (P1) Establish provider ownership for the MediaOps and TelePrompter split.
+  Goal:
+  Make the gateway boundary executable before provider cutovers.
+  Requirements:
+  - Own every media-provider API call, credential, native request, upload, resource, history, and recovery path in LLM Proxy.
+  - Keep one provider catalog and reuse account connections across text and media offerings.
+  - Keep product workflows, projects, assets, authorization, and media processing in the single MediaOps backend.
+  - Keep the TelePrompter timeline and prompt website connected to MediaOps.
+  - Keep Frame Picker, thumbnails, hover zoom, and other retained MediaOps interfaces outside LLM Proxy.
+  - Keep Dictator as a private provider runtime. Keep provider metrics in LLM Proxy.
+  - Map each source API method to an executable capability issue and its official client contract.
+  Deliverables:
+  - Current ownership documents, provider-call inventory, and capability handoff criteria for I274.
+  Validation:
+  - Compare the inventory with current MediaOps source and public interfaces.
+  - Prove that each provider call has one destination owner and one consumer cutover issue.
+  Classification:
+  - Reclassified from F071. The earlier all-applications-in-MediaOps scope is historical.
+  - The proposed gateway Frame Picker was removed before publication. This work preserves that boundary.
+
 - [x] [I285] (P2) Retain browser screenshots only for failed tests.
   Goal: Remove routine screenshot storage after visual review.
   Requirements: Remove manual screenshot captures and the five obsolete tracked PNG files.
@@ -565,24 +2344,34 @@ retain satisfied historical dependencies.
   Files: `scripts/render_public_site.mjs`, `site/assets/llm-proxy/js/constants.js`, `site/assets/llm-proxy/js/ui/routingTree.js`, browser tests, and `README.md`.
   Event contracts: No changes.
 
-- [ ] [I274] (P1) {F040,F042,F043,F025,F026,F027,I244,F071} Verify all MediaOps capabilities.
-  Goal: Complete the requested provider migration without missing capabilities.
-  Source: `docs/media-provider-completeness.md` records all nine providers and their source capabilities.
-  Requirements: Include OpenAI, Vertex, FAL, Runway, xAI, ElevenLabs, HeyGen, Kling, and Dictator.
-  Requirements: Account for each active source model, public provider method, supported control, and recovery path.
-  Requirements: Include discovery, account resources, histories, pronunciation dictionaries, uploads, quotas, and provider mutations.
-  Requirements: Keep `configs/providers.yml` as the only runtime provider and model inventory.
-  Requirements: Keep one definition per upstream provider. Extend existing OpenAI, Vertex, and xAI definitions for their media capabilities.
-  Requirements: Put capability branches in provider transports and offerings. Reuse existing connection fields and tenant assignments.
-  Requirements: Reject duplicate provider identities. Do not add capability-specific provider aliases or separate media credentials for the same account.
-  Requirements: Use the same registry for routing, discovery, connection forms, and public interfaces.
-  Requirements: Keep MediaOps applications, local processing, product authorization, and application data in MediaOps.
-  Requirements: Reuse the existing capability issues and complete them sequentially.
-  Validation: Prove provider protocols through public tests and the P011 second-provider procedure.
-  Validation: Prove one provider entry and one shared connection contract across text and media capability branches.
-  Validation: Prove affected MediaOps entry points through the official client before source retirement.
-  Validation: Record each capability as accepted or still open. Do not close this issue with an absent capability.
-  Release state: Client publication, service activation, website publication, and paid acceptance remain separate operational records.
+- [ ] [I274] (P1) {I286,F072,F042,F043,F040,F025,F026,F027,I244} Umbrella: migrate all retained media-provider APIs.
+  Goal:
+  Deliver every retained media-provider capability through the gateway and official clients.
+  Source:
+  - docs/media-provider-completeness.md records the nine-provider inventory.
+  - docs/mediaops-model-access-boundary.md records ownership and cross-repository execution order.
+  Execution:
+  - Complete I286 before provider cutovers.
+  - Reuse completed F022, I046, I216, F024, F039, and F041 foundations. Verify their current contract before reuse.
+  - Complete F072 and F042 for Dictator, then F043 and F040 for staging and Vertex images.
+  - Complete F025, F026, and F027 sequentially for video, ElevenLabs, and avatar or account operations.
+  - Hand each accepted capability to its named MediaOps cutover issue without waiting for this umbrella to close.
+  - After MediaOps I088 supplies its final receipt, complete I244.
+  Requirements:
+  - Include OpenAI, Vertex, FAL, Runway, xAI, ElevenLabs, HeyGen, Kling, and Dictator.
+  - Include every retained model, public provider method, supported control, and recovery path.
+  - Include discovery, voices, account resources, histories, dictionaries, uploads, quotas, and mutations.
+  - Keep configs/providers.yml as the single provider and model inventory.
+  - Reuse one provider identity and account connection across its capability branches.
+  - Deliver public API, official clients, provider protocol tests, and documentation in each capability issue.
+  - Preserve MediaOps application data and processing. Keep TelePrompter connected to the MediaOps API.
+  Validation:
+  - Prove public provider contracts, tenant isolation, capacity, recovery, cancellation, and artifact integrity.
+  - Record each source capability as accepted or still open. Close only after every retained capability has evidence.
+  - Use the MediaOps I088 receipt for source retirement and I244 for import-tool removal.
+  Delivery:
+  - Record source validation, client publication, runtime activation, and paid acceptance separately.
+  - Additional providers under I287 and local inference planning under P008 do not block this migration.
 
 - [x] [I272] (P1) Run Python and Go CI checks at the same time.
   Goal:
@@ -790,7 +2579,11 @@ retain satisfied historical dependencies.
   Prove the different outcomes for invalid credentials and unsupported operations through public management HTTP requests.
   Prove that both failures preserve the previous connection and its settings.
 
-- [ ] [I244] (P1) {F024,F025,F026,F027,F039,F040,F042} Remove the completed MediaOps operation-import bridge.
+- [ ] [I244] (P1) {F025,F026,F027,F040,F042,F043,I088@MediaOps} Remove the completed MediaOps operation-import bridge.
+  Current execution contract:
+  - Require the final MediaOps I088 receipt, including accepted zero-count provider families.
+  - Keep I274 and MediaOps I092 after this cleanup. They must not be prerequisites for the receipt.
+  - Preserve application project and asset records in MediaOps.
   Goal:
   Leave only the canonical model-operation contract after migration of every
   selected MediaOps provider record.
@@ -816,6 +2609,7 @@ retain satisfied historical dependencies.
   Inventory rule:
   - Accept an explicit zero-count receipt for a family with no recoverable source records.
   - Remove only import tooling actually introduced by the selected capability migrations.
+
 - [ ] [I241] (P1) Show provider requests over time on each provider card.
   Goal:
   Each provider card shows request activity across the selected Usage time
@@ -1676,6 +3470,36 @@ retain satisfied historical dependencies.
 
 ## Features
 
+- [ ] [F087] (P1) Configure and qualify the LLM Proxy Paddle sandbox.
+  Status:
+  - On 2026-09-23, the operator moved sandbox setup and actual qualification to this separate follow-up issue.
+  - This issue does not block F069 or F070 development completion.
+  Evidence:
+  - Read-only Paddle sandbox requests succeeded with the API key from `/Users/tyemirov/Development/PoodleScanner/configs/.env.ps`.
+  - The file also contains sandbox client-token and webhook-secret inputs. Their values were not copied or disclosed.
+  - The account has active PoodleScanner, Hecate, and Crossword products. It has no active LLM Proxy product or USD 5 funding price.
+  - No listed notification destination targets LLM Proxy. The existing destinations belong to other application flows.
+  - Hecate uses RevenueCat for browser Paddle commerce. F069 uses the existing direct Paddle approach from PoodleScanner.
+  - The API checks did not establish the platform supplier or the canonical Paddle account identity.
+  Goal:
+  Configure separate LLM Proxy sandbox resources and retain evidence from actual processor scenarios.
+  Requirements:
+  - Confirm the platform supplier and Paddle account identity before configuration.
+  - Reuse the existing authorized sandbox account and shared Paddle client.
+  - Create a distinct LLM Proxy product and an active one-time USD 5 funding price.
+  - Keep the USD 5 funding minimum and permit spending down to USD 0 without a subscription.
+  - Configure the LLM Proxy checkout origin and a notification destination for `/api/payments/paddle/events`.
+  - Use the secret for that notification destination. Do not reuse another application's webhook secret or product identifiers.
+  - Select a sandbox client token from the same account and an isolated managed database.
+  - Record the private configuration path and non-secret account, product, price, and notification identifiers.
+  - Keep sandbox records separate from production. Keep production payments disabled.
+  - Use the actual sandbox procedure in `docs/hosted-billing.md`.
+  Validation:
+  - Complete checkout, signed notification, delayed confirmation, replay, refund, reversal, and reconciliation scenarios.
+  - Retain the source revision, scenario results, processor references, and expected financial totals without credentials.
+  - Run `make qualify-paddle-sandbox` and distinguish actual results from controlled protocol evidence.
+  - Preserve the existing F069 and F070 controlled acceptance and CI requirements.
+
 - [ ] [F086] (P1) Compare models on tenant tasks before a model change.
   Goal:
   Help tenants evaluate a candidate model with their own requests before they change the selected model.
@@ -2181,6 +4005,10 @@ retain satisfied historical dependencies.
   - Define that feature as a model-backed evaluator over OpenAI or Anthropic.
 
 - [ ] [F072] (P1) Expose granular Dictator models for Whisper transcription and Qwen3 and Silero synthesis.
+  Current handoff:
+  - Supply exact model and capability evidence to F042 and MediaOps I087.
+  - Keep engine routing in the gateway. MediaOps and TelePrompter use the declared public capability contract.
+  - Verify existing source before implementing missing work.
   Goal:
   Replace the monolithic `dictator-speech-v1` catalog entry with distinct, purpose-built models for Dictator's underlying Whisper transcription and Qwen3/Silero speech synthesis engines.
   Requirements:
@@ -2203,6 +4031,11 @@ retain satisfied historical dependencies.
   - Final local `make ci` passes with 100% statement coverage.
 
 - [ ] [F073] (P1) {F072} Deconstruct umbrella Media capability into specific Transcription and Speech taxonomy.
+  Current ownership:
+  - This issue changes the LLM Proxy management interface and capability discovery.
+  - MediaOps projects those capabilities through its API. TelePrompter owns the creative product controls.
+  - Reconcile the existing task filters before further interface changes.
+  - This management UI refinement is outside the retained-provider migration gate.
   Goal:
   Replace the catch-all "Media" capability in the management dashboard and public capabilities catalog with first-class domain capabilities for Transcription, Speech synthesis, and visual media.
   Requirements:
@@ -2240,39 +4073,26 @@ retain satisfied historical dependencies.
   - `npm run frontend:lint` passes without type or syntax errors.
   - Final local `make ci` passes all quality and coverage gates.
 
-- [ ] [F071] (P1) Align MediaOps model access with the provider gateway boundary.
-  Goal:
-  Move model and provider access to LLM Proxy while all MediaOps applications and local processing stay in MediaOps.
-  Requirements:
-  - Keep TelePrompter, Tube, Subtitles, Audio QC, Text Video, Frame Picker, CLI, and MCP product workflows in MediaOps.
-  - Keep narration plans, composition, local workers, media inspection, validation, and application data in MediaOps.
-  - Move model-provider adapters, credentials, native request handling, provider recovery, and provider artifacts through the existing capability issues.
-  - Keep provider operation metrics in LLM Proxy. Do not add a MediaOps metrics client without a product requirement.
-  - Use the official gateway client from retained MediaOps callers.
-  - Keep user authorization, explicit spend authority, dry runs, product intent, and local path containment in MediaOps.
-  - Map actual provider records before a bounded import. Keep application records and local artifacts at their current owner.
-  - Remove only direct provider paths and obsolete provider credentials after consumer acceptance.
-  - Coordinate MediaOps I009, I088, and I092 without a separate application migration sequence.
-  Deliverables:
-  - A current ownership contract, provider issue sequence, caller inventory, and provider migration receipts.
-  Validation:
-  - Verify each capability through the gateway and each affected MediaOps public entry point.
-  - Prove tenant isolation, duplicate recovery, cancellation, and artifact integrity without another paid submission.
-  - Record source validation, publication, activation, and consumer acceptance separately.
-  Status:
-  - On 2026-09-19, the operator limited the migration to model access. This replaces the earlier application migration scope.
-  - Frame Picker stays entirely in MediaOps, including its browser workflow, storage, and worker.
-  - Removed the proposed LLM Proxy Frame Picker backend and browser before publication or activation.
-  - Regenerated the API reference. The OpenAPI/static-page checks and all 129 frontend browser cases pass after removal.
-  - Full CI passed behavioral tests but failed the strict coverage gate at `dictator_grpc_protocol.go:253` with current synthesis-model changes.
-  - Final stack CI, provider cutovers, publication, and actual consumer acceptance remain open.
-  - See `docs/mediaops-model-access-boundary.md`. Provider capability work remains in scope.
-  - No MediaOps application routes, workers, or data were removed.
-
-- [ ] [F065] (P1) Add platform connections and explicit hosted access grants.
+- [x] [F065] (P1) Add platform connections and explicit hosted access grants.
+  Resolution:
+  Development implementation and acceptance passed after the advertised Responses image changes.
+  All 14 CI gates passed with 100.0% Go coverage. Complete controlled billing acceptance also passed.
+  Evidence: `docs/hosted-billing.md`, `/tmp/llm-proxy-f070-advertised-final-ci.log`, and `/tmp/llm-proxy-f070-advertised-final-billing.log`.
+  Production activation and actual processor qualification remain separate. F087 owns the processor qualification.
+  Earlier implementation evidence and requirements:
   Goal:
   Let customers use approved provider offerings through platform credentials after account creation.
   Give each customer separate tenant access, usage attribution, and billing ownership.
+  Billing account, platform connection, and grant resources are implemented in the development branch.
+  Grant tests cover account isolation, concurrent revisions, audit rollback, and recovery after restart or catalog changes.
+  Explicit assignments, database exclusion constraints, and browser hosted setup are implemented.
+  HTTP tests reject unavailable hosted execution across native, client, MCP, dictation, and media interfaces without upstream calls.
+  Browser tests verify hosted setup and grant suspension at desktop, 390px, and 320px widths.
+  The resource foundation is in [PR 339](https://github.com/tyemirov/llm-proxy/pull/339).
+  Hosted CI run 35804548155 passed frontend and backend-checks jobs.
+  The backend coverage gate reported `coverage total 99.0%, want 100.0%`.
+  Financial admission and accepted-work recovery are implemented in the stack.
+  Final CI and complete F070 acceptance remain open.
   Requirements:
   - Use F070 as the shared hosted service contract.
   - Extend the ownership rules in `docs/tenant-connections.md` and the account connection store.
@@ -2314,9 +4134,88 @@ retain satisfied historical dependencies.
   - Verify onboarding through the real browser and controlled provider endpoints.
   - Run `make ci` after the last application change.
 
-- [ ] [F066] (P1) {F065} Add a durable usage journal for customer billing.
+- [x] [F066] (P1) {F065} Add a durable usage journal for customer billing.
+  Resolution:
+  Development implementation and acceptance passed after the advertised Responses image changes.
+  All 14 CI gates passed with 100.0% Go coverage. Complete controlled billing acceptance also passed.
+  Evidence: `docs/hosted-billing.md`, `/tmp/llm-proxy-f070-advertised-final-ci.log`, and `/tmp/llm-proxy-f070-advertised-final-billing.log`.
+  Production activation and actual processor qualification remain separate. F087 owns the processor qualification.
+  Earlier implementation evidence and requirements:
   Goal:
   Record every hosted request and upstream attempt with enough evidence to explain its financial outcome after a restart.
+  Account-owned journal reads and browser client methods are implemented in the development branch.
+  Database tests cover concurrent admission, reservation rollback, worker claims, dispatch recovery, exact quantities, and accounting delivery.
+  Controlled HTTP tests cover text continuations, synthesis, polling, lost responses, invalid JSON, and grant denial.
+  Hosted text identity tests cover concurrent database instances, result replay, response expiry, and native and client protocols.
+  Text recovery tests interrupt the service before dispatch, during provider work, after observation, and before and after result publication.
+  HTTP tests verify worker replacement, retained usage, publication recovery, and rejection of obsolete worker writes.
+  Authenticated MCP tests verify shared native identity, concurrent replay, changed intent, account isolation, result expiry, and uncertain outcomes.
+  Go, Python, and CLI acceptance verifies shared hosted keys, pending states, and result expiry through the service.
+  Controlled media HTTP tests verify atomic admission, shared operation identity, concurrent replay, authority changes, and rollback.
+  Text startup recovery leaves media records for the media worker.
+  Hosted image worker tests cover accepted credential versions, dispatch authority, obsolete workers, provider recovery, and cancellation.
+  Media outcomes and journal outcomes use one transaction. Observations and delivery records also commit together.
+  Missing media meters retain unknown usage.
+  The Images API adapter records exact token evidence before image validation and asset publication.
+  HTTP tests cover completed streams, contradictory totals, missing quantities, evidence write failures, and delayed obsolete responses.
+  B291 removes inapplicable cache quantities from direct Images usage. Complete native counts now establish complete usage for that surface.
+  The Responses image adapter retains exact terminal response usage from JSON, polling, and streams before result publication.
+  Separate response quantities preserve cache and reasoning inclusion.
+  A second authorized probe established exact image-tool quantities in the top-level `tool_usage.image_gen` object.
+  The meter now retains these counts and source paths through revision `openai_responses:image:2`.
+  Responses cache measurements remain unknown because the provider does not expose them in output.
+  The initial HTTP tests discarded native image-tool counts as `unsupported_meter`.
+  Corrected image and worker regression passed in 11.658 seconds. Expanded Responses and worker race checks passed in 155.616 seconds.
+  Controlled HTTP tests verify failed outcomes, missing usage, replay, and evidence write failures across all three response paths.
+  B250 resolved missing operator reports for media worker persistence failures.
+  B251 prevents adapter recovery content from becoming journal provider identifiers.
+  B252 supplies hosted authority during existing speech validation and preserves the final admission check.
+  B253 applies shared dispatch authority to HTTP and gRPC, including recovery and cancellation.
+  Hosted voice discovery and previews now use current speech grants and qualified platform credentials through existing adapters.
+  HTTP and gRPC tests verify private voice isolation, retained tenant voices, obsolete cursors, revocation, and separate metadata permission.
+  Hosted grants and journal records now support explicit provider services without model identifiers.
+  HTTP tests verify dictionary creation, audio alignment, retained identity, exact service authority, and revocation through existing adapters.
+  Alignment saves its validated output, provider trace, and request interval before result publication.
+  A replacement worker restores the output from the private receipt without another provider request.
+  HTTP tests cover failed receipt writes, failed publication, malformed stored receipts, restoration, and replay.
+  The runtime test closes the original router and verifies the downloaded output after restart.
+  Hosted alignment now reads native usage through its retained trace and request interval.
+  Empty rows remain pending. Exact native minutes become input seconds, with the native cost and request count retained as source fields.
+  Failed reads or invalid measurements leave the outcome uncertain without a charge.
+  A valid receipt permits recovery after shutdown without another paid alignment request. B290 preserves the associated journal state.
+  Funded HTTP tests verify delayed usage, exact settlement, measured zero, invalid evidence, replay, and pending usage recovery.
+  The browser displays and assigns service grants at desktop and phone widths.
+  Customer journal views now expose bounded attempts, exact usage observations, and safe reconciliation cases through the existing dashboard.
+  HTTP tests verify account isolation, pagination, private-field omission, and unchanged journal records.
+  Browser tests verify exact values, unknown quantities, additional pages, failed reads, and desktop and phone layouts.
+  Hosted dictation now uses shared completion admission, pinned credentials, replay, and recovery.
+  HTTP tests verify cross-interface identity, concurrent requests, revocation, expiry, exact measurements, and uncertain outcomes after failures.
+  Catalog-driven HTTP tests verify each current dictation offering through its existing adapter and both transcription interfaces.
+  Dictation recovery tests verify all five process-interruption boundaries with retained usage and execution identity.
+  Hosted file tests verify staging authority, cleanup after revocation, claim expiry, and replay without repeated generation.
+  B256 verifies maintenance failure reports, transaction rollback, repeated recovery, and financial evidence after operational retention.
+  The existing ElevenLabs generation and conversion adapters retain exact provider cost units before audio publication.
+  HTTP tests cover every current offering for both protocols, unknown usage, failures, multipart conversion, and replay.
+  Anthropic cache evidence now retains exact five-minute and one-hour subdivisions with explicit inclusion rules.
+  Shared token validation preserves contradictory numeric source evidence while marking the corresponding quantities as unknown.
+  Hosted web search retains per-attempt search action counts without queries, URLs, or tool identifiers.
+  HTTP tests verify unknown tool usage, polling, continuations, transaction rollback, and failure replay without repeated work.
+  Google text and dictation meters now retain exact modality arrays with explicit inclusion rules.
+  HTTP tests verify unknown subdivisions, invalid counts, cache boundaries, and replay through both Google protocols.
+  xAI Responses evidence now retains exact provider cost in USD ticks separately from token measurements.
+  FAL queue results now retain exact billed units through the shared decimal header reader.
+  HTTP tests verify failed results, artifact failures, transaction rollback, and recovery without another submission.
+  The hosted Dictator gRPC boundary now retains terminal synthesis duration before artifact transfer.
+  HTTP and gRPC tests verify native precision, unknown duration, terminal states, failed writes, and artifact loss.
+  The same gRPC boundary now records unknown input duration for all five Dictator audio input operations.
+  Voice extraction retains reported sample duration separately from unknown input duration.
+  HTTP acceptance covers each current audio input offering and rejects duplicate work on replay.
+  A full operational telemetry queue does not remove hosted usage or its delivery record.
+  HTTP acceptance verifies this separation and one provider call across replay.
+  Controlled HTTP acceptance covers all 67 active text offerings, both image editing surfaces, and both Dictator synthesis offerings.
+  Timeout and client disconnect acceptance preserve uncertain dispatches and prevent repeated provider work.
+  The journal implementation passes component acceptance. F067 and F068 connect rating and funds settlement to its delivery transaction.
+  Final stack CI remains the F070 completion checkpoint.
   Requirements:
   - Use F070 as the shared hosted service contract.
   - Replace the billing dependency on `management_usage_writer.go` with a durable journal in the managed database.
@@ -2349,7 +4248,7 @@ retain satisfied historical dependencies.
   - Expose account-scoped, cursor-paginated journal reads with safe request and reconciliation identifiers.
   Deliverables:
   - Durable journal tables, transaction boundaries, restart recovery, and accounting delivery integration.
-  - Usage extraction in each initially eligible provider adapter and operation.
+  - Usage extraction in every supported provider adapter and operation.
   - Safe journal API, applicable client updates, and retention documentation.
   Validation:
   - Interrupt the real service before dispatch, after dispatch, after observation, and before settlement.
@@ -2361,9 +4260,55 @@ retain satisfied historical dependencies.
   - Prove journal attribution and access remain isolated across accounts and tenants.
   - Run `make ci` after the last application change.
 
-- [ ] [F067] (P1) {F066} Calculate exact provider costs and customer charges.
+- [x] [F067] (P1) {F066} Calculate exact provider costs and customer charges.
+  Resolution:
+  Development implementation and acceptance passed after the advertised Responses image changes.
+  All 14 CI gates passed with 100.0% Go coverage. Complete controlled billing acceptance also passed.
+  Evidence: `docs/hosted-billing.md`, `/tmp/llm-proxy-f070-advertised-final-ci.log`, and `/tmp/llm-proxy-f070-advertised-final-billing.log`.
+  Production activation and actual processor qualification remain separate. F087 owns the processor qualification.
+  Earlier implementation evidence and requirements:
   Goal:
   Convert measured usage into reproducible provider costs and customer charges with the price selected at request acceptance.
+  Evidence:
+  The catalog now uses exact decimal strings for rates and minimum charges.
+  Public HTTP tests retain large values and small fractions without floating-point conversion.
+  The calculation service copies selected rates and applies the approved multiplier `13/10`.
+  Public package tests cover cache inclusion, reasoning inclusion, minimum charges, unknown quantities, fractional remainders, and authorization bounds.
+  Admission retains prices and bounds in the journal transaction. The attempt limit rejects excess work before dispatch.
+  Journal delivery records charges in the settlement transaction. Unresolved charges do not call settlement.
+  Account-owned HTTP resources expose charges and accepted prices under OpenAPI.
+  HTTP tests cover restart recovery, immutable prices, duplicate delivery, rollback, ownership, pagination, and corrupt records.
+  The catalog now has typed token ranges, cache classes, service tiers, regions, and effective intervals.
+  The loader rejects overlapping known conditions. Admission rejects expired prices and unresolved token boundaries.
+  Price snapshots retain all active input-token tiers. HTTP tests prove correct tier selection after restart and price expiry.
+  Native text bindings cover Responses, Chat Completions, DashScope, xAI, and Anthropic cache lifetimes.
+  Text admission constructs bounds from catalog token limits for each authorized attempt.
+  HTTP tests prove that an exhausted attempt limit prevents dispatch and returns a request conflict.
+  Compound quantity rules retain separate thinking tokens under the output rate without changing journal measurements.
+  Gemini HTTP tests prove cache-storage exclusion and unresolved settlement for missing thoughts or unexpected tool input.
+  HTTP tests verify dictation time rates, explicit speech provider-unit rates, and separate image modality charges.
+  Image retries produce one charge. Missing measurements and usage above accepted bounds do not settle.
+  Media admission constructs native quantity bounds from fixed catalog limits.
+  HTTP tests reject missing, account-dependent, and incompatible bounds before provider dispatch.
+  Catalog validation retains billing limits separately from capability control limits.
+  Text admission uses the smallest fixed input or context limit for its input bound.
+  The catalog ends the published Gemini Flash discounts at the local January 2027 eligibility boundary.
+  Search admission includes call prices and input passes in its reservation.
+  The transport sends the accepted tool limit on each generation, including continuations.
+  HTTP tests verify search charges, missing evidence, exceeded bounds, and disabled-search exclusion.
+  Separate customer-credit records preserve the original provider cost and exact charge.
+  HTTP tests verify partial and full credits, duplicate events, restart recovery, account isolation, settlement rollback, and concurrent credit limits.
+  The adjustment and Ledger callback share one transaction. Shared Ledger integration remains under F068.
+  Request summaries add exact amounts across all attempts and customer credits without rounding.
+  One database snapshot prevents mixed totals when another instance commits a credit during the read.
+  HTTP tests cover multiple pages, pending delivery, unpublished results, unknown usage, failed work, and account ownership.
+  Unresolved customer totals remain null. Known provider costs remain separate from customer credits.
+  The browser reads itemized charges and request totals through the existing account-owned APIs.
+  Browser checks passed for customer credits, exact fractions, large amounts, pending totals, pagination, failed reads, and phone widths.
+  Complete provider price and limit qualification remains incomplete.
+  Shared Ledger admission and settlement remain under F068.
+  Component validation passes for hosted execution, exact rating, provider catalogs, Go lint, client contracts, and 39 browser tests.
+  Final stack CI remains the F070 completion checkpoint. Production qualification and activation remain separate.
   Requirements:
   - Use F070 as the shared hosted service contract.
   - Extend `catalog_service.go` and the canonical provider catalog instead of copying provider rates into billing code.
@@ -2376,7 +4321,7 @@ retain satisfied historical dependencies.
   - Store immutable price snapshots for accepted requests independently of later catalog changes.
   - Keep historical snapshots as financial evidence under the current schema, without obsolete catalog readers or compatibility paths.
   - Record provider rates and customer rates separately under one accepted snapshot identifier.
-  - Support a configured customer price schedule without assuming provider cost equals customer price.
+  - Apply the F070 customer price schedule: provider price multiplied by `1.30`.
   - Require explicit approval of customer rates and fees before production activation.
   - Use exact decimal or rational arithmetic for rates and integer monetary units for ledger amounts.
   - Specify monetary precision, overflow bounds, rounding direction, and the single rounding boundary.
@@ -2397,7 +4342,7 @@ retain satisfied historical dependencies.
   - Charge records and itemized customer representations with safe evidence references.
   - Canonical catalog, OpenAPI, client, pricing, and operator documentation updates.
   Validation:
-  - Verify calculations against hand-calculated fixtures for every initially eligible billing component.
+  - Verify calculations against hand-calculated fixtures for every supported provider billing component.
   - Prove cached and reasoning quantities follow provider inclusion rules without duplicate counting.
   - Prove repeated rating of one immutable observation produces the same charge.
   - Prove historical charges remain unchanged after catalog, margin, or currency configuration changes.
@@ -2406,12 +4351,45 @@ retain satisfied historical dependencies.
   - Prove every permitted execution path stays within its declared reservation bound.
   - Run `make ci` after the last application change.
 
-- [ ] [F068] (P1) {F067} Enforce prepaid balances with atomic funds reservations.
+- [x] [F068] (P1) {F067} Enforce prepaid balances with atomic funds reservations.
+  Resolution:
+  Development implementation and acceptance passed after the advertised Responses image changes.
+  All 14 CI gates passed with 100.0% Go coverage. Complete controlled billing acceptance also passed.
+  Evidence: `docs/hosted-billing.md`, `/tmp/llm-proxy-f070-advertised-final-ci.log`, and `/tmp/llm-proxy-f070-advertised-final-billing.log`.
+  Production activation and actual processor qualification remain separate. F087 owns the processor qualification.
+  Earlier implementation evidence and requirements:
   Goal:
   Bound hosted provider spending by each customer's available funds across concurrent requests and process restarts.
+  Evidence:
+  The operator selected the existing Ledger model and balance conservation for acceptance on 2026-09-23.
+  The funds suite passes in 20.456 seconds after the decision update.
+  Ledger PR 102 is merged. Release CI and publication passed for Ledger v1.1.0 on 2026-09-23.
+  LLM Proxy uses the published public GORM adapter without a local module replacement.
+  Journal admission, accepted prices, Ledger reservations, and settlement effects share the application transaction.
+  Exact account remainders preserve fractional usage and credits. Uncertain work retains its funds reservation.
+  Native HTTP, Go and Python clients, MCP, dictation, and media tests cover financial admission.
+  Real service processes verify competing reservations and interruption before dispatch, after dispatch, and during settlement.
+  The service reconciles funded usage and retained holds at startup and during operation.
+  Account resources expose balances, reservations, Ledger entries, tenant limits, and audited financial decisions.
+  The browser shows exact amounts, financial history, and tenant limits at desktop and narrow widths.
+  Operator decisions preserve provider evidence and cannot exceed authorization, known pricing, or the remaining charge.
+  Audited request credits and usage credits share one settlement limit, account lock, and Ledger credit implementation.
+  Duplicate credits have one effect. A failed audit write rolls back the Ledger effect and exact remainder.
+  Usage delivery retains known platform exposure and reconciliation cases. Incomplete provider costs remain explicit.
+  Snapshot and restore tests preserve journal records, prices, charges, Ledger entries, holds, credits, decisions, and exposure.
+  The funds suite passes in 22.330 seconds. Credit race checks pass in 36.013 seconds. Go lint and formatting pass.
+  With the published dependency, hosted regression passes in 121.302 seconds and browser acceptance passes in 11.6 seconds.
+  Go lint and formatting pass. Final stack CI remains the F070 completion gate.
+  F069 verifies payment credits, reversals, and payment records in the restore fixture.
+  F070 connects service admission and settlement and verifies browser funding errors.
+  Final CI, commercial decisions, and complete F070 acceptance remain open.
   Requirements:
   - Use F070 as the shared hosted service contract.
-  - Create an append-only credit ledger with balanced entries for each transaction and currency.
+  - Reuse the Ledger integration and domain code used by PoodleScanner and Hecate.
+  - Resolve the transaction boundary, monetary precision, and uncertain holds before financial persistence implementation.
+  - Keep one balance authority and extend the owning shared component for missing capabilities.
+  - Use the existing Ledger account model and append-only credit ledger.
+  - Verify balance conservation for each account and currency, including exact remainders and holds.
   - Use one billing account balance across all customer tenants, with optional lower tenant spending limits.
   - Define available funds as posted credits minus settled charges, active reservations, and payment reversal holds.
   - Store ledger amounts in the precision defined by F067.
@@ -2444,7 +4422,7 @@ retain satisfied historical dependencies.
   Validation:
   - Submit concurrent requests whose combined maximum exceeds the funded balance through multiple real service processes.
   - Prove admitted reservations never exceed available funds and rejected requests cause zero provider work.
-  - Prove ledger entries balance after settlement, refund, reversal, and recovery.
+  - Prove balance conservation after settlement, refund, reversal, and recovery through the existing Ledger model.
   - Prove duplicate settlements, credits, and releases change balances once.
   - Interrupt execution across each transaction boundary and verify recovery against the real database.
   - Prove uncertain work retains its hold and known undispatched work releases its hold.
@@ -2452,13 +4430,111 @@ retain satisfied historical dependencies.
   - Verify browser balances, tenant limits, and insufficient-funds messages through real public entry points.
   - Run `make ci` after the last application change.
 
-- [ ] [F069] (P1) {F068} Add prepaid payments, receipts, and financial reconciliation.
+- [x] [F069] (P1) {F068} Add prepaid payments, receipts, and financial reconciliation.
+  Resolution:
+  Development implementation and acceptance passed after the advertised Responses image changes.
+  All 14 CI gates passed with 100.0% Go coverage. Complete controlled billing acceptance also passed.
+  Evidence: `docs/hosted-billing.md`, `/tmp/llm-proxy-f070-advertised-final-ci.log`, and `/tmp/llm-proxy-f070-advertised-final-billing.log`.
+  Production activation and actual processor qualification remain separate. F087 owns the processor qualification.
+  Earlier implementation evidence and requirements:
+  Status:
+  - On 2026-09-22, the operator selected Paddle. The service must obey the applicable Paddle financial policies.
+  - F070 requires a USD 5 funding minimum. Customers can spend their balance down to USD 0.
+  - The current payment and refund contract is in `docs/hosted-billing.md`.
+  Evidence:
+  The HTTP inbox uses the published shared Paddle verifier from `utils/billing` v0.18.0, resolved through `@latest`.
+  It verifies raw bytes before JSON parsing and acknowledges only a committed inbox record.
+  Processor account, environment, and event identity control deduplication across service instances and restarts.
+  Conflicting content is rejected. Signed events do not grant funds before financial verification.
+  SQL diagnostics retain database failures without the private payment body.
+  Inbox and restore acceptance passes in 3.657 seconds. Race checks pass in 15.969 seconds.
+  Go lint, format checks, frontend lint, and generated API checks pass.
+  Authenticated funding orders retain a server offer of at least 500 cents and its supplier, processor, and environment identities.
+  Orders and checkout delivery intents commit together. Concurrent retries retain one order and preserve its original price.
+  HTTP tests verify ownership, invalid financial inputs, pagination, disabled funding, rollback, and processor isolation.
+  Payment and restore checks pass in 5.118 seconds. Payment race checks pass in 40.265 seconds.
+  The funds regression passes in 21.591 seconds.
+  The snapshot fixture preserves order and delivery records and verifies replay after restoration.
+  Go lint, formatting, frontend lint, and generated API checks pass.
+  Checkout delivery binds one processor transaction to the retained order through the released shared commerce client.
+  A lost response or local write failure requires processor reconciliation without another transaction creation request.
+  Completed events and current processor evidence must match before the service grants funds.
+  The receipt, Ledger credit, order state, and event state commit together.
+  Different events for one transaction and concurrent workers produce one credit.
+  Receipt, order, and event write failures roll back the complete financial change.
+  Payment and funds checks pass in 7.308 and 20.928 seconds against the released dependency.
+  The complete backup fixture retains payment receipts and verifies replay without another credit after restoration.
+  Receipt restoration passes in 5.012 seconds. Payment race checks pass in 103.389 seconds.
+  Go and frontend lint pass.
+  Utils PR 47 is merged and published as v0.19.0 with matching remote artifact hashes.
+  The application uses the released shared adjustment client without a local dependency replacement.
+  Current processor evidence controls pending holds, cumulative reversals, and restored funds.
+  Adjustment revisions and Ledger effects commit together, including adjustments before initial funding.
+  Derived payment restrictions reject new work after a deficit without changing an operator suspension.
+  Controlled tests cover approval, rejection, chargeback replay, concurrent workers, restart, and failed financial writes.
+  Payment and funds checks pass in 8.213 and 23.260 seconds against released utils v0.19.0.
+  The complete backup test restores adjustment evidence and Ledger effects without another deduction after replay.
+  The payment race check, Go lint, and format checks pass.
+  Owned receipt resources expose original and adjusted customer amounts without private processor evidence.
+  Temporary Paddle portal sessions use the owned processor customer and remain uncached.
+  The normal CLI configures payment processing through its existing environment interpolation.
+  The normal service runs checkout delivery and payment processing with HTTP admission.
+  Financial write failure stops admission. Restart recovery applies the retained payment once.
+  The database binds to one payment environment and preserves that binding through backup restoration.
+  Payment, CLI, funds, restore, race, lint, and generated API checks pass against released utils v0.19.0.
+  The browser shows funding history, verified receipts, and temporary Paddle invoice links.
+  Signed payment and adjustment events drive the normal runtime, database, and rendered financial records in browser tests.
+  The checks cover delayed funding, pending holds, partial refunds, pagination, invalid responses, and failed portal requests.
+  Payment and onboarding browser checks pass in 16.5 seconds at desktop and narrow widths.
+  Browser checkout uses the server transaction and an environment-specific public Paddle token.
+  Lost responses retain one creation key through reload. Checkout can resume from browser state or retained funding history.
+  Browser completion events cannot grant funds. Verified server state refreshes the balance and payment history.
+  Payment, CLI, format, Go lint, frontend lint, and generated API checks pass.
+  All three payment and onboarding browser checks pass in 23.5 seconds with controlled Paddle protocols.
+  Verified cancellation changes an unpaid order to failed without a credit. Declined payment attempts remain retryable.
+  Processor observations commit with order and event changes. Funding and adjustments use the same timestamp check.
+  Older snapshots and conflicting evidence remain unresolved without a financial change.
+  HTTP tests verify rollback, concurrency, restart, and restoration of retained observations.
+  Payment, CLI, backup, race, browser, lint, format, and generated API checks pass.
+  The operator command retains payment reconciliation runs, fixed order sets, processor evidence, and atomic checkpoints.
+  Reports compare processor state, receipts, refund projections, and Ledger entries without monetary effects.
+  Completed runs return their retained report. Unfinished runs resume the same order set.
+  Public tests detect currency, discount, fee, receipt, Ledger, duplicate-credit, and pending-refund differences.
+  Payment, CLI, backup, race, funds, browser, lint, and format checks pass.
+  Provider cost imports bind original source bytes and normalized amounts to a credential version and UTC period.
+  The comparison uses immutable ratings and separates incomplete usage, currencies, discounts, fees, and duplicate provider identifiers.
+  Imported evidence and reports commit together without customer charge changes.
+  Public tests verify exact cost comparison, source identity, scope filters, concurrent imports, rollback, replay, and unchanged customer charges.
+  The normal CLI reads normalized evidence and the original source file. Backup restoration preserves both evidence and reports.
+  Payment, CLI, backup, provider scope, race, lint, and format checks pass.
+  Approved corrections reuse the F068 administrator-only financial resolution and request credit resources.
+  Integrated HTTP acceptance combines Paddle funding, metered usage, a provider report, an approved customer credit, and a later refund.
+  Customer approval fails. The operator identity and report reference remain in the audit record.
+  Replay preserves one credit, original costs remain unchanged, and the final payment report confirms the expected Ledger effects.
+  The combined hosted billing target passed hosted HTTP, exact rating, payments, official clients, and database restoration.
+  All three authenticated browser scenarios passed in 32.3 seconds. The approved correction race and Go lint checks passed.
+  The separate Paddle sandbox procedure specifies isolated configuration, required scenarios, and retained evidence.
+  The separate native sandbox target verifies expected order and receipt amounts against the existing Paddle and Ledger reconciliation.
+  It rejects production settings, protocol overrides, empty expectations, missing orders, and reused qualification reports.
+  Controlled input checks and payment tests pass.
+  B259 rejects recurring prices before checkout and preserves retries after temporary price failures through the existing shared client.
+  Payment, checkout, browser, formatting, and lint checks pass after B259.
+  The corrected stack CI run passed all Go tests, Python checks, and upstream race checks.
+  Its coverage gate failed with `coverage total 95.3%, want 100.0%`. B266 owns that failure.
+  B265 now rejects Responses image requests whose accepted snapshot cannot bound both paid components.
+  The related HTTP regression and Go lint passed. F087 owns actual sandbox evidence. Complete F070 development acceptance remains open.
+  `make test-hosted-billing` passed after B265, including clients, backup restoration, and four browser scenarios in 37.1 seconds.
   Goal:
   Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
   Requirements:
   - Use F070 as the shared hosted service contract.
-  - Use Stripe Checkout as the proposed first payment processor integration.
-  - Record processor selection and merchant ownership before external configuration or production activation.
+  - Use Paddle Checkout with one-time purchases for prepaid funding.
+  - Reuse `github.com/tyemirov/utils/billing` and the direct Paddle integration in PoodleScanner.
+  - Reuse Hecate event persistence and idempotent grant patterns without its native-store or RevenueCat purchase flow.
+  - Permit prepaid funding without an active subscription.
+  - Use Paddle as merchant of record and retain the platform supplier, Paddle account, and environment identities.
+  - Require a minimum funding amount of USD 5 without an unspent balance floor.
+  - Obey the Paddle Buyer Terms and Refund Policy applicable to each purchase.
   - Keep the credit ledger authoritative for immediate admission and customer usage deductions.
   - Use payment processing for account funding, receipts, refunds, and payment reversals.
   - Keep metered invoices outside the initial prepaid contract to prevent duplicate collection for consumed credits.
@@ -2468,14 +4544,18 @@ retain satisfied historical dependencies.
   - Define funding states as `created`, `pending`, `paid`, `failed`, `partially_refunded`, `refunded`, and `disputed`.
   - Keep payment receipts separate from credit ledger entries and link both through a unique funding order.
   - Verify webhook signatures against raw request bytes and validate the processor environment.
+  - Verify the `Paddle-Signature` header before JSON parsing.
   - Persist verified events in a payment inbox before acknowledging durable acceptance.
   - Deduplicate processor event identifiers and financial effects by payment object and effect type.
   - Handle duplicate and out-of-order events with verified payment state and explicit transition rules.
   - Credit funds only after verified payment success with matching account, amount, and currency.
+  - Use verified `transaction.completed` evidence for the funding credit.
   - Keep browser return pages informational until the server confirms the payment state.
   - Use a delivery outbox for retryable external requests with stable idempotency identifiers.
   - Retry transient transport failures while retaining uncertain outcomes for provider reconciliation.
   - Apply partial refunds, disputes, and chargebacks through compensating ledger entries and explicit account holds.
+  - Process Paddle adjustments with separate pending approval, approved, rejected, and reversed states.
+  - Deduplicate chargeback warnings, chargebacks, and reversals without duplicate deductions.
   - Prevent new spending from funds allocated to a pending refund or reversal.
   - Define account suspension and deficit treatment when a reversal exceeds remaining funds.
   - Keep gross payment, tax, processor fee, net settlement, customer credit, and refund amounts separate.
@@ -2485,7 +4565,8 @@ retain satisfied historical dependencies.
   - Compare provider costs with provider usage exports or invoices where those sources are available.
   - Separate timing, currency, discount, fee, missing usage, and duplicate-effect differences in reconciliation cases.
   - Require explicit approval and an audit record for corrective monetary entries.
-  - Define tax, receipt, retention, refund, and dispute policies before production activation.
+  - Align tax, receipt, retention, refund, and dispute behavior with the verified Paddle contract.
+  - Record platform retention periods and dispute holds before production activation.
   - Keep sandbox and production identifiers, secrets, and records isolated.
   Deliverables:
   - Checkout integration, verified webhook endpoint, payment inbox, delivery outbox, and receipt resources.
@@ -2494,7 +4575,7 @@ retain satisfied historical dependencies.
   - OpenAPI, applicable client, payment setup, and operational documentation updates.
   Validation:
   - Exercise the real service with controlled processor protocols for each financial transition and failure.
-  - Qualify checkout, webhook signatures, delayed payment, and refund behavior in the processor sandbox.
+  - Track actual checkout, webhook, delayed payment, and refund qualification in F087 without blocking development completion.
   - Prove duplicate events and different events for one payment create one customer credit.
   - Prove invalid signatures, mismatched amounts, and another account's payment cannot create funds.
   - Prove a browser success URL cannot create funds without verified payment evidence.
@@ -2504,7 +4585,128 @@ retain satisfied historical dependencies.
   - Verify the complete funding and receipt flow through the real browser.
   - Run `make ci` after the last application change and record sandbox acceptance separately.
 
-- [ ] [F070] (P1) {F065,F066,F067,F068,F069} Deliver the unified prepaid hosted service.
+- [x] [F070] (P1) {F065,F066,F067,F068,F069} Deliver the unified prepaid hosted service.
+  Resolution:
+  Development implementation and acceptance passed after the advertised Responses image changes.
+  All 14 CI gates passed with 100.0% Go coverage. Complete controlled billing acceptance also passed.
+  Evidence: `docs/hosted-billing.md`, `/tmp/llm-proxy-f070-advertised-final-ci.log`, and `/tmp/llm-proxy-f070-advertised-final-billing.log`.
+  Production activation and actual processor qualification remain separate. F087 owns the processor qualification.
+  Earlier implementation evidence and requirements:
+  Status:
+  - The latest operator instruction selects advertised pricing for Responses images, with the approved 30% markup.
+  - B266 is resolved. All 14 CI gates passed in 1354 seconds, with 100.0% Go coverage.
+  - All 154 frontend tests and 11 authenticated browser tests passed before the advertised Responses image implementation.
+  - Complete billing acceptance passed after B266. All four browser scenarios passed in 39.6 seconds.
+  - Log: `/tmp/llm-proxy-f070-takeover-final-billing.log`. Advertised Responses image implementation follows this result.
+  - This instruction replaces the earlier actual-discounted-cost decision for this route.
+  - Preserve unknown native cache counts. Keep the published-rate calculation distinct from actual invoice costs.
+  - Implement one snapshot and reservation for both response-model and image-tool charges. Require complete bounds before dispatch.
+  - The new session recovered the previous complete billing result. All groups, both clients, backup restoration, and four browser scenarios passed.
+  - Log: `/tmp/llm-proxy-f070-payment-identity-billing.log`. The browser scenarios passed in 39.4 seconds.
+  - B266 now has more public acceptance tests and refactors for serialization, payment construction, worker completion, and credential verification.
+  - The current component diagnostic has zero uncovered statements. Complete validation remains open.
+  - The previous complete billing run passed, including all four browser scenarios in 38.6 seconds.
+  - The last complete run passed before the database and rating-rule refactors. Log: `/tmp/llm-proxy-f070-takeover-current-billing.log`.
+  - The new complete Go run passed all tests and probes. Its coverage gate failed at 99.6%, with 81 uncovered statements.
+  - Log: `/tmp/llm-proxy-f070-takeover-current-go-test.log`. The required 100.0% gate is unchanged.
+  - Exact discounted Responses image costs, the combined reservation bound, and final stack CI remain open.
+  - Complete controlled billing passed after B294 and the earlier refactors. All four browser scenarios passed in 41.4 seconds.
+  - Funds, payments, and broader hosted checks passed in 165.318, 142.251, and 448.375 seconds.
+  - Both clients, package installation, and backup restoration passed. Log: `/tmp/llm-proxy-f070-post-b294-billing.log`.
+  - The complete Go run after B294 passed all tests and probes. Its gate failed with `coverage total 99.2%, want 100.0%`.
+  - The current complete profile has 175 uncovered statements across 21306 statements, in 174 blocks.
+  - Log: `/tmp/llm-proxy-f070-post-b294-go-test.log`. B266 and exact Responses image billing remain open.
+  - Complete controlled billing passed after the Ledger metadata refactor and the new financial boundary tests.
+  - All hosted groups, both clients, and backup restoration passed. All four browser scenarios passed in 40.4 seconds.
+  - The latest complete Go report remains 99.0%. Its coordinates precede the journal helper move. Final aggregate validation remains open.
+  - The required coverage gate, final stack CI, and exact Responses image billing remain open.
+  - The billing runbook now has the required operator launch checklist. Activation still requires the stated evidence and operator authorization.
+  - Normal service tests now cover concurrent tenants on one billing account, bounded holds, exact settlement, and two restarts.
+  - Component regression, race checks, and static checks passed. The latest complete Go run passed all tests and executable probes.
+  - Coverage is 99.0%, with 222 uncovered statements. B266 and the unchanged 100.0% gate remain open.
+  - Complete controlled billing passed after alignment isolation and the two JSON refactors. All four browser tests passed in 39.2 seconds.
+  - The target also passed all Go groups, both clients, and backup restoration. Final stack CI and exact Responses billing remain open.
+  - On 2026-09-26, the operator confirmed actual discounted provider costs as the Responses image markup basis.
+  - Missing cache measurements must remain unknown. Published standard rates cannot replace the actual discounted cost.
+  - On 2026-09-25, the operator authorized limited paid provider qualification with existing credentials.
+  - The first OpenAI Responses image report did not retain separate image-tool quantities.
+  - Its report omitted top-level `tool_usage` values. A second authorized probe established separate native image-tool quantities there.
+  - The second probe reported 18 text-input tokens and 196 image-output tokens. The stored response was deleted afterward.
+  - The Responses meter now retains these quantities. The official guide confirms that Responses cached-input counts remain absent.
+  - Two ElevenLabs alignment probes qualified native duration retrieval through the usage API's `trace_id` filter.
+  - An unrelated trace returned no rows. Distinct request traces selected distinct durations and costs at USD 0.22/hour.
+  - The immediate query returned no rows for the second probe. A later query supplied its native measurement.
+  - Both alignment responses supplied the same rounded credit header. That header cannot establish exact per-request dollar costs.
+  - Durable alignment output receipt recovery is implemented and passes HTTP regression.
+  - Delayed alignment usage retrieval now supplies exact input duration through the saved provider trace.
+  - The catalog declares USD 0.22/hour and the native ten-hour maximum. Ledger reserves USD 2.86 for one attempt.
+  - Funded HTTP tests verify delayed measurements, exact settlement, measured zero, invalid evidence, replay, and shutdown recovery.
+  - B290 keeps dispatched media recovery under the worker while Ledger preserves its reservation.
+  - All 27 alignment financial cases passed in 30.381 seconds. Complete funds regression passed in 166.568 seconds.
+  - Expanded financial and catalog race checks passed in 159.478 seconds. Go format and static checks passed.
+  - OpenAI Responses image measurements and the shared final stack gate remain open.
+  - On 2026-09-22, the operator confirmed a 30% markup: `customer_price = provider_price * 1.30`.
+  - The operator selected all providers and their supported operations under one shared billing contract.
+  - The minimum funding amount is USD 5. Customers can spend their balance down to USD 0.
+  - Paddle supplies payments and merchant-of-record services. The service must obey the applicable Paddle financial policies.
+  - Reuse PoodleScanner and Hecate integrations and shared components. LLM Proxy has no native mobile application.
+  - Shared decisions and current integration boundaries are in `docs/hosted-billing.md`.
+  - Normal server construction now connects hosted completion and media admission to the existing price, journal, and Ledger components.
+  - `make test-hosted-runtime` passed CLI configuration checks and funded text and image execution through the normal HTTP listener.
+  - These tests verify automatic settlement, exact remainders, idempotent replay, and zero provider calls after financial rejection.
+  - After runtime integration, `make test-hosted-billing` passed the billing, client, backup, and three browser tests. Go lint also passed.
+  - The usage journal now shows request totals, itemized charges, and customer credits through the existing APIs.
+  - Frontend lint and browser checks passed for exact amounts, pending and unresolved states, pagination, invalid responses, and narrow layouts.
+  - The funded browser flow passed model selection, USD 5 funding, exact charges, replay, receipts, isolation, and grant suspension.
+  - Four hosted browser tests passed at desktop and narrow widths with controlled Paddle and provider responses.
+  - The operational command reads queue ages, comparison differences, and exact financial totals without financial writes or external calls.
+  - `make test-hosted-signals` passed CLI and financial snapshot checks. Go lint passed.
+  - B262 added normal HTTP acceptance for dictionary service charges, exact balance exhaustion, replay, and receipt recovery.
+  - The text acceptance matrix passed every enabled catalog offering through all four public HTTP interfaces.
+  - It verified platform authority, native model selection, exact costs and charges, automatic settlement, and replay across interfaces.
+  - The same runtime fixture now verifies current image and audio inputs through `/v2`, including exact charges and media identity.
+  - Image acceptance passed for 37 offerings across seven providers. Audio and mixed inputs each passed for eight offerings across two providers.
+  - Changed bytes, removed media, and reversed attachments return HTTP 409 without additional provider work. Media input race checks passed.
+  - `make test-hosted-runtime` and Go lint passed after the matrix change.
+  - Speech financial tests passed each current ElevenLabs generation and conversion offering, including timestamped speech.
+  - The tests check exact charges, account remainders, reservations, replay, and zero provider calls after unfunded rejection.
+  - Missing usage, provider errors, and uncertain results keep funds for reconciliation without an automatic debit.
+  - Related usage, rating, settlement, and exposure checks passed. Go lint passed after the test changes.
+  - Dictation financial acceptance passed every enabled offering through both public HTTP interfaces.
+  - It checks native model selection, duration and token rates, exact settlement, account remainders, and replay across interfaces.
+  - Missing usage keeps the funds reservation and has no customer charge. Related dictation tests and Go lint passed.
+  - Image financial checks passed generation, editing, JSON, stream events, exact charges, and account remainders.
+  - FAL queue checks passed settlement, unresolved outcomes, excess cost, and recovery without duplicate provider work.
+  - Funded queue recovery preserves one settlement after worker replacement and grant revocation.
+  - Responses images keep funds for reconciliation because the image-tool meter remains unqualified.
+  - Dictator synthesis tests passed real funds admission, exact duration charges, and Ledger settlement for both current synthesis models.
+  - Cancellation, invalid durations, artifact loss, and usage write errors keep funds for reconciliation.
+  - Related Dictator and speech regression checks passed. Go lint passed.
+  - Actual Paddle sandbox inputs are absent from the process environment and all six repository private environment files.
+  - Read-only sandbox requests succeeded with the existing PoodleScanner local API key. No active LLM Proxy product or price exists there.
+  - F087 owns sandbox product, price, webhook, account identity, and actual qualification work without blocking development completion.
+  - Complete provider-operation qualification and final CI remain open. F069 has ready PR 344.
+  - A 2026-09-24 source review confirmed missing image-tool usage, alignment billed duration, and Dictator processed input duration.
+  - The current dependency evidence is in the hosted billing runbook. These provider measurements remain in F070 scope.
+  - The remaining commercial decisions and F065 through F069 implementation remain open.
+  - The corrected stack CI run passed all Go tests, Python checks, and upstream race checks.
+  - B266 records the remaining gate failure: `coverage total 95.3%, want 100.0%`.
+  - B265 rejects an incomplete Responses image cost bound before dispatch. Complete Responses billing remains required.
+  - `make test-hosted-billing` passed after B265, including clients, backup restoration, and four browser scenarios in 37.1 seconds.
+  - Gateway PRs 423 through 426 are merged. Gateway v4.6.3 is published and installed.
+  - The approved Dictator publication completed for SDK v1.12.0 and GPU image `ghcr.io/tyemirov/dictator:2.0.4`.
+  - A fresh Go module cache verified the released SDK and all nine native input-usage responses.
+  - The proxy now retains exact sample counts, sample rates, and input duration through adapter revision `dictator_speech_v1:2`.
+  - Financial acceptance passed all five Dictator input operations and both subtitle modes in 46.488 seconds.
+  - Tests verify exact costs, 30% markup, fractional remainders, replay, worker restart, and rejection before unfunded dispatch.
+  - Missing or invalid measurements retain funds for reconciliation. Measured zero releases funds without a debit.
+  - Go lint and formatting passed. B287 corrected the complete billing target after its package timeout.
+  - The corrected billing target passed all Go groups, clients, database restoration, and four browser scenarios in 40.4 seconds.
+  - Separate Dictator financial, input-usage, and artifact-transfer race checks passed in 449.297, 310.707, and 63.876 seconds.
+  - Unknown native job states preserve held funds without charges or repeated dispatch. Six new cases passed race checks in 39.305 seconds.
+  - Final Go lint and formatting passed. Stack CI passed all Go groups, executable probes, upstream race checks, and Python checks.
+  - Its remaining failure is `coverage total 98.5%, want 100.0%`. B266 remains open.
+  - OpenAI Responses image measurements, B266, and final stack CI remain open.
   Goal:
   Give a customer one account, one funded balance, and immediate access to approved services without provider account setup.
   Govern implementation and development acceptance across the five connected billing capabilities.
@@ -2512,11 +4714,13 @@ retain satisfied historical dependencies.
   - Implement F065, F066, F067, F068, and F069 sequentially in dependency order.
   - Use this umbrella for shared decisions, interface ownership, and complete service acceptance.
   - Keep implementation details and component acceptance in the owning child issue.
-  - Use a prepaid account balance and USD as the proposed initial product scope.
-  - Use explicit customer rates with a limited initial set of qualified provider offerings.
+  - Use a prepaid USD account balance with a USD 5 funding minimum and no unspent balance floor.
+  - Cover all providers and their supported operations through one shared financial contract.
+  - Calculate customer rates from provider rates with a 30% markup.
   - Record scope decisions before implementation depends on them.
-  - Record the initial provider list, supported operations, customer rates, fees, funding minimum, and maximum account exposure.
-  - Record the processor choice, merchant identity, refund policy, failure-charge policy, and financial retention policy.
+  - Record every provider, supported operation, customer rate, fee, funding minimum, and maximum account exposure.
+  - Use Paddle for payments and obey its applicable financial and refund policies.
+  - Record the platform supplier, Paddle account, failure-charge policy, and financial retention policy.
   - Confirm provider commercial authorization and paid capacity before hosted activation for each offering.
   - Keep unresolved commercial choices visible without inventing rates, tax rules, or provider rights.
   - Use F065 for billing identity, platform credentials, grants, and customer onboarding.
@@ -2525,6 +4729,10 @@ retain satisfied historical dependencies.
   - Use F068 for funds reservations, ledger entries, admission, settlement, and financial account holds.
   - Use F069 for payment receipts, processor events, funding credits, reversals, and external reconciliation.
   - Reuse the current managed database, authentication boundary, provider catalog, and execution coordinators.
+  - Reuse existing Paddle and Ledger code and approaches from PoodleScanner and Hecate.
+  - Use shared component contracts for payment transport, signature verification, and financial operations.
+  - Resolve shared component gaps in the owning package instead of creating another billing implementation.
+  - Deliver browser flows without native mobile applications or native-store purchase integrations.
   - Add current schema resources through explicit migrations only when an actual stored-data inventory requires a transfer.
   - Keep billing schema extensions separate from historical telemetry conversion.
   - Start customer financial history from verified funding and journal records, not reconstructed telemetry totals.
@@ -2547,18 +4755,18 @@ retain satisfied historical dependencies.
   Deliverables:
   - Completed F065 through F069 with linked validation evidence and resolved shared product decisions.
   - Hosted service architecture document, OpenAPI resources, customer onboarding, and billing dashboard.
-  - Controlled end-to-end acceptance suite and separate processor sandbox receipts.
+  - Controlled end-to-end acceptance suite and a separate F087 record for actual processor sandbox qualification.
   - Operator launch checklist with provider qualification, rate evidence, recovery evidence, and remaining activation decisions.
   Validation:
-  - Create a fresh account, complete sandbox funding, and use platform credentials through the customer interface.
-  - Verify the exact customer charge, provider cost, funds release, and remaining balance for each pilot operation.
+  - Create a fresh account, complete funding with controlled processor responses, and use platform credentials through the customer interface.
+  - Verify the exact customer charge, provider cost, funds release, and remaining balance for every supported provider operation.
   - Exhaust the available balance and prove subsequent rejected requests cause zero upstream work.
   - Exercise concurrent requests across tenants, idempotent retries, failed providers, client disconnects, and restarts.
   - Exercise payment duplication, delayed confirmation, refund, reversal, and uncertain provider outcomes.
   - Restore a consistent backup and prove retained financial records explain all accepted requests and payments.
   - Verify one customer's resources and financial evidence remain inaccessible to another customer.
   - Verify the rendered login, onboarding, model selection, funding, usage, and receipt flows on desktop and mobile widths.
-  - Compare sandbox payment receipts, usage journal entries, charge calculations, and ledger totals with expected fixtures.
+  - Compare controlled payment receipts, usage journal entries, charge calculations, and ledger totals with expected fixtures.
   - Run `make ci` after the last application change and record the complete acceptance target result.
   - Mark this issue complete only after its development deliverables and acceptance requirements pass.
 
@@ -3292,6 +5500,15 @@ retain satisfied historical dependencies.
   - Prove tenant-isolated response chains, partial output order, cancellation, and final artifact integrity.
   - Run current repository validation and separately record explicitly authorized live acceptance.
 - [ ] [F040] (P1) {F043} Add Vertex image operations through tenant provider connections.
+  Current ownership and handoff:
+  - Close this capability issue after destination source validation.
+  - Record consumer cutover under its MediaOps issue and final retirement under I244.
+  - LLM Proxy owns native provider calls, credentials, resource APIs, uploads, and provider recovery for this capability.
+  - Deliver the public contract and official client methods before MediaOps I085 switches its service integration.
+  - Keep product jobs, application assets, and local media processing in one MediaOps backend.
+  - Keep TelePrompter browser controls connected to MediaOps.
+  - Preserve detailed requirements and dated implementation evidence below.
+  - Record source qualification separately from consumer activation and paid acceptance.
   Goal:
   Move the current Vertex image provider contract behind the shared gateway.
   Requirements:
@@ -3308,6 +5525,7 @@ retain satisfied historical dependencies.
   - Complete the P011 second-provider acceptance procedure for each protocol adapter added or changed in this slice.
   - Prove exact route controls, tenant isolation, staging ownership, duplicate prevention, and artifact integrity.
   - Run current repository validation and separately record explicitly authorized live acceptance.
+
 - [x] [F041] (P1) Add FAL image operations and queue recovery.
   Progress: One FAL provider now declares shared credentials, read-only verification, and the Reve image transport.
   Progress: Public tests cover a second provider identity, ordered artifacts, uncertain outcomes, queue recovery, and cancellation acknowledgements.
@@ -3340,7 +5558,22 @@ retain satisfied historical dependencies.
   - Prove queue recovery after restart, uncertain transport behavior, exact controls, and ordered verified artifacts.
   - Prove staging fetch and cleanup through real files and an HTTP serving boundary.
   - Run current repository validation and separately record explicitly authorized live acceptance.
-- [ ] [F042] (P1) Expose Dictator media capabilities through the tenant gateway.
+- [ ] [F042] (P1) {F072,B258} Expose Dictator media capabilities through the tenant gateway.
+  Current acceptance boundary:
+  - Require F072 model selection evidence and verify all six retained speech capabilities through the public gateway.
+  - Preserve voice discovery, extraction duration, aligned SRT, and private native identifiers.
+  - MediaOps I087 owns its service cutover. Creative Director owns its own product state and semantic output acceptance.
+  - A consumer transcript-quality defect does not prove a gateway transport defect.
+  - Recheck dated inventory and publication claims below before a new cutover.
+  Current ownership and handoff:
+  - Close this capability issue after destination source validation.
+  - Record consumer cutover under its MediaOps issue and final retirement under I244.
+  - LLM Proxy owns native provider calls, credentials, resource APIs, uploads, and provider recovery for this capability.
+  - Deliver the public contract and official client methods before MediaOps I087 switches its service integration.
+  - Keep product jobs, application assets, and local media processing in one MediaOps backend.
+  - Keep TelePrompter browser controls connected to MediaOps.
+  - Preserve detailed requirements and dated implementation evidence below.
+  - Record source qualification separately from consumer activation and paid acceptance.
   Current execution: Positive extraction duration, media CLI commands, and durable MCP tools are implemented.
   Validation: Public CLI and MCP tests passed. All six live capabilities passed in 5.21 seconds. Final `make ci` passed 13 gates in 324 seconds.
   Initial result: CI reported four uncovered blocks. Public rejection and store-failure tests cleared all four blocks.
@@ -3348,7 +5581,7 @@ retain satisfied historical dependencies.
   Contracts: `duration_seconds`, three media MCP tools, and eight media CLI commands. Existing event contracts did not change.
   Test and operator files: Public speech and MCP tests, CLI tests, `Makefile`, OpenAPI, generated API pages, and `docs/speech-workflows.md`.
   Production inventory: Both deployed MediaOps volumes are empty. The account owns the dedicated MediaOps tenant and its assigned Dictator connection.
-  Remaining: Migrate retained consumer state and verify installed product acceptance.
+  Remaining: Verify the current provider contract and hand its acceptance evidence to MediaOps I087.
   Reconciliation (2026-09-16):
   - The MediaOps tenant has Dictator connection `connection-ef115fb73594e0158a626d610393aec1` and a client key.
   - The deployed capability API returned all six speech routes for that key.
@@ -3357,8 +5590,8 @@ retain satisfied historical dependencies.
   - Deleted `mediaops-20260821T030050-000001` as directed. The other 22 source digests still match. No replacement work was submitted.
   - Creative Director I013 owns the consumer change. Its live adapter test passed in 12.67 seconds.
   - Final consumer CI passed with 100.0 percent statement coverage. The qualified CLI is installed and its public startup checks pass.
-  - Creative Director I014 owns retained state with obsolete identities and no current artifact registry. Installed validation reports 184 errors.
-  - Source retirement remains open for that migration and installed product acceptance.
+  - The 2026-09-16 Creative Director I014 checkpoint reported 184 retained-state validation errors.
+  - MediaOps I088 owns the final source-retirement receipt. Verify current consumer evidence before reporting an external blocker.
   Goal:
   Make Dictator a private media provider behind LLM Proxy's public API.
   SDK evidence (2026-09-14):
@@ -3383,7 +5616,7 @@ retain satisfied historical dependencies.
   - Extend official Go and Python clients and current public caller interfaces in the selected capability release.
   - Inventory retained voices and jobs before activation. Require explicit tenant and provider-account ownership mapping.
   - Coordinate MediaOps I087 source migration and each actual consumer in one bounded cutover.
-  - Keep MediaOps applications and local workflows in MediaOps. Move only Dictator provider access to LLM Proxy.
+  - Keep MediaOps processing and application data in its backend. Extract the TelePrompter website under MediaOps I094.
   - Do not require a replacement MediaOps metrics client. Keep tenant metrics in LLM Proxy.
   - Remove obsolete public runtime routing and direct caller credentials after the cutover acceptance.
   Deliverables:
@@ -3471,7 +5704,17 @@ retain satisfied historical dependencies.
   - Its public homepage already displays the pause notice. Its README and product document record the same status.
   - Exclude WriterBlock code, credentials, resource transfer, and consumer acceptance from this migration.
   - WriterBlock does not gate F042 acceptance, publication, or deployment.
+
 - [ ] [F043] (P1) Add provider-readable media staging and Google credential profiles.
+  Current ownership and handoff:
+  - Close this capability issue after destination source validation.
+  - Record consumer cutover under its MediaOps issue and final retirement under I244.
+  - LLM Proxy owns native provider calls, credentials, resource APIs, uploads, and provider recovery for this capability.
+  - Deliver the public contract and official client methods before MediaOps I089 switches its service integration.
+  - Keep product jobs, application assets, and local media processing in one MediaOps backend.
+  - Keep TelePrompter browser controls connected to MediaOps.
+  - Preserve detailed requirements and dated implementation evidence below.
+  - Record source qualification separately from consumer activation and paid acceptance.
   Goal:
   Let gateway providers read tenant media through the exact storage and credential contracts they require.
   Requirements:
@@ -3492,7 +5735,11 @@ retain satisfied historical dependencies.
   P012 reconciliation (2026-09-07):
   Keep media staging separate from independent customer completion connections.
   Operator credential profiles do not satisfy P012's customer setup requirement.
-  Resolve P012 and approve a separate storage ownership contract before further Google credential implementation under F043.
+  Prepare the separate storage ownership contract as the first F043 deliverable.
+  Obtain its approval before implementing storage credentials.
+  Bind private storage credentials to the authorized gateway account and its assigned tenant routes.
+  Keep customer completion authentication under P012, independent of provider staging.
+  Reuse existing credential storage and declare exact route requirements before adapter implementation.
   `docs/gemini-customer-connections.md` records the proposed boundary.
   F060 API-key revision (2026-09-08):
   F060 removed the completion route's operator profile loader after explicit user approval.
@@ -3502,6 +5749,7 @@ retain satisfied historical dependencies.
   - Use real files and HTTP serving to prove exact fetched bytes, digest, expiry, and cleanup.
   - Prove tenant isolation, active reference retention, failed staging, and secret-free public output.
   - Run repository validation and record storage acceptance separately from paid generation acceptance.
+
 - [ ] [F036] (P1) Add public provider-offering price comparison.
   Goal:
   Let landing-page visitors compare published prices and workload estimates for
@@ -3678,6 +5926,15 @@ retain satisfied historical dependencies.
   - Run the current repository checks after implementation.
   - Record published-client, deployed-service, and explicitly authorized live-provider acceptance separately.
 - [ ] [F025] (P1) {F043} Add durable video generation to model operations.
+  Current ownership and handoff:
+  - Close this capability issue after destination source validation.
+  - Record consumer cutover under its MediaOps issue and final retirement under I244.
+  - LLM Proxy owns native provider calls, credentials, resource APIs, uploads, and provider recovery for this capability.
+  - Deliver the public contract and official client methods before MediaOps I010 switches its service integration.
+  - Keep product jobs, application assets, and local media processing in one MediaOps backend.
+  - Keep TelePrompter browser controls connected to MediaOps.
+  - Preserve detailed requirements and dated implementation evidence below.
+  - Record source qualification separately from consumer activation and paid acceptance.
   Goal:
   Make LLM Proxy the sole provider boundary for Vertex Veo, Vertex Gemini Omni,
   Runway, FAL, Kling, and xAI video generation.
@@ -3713,11 +5970,23 @@ retain satisfied historical dependencies.
     fake provider suite and repository CI pass.
   - Start with the required failing integration test. Complete validation under the current repository policy.
   Delivery boundary:
+  - Execute provider slices in this order: Runway, Vertex, FAL, Kling, then xAI.
+  - F043 gates only routes that require staging. Accept independent routes before the complete F025 scope closes.
   - Implement and release provider slices with explicit acceptance and removal receipts.
   - Keep each current capability available under its single owner until its verified cutover.
   - Add import validators only for records identified by the migration inventory.
   - Use the current repository validation policy instead of older baseline CI instructions.
+
 - [ ] [F026] (P1) Add ElevenLabs speech, music, and alignment operations.
+  Current ownership and handoff:
+  - Close this capability issue after destination source validation.
+  - Record consumer cutover under its MediaOps issue and final retirement under I244.
+  - LLM Proxy owns native provider calls, credentials, resource APIs, uploads, and provider recovery for this capability.
+  - Deliver the public contract and official client methods before MediaOps I011 switches its service integration.
+  - Keep product jobs, application assets, and local media processing in one MediaOps backend.
+  - Keep TelePrompter browser controls connected to MediaOps.
+  - Preserve detailed requirements and dated implementation evidence below.
+  - Record source qualification separately from consumer activation and paid acceptance.
   Progress (2026-09-20): One YAML provider now defines shared credentials, account verification, model metadata, and subscription quotas.
   Progress: The gateway and both official clients expose typed account resources through the assigned connection.
   Validation: Public HTTP tests cover a second provider identity, account capacity, credential replacement, tenant separation, and malformed native responses.
@@ -3776,7 +6045,7 @@ retain satisfied historical dependencies.
     continuity context, timestamps, seed, normalization, pacing/speed
     translation, formats, provider concurrency, and history identifiers.
   - Keep render plans, narrative cadence, chunk reuse, stitching, and final composite validation in MediaOps.
-  - F071 defines the model access boundary. Keep all application workflows and project controls in MediaOps.
+  - I286 defines the model access boundary. Keep workflow execution in MediaOps and timeline controls in TelePrompter.
   - Represent each provider request as one durable gateway operation.
   - Materialize provider audio and JSON outputs as typed artifacts and retain
     history or song identifiers as internal recovery evidence.
@@ -3799,7 +6068,17 @@ retain satisfied historical dependencies.
   - Keep each migrated capability on one execution path and preserve current consumer behavior.
   - Add import validators only for actual recoverable records.
   - Use the current repository validation policy instead of older baseline CI instructions.
+
 - [ ] [F027] (P1) Add provider account mutations, avatars, translation, and lip-sync.
+  Current ownership and handoff:
+  - Close this capability issue after destination source validation.
+  - Record consumer cutover under its MediaOps issue and final retirement under I244.
+  - LLM Proxy owns native provider calls, credentials, resource APIs, uploads, and provider recovery for this capability.
+  - Deliver the public contract and official client methods before MediaOps I012 switches its service integration.
+  - Keep product jobs, application assets, and local media processing in one MediaOps backend.
+  - Keep TelePrompter browser controls connected to MediaOps.
+  - Preserve detailed requirements and dated implementation evidence below.
+  - Record source qualification separately from consumer activation and paid acceptance.
   Scope clarification (2026-09-20): Include every HeyGen and Kling source capability listed in `docs/media-provider-completeness.md`.
   Goal:
   Complete gateway ownership of external media-provider credentials and
@@ -3838,6 +6117,7 @@ retain satisfied historical dependencies.
   - Use F043 staging only for provider routes that require it.
   - Add import validators only for actual recoverable records.
   - Use the current repository validation policy instead of older baseline CI instructions.
+
 - [ ] [F017] (P1) Add shared MPR UI inactivity warning and automatic logout.
   Goal:
   Make an authenticated browser session warn and sign out explicitly after
@@ -4263,6 +6543,10 @@ retain satisfied historical dependencies.
   Dependency handoff: 2026-08-15 — gateway F001 and both application manifests
   passed local contract validation. Production activation remains separate.
 - [ ] [F028] (P2) {F027} Add HeyGen Avatar V as a gateway-owned avatar engine.
+  Current ownership:
+  - Implement the provider API and exact native specification in LLM Proxy.
+  - MediaOps F022 owns backend consumption and TelePrompter product controls.
+  - Keep this additional capability under I287, outside I274 and the retained-provider migration gate.
   Goal:
   Add the current Avatar V engine to the gateway HeyGen avatar contract for actual gateway consumers, including required TelePrompter flows.
   Cross-repository sequence:
@@ -4284,7 +6568,12 @@ retain satisfied historical dependencies.
   - Prove eligible success, ineligible pre-dispatch rejection, engine-specific
     control rejection, terminal artifact download, and restart recovery.
   - Start with the required failing integration test. Complete validation under the current repository policy.
+
 - [ ] [F029] (P2) {F025} Add MiniMax H3 V2 video generation to model operations.
+  Current ownership:
+  - Implement the provider API and exact native specification in LLM Proxy.
+  - MediaOps F023 owns backend consumption and TelePrompter product controls.
+  - Keep this additional capability under I287, outside I274 and the retained-provider migration gate.
   Goal:
   Add the provider-qualified MiniMax H3 V2 route to the gateway for actual gateway consumers, including required TelePrompter flows.
   Cross-repository sequence:
@@ -4310,7 +6599,12 @@ retain satisfied historical dependencies.
     uncertain recovery, input limits, artifact integrity, and absence of Hailuo
     V1 behavior through public black-box tests.
   - Start with the required failing integration test. Complete validation under the current repository policy.
+
 - [ ] [F030] (P2) {F026} Add Speechify text-to-speech and voice discovery to model operations.
+  Current ownership:
+  - Implement the provider API and exact native specification in LLM Proxy.
+  - MediaOps F024 owns backend consumption and TelePrompter product controls.
+  - Keep this additional capability under I287, outside I274 and the retained-provider migration gate.
   Goal:
   Add the current Speechify complete-response speech and voice-discovery
   contracts to the gateway for actual consumers, including required TelePrompter narration flows.
@@ -4339,6 +6633,7 @@ retain satisfied historical dependencies.
     speech marks, rate/concurrency handling, transport uncertainty, secret
     safety, and artifact integrity through public black-box tests.
   - Start with the required failing integration test. Complete validation under the current repository policy.
+
 - [ ] [F020] (P2) {F016} Add route-validated sampling controls to the canonical v3 messages contract.
   Goal:
   Let a caller set low-level sampling controls only when the selected provider
@@ -4381,6 +6676,22 @@ retain satisfied historical dependencies.
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
 ## Planning
+
+- [ ] [P014] (P2) Assess the native provider contract for Seedance and HeyGen avatar use.
+  Goal:
+  Determine whether the proposed workflow has a supported provider API.
+  Requirements:
+  - Verify the exact model name and provider route from current official sources.
+  - Verify whether HeyGen permits the proposed external video engine or requires a separate composition workflow.
+  - Record supported controls, account access, resource ownership, and concrete limitations.
+  - Supply the feasibility result to MediaOps P007.
+  Deliverables:
+  - A supported gateway contract proposal or a documented rejection of the unsupported integration.
+  Validation:
+  - Link current official evidence for each proposed native operation.
+  Scope:
+  - This Planning issue does not authorize implementation or block I274.
+
 *do not implement yet*
 
 - [!] [P012] (P1) Plan reliable Gemini access through independent customer connections.

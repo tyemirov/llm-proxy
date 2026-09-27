@@ -6,10 +6,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -64,21 +66,36 @@ func StandardManagedTenant(secret string) ManagedTenant {
 	}
 }
 
+// BuildRouter registers worker shutdown before the test releases its database.
+func BuildRouter(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger) (*gin.Engine, error) {
+	testingInstance.Helper()
+	router, err := proxy.BuildRouter(configuration, structuredLogger)
+	if err != nil {
+		return nil, err
+	}
+	testingInstance.Cleanup(func() {
+		if err := router.Close(); err != nil {
+			testingInstance.Error(err)
+		}
+	})
+	return router.Engine, nil
+}
+
 // BuildManagedRouter builds and provisions a router through the mandatory management API.
 func BuildManagedRouter(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger, tenant ManagedTenant) (*gin.Engine, error) {
 	configured, provisionError := ProvisionManagedRouter(testingInstance, configuration, structuredLogger, tenant)
 	if provisionError != nil {
 		return nil, provisionError
 	}
-	return proxy.BuildRouter(configured, structuredLogger)
+	return BuildRouter(testingInstance, configured, structuredLogger)
 }
 
 // ProvisionManagedRouter provisions one tenant and returns the reusable persistent router configuration.
-func ProvisionManagedRouter(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger, tenant ManagedTenant) (proxy.Configuration, error) {
+func ProvisionManagedRouter(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger, tenant ManagedTenant) (_ proxy.Configuration, provisionError error) {
 	testingInstance.Helper()
 	databasePath := configuration.Management.DatabasePath
 	if databasePath == "" {
-		databasePath = "file:managed-router-" + rand.Text() + "?mode=memory&cache=shared"
+		databasePath = filepath.Join(testingInstance.TempDir(), "managed-router.sqlite")
 	}
 	configuration.Management = managedRouterConfiguration(databasePath)
 	originalHTTPClient := proxy.HTTPClient
@@ -87,11 +104,13 @@ func ProvisionManagedRouter(testingInstance testing.TB, configuration proxy.Conf
 	configuration = WithModelCatalog(testingInstance, configuration)
 	bootstrapConfiguration := configuration
 	bootstrapConfiguration.UpstreamRateLimits = nil
-	bootstrapRouter, buildError := proxy.BuildRouter(bootstrapConfiguration, structuredLogger)
+	bootstrap, buildError := proxy.BuildRouter(bootstrapConfiguration, structuredLogger)
 	if buildError != nil {
 		proxy.HTTPClient = originalHTTPClient
 		return proxy.Configuration{}, buildError
 	}
+	defer func() { provisionError = errors.Join(provisionError, bootstrap.Close()) }()
+	bootstrapRouter := bootstrap.Engine
 	sessionCookie, cookieError := managedRouterSessionCookie()
 	if cookieError != nil {
 		return proxy.Configuration{}, cookieError
@@ -242,7 +261,7 @@ func saveManagedProviderKey(router http.Handler, sessionCookie *http.Cookie, ten
 		return err
 	}
 	path := "/api/management/tenants/" + tenantID
-	if _, err := exchange(http.MethodPut, path+"/connections/"+provider, map[string]string{"connection_id": connection.ID}, http.StatusOK); err != nil {
+	if _, err := exchange(http.MethodPut, path+"/connections/"+provider, map[string]string{"kind": "account_connection", "resource_id": connection.ID}, http.StatusOK); err != nil {
 		return err
 	}
 	if textModel != "" {

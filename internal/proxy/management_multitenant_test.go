@@ -410,7 +410,7 @@ func saveManagementProviderKey(t *testing.T, router http.Handler, sessionCookie 
 	if id == "" {
 		c := exchange(http.MethodPost, "/api/management/connections", body, http.StatusCreated)
 		id = c["id"].(string)
-		exchange(http.MethodPut, managementTenantTestPath(tenantID, "/connections/openai"), map[string]string{"connection_id": id}, http.StatusOK)
+		exchange(http.MethodPut, managementTenantTestPath(tenantID, "/connections/openai"), map[string]string{"kind": "account_connection", "resource_id": id}, http.StatusOK)
 	} else {
 		exchange(http.MethodPut, "/api/management/connections/"+id, body, http.StatusOK)
 	}

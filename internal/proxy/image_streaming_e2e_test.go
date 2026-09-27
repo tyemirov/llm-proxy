@@ -334,7 +334,7 @@ func TestImageGenerationStreamingPreviewIsolationRestartAndRetention(t *testing.
 				}
 				return client
 			}
-			router, err := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+			router, err := testfixtures.BuildRouter(t, configuration, zap.NewNop().Sugar())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -392,7 +392,7 @@ func TestImageGenerationStreamingPreviewIsolationRestartAndRetention(t *testing.
 			}
 			releaseProvider()
 			newServer := func() llmproxyclient.Client {
-				restartedRouter, err := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+				restartedRouter, err := testfixtures.BuildRouter(t, configuration, zap.NewNop().Sugar())
 				if err != nil {
 					t.Fatal(err)
 				}

@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
+	"google.golang.org/grpc"
 )
 
 // accountDictatorAdapter binds every provider interaction to the tenant's
@@ -31,25 +31,22 @@ func (adapter *accountDictatorAdapter) bind(ctx context.Context, tenantID, refer
 }
 
 func (adapter *accountDictatorAdapter) bindProtocol(ctx context.Context, tenantID, reference string) (*dictatorGRPCProtocol, func(), error) {
-	var assignment managedTenantConnectionRecord
-	err := adapter.store.database.WithContext(ctx).Preload("Connection.Fields").Where("tenant_id = ? AND provider_id = ?", tenantID, adapter.provider).First(&assignment).Error
+	settings, connectionID, err := mediaConnectionSettings(ctx, tenantID, adapter.provider, reference, adapter.tenants, adapter.store)
 	if err != nil {
-		return nil, nil, fmt.Errorf("resolve Dictator assignment: %w", err)
-	}
-	current := assignment.ConnectionID + ":v" + strconv.FormatUint(assignment.Connection.Version, 10)
-	if reference != "" && current != reference {
-		return nil, nil, errMediaOperationUnavailable
-	}
-	settings, err := adapter.tenants.accountConnectionSettings(assignment.Connection)
-	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("resolve Dictator connection: %w", err)
 	}
 	connection, _, err := openDictatorConnection(ctx, settings.connectionValues, adapter.transport)
 	if err != nil {
 		return nil, nil, err
 	}
-	binding := assignment.ConnectionID + ":" + mediaSHA256Hex([]byte(settings.connectionValues[adapter.transport.endpoint.SettingField]+"\x00"+settings.connectionValues[adapter.transport.authentication.Field]+"\x00"+settings.connectionValues[dictatorTLSField]))
-	protocol := &dictatorGRPCProtocol{provider: adapter.provider, model: adapter.model, connection: connection, token: settings.connectionValues[adapter.transport.authentication.Field], binding: binding, maxAssetBytes: adapter.assets.maxAssetBytes}
+	binding := connectionID + ":" + mediaSHA256Hex([]byte(settings.connectionValues[adapter.transport.endpoint.SettingField]+"\x00"+settings.connectionValues[adapter.transport.authentication.Field]+"\x00"+settings.connectionValues[dictatorTLSField]))
+	var transport grpc.ClientConnInterface = connection
+	if _, hosted := ctx.Value(hostedMediaRequestContextKey{}).(managedJournalRequestRecord); hosted {
+		authorize, _ := ctx.Value(hostedMediaAuthorizationContextKey{}).(hostedMediaAuthorize)
+		recordUsage, _ := ctx.Value(hostedMediaUsageContextKey{}).(func(journalUsageEvidenceInput) error)
+		transport = &hostedMediaGRPCConnection{next: connection, authorize: authorize, recordUsage: recordUsage}
+	}
+	protocol := &dictatorGRPCProtocol{provider: adapter.provider, model: adapter.model, connection: transport, token: settings.connectionValues[adapter.transport.authentication.Field], binding: binding, maxAssetBytes: adapter.assets.maxAssetBytes}
 	return protocol, func() { _ = connection.Close() }, nil
 }
 
@@ -105,7 +102,11 @@ func (adapter *accountDictatorAdapter) Cancel(ctx context.Context, request Media
 }
 
 func (adapter *accountDictatorAdapter) DiscoverMediaVoices(ctx context.Context, tenantID string, query MediaVoiceQuery) (MediaVoiceDiscovery, error) {
-	bound, closeConnection, err := adapter.bind(ctx, tenantID, "")
+	reference, err := adapter.store.credentialReference(ctx, tenantID, providerID(adapter.provider))
+	if err != nil {
+		return MediaVoiceDiscovery{}, err
+	}
+	bound, closeConnection, err := adapter.bind(ctx, tenantID, reference)
 	if err != nil {
 		return MediaVoiceDiscovery{}, err
 	}
@@ -114,7 +115,11 @@ func (adapter *accountDictatorAdapter) DiscoverMediaVoices(ctx context.Context, 
 }
 
 func (adapter *accountDictatorAdapter) MediaVoiceAuthority(ctx context.Context, tenant string) (string, error) {
-	protocol, closeConnection, err := adapter.bindProtocol(ctx, tenant, "")
+	reference, err := adapter.store.credentialReference(ctx, tenant, providerID(adapter.provider))
+	if err != nil {
+		return "", err
+	}
+	protocol, closeConnection, err := adapter.bindProtocol(ctx, tenant, reference)
 	if err != nil {
 		return "", err
 	}

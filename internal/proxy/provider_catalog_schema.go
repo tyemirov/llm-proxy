@@ -20,7 +20,7 @@ import (
 
 const (
 	// ProviderCatalogSchemaVersion is the only accepted providers.yml schema.
-	ProviderCatalogSchemaVersion = 5
+	ProviderCatalogSchemaVersion = 6
 
 	CatalogProviderFieldKindCredential = "credential"
 	CatalogProviderFieldKindSetting    = "setting"

@@ -40,6 +40,8 @@ func writeProviderErrorResponse(ginContext *gin.Context, providerIdentifier stri
 		errorCode = llmproxycontract.ErrorCodeProviderRateLimited
 	} else if errors.Is(requestError, ErrProviderMediaLimit) {
 		errorCode = llmproxycontract.ErrorCodeProviderMediaLimitExceeded
+	} else if code, hosted := hostedRequestErrorCode(requestError); hosted {
+		errorCode = code
 	}
 
 	upstreamStatus, retryAfterValue, retryable, hasUpstreamStatus, providerErrorCodes := providerFailureMetadata(requestError)

@@ -18,9 +18,11 @@ import (
 var imageResponseHandlePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,200}$`)
 
 type imageResponsesSnapshot struct {
-	ID     string `json:"id"`
-	Status string `json:"status"`
-	Output []struct {
+	ID        string          `json:"id"`
+	Status    string          `json:"status"`
+	Usage     json.RawMessage `json:"usage"`
+	ToolUsage json.RawMessage `json:"tool_usage"`
+	Output    []struct {
 		ID     string `json:"id"`
 		Type   string `json:"type"`
 		Status string `json:"status"`
@@ -105,7 +107,7 @@ func (adapter *imageGenerationAdapter) executeResponses(ctx context.Context, req
 	if err != nil {
 		return imageResponsesReadFailure(err)
 	}
-	if err := request.PersistProviderHandle(snapshot.ID); err != nil {
+	if err := request.PersistProviderReceipt(MediaOperationProviderReceipt{Handle: snapshot.ID, RequestID: snapshot.ID}); err != nil {
 		return imageGenerationUncertain()
 	}
 	// Release submission admission before polling the accepted resource.
@@ -113,7 +115,7 @@ func (adapter *imageGenerationAdapter) executeResponses(ctx context.Context, req
 	if imageResponsePending(snapshot) {
 		return adapter.pollImageResponse(ctx, request, provider, snapshot.ID, controls)
 	}
-	return adapter.imageResponseResult(snapshot, controls)
+	return adapter.imageResponseResult(snapshot, controls, request)
 }
 
 func (adapter *imageGenerationAdapter) writeImageResponsesBody(writer io.Writer, request MediaOperationExecutionRequest, input imageGenerationInput, controls imageGenerationControls, previous string) error {
@@ -200,7 +202,10 @@ func imageResponsePending(snapshot imageResponsesSnapshot) bool {
 	return snapshot.Status == "queued" || snapshot.Status == "in_progress"
 }
 
-func (adapter *imageGenerationAdapter) imageResponseResult(snapshot imageResponsesSnapshot, controls imageGenerationControls) MediaOperationExecutionResult {
+func (adapter *imageGenerationAdapter) imageResponseResult(snapshot imageResponsesSnapshot, controls imageGenerationControls, request MediaOperationExecutionRequest) MediaOperationExecutionResult {
+	if err := request.recordResponsesImageUsage(snapshot); err != nil {
+		return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ProviderHandle: snapshot.ID, ErrorCode: errUsageJournalUnavailable.Error()}
+	}
 	if snapshot.Status == "cancelled" {
 		return MediaOperationExecutionResult{State: MediaOperationStateCancelled, ProviderHandle: snapshot.ID}
 	}
@@ -244,7 +249,7 @@ func (adapter *imageGenerationAdapter) pollImageResponse(ctx context.Context, re
 	if err != nil {
 		return imageResponsesReadFailure(err)
 	}
-	return adapter.imageResponseResult(snapshot, controls)
+	return adapter.imageResponseResult(snapshot, controls, request)
 }
 
 func (adapter *imageGenerationAdapter) fetchImageResponse(ctx context.Context, client HTTPDoer, provider providerDefinition, method, handle, suffix string) (imageResponsesSnapshot, error) {

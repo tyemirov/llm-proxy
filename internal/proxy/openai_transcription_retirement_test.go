@@ -37,7 +37,7 @@ func TestOpenAITranscriptionRetirementCatalog(t *testing.T) {
 	for _, price := range catalog.Prices {
 		if price.Provider == "openai" && price.Model == openAITranscriptionReplacement {
 			found = true
-			if !price.Available || len(price.Rates) != 1 || price.Rates[0].Rate != 0.0045 || price.Rates[0].Unit != "USD/minute" {
+			if !price.Available || len(price.Rates) != 1 || price.Rates[0].Rate != "0.0045" || price.Rates[0].Unit != "USD/minute" {
 				t.Fatalf("replacement price=%+v", price)
 			}
 		}

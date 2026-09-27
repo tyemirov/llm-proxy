@@ -1374,7 +1374,7 @@ func putManagementProviderKeyWithBaseURL(t *testing.T, router http.Handler, sess
 		if err := json.Unmarshal(response.Body.Bytes(), &connection); err != nil {
 			t.Fatal(err)
 		}
-		assigned := exchange(http.MethodPut, managementTenantTestPath(tenantID, "/connections/"+url.PathEscape(provider)), map[string]string{"connection_id": connection.ID})
+		assigned := exchange(http.MethodPut, managementTenantTestPath(tenantID, "/connections/"+url.PathEscape(provider)), map[string]string{"kind": "account_connection", "resource_id": connection.ID})
 		if assigned.Code != http.StatusOK {
 			return assigned
 		}

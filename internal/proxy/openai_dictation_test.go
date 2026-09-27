@@ -22,18 +22,18 @@ func TestParseTranscriptionText(t *testing.T) {
 	}{
 		{
 			name:     "uses text field",
-			input:    `{"text":"hello from text"}`,
+			input:    `{"text":" hello from text ","languages":[{"code":"en"}],"usage":{"type":"duration","seconds":1}}`,
 			wantText: "hello from text",
 		},
 		{
-			name:     "falls back to transcript field",
-			input:    `{"transcript":"hello from transcript"}`,
-			wantText: "hello from transcript",
+			name:        "rejects transcript field",
+			input:       `{"transcript":"hello from transcript"}`,
+			wantFailure: true,
 		},
 		{
-			name:     "falls back to output_text field",
-			input:    `{"output_text":"hello from output_text"}`,
-			wantText: "hello from output_text",
+			name:        "rejects output_text field",
+			input:       `{"output_text":"hello from output_text"}`,
+			wantFailure: true,
 		},
 		{
 			name:        "returns error for invalid json object payload",
@@ -46,9 +46,9 @@ func TestParseTranscriptionText(t *testing.T) {
 			wantFailure: true,
 		},
 		{
-			name:     "returns plain text payload when response is not json",
-			input:    "plain transcription",
-			wantText: "plain transcription",
+			name:        "rejects plain text payload",
+			input:       "plain transcription",
+			wantFailure: true,
 		},
 		{
 			name:        "returns error for blank payload",

@@ -84,7 +84,7 @@ func TestImageGenerationReturnsOrderedTenantArtifacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router, err := proxy.BuildRouter(routerConfiguration, zap.NewNop().Sugar())
+	router, err := testfixtures.BuildRouter(t, routerConfiguration, zap.NewNop().Sugar())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,6 +377,56 @@ func TestImageGenerationReportsProviderOutcomesWithoutResubmission(t *testing.T)
 	}
 }
 
+func TestImageGenerationRejectsOversizedResponseWithoutResubmission(t *testing.T) {
+	schema := testfixtures.ProviderCatalog(t).Schema()
+	for providerIndex := range schema.Providers {
+		provider := &schema.Providers[providerIndex]
+		if provider.ID != "openai" {
+			continue
+		}
+		for offeringIndex := range provider.Offerings {
+			offering := &provider.Offerings[offeringIndex]
+			if offering.Model != "gpt-image-2" {
+				continue
+			}
+			for limitIndex := range offering.Limits {
+				limit := &offering.Limits[limitIndex]
+				if limit.ID == "output_bytes" {
+					value := 1024
+					limit.Value = &value
+				}
+			}
+		}
+	}
+	catalog, err := proxy.NewProviderCatalog(schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(writer, strings.Repeat(" ", 128<<10))
+	}))
+	t.Cleanup(upstream.Close)
+	client := imageGenerationTestClient(t, upstream, catalog, "openai")
+	input := imageGenerationTestIntent()
+	accepted, err := client.CreateImageGeneration(t.Context(), "oversized-provider-image", input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed := waitForImageGeneration(t, client, accepted)
+	if completed.State != proxy.MediaOperationStateFailed || completed.Error == nil || completed.Error.Code != "provider_result_invalid" || len(completed.Outputs) != 0 {
+		t.Fatalf("oversized response=%+v", completed)
+	}
+	for range 2 {
+		replayed, err := client.CreateImageGeneration(t.Context(), "oversized-provider-image", input)
+		if err != nil || replayed.OperationID != accepted.OperationID || replayed.State != completed.State || calls.Load() != 1 {
+			t.Fatalf("oversized replay=%+v error=%v calls=%d", replayed, err, calls.Load())
+		}
+	}
+}
+
 func TestImageGenerationSecondProviderUsesCatalogDataAndExplicitZeroCompression(t *testing.T) {
 	const providerID = "image-fixture"
 	schema := testfixtures.ProviderCatalog(t).Schema()
@@ -497,7 +547,7 @@ func TestImageGenerationRestartReportsUncertainWithoutRepeatingPaidSubmission(t 
 		t.Fatal(err)
 	}
 	newServer := func() (*httptest.Server, llmproxyclient.Client) {
-		router, err := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+		router, err := testfixtures.BuildRouter(t, configuration, zap.NewNop().Sugar())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -759,7 +809,7 @@ func TestImageGenerationRejectsChangedOrCorruptedAcceptedCredentials(t *testing.
 			if err != nil {
 				t.Fatal(err)
 			}
-			router, err := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+			router, err := testfixtures.BuildRouter(t, configuration, zap.NewNop().Sugar())
 			if err != nil {
 				t.Fatal(err)
 			}

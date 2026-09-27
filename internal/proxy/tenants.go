@@ -72,6 +72,8 @@ func normalizedTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
 
 type managedProviderSettings struct {
 	connectionID     string
+	hostedGrantID    string
+	hostedOfferings  []hostedGrantOffering
 	connectionValues map[string]string
 	configuredFields map[string]bool
 	textModel        string
@@ -87,6 +89,10 @@ func (settings managedProviderSettings) fieldConfigured(fieldIdentifier string) 
 }
 
 func (settings managedProviderSettings) hasRequiredConnectionFields(definition providerDefinition) bool {
+	// Hosted credentials are supplied only by the funds admission boundary.
+	if settings.hostedGrantID != "" {
+		return false
+	}
 	for fieldIdentifier, field := range definition.fields {
 		if field.Required && settings.connectionValue(fieldIdentifier) == "" {
 			return false

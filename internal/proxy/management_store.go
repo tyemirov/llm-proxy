@@ -60,7 +60,7 @@ const (
 	managedClaudeRetirementSchemaVersion    = 15
 	managedOpenAITranscriptionSchemaVersion = 16
 	managedTenantSchemaVersion              = managedAccountConnectionsSchemaVersion
-	managedSQLiteRuntimeQuery               = "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
+	managedSQLiteRuntimeQuery               = "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)"
 	retiredQwenCloudProviderIdentifier      = "qwencloud"
 	retiredGrokProviderIdentifier           = "grok"
 	retiredZhipuProviderIdentifier          = "zhipu"
@@ -136,6 +136,7 @@ type managedTenantStore struct {
 	randomReader      io.Reader
 	now               func() time.Time
 	usageWriter       *managedUsageWriter
+	close             func() error
 }
 
 type managedTenantStoreMutex struct {
@@ -223,6 +224,42 @@ func newManagedTenantName(value string) (managedTenantName, error) {
 type managedUsageEventVisitor func(managedUsageEventRecord) error
 
 type managedTenantDatabase interface {
+	paymentCheckout(context.Context, string, string) (managementPaymentCheckoutResponse, error)
+	paymentReceipt(context.Context, string, string) (managementPaymentReceiptResponse, error)
+	paymentCustomer(context.Context, string, string, string) (string, error)
+	createFundingOrder(context.Context, *fundingCatalog, string, string, string, time.Time) (managedFundingOrderRecord, error)
+	fundingOrder(context.Context, string, string) (managedFundingOrderRecord, error)
+	fundingOrders(context.Context, string, managedConnectionPage) ([]managedFundingOrderRecord, error)
+	billingFundsReservation(context.Context, string, string) (managementFundsReservationDetailResponse, error)
+	fundsResolution(context.Context, string, string, *fundsResolutionCommand) (managementFundsResolutionResponse, error)
+	fundsCorrection(context.Context, string, string, string, *fundsCorrectionCommand) (managementFundsCreditResponse, error)
+	tenantFundsLimit(context.Context, managedBillingAccountRecord, string, *tenantFundsLimitChange, time.Time) (managementFundsTenantLimitResponse, error)
+	reconcileHostedFunds(context.Context, time.Time) error
+	billingFundsBalance(context.Context, string, time.Time) (hostedFundsBalance, error)
+	billingFundsReservations(context.Context, string, managedConnectionPage) ([]managedFundsReservationRecord, error)
+	billingFundsEntries(context.Context, string, managedConnectionPage) ([]managementFundsEntryResponse, error)
+	billingRequestChargeSummary(context.Context, string, string) (requestChargeSummary, error)
+	billingCharges(context.Context, string, managedConnectionPage) ([]managedChargeRecord, error)
+	billingCharge(context.Context, string, string) (managedChargeRecord, error)
+	billingChargeAdjustments(context.Context, string, []string) ([]managedChargeAdjustmentRecord, error)
+	billingPriceSnapshot(context.Context, string, string) (managedPriceSnapshotRecord, error)
+	journalRequests(context.Context, string, managedConnectionPage) ([]managedJournalRequestRecord, error)
+	journalRequest(context.Context, string, string) (managedJournalRequestRecord, error)
+	journalAttempts(context.Context, string, managedConnectionPage) ([]managedJournalAttemptRecord, error)
+	journalObservations(context.Context, string, managedConnectionPage) ([]managedJournalObservationRecord, error)
+	journalCases(context.Context, string, managedConnectionPage) ([]managedJournalCaseRecord, error)
+	hostedGrant(context.Context, managementPrincipal, string) (hostedGrant, error)
+	hostedGrants(context.Context, managementPrincipal, managedConnectionPage) ([]hostedGrant, error)
+	createHostedGrant(context.Context, managedHostedGrantRecord, managedHostedGrantRevisionRecord, managedHostedCreationRecord) (managedHostedCreationRecord, error)
+	changeHostedGrant(context.Context, string, managementHostedGrantChange, string, time.Time) (hostedGrant, error)
+	hostedGrantRevisions(context.Context, string, managedConnectionPage) ([]managedHostedGrantRevisionRecord, error)
+	billingAccount(context.Context, string) (managedBillingAccountRecord, error)
+	createBillingAccount(context.Context, managedBillingAccountRecord) (managedBillingAccountRecord, error)
+	hostedCreation(context.Context, managedHostedCreationRecord) (managedHostedCreationRecord, error)
+	platformConnection(context.Context, string) (managedPlatformConnectionRecord, error)
+	platformConnections(context.Context, managedConnectionPage) ([]managedPlatformConnectionRecord, error)
+	createPlatformConnection(context.Context, managedPlatformConnectionRecord, managedPlatformCredentialRecord, managedHostedCreationRecord) (managedHostedCreationRecord, error)
+	rotatePlatformConnection(context.Context, managedPlatformConnectionRecord, managedPlatformCredentialRecord, uint64) error
 	streamAccountConnections(context.Context, func(managedAccountConnectionRecord) error) error
 	saveTenantProviderProfile(context.Context, string, managedProviderProfileRecord) error
 	accountConnections(context.Context, string, managedConnectionPage) ([]managedAccountConnectionRecord, error)
@@ -232,7 +269,8 @@ type managedTenantDatabase interface {
 	saveAccountConnection(context.Context, managedAccountConnectionRecord, uint64) error
 	deleteAccountConnection(context.Context, string, string) error
 	assignAccountConnection(context.Context, string, string, string, string, string, time.Time) error
-	detachAccountConnection(context.Context, string, string, string, bool, time.Time) error
+	assignHostedGrant(context.Context, string, string, string, string, string, time.Time) error
+	detachProviderAssignment(context.Context, string, string, string, bool, time.Time) error
 	checkHealth(context.Context) error
 	userByID(userID string) (managedUserRecord, error)
 	users() ([]managedUserRecord, error)
@@ -289,12 +327,13 @@ type managedTenantRecord struct {
 	DefaultSystemPrompt          string
 	DefaultReasoningEffort       string
 	// ProviderAPIKeys is populated only by bounded predecessor-schema migrations.
-	ProviderAPIKeys       []managedProviderAPIKeyRecord     `gorm:"-"`
-	ConnectionAssignments []managedTenantConnectionRecord   `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnDelete:CASCADE"`
-	ProviderConnections   []managedProviderConnectionRecord `gorm:"-:migration;foreignKey:TenantID;references:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
-	ProviderProfiles      []managedProviderProfileRecord    `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
-	UsageEvents           []managedUsageEventRecord         `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
-	CreatedAt             time.Time                         `gorm:"index:idx_managed_tenant_owner_created,priority:2"`
+	ProviderAPIKeys       []managedProviderAPIKeyRecord         `gorm:"-"`
+	ConnectionAssignments []managedTenantConnectionRecord       `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnDelete:CASCADE"`
+	HostedAssignments     []managedHostedTenantAssignmentRecord `gorm:"-"`
+	ProviderConnections   []managedProviderConnectionRecord     `gorm:"-:migration;foreignKey:TenantID;references:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	ProviderProfiles      []managedProviderProfileRecord        `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	UsageEvents           []managedUsageEventRecord             `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	CreatedAt             time.Time                             `gorm:"index:idx_managed_tenant_owner_created,priority:2"`
 	UpdatedAt             time.Time
 }
 
@@ -487,6 +526,8 @@ func newManagedTenantStore(configuration ManagementConfiguration, providers *pro
 	}
 	store := newManagedTenantStoreWithDatabaseAndCipherAndUsageQueue(database, providerKeyCipher, configuration.UsageQueueSize)
 	store.routingDefaults = providers
+	closeWriter := store.close
+	store.close = sync.OnceValue(func() error { return errors.Join(closeWriter(), database.close()) })
 	return store, nil
 }
 
@@ -507,6 +548,10 @@ func newManagedTenantStoreWithDatabaseAndCipherAndUsageQueue(database managedTen
 		now:               func() time.Time { return time.Now().UTC() },
 	}
 	store.usageWriter = newManagedUsageWriter(store, usageQueueSize)
+	store.close = sync.OnceValue(func() error {
+		store.usageWriter.close()
+		return nil
+	})
 	return store
 }
 
@@ -614,9 +659,20 @@ func newGORMManagedTenantDatabase(configuration ManagementConfiguration, provide
 		return nil, fmt.Errorf("%w: %v", errManagedTenantStoreOpen, openError)
 	}
 	if initializeError := initializeManagedTenantSchema(database, providerKeyCipher, providers); initializeError != nil {
-		return nil, fmt.Errorf("%w: %w", errManagedTenantStoreOpen, initializeError)
+		return nil, errors.Join(fmt.Errorf("%w: %w", errManagedTenantStoreOpen, initializeError), (&gormManagedTenantDatabase{database: database}).close())
 	}
 	return &gormManagedTenantDatabase{database: database}, nil
+}
+
+func (database *gormManagedTenantDatabase) close() error {
+	connection, err := database.database.DB()
+	if err != nil {
+		return fmt.Errorf("resolve managed database for shutdown: %w", err)
+	}
+	if err := connection.Close(); err != nil {
+		return fmt.Errorf("close managed database: %w", err)
+	}
+	return nil
 }
 
 func managementDatabaseDialector(configuration ManagementConfiguration) gorm.Dialector {
@@ -639,6 +695,30 @@ func migrateCurrentManagedSchema(database *gorm.DB) error {
 }
 
 func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) error {
+	return database.Transaction(func(transaction *gorm.DB) error {
+		if err := initializeManagedConnectionSchema(transaction.Session(&gorm.Session{DisableNestedTransaction: true}), providerKeyCipher, providers); err != nil {
+			return err
+		}
+		if err := initializeHostedSchema(transaction); err != nil {
+			return err
+		}
+		if err := validateAssignedRoutingDefaults(transaction, providerKeyCipher, providers); err != nil {
+			return err
+		}
+		if err := initializeHostedJournalSchema(transaction); err != nil {
+			return err
+		}
+		if err := initializeHostedRatingSchema(transaction); err != nil {
+			return err
+		}
+		if err := initializeHostedFundsSchema(transaction); err != nil {
+			return err
+		}
+		return initializeHostedPaymentsSchema(transaction)
+	})
+}
+
+func initializeManagedConnectionSchema(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) error {
 	return database.Transaction(func(transaction *gorm.DB) error {
 		tables, err := transaction.Migrator().GetTables()
 		if err != nil {
@@ -2943,6 +3023,9 @@ func (database *gormManagedTenantDatabase) tenantByOwnerAndID(ownerUserID string
 		Where(&managedTenantRecord{OwnerUserID: ownerUserID, TenantID: tenantID}).
 		First(&record).
 		Error
+	if queryError == nil {
+		queryError = readHostedTenantAssignments(database.database, &record)
+	}
 	return record, queryError
 }
 
@@ -2959,12 +3042,15 @@ func (database *gormManagedTenantDatabase) tenantBySecretDigest(requestContext c
 	var record managedTenantRecord
 	transactionError := database.database.WithContext(requestContext).Transaction(
 		func(transaction *gorm.DB) error {
-			return transaction.
+			if err := transaction.
 				Preload("ConnectionAssignments.Connection.Fields").
 				Preload("ProviderProfiles").
 				Where("secret_digest = ?", secretDigest).
 				First(&record).
-				Error
+				Error; err != nil {
+				return err
+			}
+			return readHostedTenantAssignments(transaction, &record)
 		},
 		&sql.TxOptions{ReadOnly: true},
 	)
@@ -3029,6 +3115,13 @@ func (database *gormManagedTenantDatabase) deleteTenant(ownerUserID string, tena
 		}
 		if tenantCount <= 1 {
 			return errManagedFinalTenantDeletion
+		}
+		var grantCount int64
+		if err := transaction.Model(&managedHostedGrantRecord{}).Where("tenant_id = ?", tenantID).Count(&grantCount).Error; err != nil {
+			return fmt.Errorf("read hosted history for tenant %s before deletion: %w", tenantID, err)
+		}
+		if grantCount != 0 {
+			return errManagedTenantHostedHistory
 		}
 		assignments := transaction.Model(&managedTenantConnectionRecord{}).Select("connection_id").Where("tenant_id = ?", tenantID)
 		if updateError := transaction.Model(&managedAccountConnectionRecord{}).Where("id IN (?)", assignments).
@@ -3333,7 +3426,7 @@ func (store *managedTenantStore) deleteTenant(principal managementPrincipal, ten
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 	if persistError := store.database.deleteTenant(principal.userID, tenantIdentifier.string(), store.now()); persistError != nil {
-		if errors.Is(persistError, errManagedFinalTenantDeletion) {
+		if errors.Is(persistError, errManagedFinalTenantDeletion) || errors.Is(persistError, errManagedTenantHostedHistory) {
 			return persistError
 		}
 		return managedTenantMutationError(principal.userID, tenantIdentifier.string(), persistError)

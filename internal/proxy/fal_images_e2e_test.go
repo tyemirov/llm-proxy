@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"net/http"
@@ -20,6 +19,7 @@ import (
 
 	"github.com/tyemirov/llm-proxy/internal/openapitest"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxyclient"
 	"gopkg.in/yaml.v3"
 )
@@ -486,7 +486,7 @@ func falImagesDurableClient(t *testing.T, upstream *httptest.Server, changes ...
 		t.Fatal(err)
 	}
 	restart := func() llmproxyclient.Client {
-		router, err := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+		router, err := testfixtures.BuildRouter(t, configuration, zap.NewNop().Sugar())
 		if err != nil {
 			t.Fatal(err)
 		}

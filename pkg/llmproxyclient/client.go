@@ -247,7 +247,7 @@ type MessagesRequestInput struct {
 	RequestTimeoutSeconds *int
 	// StructuredOutput requires provider-enforced JSON Schema output.
 	StructuredOutput *StructuredOutputInput
-	// IdempotencyKey binds a structured request to one durable provider submission.
+	// IdempotencyKey binds hosted or structured text to one durable execution.
 	IdempotencyKey string
 }
 
@@ -284,9 +284,9 @@ func NewMessagesRequest(input MessagesRequestInput) (MessagesRequest, error) {
 	if structuredOutputError != nil {
 		return MessagesRequest{}, structuredOutputError
 	}
-	idempotencyKey := strings.TrimSpace(input.IdempotencyKey)
-	if (structuredOutput == nil) != (idempotencyKey == "") || (idempotencyKey != "" && !validClientIdempotencyKey(idempotencyKey)) {
-		return MessagesRequest{}, fmt.Errorf("%w: structured_output and a valid idempotency key are required together", ErrInvalidClientRequest)
+	idempotencyKey := input.IdempotencyKey
+	if (structuredOutput != nil && idempotencyKey == "") || (idempotencyKey != "" && !validClientIdempotencyKey(idempotencyKey)) {
+		return MessagesRequest{}, fmt.Errorf("%w: invalid or missing idempotency key", ErrInvalidClientRequest)
 	}
 	if structuredOutput != nil && input.WebSearch {
 		return MessagesRequest{}, fmt.Errorf("%w: structured_output does not support web_search", ErrInvalidClientRequest)

@@ -139,7 +139,7 @@ func TestMetaCurrentCatalog(t *testing.T) {
 	if !price.Available || price.Source != "https://dev.meta.ai/docs/pricing-rate-limits" || price.LastVerified != "2026-09-05" || len(price.Rates) != 3 {
 		t.Fatalf("price=%+v", price)
 	}
-	for index, expected := range []float64{1.25, 4.25, 0.15} {
+	for index, expected := range []proxy.CatalogDecimal{"1.25", "4.25", "0.15"} {
 		rate := price.Rates[index]
 		if rate.Rate != expected || rate.Currency != "USD" || rate.Unit != "USD/1M_tokens" || rate.Conditions.BillingMode != "standard" || rate.Component != []string{"input_tokens", "output_tokens", "cache_read"}[index] {
 			t.Fatalf("rate=%v", rate)

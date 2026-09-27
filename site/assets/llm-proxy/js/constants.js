@@ -409,3 +409,6 @@ export const PROVIDER_RESOURCE_LABELS = Object.freeze({
   quotas: 'Quotas',
   elements: 'Reusable elements',
 });
+
+export const FUNDING_CHANGED_EVENT = 'llm-proxy:funding-changed';
+export const FUNDING_RESUME_EVENT = 'llm-proxy:funding-resume';

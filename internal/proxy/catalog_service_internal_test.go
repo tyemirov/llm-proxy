@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"math"
 	"strings"
 	"testing"
 )
@@ -36,8 +35,8 @@ func TestCatalogServiceResolvesExactRoutesAndPrices(t *testing.T) {
 		catalog.Prices[priceIndex] = CatalogPriceDescriptor{
 			Provider: ProviderNameXAI, Model: "grok-imagine-video-1.5", Operation: ModelOperationVideoGeneration,
 			Available:     true,
-			Rates:         []CatalogPriceRate{{Component: "output_video", Currency: CatalogCurrencyUSD, Rate: 0.14, Unit: "USD/output_second", Conditions: conditions}},
-			MinimumCharge: &CatalogMinimumCharge{Currency: CatalogCurrencyUSD, Amount: 0.14, Unit: "USD/request"},
+			Rates:         []CatalogPriceRate{{Component: "output_video", Currency: CatalogCurrencyUSD, Rate: "0.14", Unit: "USD/output_second", Conditions: conditions}},
+			MinimumCharge: &CatalogMinimumCharge{Currency: CatalogCurrencyUSD, Amount: "0.14", Unit: "USD/request"},
 			Source:        "https://docs.x.ai/developers/pricing", LastVerified: "2026-08-08",
 		}
 	}
@@ -50,8 +49,8 @@ func TestCatalogServiceResolvesExactRoutesAndPrices(t *testing.T) {
 	*catalog.Offerings[1].Controls[0].Minimum = 9
 	catalog.Offerings[1].Limits[0].Unit = "changed"
 	catalog.Offerings[2].ReasoningEffort.Efforts[0] = "changed"
-	catalog.Prices[videoPriceIndex].Rates[0].Rate = 9
-	catalog.Prices[videoPriceIndex].MinimumCharge.Amount = 9
+	catalog.Prices[videoPriceIndex].Rates[0].Rate = "9"
+	catalog.Prices[videoPriceIndex].MinimumCharge.Amount = "9"
 	if service.Revision() != catalog.Revision {
 		t.Fatalf("revision=%q", service.Revision())
 	}
@@ -79,13 +78,13 @@ func TestCatalogServiceResolvesExactRoutesAndPrices(t *testing.T) {
 		t.Fatal("ResolveOffering accepted an unknown route")
 	}
 	selection := service.SelectPrice(ProviderNameXAI, "grok-imagine-video-1.5", ModelOperationVideoGeneration, " output_video ", conditions)
-	if !selection.Available || selection.Rate == nil || selection.Rate.Rate != 0.14 || selection.MinimumCharge == nil {
+	if !selection.Available || selection.Rate == nil || selection.Rate.Rate != "0.14" || selection.MinimumCharge == nil {
 		t.Fatalf("exact selection=%+v", selection)
 	}
-	selection.Rate.Rate = 12
-	selection.MinimumCharge.Amount = 12
+	selection.Rate.Rate = "12"
+	selection.MinimumCharge.Amount = "12"
 	selectionAgain := service.SelectPrice(ProviderNameXAI, "grok-imagine-video-1.5", ModelOperationVideoGeneration, "output_video", conditions)
-	if selectionAgain.Rate == nil || selectionAgain.Rate.Rate != 0.14 || selectionAgain.MinimumCharge == nil || selectionAgain.MinimumCharge.Amount != 0.14 {
+	if selectionAgain.Rate == nil || selectionAgain.Rate.Rate != "0.14" || selectionAgain.MinimumCharge == nil || selectionAgain.MinimumCharge.Amount != "0.14" {
 		t.Fatalf("exact selection after result mutation=%+v", selectionAgain)
 	}
 	if unavailable := service.SelectPrice(ProviderNameXAI, ModelNameGrok43, ModelOperationText, "input", CatalogPriceConditions{}); unavailable.Available || unavailable.UnavailableReason != "Test price is unavailable." {
@@ -260,7 +259,7 @@ func TestCatalogCapabilityValidationRejectsIncompleteContracts(t *testing.T) {
 
 func TestCatalogPriceValidationRejectsAmbiguousRecords(t *testing.T) {
 	validOffering := ProviderOffering{Provider: ProviderNameXAI, Model: "model", Operations: []string{ModelOperationVideoGeneration}}
-	validRate := CatalogPriceRate{Component: "output", Currency: CatalogCurrencyUSD, Rate: 1, Unit: "USD/second", Conditions: CatalogPriceConditions{Resolution: "720p"}}
+	validRate := CatalogPriceRate{Component: "output", Currency: CatalogCurrencyUSD, Rate: "1", Unit: "USD/second", Conditions: CatalogPriceConditions{Resolution: "720p"}}
 	validPrice := CatalogPriceDescriptor{
 		Provider: ProviderNameXAI, Model: "model", Operation: ModelOperationVideoGeneration, Available: true,
 		Rates: []CatalogPriceRate{validRate}, Source: "https://example.com/pricing", LastVerified: "2026-08-10",
@@ -300,7 +299,7 @@ func TestCatalogPriceValidationRejectsAmbiguousRecords(t *testing.T) {
 	invalid = freshPrice()
 	invalid.Rates[0].Currency = "EUR"
 	assertError(t, []CatalogPriceDescriptor{invalid}, newCatalog(), ".rates[0]")
-	for _, invalidRate := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+	for _, invalidRate := range []CatalogDecimal{"NaN", "Inf", "-Inf", "", "-1", "1.0", "01", "1e3"} {
 		invalid = freshPrice()
 		invalid.Rates[0].Rate = invalidRate
 		assertError(t, []CatalogPriceDescriptor{invalid}, newCatalog(), ".rates[0]")
@@ -309,9 +308,9 @@ func TestCatalogPriceValidationRejectsAmbiguousRecords(t *testing.T) {
 	invalid.Rates = append(invalid.Rates, validRate)
 	assertError(t, []CatalogPriceDescriptor{invalid}, newCatalog(), "reason=ambiguous")
 	invalid = freshPrice()
-	invalid.MinimumCharge = &CatalogMinimumCharge{Currency: "EUR", Amount: 1, Unit: "EUR/request"}
+	invalid.MinimumCharge = &CatalogMinimumCharge{Currency: "EUR", Amount: "1", Unit: "EUR/request"}
 	assertError(t, []CatalogPriceDescriptor{invalid}, newCatalog(), ".minimum_charge")
-	for _, invalidAmount := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+	for _, invalidAmount := range []CatalogDecimal{"NaN", "Inf", "-Inf", "", "-1", "1.0", "01", "1e3"} {
 		invalid = freshPrice()
 		invalid.MinimumCharge = &CatalogMinimumCharge{Currency: CatalogCurrencyUSD, Amount: invalidAmount, Unit: "USD/request"}
 		assertError(t, []CatalogPriceDescriptor{invalid}, newCatalog(), ".minimum_charge")

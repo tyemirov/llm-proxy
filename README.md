@@ -53,6 +53,10 @@ The [provider speech contract](docs/provider-speech.md) defines six ElevenLabs s
 - Supports plain text, JSON, XML, or CSV responses
 
 See [tenant connections](docs/tenant-connections.md) for the dashboard, ownership rules, and versionless database schema.
+F065 also provides development resources for billing accounts, platform connections, hosted grants, and explicit tenant assignments.
+The browser supports hosted setup without customer provider credentials.
+Hosted execution remains disabled until F070 acceptance passes.
+See [hosted billing](docs/hosted-billing.md) for the 30% markup, USD 5 funding minimum, Paddle integration, and remaining work.
 
 ## OpenCode and OpenAI clients
 
@@ -185,8 +189,9 @@ interval, and limit for a resource that is not visible yet. OpenAI permits one
 retry after two seconds for `403` or `404`. Gemini permits six retries after
 five-second intervals for `400`, `403`, or `404`. The lifecycle releases the
 upstream worker during each wait. The request context bounds each wait.
-Provider resource ids remain in the active request lifecycle. The proxy does
-not keep a durable provider job or expose a provider resource id.
+For customer-owned credentials, provider resource ids remain in the active request lifecycle.
+For hosted work, the journal keeps private provider resource identifiers for recovery.
+The proxy does not expose these provider identifiers.
 
 Every current text route uses one provider-neutral completion coordinator.
 The coordinator starts a new request only when the selected transport declares
@@ -200,15 +205,18 @@ Safety filters, refusals, tool/intermediate states, malformed responses, and
 missing or unknown signals remain `502` failures and never trigger this loop.
 
 A `504 Gateway Timeout` means the proxy request budget expired before a final
-answer. For a structured request, reconcile the idempotency key before a new
+answer. For hosted or structured text, reconcile the idempotency key before a new
 submission.
 
 ### Structured JSON output and reconciliation
 
 Canonical `POST /v2` accepts an optional `structured_output.schema` object.
 The object contains the caller-owned JSON Schema. A structured request requires
-exactly one valid `Idempotency-Key` header. The proxy rejects either input when
-the other input is absent.
+exactly one valid `Idempotency-Key` header.
+For customer-owned provider credentials, the proxy rejects either input when the other input is absent.
+The hosted text contract requires the key for all requests, including requests without a schema.
+Hosted execution remains disabled until F070 acceptance passes.
+See [hosted text identity](docs/hosted-billing.md#hosted-text-identity) for replay and result expiry.
 
 The proxy compiles the schema and validates the selected provider subset before
 provider dispatch. It maps the schema to OpenAI Responses `text.format`, Gemini
@@ -241,8 +249,9 @@ record returns its safe failure with the recorded status. An uncertain record
 returns `409 structured_request_outcome_unknown`. Every reconciliation response
 sets `Cache-Control: no-store` because its content depends on the tenant and key.
 
-An identical `POST /v2` submission reuses a succeeded or active record. A
-failed record permits an explicit new attempt with the same request intent.
+An identical `POST /v2` submission reuses a succeeded or active record.
+For customer-owned credentials, a failed record permits an explicit new attempt with the same request intent.
+Hosted failed records retain their execution identity and do not start another provider call.
 An uncertain record never starts provider work again. A process restart changes
 each interrupted `dispatched` record to `uncertain`.
 
@@ -694,11 +703,12 @@ Provider-specific details:
 See the [xAI Responses contract and live acceptance procedure](docs/xai-responses.md).
 
 Tenant access keys, defaults, prompts, and usage belong to the tenant.
-Provider credentials and provider fields belong to named account connections.
-A tenant can use one connection per provider.
+Customer provider credentials and fields belong to named account connections.
+A tenant selects one account connection or one hosted access grant per provider.
 Multiple tenants in the same account can use the same connection.
-A provider request requires an assigned connection with its required fields.
-Otherwise, the proxy returns `409 provider_not_configured` before dispatch.
+A customer-credential request requires an assigned connection with its required fields.
+Otherwise, the native proxy returns `409 provider_not_configured` before dispatch.
+Hosted assignments require the financial admission contract and remain unavailable during this implementation.
 
 Static provider URLs and paths belong to `providers.yml`.
 Alibaba Cloud and Baidu also use a `base_url` connection field.
@@ -884,7 +894,8 @@ Replacement requires confirmation because the previous key stops working immedia
 The new value appears once, with a copy control.
 Request examples use the `<generated-secret>` placeholder.
 A client key cannot be deleted independently.
-Deleting a non-final tenant removes its access key and usage while preserving account connections.
+Deleting a non-final tenant without hosted grant history removes its access key and usage while preserving account connections.
+Hosted grant history prevents tenant deletion, including after revocation.
 
 SQLite stores account connections, tenant assignments, provider profiles, default routes, secret digests, and usage.
 Runtime authentication loads the tenant and its assigned connections from one database snapshot.
@@ -1407,7 +1418,9 @@ Applications store this value as `LLM_PROXY_DEFAULT_TENANT_KEY`.
 This repository exposes the standard local targets used by MPR app repos:
 
 Hosted CI runs Go coverage, backend supporting checks, and frontend qualification in three independent jobs.
-The coverage job has a fifteen-minute limit for setup, compilation, and the existing ten-minute Go test limit.
+The coverage job has a fifteen-minute limit for setup, compilation, and tests.
+Go coverage uses separate passes for `TestHosted` and all remaining tests across every package.
+Each pass retains the existing ten-minute Go test limit. The coverage gate combines both profiles and the executable probes.
 The other qualification jobs have ten-minute limits.
 Together, the jobs run every gate from local `make ci`.
 Playwright global setup builds the capability binary before browser test workers start.
@@ -1428,6 +1441,7 @@ A failed, cancelled, skipped, or missing job result prevents success.
 | `make check-brand-icons` | Validate local SVG assets and all provider and family mappings. See [Provider and model icons](docs/provider-model-icons.md). |
 | `make test-brand-icons` | Run browser and build checks for management and public catalog icons. |
 | `make ci-backend` | Run the complete Go suite and require 100% statement coverage. |
+| `make test-coverage-contract` | Verify both Go test groups, merged coverage counts, and executable probe inputs. |
 | `make ci-backend-checks` | Run release checks, Go and Python analysis, protocol acceptance, admission race tests, Python tests, and local provider preflight. |
 | `make ci-frontend` | Run frontend analysis, browser tests, the Pages artifact check, and the management authentication test. |
 | `make up` | Require the ignored private `configs/.env.local`, then build and run the complete local browser orchestration: ghttp static UI and same-origin TAuth routes on `localhost:4179`, plus the API on `localhost:8080`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |

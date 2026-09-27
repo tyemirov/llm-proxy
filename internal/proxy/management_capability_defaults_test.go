@@ -28,7 +28,7 @@ func TestManagementCapabilityDefaultsRejectMediaOnlyDictation(t *testing.T) {
 		"fields": map[string]string{"grpc_address": listener.Addr().String(), "grpc_auth_token": fixture.token, "grpc_tls": "false"},
 	}, http.StatusCreated)
 	tenantPath := "/tenants/" + tenantID
-	accountConnectionExchange(t, router, owner, http.MethodPut, tenantPath+"/connections/dictator", map[string]any{"connection_id": connection["id"]}, http.StatusOK)
+	accountConnectionExchange(t, router, owner, http.MethodPut, tenantPath+"/connections/dictator", map[string]any{"kind": "account_connection", "resource_id": connection["id"]}, http.StatusOK)
 	accountConnectionExchange(t, router, owner, http.MethodPut, tenantPath+"/defaults", map[string]string{
 		"transcription_provider": proxy.ProviderNameDictator, "transcription_model": proxy.ModelNameDictatorWhisperBase, "reasoning_effort": "",
 	}, http.StatusOK)
@@ -138,7 +138,7 @@ func TestManagementCapabilityDefaultsSurviveRestartAndConnectionRemoval(t *testi
 				"name": "Speech", "provider": proxy.ProviderNameDictator,
 				"fields": map[string]string{"grpc_address": listener.Addr().String(), "grpc_auth_token": fixture.token, "grpc_tls": "false"},
 			}, "capability-default-connection", http.StatusCreated)
-			exchange(http.MethodPut, tenantPath+"/connections/dictator", map[string]any{"connection_id": connection["id"]}, "", http.StatusOK)
+			exchange(http.MethodPut, tenantPath+"/connections/dictator", map[string]any{"kind": "account_connection", "resource_id": connection["id"]}, "", http.StatusOK)
 			exchange(http.MethodPut, tenantPath+"/defaults", map[string]string{"speech_provider": "dictator", "speech_model": "whisper-base", "reasoning_effort": ""}, "", http.StatusBadRequest)
 			defaults := map[string]string{
 				"provider": proxy.ProviderNameOpenAI, "model": proxy.ModelNameGPT41,
