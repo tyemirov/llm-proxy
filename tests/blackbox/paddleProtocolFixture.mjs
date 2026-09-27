@@ -61,7 +61,7 @@ export async function startPaddleProtocolFixture() {
     complete(orderID) {
       const transaction=transactions.find(item=>item.custom_data.funding_order_id===orderID);
       if(!transaction)throw new Error('Checkout transaction is absent');
-      Object.assign(transaction,{status:'completed',completed_at:timestamp,updated_at:'2026-09-23T12:00:01Z',invoice_number:'INV-BROWSER-1',payments:[{payment_attempt_id:'browser-payment',amount:'550',status:'captured',captured_at:timestamp}],details:{
+      Object.assign(transaction,{status:'completed',billed_at:timestamp,updated_at:'2026-09-23T12:00:01Z',invoice_number:'INV-BROWSER-1',payments:[{payment_attempt_id:'browser-payment',amount:'550',status:'captured',captured_at:timestamp}],details:{
         adjusted_totals:totals(500),
         totals:{...totals(500),discount:'0',credit:'0',credit_to_balance:'0',balance:'0'},
         payout_totals:{...totals(500),discount:'0',credit:'0',credit_to_balance:'0',balance:'0'},
