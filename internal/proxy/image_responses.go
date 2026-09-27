@@ -18,10 +18,11 @@ import (
 var imageResponseHandlePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,200}$`)
 
 type imageResponsesSnapshot struct {
-	ID     string          `json:"id"`
-	Status string          `json:"status"`
-	Usage  json.RawMessage `json:"usage"`
-	Output []struct {
+	ID        string          `json:"id"`
+	Status    string          `json:"status"`
+	Usage     json.RawMessage `json:"usage"`
+	ToolUsage json.RawMessage `json:"tool_usage"`
+	Output    []struct {
 		ID     string `json:"id"`
 		Type   string `json:"type"`
 		Status string `json:"status"`

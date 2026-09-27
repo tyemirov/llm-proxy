@@ -3,7 +3,6 @@ package proxy
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"math/big"
 	"net/http"
@@ -26,7 +25,9 @@ type journalTokenMeter struct {
 
 // Profiles follow response protocols, not provider names. A missing measurement
 // remains unknown even when operational telemetry represents it as zero.
-func newTextJournalMeter(codec string) (journalTokenMeter, error) {
+// Catalog validation admits exactly these seven text protocols. Transport
+// composition requires the same request and response codec.
+func newTextJournalMeter(codec string) journalTokenMeter {
 	profile := journalTokenMeter{codec: codec}
 	switch codec {
 	case CatalogProtocolOpenAIResponses, CatalogProtocolDashScopeResponses, CatalogProtocolXAIResponses:
@@ -62,10 +63,8 @@ func newTextJournalMeter(codec string) (journalTokenMeter, error) {
 			{"cache_read_", "cache_read_tokens", "usageMetadata.cacheTokensDetails", "tokenCount", vertexModalityNames},
 			{"tool_input_", "tool_input_tokens", "usageMetadata.toolUsePromptTokensDetails", "tokenCount", vertexModalityNames},
 		}
-	default:
-		return journalTokenMeter{}, fmt.Errorf("%w: metering unavailable for codec %s", errHostedAuthorityDenied, codec)
 	}
-	return profile, nil
+	return profile
 }
 
 func (profile journalTokenMeter) observe(body []byte, status int, attemptID string, now time.Time) (journalUsageEvidenceInput, bool) {

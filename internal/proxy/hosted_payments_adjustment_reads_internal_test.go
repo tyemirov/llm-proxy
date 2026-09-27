@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MarkoPoloResearchLab/ledger/pkg/gormstore"
 	"github.com/MarkoPoloResearchLab/ledger/pkg/ledger"
 	"github.com/tyemirov/utils/billing"
 	"gorm.io/gorm"
@@ -105,6 +106,68 @@ func TestHostedPaymentsAdjustmentReadFailuresPreserveRefundHold(t *testing.T) {
 	}
 }
 
+func TestHostedPaymentsAdjustmentLateAccountReadsRollBackRefund(t *testing.T) {
+	for _, scenario := range []struct {
+		name      string
+		entryType ledger.EntryType
+		writes    int64
+	}{
+		{"after-hold-release", ledger.EntryReverseHold, 1},
+		{"after-refund-debit", ledger.EntrySpend, 2},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			fixture := newAdjustmentReadFixture(t)
+			before := paymentAdjustmentResources(t, fixture.paymentAuditFixture)
+			failure := errors.New("controlled_late_refund_account_read_failure")
+			var armed, failed atomic.Bool
+			var writes atomic.Int64
+			func() {
+				creates := fixture.database.database.Callback().Create()
+				const writeCallback = "test:refund_ledger_write"
+				if err := creates.After("gorm:create").Register(writeCallback, func(tx *gorm.DB) {
+					if tx.DryRun || tx.Error != nil || tx.Statement.Table != "ledger_entries" || tx.RowsAffected != 1 {
+						return
+					}
+					entry := tx.Statement.Dest.(*gormstore.LedgerEntry)
+					writes.Add(1)
+					if entry.Type == string(scenario.entryType) {
+						armed.Store(true)
+					}
+				}); err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if err := creates.Remove(writeCallback); err != nil {
+						t.Error(err)
+					}
+				}()
+				queries := fixture.database.database.Callback().Query()
+				const readCallback = "test:refund_late_account_read"
+				if err := queries.Before("gorm:query").Register(readCallback, func(tx *gorm.DB) {
+					if !tx.DryRun && tx.Statement.Table == "ledger_accounts" && armed.Load() && failed.CompareAndSwap(false, true) {
+						tx.AddError(failure)
+					}
+				}); err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if err := queries.Remove(readCallback); err != nil {
+						t.Error(err)
+					}
+				}()
+				if err := paymentProcessorFixture(t, fixture.checkout, fixture.database).reconcile(t.Context()); !errors.Is(err, failure) {
+					t.Fatalf("refund did not return account read failure: %v", err)
+				}
+			}()
+			if !failed.Load() || writes.Load() != scenario.writes {
+				t.Fatalf("late account failure not exercised: failed=%t writes=%d want=%d", failed.Load(), writes.Load(), scenario.writes)
+			}
+			fixture.assertUnapplied(t, before, paymentInboxPending)
+			fixture.recover(t)
+		})
+	}
+}
+
 func TestHostedPaymentsAdjustmentBalanceFailuresRollBackRefund(t *testing.T) {
 	for _, table := range []string{"ledger_entries", "reservations"} {
 		t.Run(table, func(t *testing.T) {
@@ -130,6 +193,34 @@ func TestHostedPaymentsAdjustmentBalanceFailuresRollBackRefund(t *testing.T) {
 			fixture.assertUnapplied(t, before, paymentInboxPending)
 			fixture.recover(t)
 		})
+	}
+}
+
+func TestHostedPaymentsBalanceRejectsInvalidRestrictionAccount(t *testing.T) {
+	fixture := newPaymentAuditFixture(t)
+	before := paymentAdjustmentResources(t, fixture)
+	var reads atomic.Int64
+	queries := fixture.database.database.Callback().Query()
+	const callback = "test:invalid_restriction_account"
+	if err := queries.After("gorm:query").Register(callback, func(tx *gorm.DB) {
+		if tx.DryRun || tx.Error != nil || tx.Statement.Table != "ledger_accounts" {
+			return
+		}
+		if reads.Add(1) == 2 {
+			tx.Statement.Dest.(*gormstore.LedgerAccount).AccountID = ""
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	response := paymentOrderHTTP(t, fixture.server, fixture.cookie("owner"), http.MethodGet, fundsBalanceTestPath, "", "", http.StatusInternalServerError)
+	if err := queries.Remove(callback); err != nil {
+		t.Fatal(err)
+	}
+	if reads.Load() != 2 || response["error"].(map[string]any)["code"] != "billing_account_store_failed" || response["posted_cents"] != nil {
+		t.Fatalf("invalid restriction account returned a partial balance: reads=%d response=%v", reads.Load(), response)
+	}
+	if !reflect.DeepEqual(before, paymentAdjustmentResources(t, fixture)) {
+		t.Fatal("invalid restriction account changed financial resources")
 	}
 }
 
@@ -217,7 +308,7 @@ func TestHostedPaymentsAdjustmentProcessorOutagesRetainRetryableEvidence(t *test
 }
 
 func TestHostedPaymentsAdjustmentHoldDeficitRefreshesBeforeUsage(t *testing.T) {
-	for _, scenario := range []string{"success", "order-read", "retained-evidence", "retained-null", "retained-total", "retained-digest", "retained-reversed", "retained-pending", "retained-exact", "revision-write"} {
+	for _, scenario := range []string{"success", "order-read", "order-account", "retained-evidence", "retained-null", "retained-total", "retained-digest", "retained-reversed", "retained-pending", "retained-exact", "revision-write"} {
 		t.Run(scenario, func(t *testing.T) {
 			fixture := newPaymentAuditFixture(t)
 			account, err := newHostedLedgerAccount(fixture.database.database, "billing-journal", time.Now())
@@ -270,6 +361,16 @@ func TestHostedPaymentsAdjustmentHoldDeficitRefreshesBeforeUsage(t *testing.T) {
 			retainedEvidence := projection.Evidence
 			var restoreEvidence func()
 			switch scenario {
+			case "order-account":
+				if err := fixture.database.database.Callback().Query().After("gorm:query").Register("test:refund_deficit_order", func(tx *gorm.DB) {
+					order, ok := tx.Statement.Dest.(*managedFundingOrderRecord)
+					if ok && !tx.DryRun && tx.Error == nil && hostedTextExecutionFromContext(tx.Statement.Context) == nil {
+						order.BillingAccountID = ""
+						failures.Add(1)
+					}
+				}); err != nil {
+					t.Fatal(err)
+				}
 			case "order-read":
 				if err := fixture.database.database.Callback().Query().Before("gorm:query").Register("test:refund_deficit_order", func(tx *gorm.DB) {
 					if !tx.DryRun && tx.Statement.Table == "managed_funding_order_records" {
@@ -297,7 +398,7 @@ func TestHostedPaymentsAdjustmentHoldDeficitRefreshesBeforeUsage(t *testing.T) {
 					t.Fatalf("unsafe refund refresh: body=%s calls=%d", body, calls.Load())
 				}
 				switch scenario {
-				case "order-read":
+				case "order-read", "order-account":
 					if err := fixture.database.database.Callback().Query().Remove("test:refund_deficit_order"); err != nil {
 						t.Fatal(err)
 					}

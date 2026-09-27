@@ -121,7 +121,7 @@ func TestHostedPaymentsRuntimeFinancialFailureStopsHTTPAndRecovers(t *testing.T)
 	}
 	transaction := completedPaymentFixture(t, processor)
 	worker := paymentProcessorFixture(t, checkout, database)
-	application := &proxyApplication{router: server.Config.Handler.(*gin.Engine), database: database, now: time.Now, payments: &paddlePaymentRuntime{checkout: checkout, processor: worker}}
+	application := &proxyApplication{closeStore: func() error { return nil }, router: server.Config.Handler.(*gin.Engine), database: database, now: time.Now, payments: &paddlePaymentRuntime{checkout: checkout, processor: worker}}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -177,7 +177,7 @@ func TestHostedPaymentsRuntimeFinancialFailureStopsHTTPAndRecovers(t *testing.T)
 }
 
 func TestHostedPaymentsRuntimeRejectsInvalidConfigurationBeforeOpeningDatabase(t *testing.T) {
-	for _, scenario := range []string{"secret", "client-token", "client-environment", "client-whitespace", "environment", "minimum", "price", "plaintext-remote"} {
+	for _, scenario := range []string{"secret", "secret-whitespace", "api-key", "api-key-whitespace", "client-token", "client-environment", "client-whitespace", "environment", "minimum", "price", "plaintext-remote"} {
 		t.Run(scenario, func(t *testing.T) {
 			input := &PaymentConfiguration{Environment: "sandbox", ClientToken: "test_browserfixture", ProcessorAccountID: "processor", SupplierID: "supplier", APIKey: "fixture-key", WebhookSecret: "fixture-secret", Offers: []PaymentOfferConfiguration{{Code: "five", PriceID: "pri_01hv8x2axb33yr5y238zfwcn5p", FundingCents: 500}}}
 			switch scenario {
@@ -189,6 +189,12 @@ func TestHostedPaymentsRuntimeRejectsInvalidConfigurationBeforeOpeningDatabase(t
 				input.ClientToken = "test_browser fixture"
 			case "secret":
 				input.WebhookSecret = ""
+			case "secret-whitespace":
+				input.WebhookSecret = " \t "
+			case "api-key":
+				input.APIKey = ""
+			case "api-key-whitespace":
+				input.APIKey = " \t "
 			case "environment":
 				input.Environment = "unknown"
 			case "minimum":

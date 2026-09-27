@@ -383,24 +383,35 @@ func TestMediaOperationCreationTransactionConvergesConcurrentAcceptance(testingI
 }
 
 func TestMediaOperationServiceRejectsInvalidAdapterCatalog(testingInstance *testing.T) {
-	fixture := newMediaOperationInternalFixture(testingInstance)
-	managedTenants := &managedTenantStore{database: &gormManagedTenantDatabase{database: fixture.database}}
 	configuration := Configuration{
-		ModelCatalog: ModelCatalog{}, MediaOperationAdapters: map[string]MediaOperationAdapter{"video.generate|xai|model": fixture.adapter},
+		ModelCatalog: ModelCatalog{}, MediaOperationAdapters: map[string]MediaOperationAdapter{"video.generate|xai|model": &mediaOperationInternalAdapter{}},
 		MediaOperationWorkers: 1, MediaOperationCapacity: 1, TenantMediaOperationCapacity: 1,
 		MediaOperationLifetimeSeconds: 60, MediaOperationClaimSeconds: 10, MediaOperationClaimRenewalSeconds: 1, AssetRetentionSeconds: 60,
-	}
-	if service, serviceError := newMediaOperationService(configuration, managedTenants, fixture.service.assets, fixture.service.providers, HTTPClient, zap.NewNop().Sugar()); service != nil || serviceError == nil {
-		testingInstance.Fatalf("service=%v error=%v", service, serviceError)
 	}
 	configuration.validated = true
 	configuration.Endpoints = NewEndpoints()
 	configuration.ProviderCatalog = internalCanonicalProviderCatalog()
 	configuration.UpstreamCapacity = testUpstreamCapacity(1, 1)
 	configuration.AssetStorePath = testingInstance.TempDir()
+	configuration.Management = managedRouterTestManagementConfiguration()
+	configuration.Management.DatabasePath = filepath.Join(testingInstance.TempDir(), "managed.sqlite")
+	providers := newProviderRegistry(configuration)
+	managedTenants, storeError := newManagedTenantStore(configuration.Management, providers)
+	if storeError != nil {
+		testingInstance.Fatal(storeError)
+	}
+	testingInstance.Cleanup(func() {
+		if err := managedTenants.close(); err != nil {
+			testingInstance.Error(err)
+		}
+	})
+	assets := newTenantAssetStore(configuration.AssetStorePath, 32, configuration.AssetRetentionSeconds)
+	if service, serviceError := newMediaOperationService(configuration, managedTenants, assets, providers, HTTPClient, zap.NewNop().Sugar()); service != nil || !errors.Is(serviceError, ErrInvalidModelCatalog) {
+		testingInstance.Fatalf("service=%v error=%v", service, serviceError)
+	}
 	if router, routerError := buildRouterWithStoreForTest(testingInstance, configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
 		return managedTenants, nil
-	}); router != nil || routerError == nil {
+	}); router != nil || !errors.Is(routerError, ErrInvalidModelCatalog) {
 		testingInstance.Fatalf("router=%v error=%v", router, routerError)
 	}
 }

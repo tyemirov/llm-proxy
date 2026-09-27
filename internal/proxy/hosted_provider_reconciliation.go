@@ -207,10 +207,9 @@ func ReconcileProviderCosts(ctx context.Context, configuration ManagementConfigu
 		if err != nil {
 			return err
 		}
-		encoded, err := json.Marshal(report)
-		if err != nil {
-			return err
-		}
+		// Imported UTC timestamps already passed JSON encoding. The report
+		// adds only closed numeric fields, strings, and the current UTC time.
+		encoded, _ := json.Marshal(report)
 		run = managedProviderReconciliationRunRecord{ID: runID, EvidenceID: evidence.ID, LocalEvidence: local, LocalDigest: report.LocalEvidenceDigest, Report: string(encoded), CreatedAt: report.CreatedAt}
 		if err := tx.Omit(clause.Associations).Create(&run).Error; err != nil {
 			return fmt.Errorf("retain provider reconciliation report: %w", err)
@@ -268,12 +267,8 @@ func compareProviderCosts(tx *gorm.DB, runID string, input providerCostEvidenceI
 			if err != nil {
 				return report, "", err
 			}
-			if response.Rating.ProviderCost != nil {
-				amount, err := parseExactMoney(*response.Rating.ProviderCost)
-				if err != nil {
-					return report, "", err
-				}
-				total.Add(total, amount)
+			if response.providerAmount != nil {
+				total.Add(total, response.providerAmount)
 			} else {
 				report.IncompleteAttempts++
 			}

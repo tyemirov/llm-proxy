@@ -38,8 +38,8 @@ func newPaymentStartupFixture(t *testing.T) paymentStartupFixture {
 
 func (fixture paymentStartupFixture) reject(t *testing.T, configuration Configuration, reason string) {
 	t.Helper()
-	// Occupying the port bounds the public Serve call if construction incorrectly succeeds.
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	// Match Serve's wildcard address so both listeners use the same address family.
+	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
 		t.Fatal(err)
 	}

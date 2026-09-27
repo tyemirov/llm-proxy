@@ -6,12 +6,74 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
+	"gorm.io/gorm"
 )
+
+func TestHostedToolUsageRejectsRedirectWithoutRepeatedPaidWork(t *testing.T) {
+	for _, status := range []int{http.StatusTemporaryRedirect, http.StatusPermanentRedirect} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			database, _, management, _ := newHostedRatingFixture(t)
+			seedHostedFunds(t, database, 100)
+			var calls, redirects atomic.Int64
+			target := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				redirects.Add(1)
+				writer.WriteHeader(http.StatusInternalServerError)
+			}))
+			t.Cleanup(target.Close)
+			upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				calls.Add(1)
+				var payload map[string]json.RawMessage
+				if err := json.NewDecoder(request.Body).Decode(&payload); err != nil || string(payload["max_tool_calls"]) != "2" {
+					t.Errorf("redirected request lost search bound: payload=%v error=%v", payload, err)
+				}
+				writer.Header().Set("Location", target.URL)
+				writer.WriteHeader(status)
+			}))
+			t.Cleanup(upstream.Close)
+			root := t.TempDir()
+			authorize := func(dependencies *hostedTextRequestDependencies) {
+				hostedSearchRatingAuthorization(t)(dependencies)
+				price := dependencies.authorize
+				dependencies.authorize = func(transaction *gorm.DB, request managedJournalRequestRecord, intent hostedCompletionIntent) error {
+					return newHostedFundsAdmission(func(tx *gorm.DB, record managedJournalRequestRecord) error {
+						return price(tx, record, intent)
+					})(transaction, request)
+				}
+			}
+			router, _, providers := newHostedIdentityHTTPHandler(t, database, upstream.URL, root, authorize)
+			providers.openAIClient = NewOpenAIClient(HTTPClient, NewEndpoints())
+			server := httptest.NewServer(router)
+			t.Cleanup(server.Close)
+			server.Client().Transport = hostedIdentityTransport{next: server.Client().Transport}
+			hostedSearchHTTP(t, server, "search-redirect", http.StatusBadGateway)
+			financial := fundsStartupFixture{database: database, management: management, calls: &calls}
+			var retained map[string]any
+			for iteration := range 3 {
+				if iteration > 0 {
+					server.Close()
+					server = newHostedIdentityHTTPServer(t, openJournalTransactionInstance(t, database), upstream.URL, root, authorize)
+				}
+				hostedSearchHTTP(t, server, "search-redirect", http.StatusBadGateway)
+				if calls.Load() != 1 || redirects.Load() != 0 {
+					t.Fatalf("provider redirect repeated work: submissions=%d redirected=%d", calls.Load(), redirects.Load())
+				}
+				assertHostedFundsBalance(t, database, 100, 90)
+				assertFundsCreditRemainder(t, database, "0", "1")
+				current := financial.state(t)
+				if iteration > 1 && !reflect.DeepEqual(retained, current) {
+					t.Fatal("redirect recovery changed financial evidence")
+				}
+				retained = current
+			}
+		})
+	}
+}
 
 func TestHostedToolUsageCountsSearchActions(t *testing.T) {
 	for _, scenario := range []struct {
@@ -20,9 +82,14 @@ func TestHostedToolUsageCountsSearchActions(t *testing.T) {
 	}{
 		{"searches", `[{"type":"web_search_call","id":"ws1","status":"completed","action":{"type":"search","query":"private query"}},{"type":"web_search_call","id":"ws2","status":"completed","action":{"type":"search","queries":["private query","second query"]}}]`, "2", ""},
 		{"other_actions", `[{"type":"web_search_call","id":"ws1","status":"completed","action":{"type":"open_page","url":"https://private.example"}},{"type":"web_search_call","id":"ws2","status":"completed","action":{"type":"find_in_page","pattern":"private pattern"}}]`, "0", ""},
+		{"mixed_output", `[{"type":"reasoning","id":"reasoning1","summary":[]},{"type":"web_search_call","id":"ws1","status":"completed","action":{"type":"search","query":"private query"}},{"type":"message","id":"message1","role":"assistant","content":[{"type":"output_text","text":"retained answer"}]}]`, "1", ""},
+		{"missing_type", `[{"id":"ws1","status":"completed","action":{"type":"search"}}]`, "", journalQuantityInvalid},
+		{"missing_action", `[{"type":"web_search_call","id":"ws1","status":"completed"}]`, "", journalQuantityInvalid},
+		{"missing_identity", `[{"type":"web_search_call","status":"completed","action":{"type":"search"}}]`, "", journalQuantityInvalid},
 		{"empty", `[]`, "0", ""},
 		{"missing", `null`, "", journalQuantityNotReported},
 		{"wrong_shape", `{}`, "", journalQuantityInvalid},
+		{"malformed_json", `[`, "", journalQuantityInvalid},
 		{"unfinished", `[{"type":"web_search_call","id":"ws1","status":"in_progress","action":{"type":"search"}}]`, "", journalQuantityNotReported},
 		{"failed", `[{"type":"web_search_call","id":"ws1","status":"failed","action":{"type":"search"}}]`, "", journalQuantityNotReported},
 		{"unknown_action", `[{"type":"web_search_call","id":"ws1","status":"completed","action":{"type":"future_action"}}]`, "", journalQuantityUnsupported},
@@ -46,8 +113,10 @@ func TestHostedToolUsageCountsSearchActions(t *testing.T) {
 			}))
 			t.Cleanup(upstream.Close)
 			server := newHostedIdentityHTTPServer(t, database, upstream.URL, t.TempDir(), hostedSearchRatingAuthorization(t))
-			if scenario.name == "wrong_shape" {
-				hostedSearchHTTP(t, server, "tool-usage", http.StatusBadGateway)
+			if scenario.name == "wrong_shape" || scenario.name == "malformed_json" {
+				for range 2 {
+					hostedSearchHTTP(t, server, "tool-usage", http.StatusBadGateway)
+				}
 			} else {
 				for range 2 {
 					hostedSearchHTTP(t, server, "tool-usage", http.StatusOK)

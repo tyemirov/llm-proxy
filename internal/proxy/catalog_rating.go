@@ -82,6 +82,7 @@ var catalogRatingUnits = map[string]catalogRatingUnit{
 }
 
 type catalogSnapshotComponent struct {
+	origin  *catalogPriceOrigin
 	binding CatalogRateBinding
 	rates   []CatalogPriceRate
 	unit    catalogRatingUnit
@@ -170,9 +171,9 @@ func (service CatalogService) newRatingSnapshot(provider, model, operation strin
 			return nil, fmt.Errorf("%w: missing component=%s", ErrCatalogRatingUnavailable, rate.Component)
 		}
 	}
-	if err := validateRatingRules(excludedComponents, zeroDimensions, dimensions, components); err != nil {
-		return nil, err
-	}
+	// Exclusions and zero dimensions come only from the closed native meter
+	// definitions. Public bindings have neither; persisted rules are validated
+	// when restoreHostedPriceSnapshot reads them.
 	if descriptor.MinimumCharge != nil && descriptor.MinimumCharge.Unit != "USD/request" {
 		return nil, fmt.Errorf("%w: minimum charge unit=%s", ErrCatalogRatingUnavailable, descriptor.MinimumCharge.Unit)
 	}
@@ -406,11 +407,21 @@ type CatalogAuthorizedMaximum struct {
 	ReservedCents  int64      `json:"reserved_cents,string"`
 }
 
+type catalogAuthorizedMaximum struct {
+	CatalogAuthorizedMaximum
+	customerCharge *big.Rat
+}
+
 // MaximumCharge includes every component and each authorized attempt.
 // Upper bounds never establish cache hits or other inclusive discounts.
 func (snapshot *CatalogRatingSnapshot) MaximumCharge(bounds []CatalogUsageBound, attempts uint32) (CatalogAuthorizedMaximum, error) {
+	maximum, err := snapshot.authorizedMaximum(bounds, attempts)
+	return maximum.CatalogAuthorizedMaximum, err
+}
+
+func (snapshot *CatalogRatingSnapshot) authorizedMaximum(bounds []CatalogUsageBound, attempts uint32) (catalogAuthorizedMaximum, error) {
 	if attempts == 0 || snapshot == nil || len(snapshot.components) == 0 {
-		return CatalogAuthorizedMaximum{}, fmt.Errorf("%w: snapshot and positive attempt limit required", ErrCatalogRatingInvalid)
+		return catalogAuthorizedMaximum{}, fmt.Errorf("%w: snapshot and positive attempt limit required", ErrCatalogRatingInvalid)
 	}
 	quantities := make([]CatalogUsageQuantity, len(bounds))
 	for index, bound := range bounds {
@@ -418,42 +429,41 @@ func (snapshot *CatalogRatingSnapshot) MaximumCharge(bounds []CatalogUsageBound,
 	}
 	measured, err := ratingMeasurements(quantities)
 	if err != nil {
-		return CatalogAuthorizedMaximum{}, err
+		return catalogAuthorizedMaximum{}, err
 	}
 	if err := snapshot.combineRatingDimensions(measured); err != nil {
-		return CatalogAuthorizedMaximum{}, err
+		return catalogAuthorizedMaximum{}, err
 	}
 	for _, dimension := range snapshot.zeroDimensions {
 		quantity, found := measured[dimension]
 		if !found || quantity.Value != "0" {
-			return CatalogAuthorizedMaximum{}, fmt.Errorf("%w: dimension=%s must remain zero", ErrCatalogRatingUnavailable, dimension)
+			return catalogAuthorizedMaximum{}, fmt.Errorf("%w: dimension=%s must remain zero", ErrCatalogRatingUnavailable, dimension)
 		}
 	}
 	selected := make([]catalogSelectedRate, 0, len(snapshot.components))
 	for _, component := range snapshot.components {
 		bound, found := measured[component.binding.Dimension]
 		if !found || bound.UnknownReason != "" {
-			return CatalogAuthorizedMaximum{}, fmt.Errorf("%w: unbounded usage", ErrCatalogRatingUnavailable)
+			return catalogAuthorizedMaximum{}, fmt.Errorf("%w: unbounded usage", ErrCatalogRatingUnavailable)
 		}
 		if bound.Unit != component.unit.quantity {
-			return CatalogAuthorizedMaximum{}, fmt.Errorf("%w: incompatible bound unit", ErrCatalogRatingInvalid)
+			return catalogAuthorizedMaximum{}, fmt.Errorf("%w: incompatible bound unit", ErrCatalogRatingInvalid)
 		}
 		rate, err := maximumCatalogRate(component, measured)
 		if err != nil {
-			return CatalogAuthorizedMaximum{}, err
+			return catalogAuthorizedMaximum{}, err
 		}
 		selected = append(selected, catalogSelectedRate{binding: component.binding, rate: rate, unit: component.unit})
 	}
-	calculation, err := snapshot.rateSelectedMeasurements(measured, selected)
-	if err != nil {
-		return CatalogAuthorizedMaximum{}, err
-	}
+	// Bounds are nonnegative disjoint roots. Compound dimensions have unique
+	// ownership, so no selected child can subtract from another bound.
+	calculation, _ := snapshot.rateSelectedMeasurements(measured, selected)
 	maximum := new(big.Rat).Mul(calculation.customerCharge, new(big.Rat).SetInt64(int64(attempts)))
 	reserved, err := reserveUSDCents(maximum)
 	if err != nil {
-		return CatalogAuthorizedMaximum{}, err
+		return catalogAuthorizedMaximum{}, err
 	}
-	return CatalogAuthorizedMaximum{Attempts: attempts, CustomerCharge: ratingMoney(maximum), ReservedCents: reserved}, nil
+	return catalogAuthorizedMaximum{CatalogAuthorizedMaximum{Attempts: attempts, CustomerCharge: ratingMoney(maximum), ReservedCents: reserved}, maximum}, nil
 }
 
 func maximumCatalogRate(component catalogSnapshotComponent, measured map[string]journalQuantity) (CatalogPriceRate, error) {

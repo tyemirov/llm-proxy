@@ -343,7 +343,7 @@ func (service *managementService) createHostedGrantHandler() gin.HandlerFunc {
 			writeHostedAccessError(ctx, err)
 			return
 		}
-		intent, err := service.hostedCreationIntent(ctx, hostedCreationGrant, request)
+		intent, err := newHostedCreationIntent(service, ctx, hostedCreationGrant, request)
 		if err != nil {
 			writeHostedAccessError(ctx, err)
 			return
@@ -371,11 +371,7 @@ func (service *managementService) createHostedGrantHandler() gin.HandlerFunc {
 			writeHostedAccessError(ctx, err)
 			return
 		}
-		offerings, err := json.Marshal(request.Offerings)
-		if err != nil {
-			writeHostedAccessError(ctx, err)
-			return
-		}
+		offerings, _ := json.Marshal(request.Offerings)
 		now := service.store.now().UTC()
 		record := managedHostedGrantRecord{ID: id, BillingAccountID: request.BillingAccountID, TenantID: request.TenantID,
 			PlatformConnectionID: connection.ID, Provider: connection.Provider, CatalogRevision: request.CatalogRevision,
@@ -383,11 +379,7 @@ func (service *managementService) createHostedGrantHandler() gin.HandlerFunc {
 		principal := managementPrincipalFromContext(ctx)
 		response := hostedGrantResponse(hostedGrant{record: record, offerings: request.Offerings}, principal)
 		intent.ResourceID = id
-		intent.Response, err = json.Marshal(response)
-		if err != nil {
-			writeHostedAccessError(ctx, err)
-			return
-		}
+		intent.Response, _ = json.Marshal(response)
 		audit := managedHostedGrantRevisionRecord{GrantID: id, Revision: 1, State: hostedGrantActive, ActorUserID: principal.userID, Reason: request.Reason, CreatedAt: now}
 		receipt, err = service.store.database.createHostedGrant(ctx.Request.Context(), record, audit, intent)
 		if err != nil {

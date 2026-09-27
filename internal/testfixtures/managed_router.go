@@ -6,10 +6,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -71,7 +73,11 @@ func BuildRouter(testingInstance testing.TB, configuration proxy.Configuration, 
 	if err != nil {
 		return nil, err
 	}
-	testingInstance.Cleanup(router.Close)
+	testingInstance.Cleanup(func() {
+		if err := router.Close(); err != nil {
+			testingInstance.Error(err)
+		}
+	})
 	return router.Engine, nil
 }
 
@@ -85,11 +91,11 @@ func BuildManagedRouter(testingInstance testing.TB, configuration proxy.Configur
 }
 
 // ProvisionManagedRouter provisions one tenant and returns the reusable persistent router configuration.
-func ProvisionManagedRouter(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger, tenant ManagedTenant) (proxy.Configuration, error) {
+func ProvisionManagedRouter(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger, tenant ManagedTenant) (_ proxy.Configuration, provisionError error) {
 	testingInstance.Helper()
 	databasePath := configuration.Management.DatabasePath
 	if databasePath == "" {
-		databasePath = "file:managed-router-" + rand.Text() + "?mode=memory&cache=shared"
+		databasePath = filepath.Join(testingInstance.TempDir(), "managed-router.sqlite")
 	}
 	configuration.Management = managedRouterConfiguration(databasePath)
 	originalHTTPClient := proxy.HTTPClient
@@ -103,7 +109,7 @@ func ProvisionManagedRouter(testingInstance testing.TB, configuration proxy.Conf
 		proxy.HTTPClient = originalHTTPClient
 		return proxy.Configuration{}, buildError
 	}
-	defer bootstrap.Close()
+	defer func() { provisionError = errors.Join(provisionError, bootstrap.Close()) }()
 	bootstrapRouter := bootstrap.Engine
 	sessionCookie, cookieError := managedRouterSessionCookie()
 	if cookieError != nil {

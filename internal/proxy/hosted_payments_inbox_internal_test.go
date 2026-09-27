@@ -18,6 +18,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tyemirov/llm-proxy/internal/openapitest"
+	"github.com/tyemirov/utils/billing"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -31,10 +32,15 @@ func paymentInboxTestServer(t *testing.T, database *gormManagedTenantDatabase, e
 
 func paymentInboxServerWithSecret(t *testing.T, database *gormManagedTenantDatabase, environment, account, secret string) *httptest.Server {
 	t.Helper()
-	inbox, err := newPaddlePaymentInbox(database, environment, account, secret, time.Minute)
+	catalog, err := newFundingCatalog(environment, account, "inbox-test-supplier", []fundingOfferInput{{Code: "five", PriceID: "pri_01hv8x2axb33yr5y238zfwcn5p", FundingCents: 500}})
 	if err != nil {
 		t.Fatal(err)
 	}
+	verifier, err := billing.NewPaddleWebhookVerifier(secret, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inbox := newPaddlePaymentInbox(database, catalog, verifier)
 	router := gin.New()
 	registerPaddlePaymentRoutes(router, inbox)
 	server := httptest.NewServer(router)

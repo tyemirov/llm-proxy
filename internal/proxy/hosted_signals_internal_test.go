@@ -139,6 +139,44 @@ func TestHostedSignalsDoNotCreateMissingDatabase(t *testing.T) {
 	}
 }
 
+func TestHostedSignalsPathFailuresPreserveFundedDatabase(t *testing.T) {
+	for _, scenario := range []struct{ name, path, failure string }{
+		{"empty-path", "", "financial signals require the managed database path"},
+		{"unavailable-working-directory", "relative.sqlite", "financial"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			fixture := newFundsStartupFixture(t, startupCompleteUsage)
+			databasePath := hostedSignalsDatabasePath(t, fixture.database)
+			before := fixture.state(t)
+			baseline := readHostedSignalsFixture(t, fixture.database)
+			workingDirectory, err := os.Getwd()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if scenario.name == "unavailable-working-directory" {
+				directory := t.TempDir()
+				t.Chdir(directory)
+				if err := os.Remove(directory); err != nil {
+					t.Fatal(err)
+				}
+			}
+			report, err := ReadHostedFinancialSignals(t.Context(), scenario.path)
+			if err == nil || !strings.Contains(err.Error(), scenario.failure) || !reflect.DeepEqual(report, HostedFinancialSignals{}) {
+				t.Fatalf("invalid signal path returned report=%+v error=%v", report, err)
+			}
+			report, err = ReadHostedFinancialSignals(t.Context(), databasePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Chdir(workingDirectory)
+			report.ObservedAt = baseline.ObservedAt
+			if !reflect.DeepEqual(baseline, report) || !reflect.DeepEqual(before, fixture.state(t)) || fixture.calls.Load() != 1 {
+				t.Fatal("signal path failure changed financial records or provider work")
+			}
+		})
+	}
+}
+
 func TestHostedSignalsUseLatestProviderComparisonAndRetainExposure(t *testing.T) {
 	database, intent, _, reserve := newHostedRatingFixture(t)
 	seedHostedFunds(t, database, 500)

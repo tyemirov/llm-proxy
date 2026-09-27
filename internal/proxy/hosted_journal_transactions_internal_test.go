@@ -18,6 +18,8 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+const hostedJournalFixtureGrantID = "grant-11111111111111111111111111111111"
+
 func newJournalTransactionFixture(t *testing.T) (*gormManagedTenantDatabase, func(string) journalAdmissionIntent, func(string) map[string]any) {
 	t.Helper()
 	database, intent, read, _ := newJournalTransactionHTTPFixture(t)
@@ -32,9 +34,9 @@ func newJournalTransactionHTTPFixture(t *testing.T) (*gormManagedTenantDatabase,
 		&managedBillingAccountRecord{ID: "billing-journal", OwnerUserID: "owner", Currency: "USD", CreationKeyDigest: strings.Repeat("a", 64), CreatedAt: now},
 		&managedPlatformConnectionRecord{ID: "platform-journal", Provider: "openai", Name: "Journal", Version: 1, CreatedAt: now, UpdatedAt: now},
 		&managedPlatformCredentialRecord{ConnectionID: "platform-journal", Version: 1, Fields: []byte(`{}`), QualifiedAt: now, CreatedAt: now},
-		&managedHostedGrantRecord{ID: "grant-journal", BillingAccountID: "billing-journal", TenantID: "managed-first", PlatformConnectionID: "platform-journal", Provider: "openai", CatalogRevision: "journal-catalog", Offerings: []byte(`[{"model":"gpt-4.1","operations":["text"]}]`), State: hostedGrantActive, Revision: 1, CreatedAt: now, UpdatedAt: now},
-		&managedHostedGrantRevisionRecord{GrantID: "grant-journal", Revision: 1, State: hostedGrantActive, ActorUserID: "operator", Reason: "Journal fixture", CreatedAt: now},
-		&managedHostedTenantAssignmentRecord{TenantID: "managed-first", ProviderID: "openai", GrantID: "grant-journal", CreatedAt: now},
+		&managedHostedGrantRecord{ID: hostedJournalFixtureGrantID, BillingAccountID: "billing-journal", TenantID: "managed-first", PlatformConnectionID: "platform-journal", Provider: "openai", CatalogRevision: "journal-catalog", Offerings: []byte(`[{"model":"gpt-4.1","operations":["text"]}]`), State: hostedGrantActive, Revision: 1, CreatedAt: now, UpdatedAt: now},
+		&managedHostedGrantRevisionRecord{GrantID: hostedJournalFixtureGrantID, Revision: 1, State: hostedGrantActive, ActorUserID: "operator", Reason: "Journal fixture", CreatedAt: now},
+		&managedHostedTenantAssignmentRecord{TenantID: "managed-first", ProviderID: "openai", GrantID: hostedJournalFixtureGrantID, CreatedAt: now},
 		&managedProviderProfileRecord{TenantID: "managed-first", ProviderID: "openai", TextModel: "gpt-4.1", CreatedAt: now, UpdatedAt: now},
 	} {
 		if err := database.database.Omit(clause.Associations).Create(record).Error; err != nil {
@@ -111,7 +113,7 @@ func TestHostedJournalAdmissionPinsAuthorityAndArbitratesRetries(t *testing.T) {
 	if _, err := database.admitJournalRequest(t.Context(), changed, reserve); !errors.Is(err, errUsageJournalConflict) {
 		t.Fatalf("changed intent error=%v", err)
 	}
-	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-journal").Update("state", hostedGrantSuspended).Error; err != nil {
+	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", hostedJournalFixtureGrantID).Update("state", hostedGrantSuspended).Error; err != nil {
 		t.Fatal(err)
 	}
 	if replay, err := database.admitJournalRequest(t.Context(), intent("same-key"), reserve); err != nil || replay.ID != records[0].ID {

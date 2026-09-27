@@ -35,6 +35,12 @@ func TestHostedTextIdentityReplaysOneExecution(t *testing.T) {
 	}))
 	t.Cleanup(upstream.Close)
 	server := newHostedIdentityHTTPServer(t, database, upstream.URL, t.TempDir())
+	for range 2 {
+		hostedIdentityStatusHTTP(t, server, "repeat", http.StatusNotFound)
+		if calls.Load() != 0 || len(read("")["requests"].([]any)) != 0 {
+			t.Fatal("absent request lookup created work or a journal identity")
+		}
+	}
 	first := hostedIdentityHTTP(t, server, "repeat", "private prompt", http.StatusOK)
 	second := hostedIdentityHTTP(t, server, "repeat", "private prompt", http.StatusOK)
 	if first != "retained answer" || second != first || calls.Load() != 1 {
@@ -71,7 +77,7 @@ func TestHostedTextIdentitySurvivesRevocationAndResponseExpiry(t *testing.T) {
 	var responses *structuredRequestStore
 	server := newHostedIdentityHTTPServer(t, database, upstream.URL, t.TempDir(), func(service *hostedTextRequestDependencies) { responses = service.responses })
 	hostedIdentityHTTP(t, server, "expiry", "private prompt", http.StatusOK)
-	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-journal").Update("state", hostedGrantRevoked).Error; err != nil {
+	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", hostedJournalFixtureGrantID).Update("state", hostedGrantRevoked).Error; err != nil {
 		t.Fatal(err)
 	}
 	hostedIdentityHTTP(t, server, "expiry", "private prompt", http.StatusOK)

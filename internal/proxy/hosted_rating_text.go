@@ -24,14 +24,27 @@ var textPriceDimensions = map[textPriceComponent]string{
 	{"prompt_cache_write_tokens", "write_1h"}: "cache_write_1h_tokens",
 }
 
+// Configuration constructs this scope after it resolves the offering and
+// validates the selected service conditions and attempt limit.
+type hostedTextPriceScope struct {
+	catalog         CatalogService
+	offering        ProviderOffering
+	conditions      CatalogPriceConditions
+	maximumAttempts uint32
+}
+
 // The model ceilings cover each continuation, including a larger output limit
 // after an empty response. Cache upper bounds never assume a cache discount.
-func newHostedTextPriceAdmission(service CatalogService, request chatRequestParameters, acceptedAt time.Time, conditions CatalogPriceConditions, attempts uint32) (journalReservation, error) {
-	provider, model := request.provider.identifier.string(), request.model.identifier.string()
-	offering, err := service.ResolveOffering(provider, model)
+func (scope *hostedTextPriceScope) admission(codec string, acceptedAt time.Time, webSearch bool) (journalReservation, error) {
+	snapshot, bounds, err := scope.pricing(codec, acceptedAt, webSearch)
 	if err != nil {
 		return nil, err
 	}
+	return newHostedPriceAdmission(snapshot, bounds, scope.maximumAttempts)
+}
+
+func (scope *hostedTextPriceScope) pricing(codec string, acceptedAt time.Time, webSearch bool) (*CatalogRatingSnapshot, []CatalogUsageBound, error) {
+	offering := scope.offering
 	inputCeiling := 0
 	searchCeiling := 0
 	for _, limit := range offering.Limits {
@@ -47,21 +60,15 @@ func newHostedTextPriceAdmission(service CatalogService, request chatRequestPara
 		}
 	}
 	if inputCeiling <= 0 || offering.OutputTokenLimit <= 0 {
-		return nil, fmt.Errorf("%w: catalog input and output token ceilings required", ErrCatalogRatingUnavailable)
+		return nil, nil, fmt.Errorf("%w: catalog input and output token ceilings required", ErrCatalogRatingUnavailable)
 	}
-	if request.maxTokens != nil && (*request.maxTokens <= 0 || *request.maxTokens > offering.OutputTokenLimit) {
-		return nil, fmt.Errorf("%w: requested output exceeds catalog ceiling", ErrCatalogRatingInvalid)
+	profile := newTextJournalMeter(codec)
+	if webSearch && (profile.codec != CatalogProtocolOpenAIResponses || searchCeiling <= 0) {
+		return nil, nil, fmt.Errorf("%w: provider tool cost requires an enforced call bound", ErrCatalogRatingUnavailable)
 	}
-	profile, err := newTextJournalMeter(request.provider.activeTransport.responseCodec)
+	snapshot, err := profile.ratingSnapshot(scope, acceptedAt, webSearch)
 	if err != nil {
-		return nil, err
-	}
-	if request.webSearchEnabled && (profile.codec != CatalogProtocolOpenAIResponses || searchCeiling <= 0) {
-		return nil, fmt.Errorf("%w: provider tool cost requires an enforced call bound", ErrCatalogRatingUnavailable)
-	}
-	snapshot, err := profile.ratingSnapshot(service, provider, model, acceptedAt, conditions, request.webSearchEnabled)
-	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	bounds := make([]CatalogUsageBound, 0, len(snapshot.components))
 	for _, component := range snapshot.components {
@@ -71,6 +78,8 @@ func newHostedTextPriceAdmission(service CatalogService, request chatRequestPara
 			}
 			var ceiling int
 			unit := "token"
+			// ratingSnapshot binds only textPriceDimensions, separate reasoning,
+			// and the explicitly priced search-call dimension.
 			switch dimension {
 			case "input_tokens", "cache_read_tokens", "cache_write_tokens", "cache_write_5m_tokens", "cache_write_1h_tokens":
 				ceiling = inputCeiling
@@ -78,11 +87,9 @@ func newHostedTextPriceAdmission(service CatalogService, request chatRequestPara
 				ceiling = offering.OutputTokenLimit
 			case "web_search_calls":
 				ceiling, unit = searchCeiling, "call"
-			default:
-				return nil, fmt.Errorf("%w: unbounded text dimension=%s", ErrCatalogRatingUnavailable, dimension)
 			}
 			maximum := strconv.Itoa(ceiling)
-			if request.webSearchEnabled && (dimension == "input_tokens" || dimension == "cache_read_tokens") {
+			if webSearch && (dimension == "input_tokens" || dimension == "cache_read_tokens") {
 				passes := new(big.Int).Add(big.NewInt(int64(searchCeiling)), big.NewInt(1))
 				maximum = passes.Mul(passes, big.NewInt(int64(ceiling))).String()
 			}
@@ -92,14 +99,12 @@ func newHostedTextPriceAdmission(service CatalogService, request chatRequestPara
 	for _, dimension := range snapshot.zeroDimensions {
 		bounds = append(bounds, CatalogUsageBound{Dimension: dimension, Unit: "token", Maximum: "0"})
 	}
-	return newHostedPriceAdmission(snapshot, bounds, attempts)
+	return snapshot, bounds, nil
 }
 
-func (profile journalTokenMeter) ratingSnapshot(service CatalogService, provider, model string, acceptedAt time.Time, conditions CatalogPriceConditions, webSearch bool) (*CatalogRatingSnapshot, error) {
-	if conditions != categoricalPriceConditions(conditions) || conditions.CacheClass != "" {
-		return nil, fmt.Errorf("%w: text conditions must select a service without token ranges or cache classes", ErrCatalogRatingInvalid)
-	}
-	descriptor, found := service.catalog.prices[catalogPriceIdentifier(provider, model, ModelOperationText)]
+func (profile journalTokenMeter) ratingSnapshot(scope *hostedTextPriceScope, acceptedAt time.Time, webSearch bool) (*CatalogRatingSnapshot, error) {
+	provider, model := scope.offering.Provider, scope.offering.Model
+	descriptor, found := scope.catalog.catalog.prices[catalogPriceIdentifier(provider, model, ModelOperationText)]
 	if !found || !descriptor.Available {
 		return nil, fmt.Errorf("%w: text price unavailable", ErrCatalogRatingUnavailable)
 	}
@@ -142,7 +147,7 @@ func (profile journalTokenMeter) ratingSnapshot(service CatalogService, provider
 		categorical := categoricalPriceConditions(rate.Conditions)
 		base := categorical
 		base.CacheClass = ""
-		if base != conditions || !catalogPriceActiveAt(rate.Conditions, acceptedAt) {
+		if base != scope.conditions || !catalogPriceActiveAt(rate.Conditions, acceptedAt) {
 			continue
 		}
 		dimension := textPriceDimensions[textPriceComponent{rate.Component, categorical.CacheClass}]
@@ -163,5 +168,5 @@ func (profile journalTokenMeter) ratingSnapshot(service CatalogService, provider
 	if webSearch && !searchPriced {
 		return nil, fmt.Errorf("%w: search call rate required", ErrCatalogRatingUnavailable)
 	}
-	return service.newRatingSnapshot(provider, model, ModelOperationText, acceptedAt, bindings, excludedComponents, zeroDimensions)
+	return scope.catalog.newRatingSnapshot(provider, model, ModelOperationText, acceptedAt, bindings, excludedComponents, zeroDimensions)
 }

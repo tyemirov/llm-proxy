@@ -5,8 +5,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
+
+	"gorm.io/gorm"
 )
 
 func TestHostedUsageSurvivesTelemetrySaturation(t *testing.T) {
@@ -19,18 +23,39 @@ func TestHostedUsageSurvivesTelemetrySaturation(t *testing.T) {
 	}))
 	t.Cleanup(upstream.Close)
 	router, service, _ := newHostedIdentityHTTPHandler(t, database, upstream.URL, t.TempDir())
-	// Model a full queue whose consumer cannot make progress. The real writer
-	// still receives HTTP telemetry and applies its normal overflow behavior.
+	// Block the real storage boundary while HTTP fills the bounded queue.
+	started, release := make(chan struct{}), make(chan struct{})
+	var blockOnce sync.Once
+	if err := database.database.Callback().Create().Before("gorm:create").Register("test:telemetry_saturation", func(tx *gorm.DB) {
+		if tx.Statement.Table == managedUsageEventTable {
+			blockOnce.Do(func() {
+				close(started)
+				select {
+				case <-release:
+				case <-tx.Statement.Context.Done():
+					tx.AddError(tx.Statement.Context.Err())
+				}
+			})
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { close(release) })
 	writer := newManagedUsageWriter(service.store, 1)
-	writer.queue <- managedUsageWrite{}
-	writer.startOnce.Do(func() {})
 	service.store.usageWriter = writer
 	server := httptest.NewServer(router)
 	server.Client().Transport = hostedIdentityTransport{next: server.Client().Transport}
 	t.Cleanup(server.Close)
-	for range 2 {
+	for index := range 3 {
 		if body := hostedIdentityHTTP(t, server, "telemetry-full", "private prompt", http.StatusOK); body != "saved answer" {
 			t.Fatalf("hosted result=%q", body)
+		}
+		if index == 0 {
+			select {
+			case <-started:
+			case <-time.After(5 * time.Second):
+				t.Fatal("telemetry did not reach the storage boundary")
+			}
 		}
 	}
 	if calls.Load() != 1 || len(writer.queue) != 1 {

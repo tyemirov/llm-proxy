@@ -33,64 +33,12 @@ func TestHostedRuntimeDictionaryFundsAndSettlement(t *testing.T) {
 		fmt.Fprint(writer, `{"id":"native-dictionary","version_id":"native-version","name":"Names","description":"private dictionary","created_by":"provider-user","creation_time_unix":1,"version_rules_num":1}`)
 	}))
 	t.Cleanup(upstream.Close)
-	root := t.TempDir()
-	_, management, _ := newHostedIdentityHTTPHandler(t, database, upstream.URL, root)
-	var source struct{ File string }
-	if err := database.database.Raw("SELECT file FROM pragma_database_list WHERE name = 'main'").Scan(&source).Error; err != nil {
-		t.Fatal(err)
-	}
-	management.configuration.DatabasePath = source.File
-	catalog := internalCanonicalProviderCatalog()
-	for index := range catalog.modelCatalog.Providers {
-		provider := &catalog.modelCatalog.Providers[index]
-		if provider.ID != "elevenlabs" {
-			continue
-		}
-		for serviceIndex := range provider.Services {
-			service := &provider.Services[serviceIndex]
-			if service.Operation == ModelOperationPronunciationDictionaryCreation {
-				// This fixture price is not a supplier rate or a production activation.
-				service.Price = ProviderCatalogPrice{Operation: service.Operation, Available: true, Source: "https://example.com/controlled-service-rates", LastVerified: "2026-09-23", Rates: []CatalogPriceRate{{Component: "service_calls", Currency: "USD", Rate: "0.5", Unit: "USD/call", Conditions: CatalogPriceConditions{EffectiveFrom: "2026-09-01T00:00:00Z"}}}}
-			}
-		}
-	}
-	for _, schema := range []*ProviderCatalogSchema{&catalog.schema, &catalog.runtimeSchema} {
-		for index := range schema.Providers {
-			provider := &schema.Providers[index]
-			if provider.ID != "elevenlabs" {
-				continue
-			}
-			for transport := range provider.Transports {
-				if provider.Transports[transport].Endpoint.Protocol == CatalogEndpointProtocolHTTP {
-					provider.Transports[transport].Endpoint.DefaultBaseURL = upstream.URL
-				}
-			}
-		}
-	}
-	key, err := management.store.providerKeyCipher.encryptConnection(rand.Reader, platformCredentialReference("platform-service", 1), "elevenlabs", CatalogCredentialAPIKey, "hosted-service-secret")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fields, err := json.Marshal(map[string]string{CatalogCredentialAPIKey: key})
-	if err != nil {
-		t.Fatal(err)
-	}
-	now := time.Now().UTC()
-	for _, record := range []any{
-		&managedPlatformConnectionRecord{ID: "platform-service", Provider: "elevenlabs", Name: "Service", Version: 1, CreatedAt: now, UpdatedAt: now},
-		&managedPlatformCredentialRecord{ConnectionID: "platform-service", Version: 1, Fields: fields, QualifiedAt: now, CreatedAt: now},
-		&managedHostedGrantRecord{ID: "grant-service", BillingAccountID: "billing-journal", TenantID: "managed-first", PlatformConnectionID: "platform-service", Provider: "elevenlabs", CatalogRevision: catalog.modelCatalog.Revision, Offerings: []byte(`[{"operations":["pronunciation_dictionary_creation"]}]`), State: hostedGrantActive, Revision: 1, CreatedAt: now, UpdatedAt: now},
-		&managedHostedGrantRevisionRecord{GrantID: "grant-service", Revision: 1, State: hostedGrantActive, ActorUserID: "operator", Reason: "Service acceptance", CreatedAt: now},
-		&managedHostedTenantAssignmentRecord{TenantID: "managed-first", ProviderID: "elevenlabs", GrantID: "grant-service", CreatedAt: now},
-		&managedProviderProfileRecord{TenantID: "managed-first", ProviderID: "elevenlabs", CreatedAt: now, UpdatedAt: now},
-	} {
-		if err := database.database.Omit(clause.Associations).Create(record).Error; err != nil {
-			t.Fatal(err)
-		}
-	}
-	configuration := withInternalUpstreamCapacity(t, Configuration{Management: management.configuration, ProviderCatalog: catalog, AssetStorePath: root, Hosted: &HostedConfiguration{Offerings: []HostedOfferingConfiguration{{Provider: "elevenlabs", Operation: ModelOperationPronunciationDictionaryCreation, MaximumAttempts: 1}}}})
+	configuration, management := hostedRuntimeServiceConfiguration(t, database, ModelOperationPronunciationDictionaryCreation, upstream.URL, func(service *ProviderCatalogService) {
+		// This fixture price is not a supplier rate or a production activation.
+		service.Price = ProviderCatalogPrice{Operation: service.Operation, Available: true, Source: "https://example.com/controlled-service-rates", LastVerified: "2026-09-23", Rates: []CatalogPriceRate{{Component: "service_calls", Currency: "USD", Rate: "0.5", Unit: "USD/call", Conditions: CatalogPriceConditions{EffectiveFrom: "2026-09-01T00:00:00Z"}}}}
+	})
 	application, err := buildProxyApplicationForTest(t, configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
-		return management.store, nil
+		return management, nil
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -181,4 +129,66 @@ func TestHostedRuntimeDictionaryFundsAndSettlement(t *testing.T) {
 		}
 	}
 	assertFundsCreditRemainder(t, database, "0", "1")
+}
+
+const hostedRuntimeServiceGrantID = "grant-33333333333333333333333333333333"
+
+func hostedRuntimeServiceConfiguration(t *testing.T, database *gormManagedTenantDatabase, operation, upstreamURL string, configure func(*ProviderCatalogService)) (Configuration, *managedTenantStore) {
+	t.Helper()
+	root := t.TempDir()
+	_, management, _ := newHostedIdentityHTTPHandler(t, database, upstreamURL, root)
+	var source struct{ File string }
+	if err := database.database.Raw("SELECT file FROM pragma_database_list WHERE name = 'main'").Scan(&source).Error; err != nil {
+		t.Fatal(err)
+	}
+	management.configuration.DatabasePath = source.File
+	catalog := internalCanonicalProviderCatalog()
+	for index := range catalog.modelCatalog.Providers {
+		provider := &catalog.modelCatalog.Providers[index]
+		if provider.ID != "elevenlabs" {
+			continue
+		}
+		for serviceIndex := range provider.Services {
+			service := &provider.Services[serviceIndex]
+			if service.Operation == operation {
+				configure(service)
+			}
+		}
+	}
+	for _, schema := range []*ProviderCatalogSchema{&catalog.schema, &catalog.runtimeSchema} {
+		for index := range schema.Providers {
+			provider := &schema.Providers[index]
+			if provider.ID != "elevenlabs" {
+				continue
+			}
+			for transport := range provider.Transports {
+				if provider.Transports[transport].Endpoint.Protocol == CatalogEndpointProtocolHTTP {
+					provider.Transports[transport].Endpoint.DefaultBaseURL = upstreamURL
+				}
+			}
+		}
+	}
+	key, err := management.store.providerKeyCipher.encryptConnection(rand.Reader, platformCredentialReference("platform-service", 1), "elevenlabs", CatalogCredentialAPIKey, "hosted-service-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields, err := json.Marshal(map[string]string{CatalogCredentialAPIKey: key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	for _, record := range []any{
+		&managedPlatformConnectionRecord{ID: "platform-service", Provider: "elevenlabs", Name: "Service", Version: 1, CreatedAt: now, UpdatedAt: now},
+		&managedPlatformCredentialRecord{ConnectionID: "platform-service", Version: 1, Fields: fields, QualifiedAt: now, CreatedAt: now},
+		&managedHostedGrantRecord{ID: hostedRuntimeServiceGrantID, BillingAccountID: "billing-journal", TenantID: "managed-first", PlatformConnectionID: "platform-service", Provider: "elevenlabs", CatalogRevision: catalog.modelCatalog.Revision, Offerings: []byte(fmt.Sprintf(`[{"operations":[%q]}]`, operation)), State: hostedGrantActive, Revision: 1, CreatedAt: now, UpdatedAt: now},
+		&managedHostedGrantRevisionRecord{GrantID: hostedRuntimeServiceGrantID, Revision: 1, State: hostedGrantActive, ActorUserID: "operator", Reason: "Service acceptance", CreatedAt: now},
+		&managedHostedTenantAssignmentRecord{TenantID: "managed-first", ProviderID: "elevenlabs", GrantID: hostedRuntimeServiceGrantID, CreatedAt: now},
+		&managedProviderProfileRecord{TenantID: "managed-first", ProviderID: "elevenlabs", CreatedAt: now, UpdatedAt: now},
+	} {
+		if err := database.database.Omit(clause.Associations).Create(record).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	configuration := withInternalUpstreamCapacity(t, Configuration{Management: management.configuration, ProviderCatalog: catalog, AssetStorePath: root, Hosted: &HostedConfiguration{Offerings: []HostedOfferingConfiguration{{Provider: "elevenlabs", Operation: operation, MaximumAttempts: 1}}}})
+	return configuration, management.store
 }

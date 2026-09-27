@@ -255,17 +255,14 @@ func validPaymentTotals(totals *billing.PaddleTransactionTotals) bool {
 
 func (worker *paddlePaymentProcessor) credit(ctx context.Context, event managedPaymentInboxRecord, order managedFundingOrderRecord, checkout managedPaymentCheckoutRecord, evidence verifiedCompletedPayment, adjustments verifiedPaymentAdjustments) error {
 	now := worker.now().UTC()
-	observation, err := paymentStateObservation(event, order, evidence.transaction, adjustments.evidence.TransactionUpdatedAt, now)
-	if err != nil {
-		return err
-	}
+	observation := paymentStateObservation(event, order, evidence.transaction, adjustments.evidence.TransactionUpdatedAt, now)
 	totals := evidence.transaction.Details.Totals
 	receipt := managedPaymentReceiptRecord{OrderID: order.ID, BillingAccountID: order.BillingAccountID, Environment: order.Environment, ProcessorAccountID: order.ProcessorAccountID, TransactionID: checkout.TransactionID, CustomerID: checkout.CustomerID, InboxID: event.ID, LedgerKey: "payment-funding:" + order.ID, Currency: order.Currency, CreditCents: order.FundingCents, GrossCents: totals.Total, TaxCents: totals.Tax, FeeCents: totals.Fee, EarningsCents: totals.Earnings, InvoiceNumber: evidence.transaction.InvoiceNumber, FinancialEvidence: evidence.encoded, EvidenceDigest: evidence.digest, CompletedAt: evidence.completedAt, CreatedAt: now}
 	if payout := evidence.transaction.Details.PayoutTotals; payout != nil {
 		receipt.PayoutCurrency, receipt.PayoutEarningsCents = payout.CurrencyCode, payout.Earnings
 	}
 	privateQuery := worker.database.database.Session(&gorm.Session{Logger: paymentInboxLogger{worker.database.database.Logger}})
-	err = privateQuery.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := privateQuery.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		lock := tx.Model(&managedBillingAccountRecord{}).Where("id = ?", order.BillingAccountID).UpdateColumn("id", gorm.Expr("id"))
 		if lock.Error != nil {
 			return fmt.Errorf("lock payment account: %w", lock.Error)
@@ -283,10 +280,7 @@ func (worker *paddlePaymentProcessor) credit(ctx context.Context, event managedP
 				return errFundingConflict
 			}
 		} else if errors.Is(err, gorm.ErrRecordNotFound) {
-			metadata, err := json.Marshal(map[string]string{"funding_order_id": order.ID, "transaction_id": checkout.TransactionID, "environment": order.Environment, "processor_account_id": order.ProcessorAccountID})
-			if err != nil {
-				return fmt.Errorf("encode funding credit: %w", err)
-			}
+			metadata := newHostedLedgerMetadata(map[string]string{"funding_order_id": order.ID, "transaction_id": checkout.TransactionID, "environment": order.Environment, "processor_account_id": order.ProcessorAccountID})
 			if err := postHostedFundsCredit(tx, order.BillingAccountID, receipt.LedgerKey, order.FundingCents, now, metadata); err != nil {
 				return err
 			}

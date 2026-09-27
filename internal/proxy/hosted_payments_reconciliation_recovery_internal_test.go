@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"database/sql"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -15,9 +16,10 @@ import (
 
 type paymentAuditReadFailureDialector struct {
 	gorm.Dialector
-	table    string
-	failures *atomic.Int64
-	manyOnly bool
+	table           string
+	failures        *atomic.Int64
+	manyOnly        bool
+	transactionOnly bool
 }
 
 func (dialector paymentAuditReadFailureDialector) Initialize(database *gorm.DB) error {
@@ -25,11 +27,78 @@ func (dialector paymentAuditReadFailureDialector) Initialize(database *gorm.DB) 
 		return err
 	}
 	return database.Callback().Query().Before("gorm:query").Register("test:payment_audit_read", func(tx *gorm.DB) {
+		if dialector.transactionOnly {
+			if _, inTransaction := tx.Statement.ConnPool.(*sql.Tx); !inTransaction {
+				return
+			}
+		}
 		if tx.Statement.Table == dialector.table && (!dialector.manyOnly || !tx.Statement.RaiseErrorOnNotFound) {
 			dialector.failures.Add(1)
 			tx.AddError(errors.New("controlled_payment_audit_read_failure"))
 		}
 	})
+}
+
+func TestHostedPaymentsReconciliationLockedReadsPreserveCheckpoint(t *testing.T) {
+	for _, table := range []string{"managed_funding_order_records", "managed_payment_reconciliation_item_records"} {
+		t.Run(table, func(t *testing.T) {
+			fixture := newPaymentAuditFixture(t)
+			fixture.applyAdjustment(t, "pending_approval", 200)
+			before := paymentAdjustmentResources(t, fixture)
+			management := fixture.management
+			var failures atomic.Int64
+			management.DatabaseDialector = paymentAuditReadFailureDialector{
+				Dialector: management.DatabaseDialector, table: table, failures: &failures, transactionOnly: true,
+			}
+			_, err := ReconcilePayments(t.Context(), management, fixture.payments, "locked-read-failure")
+			if err == nil || !strings.Contains(err.Error(), "controlled_payment_audit_read_failure") || failures.Load() != 1 {
+				t.Fatalf("locked read failure: count=%d error=%v", failures.Load(), err)
+			}
+			assertPaymentAuditCheckpointRecovery(t, fixture, "locked-read-failure", before)
+		})
+	}
+}
+
+func TestHostedPaymentsReconciliationMissingAccountLockPreservesCheckpoint(t *testing.T) {
+	fixture := newPaymentAuditFixture(t)
+	fixture.applyAdjustment(t, "pending_approval", 200)
+	before := paymentAdjustmentResources(t, fixture)
+	if err := fixture.database.database.Exec("CREATE TRIGGER ignore_audit_lock BEFORE UPDATE ON managed_billing_account_records BEGIN SELECT RAISE(IGNORE); END").Error; err != nil {
+		t.Fatal(err)
+	}
+	_, err := ReconcilePayments(t.Context(), fixture.management, fixture.payments, "missing-account-lock")
+	if !errors.Is(err, errFundingNotFound) {
+		t.Fatalf("missing account lock error=%v", err)
+	}
+	if err := fixture.database.database.Exec("DROP TRIGGER ignore_audit_lock").Error; err != nil {
+		t.Fatal(err)
+	}
+	assertPaymentAuditCheckpointRecovery(t, fixture, "missing-account-lock", before)
+}
+
+func assertPaymentAuditCheckpointRecovery(t *testing.T, fixture paymentAuditFixture, runID string, before map[string]any) {
+	t.Helper()
+	if !reflect.DeepEqual(before, paymentAdjustmentResources(t, fixture)) {
+		t.Fatal("failed reconciliation changed funds or payment evidence")
+	}
+	var run managedPaymentReconciliationRunRecord
+	if err := fixture.database.database.First(&run, "id = ?", runID).Error; err != nil || run.State != paymentReconciliationPending || run.TotalOrders != 1 || run.CompletedOrders != 0 {
+		t.Fatalf("incomplete run=%+v error=%v", run, err)
+	}
+	var item managedPaymentReconciliationItemRecord
+	if err := fixture.database.database.First(&item, "run_id = ?", runID).Error; err != nil || item.State != paymentReconciliationPending || item.Result != "" || item.Evidence != "" || item.EvidenceDigest != "" {
+		t.Fatalf("partial reconciliation result=%+v error=%v", item, err)
+	}
+	report, err := ReconcilePayments(t.Context(), fixture.management, fixture.payments, runID)
+	if err != nil || report.State != paymentReconciliationCompleted || report.CompletedOrders != 1 || len(report.Items) != 1 || len(report.Items[0].Differences) != 0 {
+		t.Fatalf("reconciliation did not resume: report=%+v error=%v", report, err)
+	}
+	for range 2 {
+		replayed, err := ReconcilePayments(t.Context(), fixture.management, fixture.payments, runID)
+		if err != nil || !reflect.DeepEqual(report, replayed) || !reflect.DeepEqual(before, paymentAdjustmentResources(t, fixture)) {
+			t.Fatalf("replay changed financial resources or reconciliation evidence: error=%v", err)
+		}
+	}
 }
 
 func TestHostedPaymentsReconciliationReadFailuresResumeWithoutFinancialChanges(t *testing.T) {
@@ -166,8 +235,55 @@ func TestHostedPaymentsReconciliationUnreadableEvidenceStopsAndRecovers(t *testi
 	}
 }
 
+func TestHostedPaymentsReconciliationInvalidStoredTimestampPreservesCheckpoint(t *testing.T) {
+	for _, table := range []string{"managed_funding_order_records", "managed_payment_checkout_records", "managed_payment_receipt_records"} {
+		t.Run(table, func(t *testing.T) {
+			fixture := newPaymentAuditFixture(t)
+			before := fixture.balance(t)
+			var original string
+			if err := fixture.database.database.Table(table).Select("CAST(created_at AS TEXT)").Scan(&original).Error; err != nil {
+				t.Fatal(err)
+			}
+			writeTimestamp := func(value string) {
+				t.Helper()
+				result := fixture.database.database.Table(table).Where("1 = 1").UpdateColumn("created_at", value)
+				if result.Error != nil || result.RowsAffected != 1 {
+					t.Fatalf("timestamp write rows=%d error=%v", result.RowsAffected, result.Error)
+				}
+			}
+			writeTimestamp("2026-09-22T12:00:00+24:00")
+			for range 2 {
+				_, err := ReconcilePayments(t.Context(), fixture.management, fixture.payments, "timestamp-recovery")
+				if err == nil || !strings.Contains(err.Error(), "encode reconciliation evidence") {
+					t.Fatalf("invalid timestamp reconciliation error=%v", err)
+				}
+				var run managedPaymentReconciliationRunRecord
+				if err := fixture.database.database.First(&run).Error; err != nil || run.CompletedOrders != 0 {
+					t.Fatalf("failed comparison advanced checkpoint: run=%+v error=%v", run, err)
+				}
+				var items []managedPaymentReconciliationItemRecord
+				if err := fixture.database.database.Find(&items).Error; err != nil || len(items) != 1 || items[0].State != "pending" || items[0].Result != "" {
+					t.Fatalf("failed comparison retained partial evidence: items=%+v error=%v", items, err)
+				}
+				if !reflect.DeepEqual(before, fixture.balance(t)) {
+					t.Fatal("failed payment comparison changed funds")
+				}
+			}
+			writeTimestamp(original)
+			report, err := ReconcilePayments(t.Context(), fixture.management, fixture.payments, "timestamp-recovery")
+			if err != nil || report.State != paymentReconciliationCompleted || report.CompletedOrders != 1 || len(report.Items) != 1 || len(report.Items[0].Differences) != 0 {
+				t.Fatalf("restored timestamp did not recover comparison: report=%+v error=%v", report, err)
+			}
+			replayed, err := ReconcilePayments(t.Context(), fixture.management, fixture.payments, "timestamp-recovery")
+			if err != nil || !reflect.DeepEqual(report, replayed) || !reflect.DeepEqual(before, fixture.balance(t)) {
+				t.Fatalf("replay changed report or funds: error=%v", err)
+			}
+		})
+	}
+}
+
 func TestHostedPaymentsReconciliationInvalidInputsCreateNoRunOrProviderCall(t *testing.T) {
-	for _, scenario := range []string{"run-id", "missing-payments", "invalid-payments", "missing-database", "unavailable-database", "uninitialized-schema", "environment"} {
+	for _, scenario := range []string{"run-id", "missing-payments", "invalid-payments", "missing-database", "unavailable-database", "connection-access", "uninitialized-schema", "environment"} {
 		t.Run(scenario, func(t *testing.T) {
 			fixture := newPaymentAuditFixture(t)
 			before := fixture.balance(t)
@@ -191,6 +307,8 @@ func TestHostedPaymentsReconciliationInvalidInputsCreateNoRunOrProviderCall(t *t
 				management = ManagementConfiguration{}
 			case "unavailable-database":
 				management = ManagementConfiguration{DatabasePath: filepath.Join(t.TempDir(), "missing", "database.sqlite")}
+			case "connection-access":
+				management.DatabaseDialector = reconciliationConnectionFailureDialector{management.DatabaseDialector, t}
 			case "uninitialized-schema":
 				management = ManagementConfiguration{DatabasePath: filepath.Join(t.TempDir(), "empty.sqlite")}
 			case "environment":
@@ -198,8 +316,12 @@ func TestHostedPaymentsReconciliationInvalidInputsCreateNoRunOrProviderCall(t *t
 					t.Fatal(err)
 				}
 			}
-			if _, err := ReconcilePayments(t.Context(), management, selected, runID); err == nil {
-				t.Fatal("invalid reconciliation inputs were accepted")
+			report, err := ReconcilePayments(t.Context(), management, selected, runID)
+			if err == nil || !reflect.DeepEqual(report, PaymentReconciliationReport{}) {
+				t.Fatalf("invalid reconciliation returned report=%+v error=%v", report, err)
+			}
+			if scenario == "connection-access" && !errors.Is(err, errReconciliationConnectionAccess) {
+				t.Fatalf("connection access failure was not reported: %v", err)
 			}
 			var runs int64
 			if err := fixture.database.database.Model(&managedPaymentReconciliationRunRecord{}).Count(&runs).Error; err != nil || runs != 0 || calls.Load() != 0 {
@@ -207,6 +329,16 @@ func TestHostedPaymentsReconciliationInvalidInputsCreateNoRunOrProviderCall(t *t
 			}
 			if !reflect.DeepEqual(before, fixture.balance(t)) {
 				t.Fatal("invalid reconciliation input changed funds")
+			}
+			if scenario == "connection-access" {
+				report, err := ReconcilePayments(t.Context(), fixture.management, fixture.payments, runID)
+				if err != nil || report.State != paymentReconciliationCompleted || report.CompletedOrders != 1 || len(report.Items) != 1 || len(report.Items[0].Differences) != 0 {
+					t.Fatalf("connection recovery report=%+v error=%v", report, err)
+				}
+				replayed, err := ReconcilePayments(t.Context(), fixture.management, fixture.payments, runID)
+				if err != nil || !reflect.DeepEqual(report, replayed) || !reflect.DeepEqual(before, fixture.balance(t)) {
+					t.Fatalf("connection recovery changed the report or funds: error=%v", err)
+				}
 			}
 		})
 	}

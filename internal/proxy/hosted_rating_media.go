@@ -38,22 +38,26 @@ func mediaCapabilityLimits(offering ProviderOffering) []CatalogLimit {
 }
 
 func newHostedMediaPriceAdmission(service CatalogService, request managedJournalRequestRecord, codec string, conditions CatalogPriceConditions, attempts uint32) (journalReservation, error) {
-	snapshot, err := newHostedMediaRatingSnapshot(service, request.Provider, request.Model, request.Operation, codec, request.CreatedAt, conditions)
+	snapshot, bounds, err := newHostedMediaPricing(service, request, codec, conditions)
 	if err != nil {
 		return nil, err
 	}
+	return newHostedPriceAdmission(snapshot, bounds, attempts)
+}
+
+func newHostedMediaPricing(service CatalogService, request managedJournalRequestRecord, codec string, conditions CatalogPriceConditions) (*CatalogRatingSnapshot, []CatalogUsageBound, error) {
+	snapshot, err := newHostedMediaRatingSnapshot(service, request.Provider, request.Model, request.Operation, codec, request.CreatedAt, conditions)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Snapshot construction found a price in the validated catalog. Each price
+	// references an existing offering or its declaring provider service.
 	var declaredLimits []CatalogLimit
 	if request.Model == "" {
-		route, err := service.ResolveService(request.Provider, request.Operation)
-		if err != nil {
-			return nil, err
-		}
+		route, _ := service.ResolveService(request.Provider, request.Operation)
 		declaredLimits = route.Limits
 	} else {
-		offering, err := service.ResolveOffering(request.Provider, request.Model)
-		if err != nil {
-			return nil, err
-		}
+		offering, _ := service.ResolveOffering(request.Provider, request.Model)
 		declaredLimits = offering.Limits
 	}
 	limits := make(map[string]CatalogLimit, len(declaredLimits))
@@ -74,7 +78,7 @@ func newHostedMediaPriceAdmission(service CatalogService, request managedJournal
 			limit, found := limits[dimension]
 			unit := component.unit.quantity
 			if !found || limit.AccountDependent || limit.Value == nil || limit.Unit != mediaCatalogLimitUnits[unit] {
-				return nil, fmt.Errorf("%w: fixed media limit required for dimension=%s unit=%s", ErrCatalogRatingUnavailable, dimension, unit)
+				return nil, nil, fmt.Errorf("%w: fixed media limit required for dimension=%s unit=%s", ErrCatalogRatingUnavailable, dimension, unit)
 			}
 			bounds = append(bounds, CatalogUsageBound{Dimension: dimension, Unit: unit, Maximum: strconv.Itoa(*limit.Value)})
 		}
@@ -82,7 +86,7 @@ func newHostedMediaPriceAdmission(service CatalogService, request managedJournal
 	for _, dimension := range snapshot.zeroDimensions {
 		bounds = append(bounds, CatalogUsageBound{Dimension: dimension, Unit: "token", Maximum: "0"})
 	}
-	return newHostedPriceAdmission(snapshot, bounds, attempts)
+	return snapshot, bounds, nil
 }
 
 var imagePriceDimensions = map[mediaPriceComponent]string{
@@ -112,6 +116,12 @@ var googleAudioPriceDimensions = map[mediaPriceComponent]string{
 	{"output_text", "USD/1M_tokens", ""}: "output_tokens",
 }
 
+var inputAudioDurationPriceDimensions = map[mediaPriceComponent]string{
+	{"input_audio", "USD/second", ""}: "input_audio_seconds",
+	{"input_audio", "USD/minute", ""}: "input_audio_seconds",
+	{"input_audio", "USD/hour", ""}:   "input_audio_seconds",
+}
+
 // Every conversion names the native meter quantity and its catalog unit.
 // A provider-reported cost unit has no implicit USD, character, or time value.
 var mediaPriceProfiles = map[mediaPriceRoute]map[mediaPriceComponent]string{
@@ -125,9 +135,15 @@ var mediaPriceProfiles = map[mediaPriceRoute]map[mediaPriceComponent]string{
 	{CatalogProtocolOpenAIImages, ModelOperationImageEditing}:             imagePriceDimensions,
 	{CatalogProtocolElevenLabsSpeech, ModelOperationSpeechGeneration}:     speechPriceDimensions,
 	{CatalogProtocolElevenLabsConversion, ModelOperationSpeechConversion}: speechPriceDimensions,
+	{CatalogProtocolElevenLabsAlignment, ModelOperationAudioAlignment}:    inputAudioDurationPriceDimensions,
 	{CatalogProtocolFALQueueImages, ModelOperationImageGeneration}: {
 		{"billable_units", "USD/provider_unit", ""}: "billable_units",
 	},
+	{CatalogProtocolDictatorSpeechV1, ModelOperationAudioTranscription}: inputAudioDurationPriceDimensions,
+	{CatalogProtocolDictatorSpeechV1, ModelOperationAudioDiarization}:   inputAudioDurationPriceDimensions,
+	{CatalogProtocolDictatorSpeechV1, ModelOperationAudioAlignment}:     inputAudioDurationPriceDimensions,
+	{CatalogProtocolDictatorSpeechV1, ModelOperationSubtitleCreation}:   inputAudioDurationPriceDimensions,
+	{CatalogProtocolDictatorSpeechV1, ModelOperationVoiceExtraction}:    inputAudioDurationPriceDimensions,
 	{CatalogProtocolDictatorSpeechV1, ModelOperationSpeechGeneration}: {
 		{"output_audio", "USD/second", ""}: "output_audio_seconds",
 		{"output_audio", "USD/minute", ""}: "output_audio_seconds",

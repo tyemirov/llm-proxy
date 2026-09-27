@@ -106,7 +106,7 @@ func TestHostedFundsDictationCatalogFinancialAcceptance(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-journal").Update("offerings", scope).Error; err != nil {
+					if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", hostedJournalFixtureGrantID).Update("offerings", scope).Error; err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -124,6 +124,22 @@ func TestHostedFundsDictationCatalogFinancialAcceptance(t *testing.T) {
 					t.Fatal("unfunded dictation dispatched")
 				}
 				seedHostedFunds(t, database, 500)
+				beforeEmpty := (fundsStartupFixture{database: database, management: management}).state(t)
+				for index, path := range paths {
+					key := fmt.Sprintf("dictation-%d", index)
+					emptyStatus := http.StatusBadRequest
+					if path == transcriptionsPath {
+						emptyStatus = http.StatusRequestEntityTooLarge
+					}
+					hostedDictationProviderHTTP(t, server, path, key, "", offering.Provider, offering.Model, emptyStatus)
+				}
+				if calls.Load() != 0 || !reflect.DeepEqual(beforeEmpty, (fundsStartupFixture{database: database, management: management}).state(t)) {
+					t.Fatal("empty dictation changed funds or dispatched provider work")
+				}
+				requests := accountConnectionHTTPExchange(t, management, http.MethodGet, "/billing-accounts/billing-journal/requests", "", http.StatusOK)
+				if len(requests["requests"].([]any)) != 0 {
+					t.Fatal("empty dictation retained an accepted request")
+				}
 				if offering.WireContract == CatalogProtocolMetaTranscription {
 					for _, path := range paths {
 						body := hostedDictationProviderHTTP(t, server, path, "unsupported-meter", string(audio), offering.Provider, offering.Model, status)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
@@ -18,13 +17,6 @@ type journalWorkerClaim struct {
 	requestID string
 	owner     string
 	now       time.Time
-}
-
-func newJournalWorkerClaim(requestID, owner string, now time.Time) (journalWorkerClaim, error) {
-	if !strings.HasPrefix(requestID, journalRequestIDPrefix) || owner == "" || now.IsZero() {
-		return journalWorkerClaim{}, errUsageJournalInvalid
-	}
-	return journalWorkerClaim{requestID: requestID, owner: owner, now: now.UTC()}, nil
 }
 
 func lockJournalClaim(transaction *gorm.DB, claim journalWorkerClaim) (managedJournalRequestRecord, error) {

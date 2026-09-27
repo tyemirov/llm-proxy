@@ -4,12 +4,32 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"gorm.io/gorm"
 )
+
+func TestHostedFinancialCreditReadsRejectInvalidQueriesWithoutEffects(t *testing.T) {
+	fixture := newFundsCorrectionFixture(t)
+	original := fundsResolutionHTTP(t, fixture.server, fixture.cookie("operator"), http.MethodPut, fixture.creditPath, fixture.creditBody, http.StatusOK)
+	before := fixture.resources(t)
+	for _, owner := range []string{"owner", "operator"} {
+		for _, path := range []string{
+			fixture.creditPath + "?unexpected=1",
+			fixture.creditPath[:strings.LastIndex(fixture.creditPath, "/")+1] + "%20",
+		} {
+			fundsResolutionHTTP(t, fixture.server, fixture.cookie(owner), http.MethodGet, path, "", http.StatusBadRequest)
+			read := fundsResolutionHTTP(t, fixture.server, fixture.cookie(owner), http.MethodGet, fixture.creditPath, "", http.StatusOK)
+			if !reflect.DeepEqual(original, read) || !reflect.DeepEqual(before, fixture.resources(t)) {
+				t.Fatal("rejected credit query changed receipts or funds")
+			}
+			assertFundsCreditRemainder(t, fixture.database, "1", "125")
+		}
+	}
+}
 
 func TestHostedFinancialCreditReadsRejectCorruptReceipts(t *testing.T) {
 	fixture := newFundsCorrectionFixture(t)
@@ -31,6 +51,14 @@ func TestHostedFinancialCreditReadsRejectCorruptReceipts(t *testing.T) {
 		{"negative-denominator", "credit_denominator", "-1000", record.CreditDenominator},
 		{"invalid-reason", "reason", "invalid reason", record.Reason},
 		{"missing-timestamp", "created_at", time.Time{}, record.CreatedAt},
+		{"changed-credit", "credit_numerator", "1", record.CreditNumerator},
+		{"changed-cents", "credited_cents", int64(2), record.Effect.CreditedCents},
+		{"invalid-before", "remainder_before_denominator", "0", record.Effect.RemainderBeforeDenominator},
+		{"excess-before", "remainder_before_numerator", "200", record.Effect.RemainderBeforeNumerator},
+		{"changed-before", "remainder_before_numerator", "0", record.Effect.RemainderBeforeNumerator},
+		{"invalid-after", "remainder_after_denominator", "0", record.Effect.RemainderAfterDenominator},
+		{"excess-after", "remainder_after_numerator", "125", record.Effect.RemainderAfterNumerator},
+		{"changed-after", "remainder_after_numerator", "0", record.Effect.RemainderAfterNumerator},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			write := func(value any) {
@@ -152,5 +180,64 @@ func TestHostedFinancialCreditReadsRejectCorruptChargeAdjustments(t *testing.T) 
 		if fixture.calls.Load() != 1 {
 			t.Fatalf("credit read repeated provider work: calls=%d", fixture.calls.Load())
 		}
+	}
+}
+
+func TestHostedFinancialCreditEffectsRejectLaterCreditAndReplay(t *testing.T) {
+	for _, scenario := range []struct {
+		name, column string
+		value        any
+	}{
+		{"amount", "credit_numerator", "1"},
+		{"cents", "credited_cents", int64(2)},
+		{"before", "remainder_before_numerator", "0"},
+		{"after", "remainder_after_numerator", "0"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			fixture := newFundsCorrectionFixture(t)
+			original := fundsResolutionHTTP(t, fixture.server, fixture.cookie("operator"), http.MethodPut, fixture.creditPath, fixture.creditBody, http.StatusOK)
+			before := fixture.resources(t)
+			var record managedFundsCorrectionRecord
+			if err := fixture.database.database.First(&record).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := fixture.database.database.Model(&managedFundsCorrectionRecord{}).Where("id = ?", record.ID).UpdateColumn(scenario.column, scenario.value).Error; err != nil {
+				t.Fatal(err)
+			}
+			nextPath := fixture.creditPath + "-next"
+			nextBody := `{"credit":{"numerator":"1","denominator":"1000"},"reason":"approved_correction","evidence_reference":"next-review"}`
+			fundsResolutionHTTP(t, fixture.server, fixture.cookie("operator"), http.MethodPut, nextPath, nextBody, http.StatusInternalServerError)
+			// A changed amount conflicts with the original idempotent request.
+			replayStatus := http.StatusInternalServerError
+			if scenario.name == "amount" {
+				replayStatus = http.StatusConflict
+			}
+			fundsResolutionHTTP(t, fixture.server, fixture.cookie("operator"), http.MethodPut, fixture.creditPath, fixture.creditBody, replayStatus)
+			if !reflect.DeepEqual(before, fixture.resources(t)) {
+				t.Fatal("inconsistent retained credit changed financial resources")
+			}
+			fundsResolutionHTTP(t, fixture.server, fixture.cookie("owner"), http.MethodGet, nextPath, "", http.StatusNotFound)
+			if err := fixture.database.database.Model(&record).Select("credit_numerator", "credited_cents", "remainder_before_numerator", "remainder_after_numerator").Updates(record).Error; err != nil {
+				t.Fatal(err)
+			}
+			restarted, cookie := newFundsManagementHTTPFixture(t, openJournalTransactionInstance(t, fixture.database))
+			read := fundsResolutionHTTP(t, restarted, cookie("owner"), http.MethodGet, fixture.creditPath, "", http.StatusOK)
+			if !reflect.DeepEqual(original, read) {
+				t.Fatal("restored evidence changed the original credit")
+			}
+			created := fundsResolutionHTTP(t, restarted, cookie("operator"), http.MethodPut, nextPath, nextBody, http.StatusOK)
+			if created["credited_cents"] != "0" {
+				t.Fatalf("fractional credit created an unexpected Ledger effect: %v", created)
+			}
+			after := fixture.resources(t)
+			for range 2 {
+				replayed := fundsResolutionHTTP(t, restarted, cookie("operator"), http.MethodPut, nextPath, nextBody, http.StatusOK)
+				if !reflect.DeepEqual(created, replayed) || !reflect.DeepEqual(after, fixture.resources(t)) {
+					t.Fatal("restored credit replay changed financial effects")
+				}
+			}
+			assertHostedFundsBalance(t, fixture.database, 5, 5)
+			assertFundsCreditRemainder(t, fixture.database, "7", "1000")
+		})
 	}
 }

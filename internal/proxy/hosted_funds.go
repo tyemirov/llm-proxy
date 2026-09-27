@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -178,16 +177,7 @@ func reserveHostedFunds(transaction *gorm.DB, request managedJournalRequestRecor
 		if err != nil {
 			return fmt.Errorf("construct ledger reservation for request %s: %w", request.ID, err)
 		}
-		encoded, err := json.Marshal(struct {
-			RequestID string `json:"request_id"`
-		}{request.ID})
-		if err != nil {
-			return err
-		}
-		metadata, err := ledger.NewMetadataJSON(string(encoded))
-		if err != nil {
-			return err
-		}
+		metadata := newHostedLedgerMetadata(hostedLedgerRequestMetadata{RequestID: request.ID})
 		// A request timeout cannot release funds after an uncertain dispatch.
 		if err := account.service.Reserve(transaction.Statement.Context, account.tenant, account.user, account.namespace, input.amount, input.reservation, input.key, 0, metadata); err != nil {
 			if errors.Is(err, ledger.ErrInsufficientFunds) {

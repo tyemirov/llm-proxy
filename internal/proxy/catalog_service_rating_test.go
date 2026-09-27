@@ -90,6 +90,24 @@ func TestCatalogRatingProviderServicesShareExactPriceContract(t *testing.T) {
 
 func TestCatalogRatingUnavailableServiceRetainsItsReason(t *testing.T) {
 	catalog := testfixtures.ProviderCatalog(t).ModelCatalog()
+	const unavailableReason = "Controlled service price is unavailable."
+	const source = "https://example.com/controlled-service-rates"
+	const lastVerified = "2026-09-23"
+	for providerIndex := range catalog.Providers {
+		provider := &catalog.Providers[providerIndex]
+		if provider.ID != "elevenlabs" {
+			continue
+		}
+		for serviceIndex := range provider.Services {
+			route := &provider.Services[serviceIndex]
+			if route.Operation == proxy.ModelOperationAudioAlignment {
+				route.Price = proxy.ProviderCatalogPrice{
+					Operation: route.Operation, Available: false, Source: source,
+					LastVerified: lastVerified, UnavailableReason: unavailableReason,
+				}
+			}
+		}
+	}
 	service, err := proxy.NewCatalogService(catalog)
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +117,43 @@ func TestCatalogRatingUnavailableServiceRetainsItsReason(t *testing.T) {
 		t.Fatal(err)
 	}
 	selection := service.SelectPrice("elevenlabs", "", route.Operation, "input_audio", proxy.CatalogPriceConditions{})
-	if selection.Available || selection.UnavailableReason != route.Price.UnavailableReason || selection.Source != route.Price.Source {
+	if selection.Available || selection.UnavailableReason != unavailableReason || selection.Source != source || selection.LastVerified != lastVerified {
 		t.Fatalf("unavailable service evidence lost: %+v", selection)
+	}
+}
+
+func TestCatalogRatingAdvertisedOpenAIImageAndResponsePrices(t *testing.T) {
+	service, err := proxy.NewCatalogService(testfixtures.ProviderCatalog(t).ModelCatalog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []struct{ model, operation, component, cache, rate string }{
+		{"gpt-5", proxy.ModelOperationText, "input_tokens", "", "1.25"},
+		{"gpt-5", proxy.ModelOperationText, "cache_read", "read", "0.125"},
+		{"gpt-5", proxy.ModelOperationText, "output_tokens", "", "10"},
+		{"gpt-image-2", proxy.ModelOperationImageGeneration, "input_text", "", "2.5"},
+		{"gpt-image-2", proxy.ModelOperationImageGeneration, "input_image", "", "4"},
+		{"gpt-image-2", proxy.ModelOperationImageGeneration, "output_image", "", "15"},
+		{"gpt-image-2", proxy.ModelOperationImageEditing, "input_text", "", "2.5"},
+		{"gpt-image-2", proxy.ModelOperationImageEditing, "input_image", "", "4"},
+		{"gpt-image-2", proxy.ModelOperationImageEditing, "output_image", "", "15"},
+	} {
+		selected := service.SelectPrice("openai", scenario.model, scenario.operation, scenario.component, proxy.CatalogPriceConditions{BillingMode: "standard", ServiceTier: "standard", CacheClass: scenario.cache, EffectiveFrom: "2026-09-26T00:00:00Z"})
+		if !selected.Available || selected.Rate == nil || string(selected.Rate.Rate) != scenario.rate || selected.Rate.Unit != "USD/1M_tokens" || selected.Source != "https://developers.openai.com/api/docs/pricing" || selected.LastVerified != "2026-09-26" {
+			t.Fatalf("advertised %s %s %s price=%+v", scenario.model, scenario.operation, scenario.component, selected)
+		}
+	}
+	offering, err := service.ResolveOffering("openai", "gpt-5")
+	if err != nil || offering.OutputTokenLimit != 128000 {
+		t.Fatalf("response output bound=%+v error=%v", offering, err)
+	}
+	found := false
+	for _, limit := range offering.Limits {
+		if limit.ID == "context_tokens" && limit.Value != nil && *limit.Value == 400000 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("published response context ceiling absent")
 	}
 }

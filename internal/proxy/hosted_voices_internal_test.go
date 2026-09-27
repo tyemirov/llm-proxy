@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -21,6 +22,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
@@ -47,7 +49,10 @@ func (upstream *hostedVoiceGRPCFixture) SubmitSynthesizeSpeechJob(context.Contex
 	return &dictator.SubmitSynthesizeSpeechJobResponse{JobId: "unwanted-job"}, nil
 }
 
-type hostedVoiceSubmissionProbe struct{ *accountDictatorAdapter }
+type hostedVoiceSubmissionProbe struct {
+	*accountDictatorAdapter
+	request func(context.Context, grpc.ClientConnInterface) error
+}
 
 func (adapter hostedVoiceSubmissionProbe) DiscoverMediaVoices(ctx context.Context, tenant string, _ MediaVoiceQuery) (MediaVoiceDiscovery, error) {
 	reference, err := adapter.store.credentialReference(ctx, tenant, providerID(adapter.provider))
@@ -59,8 +64,7 @@ func (adapter hostedVoiceSubmissionProbe) DiscoverMediaVoices(ctx context.Contex
 		return MediaVoiceDiscovery{}, err
 	}
 	defer closeConnection()
-	_, err = dictator.NewVoiceServiceClient(protocol.connection).SubmitSynthesizeSpeechJob(protocol.context(ctx), &dictator.SynthesizeSpeechRequest{})
-	return MediaVoiceDiscovery{}, err
+	return MediaVoiceDiscovery{}, adapter.request(protocol.context(ctx), protocol.connection)
 }
 
 func TestHostedVoicesGRPCPreservesTenantResourcesAndMetadataAuthority(t *testing.T) {
@@ -120,10 +124,35 @@ func TestHostedVoicesGRPCPreservesTenantResourcesAndMetadataAuthority(t *testing
 		t.Fatal(err)
 	}
 	hostedVoiceHTTP(t, server, "/model/v1/voices?provider=dictator&cursor="+url.QueryEscape(paged["next_cursor"].(string)), http.StatusBadRequest)
-	service.voiceProviders[ProviderNameDictator] = hostedVoiceSubmissionProbe{adapter}
-	hostedVoiceHTTP(t, server, "/model/v1/voices?provider=dictator", http.StatusForbidden)
-	if upstream.submissions.Load() != 0 {
-		t.Fatal("metadata authorization submitted paid work")
+	for _, probe := range []struct {
+		name    string
+		request func(context.Context, grpc.ClientConnInterface) error
+	}{
+		{"paid-submission", func(ctx context.Context, connection grpc.ClientConnInterface) error {
+			_, err := dictator.NewVoiceServiceClient(connection).SubmitSynthesizeSpeechJob(ctx, &dictator.SynthesizeSpeechRequest{})
+			return err
+		}},
+		{"undeclared-unary", func(ctx context.Context, connection grpc.ClientConnInterface) error {
+			return connection.Invoke(ctx, "/unregistered.Service/Invoke", &dictator.ListSynthesisVoicesRequest{}, &dictator.ListSynthesisVoicesResponse{})
+		}},
+		{"undeclared-stream", func(ctx context.Context, connection grpc.ClientConnInterface) error {
+			_, err := connection.NewStream(ctx, &grpc.StreamDesc{ClientStreams: true}, "/unregistered.Service/Stream")
+			return err
+		}},
+		{"unauthorized-upload", func(ctx context.Context, connection grpc.ClientConnInterface) error {
+			_, err := dictator.NewArtifactServiceClient(connection).UploadArtifact(ctx)
+			return err
+		}},
+	} {
+		t.Run(probe.name, func(t *testing.T) {
+			service.voiceProviders[ProviderNameDictator] = hostedVoiceSubmissionProbe{adapter, probe.request}
+			for range 2 {
+				hostedVoiceHTTP(t, server, "/model/v1/voices?provider=dictator", http.StatusForbidden)
+			}
+			if upstream.submissions.Load() != 0 || upstream.calls.Load() != 2 {
+				t.Fatal("metadata authority permitted unrelated provider work")
+			}
+		})
 	}
 	service.voiceProviders[ProviderNameDictator] = adapter
 	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-voices").Update("state", hostedGrantRevoked).Error; err != nil {
@@ -132,6 +161,76 @@ func TestHostedVoicesGRPCPreservesTenantResourcesAndMetadataAuthority(t *testing
 	hostedVoiceHTTP(t, server, "/model/v1/voices?provider=dictator", http.StatusForbidden)
 	if upstream.calls.Load() != 2 {
 		t.Fatal("revoked Dictator discovery reached provider")
+	}
+}
+
+func TestHostedVoicesBindingReadFailurePreservesPrivateResources(t *testing.T) {
+	for _, scenario := range []struct {
+		name   string
+		read   int64
+		status int
+	}{
+		{"authority", 2, http.StatusBadGateway},
+		{"discovery", 3, http.StatusBadGateway},
+		{"detail", 2, http.StatusNotFound},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			database, _, _ := newJournalTransactionFixture(t)
+			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			upstream := &hostedVoiceGRPCFixture{}
+			grpcServer := grpc.NewServer()
+			dictator.RegisterVoiceServiceServer(grpcServer, upstream)
+			go func() {
+				if err := grpcServer.Serve(listener); err != nil {
+					t.Error(err)
+				}
+			}()
+			t.Cleanup(grpcServer.Stop)
+			server, service := newHostedVoiceHTTPFixture(t, database, ProviderNameDictator, ModelNameDictatorQwen3TTS, map[string]string{dictatorAddressField: listener.Addr().String(), dictatorTokenField: "hosted-voice-secret", dictatorTLSField: "false"})
+			imageAdapter := service.adapters[mediaOperationAdapterKey(llmproxycontract.MediaCapabilityImageGenerate, "openai", "gpt-image-2")].(*imageGenerationAdapter)
+			definition := service.providers.definitions[ProviderNameDictator]
+			service.voiceProviders = map[string]MediaVoiceProvider{ProviderNameDictator: &accountDictatorAdapter{provider: ProviderNameDictator, transport: definition.transports["speech"], tenants: imageAdapter.tenants, store: service.store, assets: service.assets}}
+			path := "/model/v1/voices?provider=dictator"
+			page := hostedVoiceHTTP(t, server, path, http.StatusOK)
+			voiceID := page["voices"].([]any)[0].(map[string]any)["voice_id"].(string)
+			if scenario.name == "detail" {
+				path = "/model/v1/voices/" + voiceID
+			}
+			var reads, failures atomic.Int64
+			var armed atomic.Bool
+			callback := database.database.Callback().Query()
+			if err := callback.After("gorm:query").Register("test:voice_binding_failure", func(tx *gorm.DB) {
+				if armed.Load() && tx.Statement.Table == "managed_platform_credential_records" && reads.Add(1) == scenario.read {
+					failures.Add(1)
+					tx.AddError(errors.New("controlled_voice_binding_read_failure"))
+				}
+			}); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = callback.Remove("test:voice_binding_failure") })
+			for range 2 {
+				reads.Store(0)
+				armed.Store(true)
+				hostedVoiceHTTP(t, server, path, scenario.status)
+				armed.Store(false)
+			}
+			if failures.Load() != 2 || upstream.calls.Load() != 1 || upstream.submissions.Load() != 0 {
+				t.Fatalf("failures=%d metadata calls=%d submissions=%d", failures.Load(), upstream.calls.Load(), upstream.submissions.Load())
+			}
+			for range 2 {
+				restored := hostedVoiceHTTP(t, server, "/model/v1/voices/"+voiceID, http.StatusOK)
+				if restored["voice_id"] != voiceID {
+					t.Fatalf("restored voice=%v", restored)
+				}
+			}
+			repaired := hostedVoiceHTTP(t, server, "/model/v1/voices?provider=dictator", http.StatusOK)
+			if len(repaired["voices"].([]any)) != 1 || repaired["voices"].([]any)[0].(map[string]any)["voice_id"] != voiceID || upstream.calls.Load() != 2 || upstream.submissions.Load() != 0 {
+				t.Fatalf("repaired=%v metadata calls=%d submissions=%d", repaired, upstream.calls.Load(), upstream.submissions.Load())
+			}
+		})
 	}
 }
 
@@ -168,6 +267,11 @@ func TestHostedVoicesUseGrantedPlatformAndRejectPrivateVoices(t *testing.T) {
 				t.Error(err)
 			}
 		}
+		if mode.Load() == "revise" {
+			if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-voices").Update("revision", gorm.Expr("revision + 1")).Error; err != nil {
+				t.Error(err)
+			}
+		}
 		writer.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(writer, `{"voices":[{"voice_id":"private-native-voice","name":"Public voice","category":%q,"labels":{},"high_quality_base_model_ids":[],"verified_languages":[],"preview_url":%q}],"has_more":true,"total_count":1,"next_page_token":"private-native-page"}`, category, origin+"/preview")
 	}))
@@ -182,6 +286,41 @@ func TestHostedVoicesUseGrantedPlatformAndRejectPrivateVoices(t *testing.T) {
 	service.providers.definitions[providerID("elevenlabs")] = definition
 	imageAdapter := service.adapters[mediaOperationAdapterKey(llmproxycontract.MediaCapabilityImageGenerate, "openai", "gpt-image-2")].(*imageGenerationAdapter)
 	service.voiceProviders = map[string]MediaVoiceProvider{"elevenlabs": &elevenLabsVoiceProvider{provider: definition, transport: "voices", tenants: imageAdapter.tenants, store: service.store, client: upstream.Client(), revision: service.catalog.Revision()}}
+	for _, scenario := range []struct {
+		name   string
+		err    error
+		status int
+	}{
+		{"missing", gorm.ErrRecordNotFound, http.StatusForbidden},
+		{"unavailable", errors.New("controlled_voice_grant_read_failure"), http.StatusInternalServerError},
+		{"malformed-offerings", nil, http.StatusInternalServerError},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			var failures atomic.Int64
+			callback := database.database.Callback().Query()
+			if err := callback.After("gorm:query").Register("test:voice_grant_read", func(tx *gorm.DB) {
+				if tx.Statement.Table == "managed_hosted_grant_records" && strings.Contains(tx.Statement.SQL.String(), "id = ? AND tenant_id = ? AND provider = ?") {
+					failures.Add(1)
+					if scenario.err != nil {
+						tx.AddError(scenario.err)
+					} else {
+						tx.Statement.Dest.(*managedHostedGrantRecord).Offerings = []byte(`{`)
+					}
+				}
+			}); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := callback.Remove("test:voice_grant_read"); err != nil {
+					t.Error(err)
+				}
+			})
+			hostedVoiceHTTP(t, server, "/model/v1/voices?provider=elevenlabs", scenario.status)
+			if failures.Load() != 1 || calls.Load() != 0 {
+				t.Fatalf("grant read failure count=%d provider calls=%d", failures.Load(), calls.Load())
+			}
+		})
+	}
 	admission := service.hostedAdmission
 	service.hostedAdmission = nil
 	hostedVoiceHTTP(t, server, "/model/v1/voices?provider=elevenlabs", http.StatusForbidden)
@@ -222,6 +361,38 @@ func TestHostedVoicesUseGrantedPlatformAndRejectPrivateVoices(t *testing.T) {
 	if err != nil || response.StatusCode != http.StatusOK || string(body) != "controlled preview" {
 		t.Fatalf("preview=%s status=%d error=%v", body, response.StatusCode, err)
 	}
+	var credentialReads, rejectedPreviews atomic.Int64
+	callback := database.database.Callback().Query()
+	const previewCallback = "test:voice_preview_authorization"
+	if err := callback.Before("gorm:query").Register(previewCallback, func(tx *gorm.DB) {
+		if tx.Statement.Table == "managed_platform_credential_records" && credentialReads.Add(1) == 3 {
+			rejectedPreviews.Add(1)
+			tx.AddError(errors.New("controlled_preview_authorization_failure"))
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = callback.Remove(previewCallback) })
+	previewCalls := calls.Load()
+	for range 2 {
+		credentialReads.Store(0)
+		hostedVoiceHTTP(t, server, preview, http.StatusNotFound)
+	}
+	if rejectedPreviews.Load() != 2 || calls.Load() != previewCalls {
+		t.Fatalf("preview authorization failures=%d provider calls=%d want=%d", rejectedPreviews.Load(), calls.Load(), previewCalls)
+	}
+	if err := callback.Remove(previewCallback); err != nil {
+		t.Fatal(err)
+	}
+	response, err = http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err = io.ReadAll(response.Body)
+	response.Body.Close()
+	if err != nil || response.StatusCode != http.StatusOK || string(body) != "controlled preview" || calls.Load() != previewCalls+1 {
+		t.Fatalf("restored preview=%s status=%d error=%v calls=%d", body, response.StatusCode, err, calls.Load())
+	}
 	before := calls.Load()
 	hostedVoiceHTTP(t, server, "/model/v1/voices?provider=elevenlabs&voice_type=personal", http.StatusBadRequest)
 	if calls.Load() != before {
@@ -238,6 +409,13 @@ func TestHostedVoicesUseGrantedPlatformAndRejectPrivateVoices(t *testing.T) {
 	if calls.Load() != before {
 		t.Fatal("obsolete grant cursor reached platform")
 	}
+	mode.Store("revise")
+	hostedVoiceHTTP(t, server, "/model/v1/voices?provider=elevenlabs", http.StatusForbidden)
+	if calls.Load() != before+1 {
+		t.Fatal("grant revision did not change during provider discovery")
+	}
+	mode.Store("public")
+	hostedVoiceHTTP(t, server, "/model/v1/voices?provider=elevenlabs", http.StatusOK)
 	mode.Store("preview-revoke")
 	hostedVoiceHTTP(t, server, preview, http.StatusNotFound)
 	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-voices").Update("state", hostedGrantActive).Error; err != nil {

@@ -36,12 +36,8 @@ func testHostedGeminiRating(t *testing.T, mode string) {
 		{Component: "cache_read", Currency: "USD", Rate: "0.5", Unit: "USD/1M_tokens", Conditions: cache},
 		{Component: "cache_storage", Currency: "USD", Rate: "2", Unit: "USD/1M_token_hours", Conditions: storage},
 	}}
-	prices, err := NewCatalogService(catalog)
-	if err != nil {
-		t.Fatal(err)
-	}
-	request := chatRequestParameters{provider: providerDefinition{identifier: providerID("gemini"), activeTransport: providerTransportDefinition{responseCodec: CatalogProtocolGeminiInteractions}}, model: textModelDefinition{identifier: newModelID("gemini-3.5-flash")}}
-	reserve, err := newHostedTextPriceAdmission(prices, request, ratingTestAcceptanceTime(), categoricalPriceConditions(conditions), 1)
+	scope := hostedTextPriceScopeForTest(t, catalog, categoricalPriceConditions(conditions), 1)
+	reserve, err := scope.admission(CatalogProtocolGeminiInteractions, ratingTestAcceptanceTime(), false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -85,11 +85,11 @@ type dictationRequestParameters struct {
 // Router owns HTTP routes and their background media workers.
 type Router struct {
 	*gin.Engine
-	stop func()
+	stop func() error
 }
 
-// Close cancels media execution and waits for the router's workers to stop.
-func (router *Router) Close() { router.stop() }
+// Close stops workers, drains accepted usage, and closes the owned database.
+func (router *Router) Close() error { return router.stop() }
 
 // BuildRouter constructs the proxy router. The caller must close it after HTTP shutdown.
 func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger) (*Router, error) {
@@ -107,7 +107,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	return &Router{Engine: application.router, stop: application.close}, nil
 }
 
-func buildProxyApplication(configuration Configuration, structuredLogger *zap.SugaredLogger, openManagedTenantStore managedTenantStoreOpener) (*proxyApplication, error) {
+func buildProxyApplication(configuration Configuration, structuredLogger *zap.SugaredLogger, openManagedTenantStore managedTenantStoreOpener) (_ *proxyApplication, buildError error) {
 	configuration, validationError := ensureValidatedConfiguration(configuration)
 	if validationError != nil {
 		return nil, validationError
@@ -142,12 +142,19 @@ func buildProxyApplication(configuration Configuration, structuredLogger *zap.Su
 	if storeError != nil {
 		return nil, storeError
 	}
+	application := &proxyApplication{router: router, database: managedTenants.database, address: fmt.Sprintf(":%d", configuration.Port), now: time.Now, closeStore: managedTenants.close}
+	defer func() {
+		if buildError != nil {
+			buildError = errors.Join(buildError, application.close())
+		}
+	}()
 	if err := validateSavedUpstreamCapacityOrigins(context.Background(), managedTenants, providers, configuration.upstreamCapacity); err != nil {
 		return nil, err
 	}
 	tenantAuthenticator := newTenantAuthenticator(managedTenants)
 	assetStore := newTenantAssetStore(configuration.AssetStorePath, configuration.MaxAssetBytes, configuration.AssetRetentionSeconds)
 	mediaOperations, mediaOperationError := newMediaOperationService(configuration, managedTenants, assetStore, providers, upstreamHTTPClient, structuredLogger)
+	application.media = mediaOperations
 	if mediaOperationError != nil {
 		return nil, mediaOperationError
 	}
@@ -222,10 +229,11 @@ func buildProxyApplication(configuration Configuration, structuredLogger *zap.Su
 	}}
 	adapters = append(adapters, openAIClientAdapters(configuration, tenantAuthenticator, providers, upstreamProviders, managedTenants, structuredLogger)...)
 	registerClientMethodErrors(router)
-	if err := RegisterClientProtocols(router, adapters); err != nil {
-		return nil, err
-	}
-	return &proxyApplication{router: router, database: managedTenants.database, address: fmt.Sprintf(":%d", configuration.Port), now: time.Now, payments: payments, media: mediaOperations}, nil
+	// Built-in adapters declare fixed, disjoint routes. The public registry
+	// validates external route declarations before using this same core.
+	registerClientProtocolRoutes(router, adapters)
+	application.payments = payments
+	return application, nil
 }
 
 // chatHandler returns a handler that forwards query-string requests to upstream providers.

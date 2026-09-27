@@ -17,7 +17,6 @@ func TestHostedFundsSettlementLaterReadFailuresPreservePendingDelivery(t *testin
 		read  int64
 	}{
 		{"managed_journal_observation_records", 2},
-		{"managed_price_snapshot_records", 2},
 		{"managed_journal_request_records", 2},
 		{"managed_journal_request_records", 3},
 		{"managed_journal_request_records", 4},

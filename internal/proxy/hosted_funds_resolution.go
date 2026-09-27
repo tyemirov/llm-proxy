@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
@@ -29,7 +30,10 @@ type managedFundsResolutionRecord struct {
 	CreatedAt           time.Time                   `gorm:"not null"`
 }
 
-type fundsResolutionCommand struct{ record managedFundsResolutionRecord }
+type fundsResolutionCommand struct {
+	record managedFundsResolutionRecord
+	amount *big.Rat
+}
 type managementFundsResolutionResponse struct {
 	RequestID      string     `json:"request_id"`
 	Currency       string     `json:"currency"`
@@ -54,7 +58,7 @@ func decodeFundsResolution(ctx *gin.Context, now time.Time) (fundsResolutionComm
 		return fundsResolutionCommand{}, errBillingAccountInvalid
 	}
 	exact := ratingMoney(amount)
-	return fundsResolutionCommand{record: managedFundsResolutionRecord{RequestID: ctx.Param("request_id"), BillingAccountID: ctx.Param("billing_account_id"), ActorUserID: managementPrincipalFromContext(ctx).userID, ReservationRevision: input.Revision, ChargeNumerator: exact.Numerator, ChargeDenominator: exact.Denominator, Reason: input.Reason, EvidenceReference: input.EvidenceReference, CreatedAt: now}}, nil
+	return fundsResolutionCommand{record: managedFundsResolutionRecord{RequestID: ctx.Param("request_id"), BillingAccountID: ctx.Param("billing_account_id"), ActorUserID: managementPrincipalFromContext(ctx).userID, ReservationRevision: input.Revision, ChargeNumerator: exact.Numerator, ChargeDenominator: exact.Denominator, Reason: input.Reason, EvidenceReference: input.EvidenceReference, CreatedAt: now}, amount: amount}, nil
 }
 
 func readFundsResolution(tx *gorm.DB, accountID, requestID string) (managementFundsResolutionResponse, error) {
@@ -69,14 +73,30 @@ func readFundsResolution(tx *gorm.DB, accountID, requestID string) (managementFu
 	if err := tx.Where("request_id = ? AND billing_account_id = ?", requestID, accountID).First(&settlement).Error; err != nil {
 		return managementFundsResolutionResponse{}, err
 	}
-	return managementFundsResolutionResponse{RequestID: record.RequestID, Currency: CatalogCurrencyUSD, CustomerCharge: ExactMoney{Numerator: record.ChargeNumerator, Denominator: record.ChargeDenominator}, SettledCents: strconv.FormatInt(settlement.SettledCents, 10), Reason: record.Reason, CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339Nano)}, nil
+	exact := ExactMoney{Numerator: record.ChargeNumerator, Denominator: record.ChargeDenominator}
+	amount, err := parseExactMoney(exact)
+	if err != nil {
+		return managementFundsResolutionResponse{}, fmt.Errorf("decode retained resolution %s: %w", requestID, err)
+	}
+	if ratingMoney(amount) != exact || record.ReservationRevision == 0 || !journalDimensionPattern.MatchString(record.Reason) || record.CreatedAt.IsZero() ||
+		record.ChargeNumerator != settlement.ChargeNumerator || record.ChargeDenominator != settlement.ChargeDenominator {
+		return managementFundsResolutionResponse{}, fmt.Errorf("invalid retained resolution receipt %s", requestID)
+	}
+	cents, remainder, err := settleUSDCents(amount, ExactMoney{Numerator: settlement.RemainderBeforeNumerator, Denominator: settlement.RemainderBeforeDenominator})
+	if err != nil {
+		return managementFundsResolutionResponse{}, fmt.Errorf("decode retained resolution settlement %s: %w", requestID, err)
+	}
+	if cents != settlement.SettledCents || remainder != (ExactMoney{Numerator: settlement.RemainderAfterNumerator, Denominator: settlement.RemainderAfterDenominator}) {
+		return managementFundsResolutionResponse{}, fmt.Errorf("inconsistent retained resolution settlement %s", requestID)
+	}
+	return managementFundsResolutionResponse{RequestID: record.RequestID, Currency: CatalogCurrencyUSD, CustomerCharge: exact, SettledCents: strconv.FormatInt(settlement.SettledCents, 10), Reason: record.Reason, CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339Nano)}, nil
 }
 
 func (database *gormManagedTenantDatabase) fundsResolution(ctx context.Context, accountID, requestID string, command *fundsResolutionCommand) (managementFundsResolutionResponse, error) {
 	var response managementFundsResolutionResponse
 	err := database.database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if command != nil {
-			if err := applyFundsResolution(tx, command.record); err != nil {
+			if err := applyFundsResolution(tx, *command); err != nil {
 				return err
 			}
 		}
@@ -90,7 +110,8 @@ func (database *gormManagedTenantDatabase) fundsResolution(ctx context.Context, 
 	return response, nil
 }
 
-func applyFundsResolution(tx *gorm.DB, decision managedFundsResolutionRecord) error {
+func applyFundsResolution(tx *gorm.DB, command fundsResolutionCommand) error {
+	decision := command.record
 	lock := tx.Model(&managedJournalRequestRecord{}).Where("id = ? AND billing_account_id = ?", decision.RequestID, decision.BillingAccountID).UpdateColumn("state", gorm.Expr("state"))
 	if lock.Error != nil {
 		return lock.Error
@@ -137,19 +158,11 @@ func applyFundsResolution(tx *gorm.DB, decision managedFundsResolutionRecord) er
 	if err != nil {
 		return err
 	}
-	exposure, err := readHostedFundsExposure(tx, decision.BillingAccountID, decision.RequestID, document.Maximum.CustomerCharge)
+	exposure, err := readHostedFundsExposure(tx, decision.BillingAccountID, decision.RequestID, document.authorizedMaximum)
 	if err != nil {
 		return err
 	}
-	maximum, err := parseExactMoney(exposure.ResolutionChargeLimit)
-	if err != nil {
-		return err
-	}
-	amount, err := parseExactMoney(ExactMoney{Numerator: decision.ChargeNumerator, Denominator: decision.ChargeDenominator})
-	if err != nil {
-		return err
-	}
-	if amount.Cmp(maximum) > 0 {
+	if command.amount.Cmp(exposure.resolutionChargeLimit) > 0 {
 		return errBillingAccountConflict
 	}
 	// The decision is the final net amount. Retain prior credits as included so
@@ -159,7 +172,7 @@ func applyFundsResolution(tx *gorm.DB, decision managedFundsResolutionRecord) er
 	if err := tx.Model(&managedChargeAdjustmentRecord{}).Where("charge_id IN (?)", charges).Order("id").Pluck("id", &creditIDs).Error; err != nil {
 		return err
 	}
-	if err := commitHostedFundsSettlement(tx, reservation, amount, creditIDs, decision.CreatedAt); err != nil {
+	if err := commitHostedFundsSettlement(tx, reservation, command.amount, creditIDs, decision.CreatedAt); err != nil {
 		return err
 	}
 	if err := tx.Omit(clause.Associations).Create(&decision).Error; err != nil {

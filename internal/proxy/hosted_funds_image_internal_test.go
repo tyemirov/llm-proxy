@@ -86,7 +86,7 @@ func TestHostedFundsImageGenerationAndEditing(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-journal").Update("offerings", scope).Error; err != nil {
+				if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", hostedJournalFixtureGrantID).Update("offerings", scope).Error; err != nil {
 					t.Fatal(err)
 				}
 				capability := llmproxycontract.MediaCapabilityImageGenerate

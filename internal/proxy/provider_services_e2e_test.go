@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/glebarez/sqlite"
+	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 	"image"
@@ -205,7 +206,19 @@ func providerServicesFixture(t *testing.T, native http.HandlerFunc, changes ...f
 	for _, change := range changes {
 		change(&configuration)
 	}
-	router := newManagementRouterWithDatabasePath(t, configuration, databasePath)
+	openRouter := func() *proxy.Router {
+		router, err := proxy.BuildRouter(withModelCatalog(t, managementConfigurationWithDatabasePath(configuration, databasePath)), zap.NewNop().Sugar())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := router.Close(); err != nil {
+				t.Error(err)
+			}
+		})
+		return router
+	}
+	router := openRouter()
 	owner := managementSessionCookie(t, "service-fixture")
 	tenantID := managementDefaultTenantTestID(t, router, owner)
 	secret := generateManagementTenantSecret(t, router, owner, tenantID)
@@ -229,7 +242,11 @@ func providerServicesFixture(t *testing.T, native http.HandlerFunc, changes ...f
 		t.Fatal(err)
 	}
 	return connect(router), database, func() llmproxyclient.Client {
-		return connect(newManagementRouterWithDatabasePath(t, configuration, databasePath))
+		if err := router.Close(); err != nil {
+			t.Fatal(err)
+		}
+		router = openRouter()
+		return connect(router)
 	}
 }
 
@@ -240,6 +257,77 @@ func providerServicesInput(t *testing.T, client llmproxyclient.Client) llmproxyc
 		t.Fatal(err)
 	}
 	return llmproxyclient.MediaOperationInput{Capability: "audio.align", Provider: "elevenlabs", Input: json.RawMessage(`{"audio_asset_id":"` + asset.AssetID + `","transcript":"hello"}`), Controls: json.RawMessage(`{}`)}
+}
+
+func TestProviderServicesAlignmentRecoversAcceptedOutput(t *testing.T) {
+	const output = `{"characters":[{"text":"h","start":0,"end":1}],"words":[{"text":"hello","start":0,"end":1}],"loss":0}`
+	var submissions atomic.Int64
+	client, database, restart := providerServicesFixture(t, func(writer http.ResponseWriter, request *http.Request) {
+		submissions.Add(1)
+		if request.Method != http.MethodPost || request.URL.Path != "/v1/forced-alignment" || request.Header.Get("xi-api-key") != "alignment-secret" {
+			t.Error("recovery fixture received an unexpected provider request")
+		}
+		writer.Header().Set("x-trace-id", "private-alignment-trace")
+		writer.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(writer, output)
+	})
+	if err := database.Exec("CREATE TRIGGER reject_alignment_publication BEFORE UPDATE OF public_state ON media_operation_records WHEN OLD.public_state = 'running' AND NEW.public_state != 'running' BEGIN SELECT RAISE(ABORT, 'controlled alignment publication failure'); END").Error; err != nil {
+		t.Fatal(err)
+	}
+	input := providerServicesInput(t, client)
+	accepted, err := client.CreateMediaOperation(t.Context(), "alignment-recovery", input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	tick := time.NewTicker(time.Millisecond)
+	defer tick.Stop()
+	for {
+		var saved struct{ ProviderHandle string }
+		if err := database.Table("media_operation_records").Where("operation_id = ?", accepted.OperationID).First(&saved).Error; err != nil {
+			t.Fatal(err)
+		}
+		if saved.ProviderHandle != "" {
+			break
+		}
+		select {
+		case <-tick.C:
+		case <-ctx.Done():
+			t.Fatal("alignment did not retain its accepted output")
+		}
+	}
+	// Close the original runtime while publication is unavailable. A fresh runtime
+	// must use the receipt after the previous worker claim expires.
+	restart()
+	if err := database.Exec("DROP TRIGGER reject_alignment_publication").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Table("media_operation_claim_records").Where("operation_id = ?", accepted.OperationID).Update("expires_at", time.Now().Add(-time.Hour)).Error; err != nil {
+		t.Fatal(err)
+	}
+	client = restart()
+	recoveryContext, recoveryCancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer recoveryCancel()
+	completed, err := client.WaitMediaOperation(recoveryContext, accepted.OperationID, time.Millisecond)
+	if err != nil || completed.State != "succeeded" || len(completed.Outputs) != 1 {
+		t.Fatalf("alignment recovery=%+v error=%v", completed, err)
+	}
+	for range 2 {
+		asset, err := client.GetAsset(t.Context(), completed.Outputs[0].AssetID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := client.DownloadAsset(t.Context(), asset)
+		if err != nil || string(data) != output {
+			t.Fatalf("recovered alignment=%s error=%v", data, err)
+		}
+		replay, err := client.CreateMediaOperation(t.Context(), "alignment-recovery", input)
+		if err != nil || replay.OperationID != accepted.OperationID || submissions.Load() != 1 {
+			t.Fatalf("alignment replay=%+v error=%v calls=%d", replay, err, submissions.Load())
+		}
+		client = restart()
+	}
 }
 
 func TestProviderServicesNativeFailuresAndRecoveryNeverResubmit(t *testing.T) {
@@ -376,6 +464,16 @@ func TestProviderServicesCatalogRejectsInvalidBindings(t *testing.T) {
 		},
 		"dictionary limits": func(p *proxy.ProviderCatalogProvider) { p.Services[1].Limits = p.Services[0].Limits },
 		"limit":             func(p *proxy.ProviderCatalogProvider) { p.Services[0].Limits[0].Value = new(1000000001) },
+		"missing duration limit": func(p *proxy.ProviderCatalogProvider) {
+			p.Services[0].Limits = p.Services[0].Limits[:1]
+		},
+		"absent duration value":       func(p *proxy.ProviderCatalogProvider) { p.Services[0].Limits[1].Value = nil },
+		"lower duration bound":        func(p *proxy.ProviderCatalogProvider) { p.Services[0].Limits[1].Value = new(35999) },
+		"higher duration bound":       func(p *proxy.ProviderCatalogProvider) { p.Services[0].Limits[1].Value = new(36001) },
+		"duration unit":               func(p *proxy.ProviderCatalogProvider) { p.Services[0].Limits[1].Unit = "minutes" },
+		"duration depends on account": func(p *proxy.ProviderCatalogProvider) { p.Services[0].Limits[1].AccountDependent = true },
+		"unknown alignment limit":     func(p *proxy.ProviderCatalogProvider) { p.Services[0].Limits[1].ID = "unknown" },
+		"duplicate alignment limit":   func(p *proxy.ProviderCatalogProvider) { p.Services[0].Limits[1] = p.Services[0].Limits[0] },
 	} {
 		t.Run(name, func(t *testing.T) {
 			schema := testfixtures.ProviderCatalog(t).Schema()
@@ -392,6 +490,23 @@ func TestProviderServicesCatalogRejectsInvalidBindings(t *testing.T) {
 				t.Fatal("invalid service catalog accepted")
 			}
 		})
+	}
+}
+
+func TestProviderServicesCatalogAcceptsReorderedAlignmentLimits(t *testing.T) {
+	schema := testfixtures.ProviderCatalog(t).Schema()
+	for index := range schema.Providers {
+		if schema.Providers[index].ID == "elevenlabs" {
+			limits := schema.Providers[index].Services[0].Limits
+			limits[0], limits[1] = limits[1], limits[0]
+		}
+	}
+	data, err := yaml.Marshal(schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := proxy.ParseProviderCatalog(data); err != nil {
+		t.Fatalf("reordered alignment limits: %v", err)
 	}
 }
 

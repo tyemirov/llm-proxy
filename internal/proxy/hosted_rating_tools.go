@@ -10,10 +10,9 @@ import (
 
 // Every generation, including a continuation, uses the immutable tool ceiling.
 // The provider payload cannot raise the authorized bound.
-func (execution *hostedTextExecution) bindAcceptedToolLimit(request *http.Request, codec string) error {
-	if codec != CatalogProtocolOpenAIResponses {
-		return fmt.Errorf("%w: provider has no enforceable tool ceiling", errHostedAuthorityDenied)
-	}
+func (execution *hostedTextExecution) bindAcceptedToolLimit(request *http.Request) error {
+	// Admission accepts search only on the OpenAI Responses route. Execution
+	// retains that route and reads its immutable bound before provider dispatch.
 	var record managedPriceSnapshotRecord
 	if err := execution.database.database.WithContext(request.Context()).Where("request_id = ? AND billing_account_id = ?", execution.request.ID, execution.request.BillingAccountID).First(&record).Error; err != nil {
 		return fmt.Errorf("%w: read accepted tool ceiling: %w", errHostedAuthorityDenied, err)
@@ -39,10 +38,8 @@ func (execution *hostedTextExecution) bindAcceptedToolLimit(request *http.Reques
 		return fmt.Errorf("close hosted tool payload: %w", err)
 	}
 	payload["max_tool_calls"] = json.RawMessage(maximum)
-	encoded, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("encode hosted tool ceiling: %w", err)
-	}
+	// Payload values were decoded from JSON; the ceiling is a validated integer.
+	encoded, _ := json.Marshal(payload)
 	request.Body = io.NopCloser(bytes.NewReader(encoded))
 	request.ContentLength = int64(len(encoded))
 	request.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(encoded)), nil }

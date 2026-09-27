@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,6 +31,40 @@ func TestHostedFundsExposureReportsExcessProviderCost(t *testing.T) {
 	var cases int64
 	if err := database.database.Model(&managedJournalCaseRecord{}).Where("request_id = ? AND reason = ?", reservation.RequestID, "platform_exposure").Count(&cases).Error; err != nil || cases != 1 {
 		t.Fatalf("exposure cases=%d error=%v", cases, err)
+	}
+}
+
+func TestHostedFundsExposureRejectsCreditOnUnresolvedCost(t *testing.T) {
+	database, server, cookie, reservation := newFundsResolutionFixtureFor(t, `{"input_tokens":20000,"output_tokens":100,"input_tokens_details":{"cached_tokens":0},"output_tokens_details":{"reasoning_tokens":0}}`, journalRequestCompleted)
+	path := "/billing-accounts/billing-journal/reservations/" + reservation.RequestID
+	before := fundsResolutionHTTP(t, server, cookie("owner"), http.MethodGet, path, "", http.StatusOK)
+	var charge managedChargeRecord
+	if err := database.database.Where("request_id = ?", reservation.RequestID).First(&charge).Error; err != nil {
+		t.Fatal(err)
+	}
+	credit, err := newCustomerChargeAdjustment("billing-journal", charge.ID, "credit-above-reservation", "customer_credit", ExactMoney{Numerator: "1", Denominator: "25"}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := applyFundsFixtureCredit(t, openJournalTransactionInstance(t, database), credit); !errors.Is(err, errUsageJournalConflict) {
+			t.Fatalf("unresolved cost permitted a credit: %v", err)
+		}
+		current := fundsResolutionHTTP(t, server, cookie("owner"), http.MethodGet, path, "", http.StatusOK)
+		if !reflect.DeepEqual(before, current) {
+			t.Fatal("rejected credit changed the reservation or exposure")
+		}
+		assertHostedFundsBalance(t, database, 5, 2)
+		assertFundsCreditRemainder(t, database, "0", "1")
+	}
+	resolution := "/billing-accounts/billing-journal/requests/" + reservation.RequestID + "/funds-resolution"
+	invalid := fmt.Sprintf(`{"revision":%d,"customer_charge":{"numerator":"1","denominator":"25"},"reason":"approved_charge","evidence_reference":"credited-exposure"}`, reservation.Revision)
+	fundsResolutionHTTP(t, server, cookie("operator"), http.MethodPut, resolution, invalid, http.StatusConflict)
+	waiver := fmt.Sprintf(`{"revision":%d,"customer_charge":{"numerator":"0","denominator":"1"},"reason":"approved_waiver","evidence_reference":"credited-exposure"}`, reservation.Revision)
+	for range 2 {
+		fundsResolutionHTTP(t, server, cookie("operator"), http.MethodPut, resolution, waiver, http.StatusOK)
+		assertHostedFundsBalance(t, database, 5, 5)
+		assertFundsCreditRemainder(t, database, "0", "1")
 	}
 }
 

@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -23,7 +24,7 @@ type providerAuditFixture struct {
 }
 
 func TestHostedPaymentsProviderReconciliationRejectsInvalidImportInputs(t *testing.T) {
-	for _, scenario := range []string{"run-id", "missing-evidence", "missing-source", "evidence-too-large", "source-too-large", "empty-source", "malformed-json", "multiple-json", "invalid-discount", "invalid-fees", "missing-database", "unavailable-database", "missing-schema", "missing-connection"} {
+	for _, scenario := range []string{"run-id", "missing-evidence", "missing-source", "evidence-too-large", "source-too-large", "empty-source", "malformed-json", "multiple-json", "invalid-discount", "invalid-fees", "missing-database", "unavailable-database", "connection-access", "missing-schema", "missing-connection"} {
 		t.Run(scenario, func(t *testing.T) {
 			fixture := newProviderAuditFixture(t)
 			before := fixture.charges(t)
@@ -64,11 +65,17 @@ func TestHostedPaymentsProviderReconciliationRejectsInvalidImportInputs(t *testi
 				configuration = ManagementConfiguration{}
 			case "unavailable-database":
 				configuration = ManagementConfiguration{DatabasePath: filepath.Join(t.TempDir(), "absent", "management.db")}
+			case "connection-access":
+				configuration.DatabaseDialector = reconciliationConnectionFailureDialector{configuration.DatabaseDialector, t}
 			case "missing-schema":
 				configuration = ManagementConfiguration{DatabasePath: filepath.Join(t.TempDir(), "empty.db")}
 			}
-			if _, err := ReconcileProviderCosts(t.Context(), configuration, runID, normalized, source); err == nil {
-				t.Fatal("invalid import accepted")
+			report, err := ReconcileProviderCosts(t.Context(), configuration, runID, normalized, source)
+			if err == nil || !reflect.DeepEqual(report, ProviderCostReconciliationReport{}) {
+				t.Fatalf("invalid import returned report=%+v error=%v", report, err)
+			}
+			if scenario == "connection-access" && !errors.Is(err, errReconciliationConnectionAccess) {
+				t.Fatalf("connection access failure was not reported: %v", err)
 			}
 			fixture.assertNoImport(t)
 			fixture.assertRecovery(t, before)

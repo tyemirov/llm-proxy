@@ -26,6 +26,11 @@ func TestHostedPaymentsReadsFailWithoutPartialAmountsAndRecover(t *testing.T) {
 		t.Fatal(err)
 	}
 	orderPath := paymentOrdersTestPath + "/" + order["id"].(string)
+	checkoutReceipt := paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, orderPath+"/checkout", "", "", http.StatusOK)
+	paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, orderPath+"/checkout?unexpected=1", "", "", http.StatusBadRequest)
+	if after := paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, orderPath+"/checkout", "", "", http.StatusOK); !reflect.DeepEqual(checkoutReceipt, after) {
+		t.Fatal("rejected checkout query changed its receipt")
+	}
 	var failedTable atomic.Pointer[string]
 	var failures atomic.Int64
 	const callback = "test:payment_resource_read_failure"
@@ -77,6 +82,37 @@ func TestHostedPaymentsReadsFailWithoutPartialAmountsAndRecover(t *testing.T) {
 		}
 		failedTable.Store(nil)
 		paymentOrderHTTP(t, server, cookie("owner"), http.MethodPost, "/billing-accounts/billing-journal/payment-portal-sessions", "", `{}`, http.StatusCreated)
+	})
+	t.Run("portal-processor", func(t *testing.T) {
+		snapshot := func() map[string]any {
+			t.Helper()
+			result := map[string]any{}
+			for _, path := range []string{orderPath, orderPath + "/receipt", fundsBalanceTestPath, "/billing-accounts/billing-journal/ledger-entries"} {
+				result[path] = paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, path, "", "", http.StatusOK)
+			}
+			return result
+		}
+		before := snapshot()
+		calls := processor.portalCalls.Load()
+		processor.portalStatus.Store(http.StatusServiceUnavailable)
+		for range 2 {
+			failure := paymentOrderHTTP(t, server, cookie("owner"), http.MethodPost, "/billing-accounts/billing-journal/payment-portal-sessions", "", `{}`, http.StatusServiceUnavailable)
+			if !reflect.DeepEqual(failure, map[string]any{"error": map[string]any{"code": errFundingUnavailable.Error()}}) {
+				t.Fatalf("failed portal exposed processor details: %v", failure)
+			}
+			if !reflect.DeepEqual(before, snapshot()) {
+				t.Fatal("failed portal changed payment receipts or funds")
+			}
+		}
+		if processor.portalCalls.Load() != calls+2 {
+			t.Fatalf("failed portal repeated processor requests: calls=%d", processor.portalCalls.Load())
+		}
+		processor.portalStatus.Store(0)
+		service.store.database = openJournalTransactionInstance(t, database)
+		paymentOrderHTTP(t, server, cookie("owner"), http.MethodPost, "/billing-accounts/billing-journal/payment-portal-sessions", "", `{}`, http.StatusCreated)
+		if !reflect.DeepEqual(before, snapshot()) || processor.creates.Load() != 1 {
+			t.Fatal("portal recovery changed financial effects or created another payment")
+		}
 	})
 }
 

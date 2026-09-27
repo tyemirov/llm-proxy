@@ -28,8 +28,24 @@ func validateProviderCatalogServices(services []ProviderCatalogService, transpor
 			}
 			continue
 		}
-		if len(service.Controls) != 0 || len(service.Limits) != 1 || service.Limits[0].ID != alignmentInputLimit || service.Limits[0].Unit != "bytes" || service.Limits[0].Value == nil || *service.Limits[0].Value <= 0 || *service.Limits[0].Value > 1_000_000_000 || service.Limits[0].AccountDependent {
+		if len(service.Controls) != 0 || len(service.Limits) != 2 {
 			return fmt.Errorf("%w: field=%s[%d] reason=invalid_alignment_limits", ErrInvalidModelCatalog, field, index)
+		}
+		for _, limit := range service.Limits {
+			valid := limit.Value != nil && !limit.AccountDependent
+			if valid {
+				switch limit.ID {
+				case alignmentInputLimit:
+					valid = limit.Unit == "bytes" && *limit.Value > 0 && *limit.Value <= 1_000_000_000
+				case alignmentDurationDimension:
+					valid = limit.Unit == "seconds" && *limit.Value == alignmentMaximumInputSeconds
+				default:
+					valid = false
+				}
+			}
+			if !valid {
+				return fmt.Errorf("%w: field=%s[%d] reason=invalid_alignment_limits", ErrInvalidModelCatalog, field, index)
+			}
 		}
 	}
 	return nil

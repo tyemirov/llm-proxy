@@ -29,6 +29,17 @@ const (
 
 const journalPersistenceTimeout = 10 * time.Second
 
+// A local journal or authority failure ends this execution even when its
+// provider operation is a read that would otherwise permit transport retries.
+type hostedExecutionBoundaryError struct{ error }
+
+func (failure *hostedExecutionBoundaryError) Unwrap() error { return failure.error }
+
+func isHostedExecutionBoundaryFailure(err error) bool {
+	var failure *hostedExecutionBoundaryError
+	return errors.As(err, &failure)
+}
+
 // One admitted execution owns all of its provider attempts, including protocol
 // synthesis calls and HTTP retries below the visible continuation loop.
 type hostedTextExecution struct {
@@ -74,47 +85,44 @@ func (execution *hostedTextExecution) do(next HTTPDoer, request *http.Request, t
 	case hostedProviderAuxiliary, hostedProviderStaging:
 		if (role == hostedProviderStaging && request.Method != http.MethodPost) ||
 			(role == hostedProviderAuxiliary && request.Method != http.MethodGet && request.Method != http.MethodDelete) {
-			return nil, errHostedAuthorityDenied
+			return nil, &hostedExecutionBoundaryError{errHostedAuthorityDenied}
 		}
 		if err := execution.authorizeTransfer(request.Context(), role); err != nil {
-			return nil, err
+			return nil, &hostedExecutionBoundaryError{err}
 		}
 		return next.Do(request)
 	case hostedProviderGeneration:
 		if request.Method != http.MethodPost {
-			return nil, errHostedAuthorityDenied
+			return nil, &hostedExecutionBoundaryError{errHostedAuthorityDenied}
 		}
 	case hostedProviderObservation:
 		if request.Method != http.MethodGet || execution.activeAttempt == "" {
-			return nil, errHostedAuthorityDenied
+			return nil, &hostedExecutionBoundaryError{errHostedAuthorityDenied}
 		}
 		if err := execution.authorizeTransfer(request.Context(), role); err != nil {
-			return nil, err
+			return nil, &hostedExecutionBoundaryError{err}
 		}
 	default:
-		return nil, errHostedAuthorityDenied
+		return nil, &hostedExecutionBoundaryError{errHostedAuthorityDenied}
 	}
-	profile, err := newCompletionJournalMeter(transport.responseCodec, execution.request.Operation)
-	if err != nil {
-		return nil, err
-	}
+	profile := newCompletionJournalMeter(transport.responseCodec, execution.request.Operation)
 	// Cleanup and read-only polling do not create another paid generation attempt.
 	if role == hostedProviderGeneration {
 		if execution.webSearch {
-			if err := execution.bindAcceptedToolLimit(request, transport.responseCodec); err != nil {
-				return nil, err
+			if err := execution.bindAcceptedToolLimit(request); err != nil {
+				return nil, &hostedExecutionBoundaryError{err}
 			}
 		}
 		identifier, err := newHostedResourceID(journalAttemptIDPrefix, execution.entropy)
 		if err != nil {
-			return nil, err
+			return nil, &hostedExecutionBoundaryError{err}
 		}
 		attempt, err := execution.database.prepareJournalAttempt(request.Context(), execution.claim(), identifier, execution.authorize)
 		if err != nil {
-			return nil, err
+			return nil, &hostedExecutionBoundaryError{err}
 		}
 		if err := execution.database.dispatchJournalAttempt(request.Context(), execution.claim(), attempt.ID); err != nil {
-			return nil, err
+			return nil, &hostedExecutionBoundaryError{err}
 		}
 		execution.activeAttempt = attempt.ID
 	}
@@ -133,7 +141,7 @@ func (execution *hostedTextExecution) do(next HTTPDoer, request *http.Request, t
 	defer cancel()
 	if observation.ProviderRequestID != "" {
 		if err := execution.database.bindJournalProviderRequest(persistContext, execution.claim(), execution.activeAttempt, observation.ProviderRequestID); err != nil {
-			return nil, err
+			return nil, &hostedExecutionBoundaryError{err}
 		}
 	}
 	if !terminal {
@@ -144,10 +152,10 @@ func (execution *hostedTextExecution) do(next HTTPDoer, request *http.Request, t
 	}
 	evidence, err := newJournalUsageEvidence(observation, execution.entropy)
 	if err != nil {
-		return nil, fmt.Errorf("normalize provider usage for attempt %s: %w", execution.activeAttempt, err)
+		return nil, &hostedExecutionBoundaryError{fmt.Errorf("normalize provider usage for attempt %s: %w", execution.activeAttempt, err)}
 	}
 	if _, err := execution.database.observeJournalAttempt(persistContext, execution.claim(), evidence); err != nil {
-		return nil, err
+		return nil, &hostedExecutionBoundaryError{err}
 	}
 	return response, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"net/http"
 	"time"
 
@@ -18,6 +19,10 @@ const (
 )
 
 type managementChargeResponse struct {
+	providerAmount      *big.Rat
+	quotedAmount        *big.Rat
+	customerAmount      *big.Rat
+	netCustomerAmount   *big.Rat
 	ID                  string                               `json:"id"`
 	RequestID           string                               `json:"request_id"`
 	AttemptID           string                               `json:"attempt_id"`
@@ -93,17 +98,19 @@ func chargeResponse(record managedChargeRecord, adjustments []managedChargeAdjus
 	}
 	response := managementChargeResponse{ID: record.ID, RequestID: record.RequestID, AttemptID: record.AttemptID, ObservationID: record.ObservationID, PriceSnapshotID: record.PriceSnapshotID, State: record.State, Rating: managementRatingResponse{State: rating.State, Lines: rating.Lines, UnresolvedDimensions: rating.UnresolvedDimensions}, CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339Nano)}
 	if rating.State == CatalogRatingResolved {
+		response.providerAmount, response.quotedAmount = rating.providerAmount, rating.customerAmount
 		response.Rating.ProviderCost = &rating.ProviderCost
 		response.Rating.CustomerCharge = &rating.CustomerCharge
 		response.Rating.MinimumAdjustment = &rating.MinimumAdjustment
 	}
 	if record.State == chargeRated {
 		response.CustomerCharge = &rating.CustomerCharge
-		net, err := netCustomerCharge(rating.CustomerCharge, adjustments)
+		net, err := netCustomerCharge(rating.customerAmount, adjustments)
 		if err != nil {
 			return managementChargeResponse{}, err
 		}
 		amount := ratingMoney(net)
+		response.customerAmount, response.netCustomerAmount = rating.customerAmount, net
 		response.NetCustomerCharge = &amount
 	} else if len(adjustments) != 0 {
 		return managementChargeResponse{}, fmt.Errorf("unresolved charge has customer credits")
@@ -181,6 +188,6 @@ func (service *managementService) getPriceSnapshotHandler() gin.HandlerFunc {
 			writeUsageJournalError(ctx, fmt.Errorf("%w: restore accepted price %s: %w", errUsageJournalUnavailable, record.ID, err))
 			return
 		}
-		ctx.JSON(http.StatusOK, managementPriceSnapshotResponse{ID: record.ID, RequestID: record.RequestID, Snapshot: document, CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339Nano)})
+		ctx.JSON(http.StatusOK, managementPriceSnapshotResponse{ID: record.ID, RequestID: record.RequestID, Snapshot: document.hostedPriceSnapshotDocument, CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339Nano)})
 	}
 }

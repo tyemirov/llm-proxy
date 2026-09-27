@@ -55,7 +55,7 @@ func TestHostedMCPIdentitySharesNativeExecution(t *testing.T) {
 		t.Fatalf("foreign MCP account disclosed the request: %v", result)
 	}
 	input["messages"] = []map[string]string{{"role": "user", "content": "shared prompt"}}
-	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-journal").Update("state", hostedGrantRevoked).Error; err != nil {
+	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", hostedJournalFixtureGrantID).Update("state", hostedGrantRevoked).Error; err != nil {
 		t.Fatal(err)
 	}
 	if saved := hostedMCPCall(t, owner, input, false); saved["request_id"] != first["request_id"] {

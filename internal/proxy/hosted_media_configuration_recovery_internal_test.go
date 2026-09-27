@@ -130,6 +130,35 @@ func TestHostedMediaRecoveryRejectsRemovedRuntimeAuthorization(t *testing.T) {
 	}
 }
 
+func TestHostedMediaStoredControlsFailurePreventsDispatch(t *testing.T) {
+	for _, controls := range []string{`{`, `{"quality":42}`} {
+		t.Run(controls, func(t *testing.T) {
+			fixture := newFundedMediaRecoveryFixture(t)
+			var operation mediaOperationRecord
+			if err := fixture.database.database.Where("operation_id = ?", fixture.operationID).First(&operation).Error; err != nil {
+				t.Fatal(err)
+			}
+			before := fixture.state(t)
+			if err := fixture.database.database.Model(&mediaOperationRecord{}).Where("operation_id = ?", fixture.operationID).Update("normalized_controls", []byte(controls)).Error; err != nil {
+				t.Fatal(err)
+			}
+			fixture.worker.runOperation("stored-controls-worker", fixture.operationID)
+			fixture.assertFailure(t, MediaOperationStateFailed, 0)
+			if !reflect.DeepEqual(before, fixture.state(t)) {
+				t.Fatal("invalid stored controls changed financial resources")
+			}
+			var attempts int64
+			if err := fixture.database.database.Model(&managedJournalAttemptRecord{}).Count(&attempts).Error; err != nil || attempts != 0 {
+				t.Fatalf("invalid controls retained attempts=%d error=%v", attempts, err)
+			}
+			if err := fixture.database.database.Model(&mediaOperationRecord{}).Where("operation_id = ?", fixture.operationID).Update("normalized_controls", operation.NormalizedControls).Error; err != nil {
+				t.Fatal(err)
+			}
+			fixture.recover(t, MediaOperationStateFailed)
+		})
+	}
+}
+
 func (fixture fundedMediaRecoveryFixture) restartConfiguration(t *testing.T, hosted *HostedConfiguration) (Configuration, *managedTenantStore) {
 	t.Helper()
 	database := openJournalTransactionInstance(t, fixture.database)

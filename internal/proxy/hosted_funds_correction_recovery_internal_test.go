@@ -108,6 +108,24 @@ func TestHostedFundsCorrectionWriteFailuresPreserveCreditState(t *testing.T) {
 	}
 }
 
+func TestHostedFundsCorrectionMissingResourcesPreserveCreditState(t *testing.T) {
+	for _, scenario := range []struct{ name, replaced, replacement string }{
+		{"account", "billing-journal", "billing-absent"},
+		{"reservation", "/requests/", "/requests/absent-"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			fixture := newFundsCorrectionFixture(t)
+			before := fixture.resources(t)
+			path := strings.Replace(fixture.creditPath, scenario.replaced, scenario.replacement, 1)
+			for range 2 {
+				fundsResolutionHTTP(t, fixture.server, fixture.cookie("operator"), http.MethodPut, path, fixture.creditBody, http.StatusNotFound)
+				fixture.assertUnchanged(t, before)
+			}
+			fixture.recoverCredit(t, before)
+		})
+	}
+}
+
 func TestHostedFundsCorrectionReadFailuresPreserveCreditState(t *testing.T) {
 	for _, scenario := range []struct {
 		table string

@@ -24,8 +24,11 @@ type managedChargeAdjustmentRecord struct {
 	CreatedAt         time.Time                   `gorm:"not null"`
 }
 
-type customerChargeAdjustment struct{ record managedChargeAdjustmentRecord }
-type chargeAdjustmentSettlement func(*gorm.DB, managedChargeAdjustmentRecord) error
+type customerChargeAdjustment struct {
+	record managedChargeAdjustmentRecord
+	amount *big.Rat
+}
+type chargeAdjustmentSettlement func(*gorm.DB, customerChargeAdjustment) error
 
 func newCustomerChargeAdjustment(accountID, chargeID, eventKey, reason string, credit ExactMoney, now time.Time) (customerChargeAdjustment, error) {
 	amount, err := parseExactMoney(credit)
@@ -36,7 +39,7 @@ func newCustomerChargeAdjustment(accountID, chargeID, eventKey, reason string, c
 	return customerChargeAdjustment{record: managedChargeAdjustmentRecord{
 		ID: "adjustment-" + sha256Hex(accountID + "\x00" + eventKey)[:32], BillingAccountID: accountID, ChargeID: chargeID,
 		CreditNumerator: canonical.Numerator, CreditDenominator: canonical.Denominator, Reason: reason, CreatedAt: now.UTC(),
-	}}, nil
+	}, amount: amount}, nil
 }
 
 // A trusted financial command supplies settlement. Customers cannot create
@@ -80,29 +83,26 @@ func (database *gormManagedTenantDatabase) applyCustomerChargeAdjustment(ctx con
 		if err := transaction.Where("charge_id = ? AND billing_account_id = ?", charge.ID, charge.BillingAccountID).Find(&adjustments).Error; err != nil {
 			return fmt.Errorf("read charge credits: %w", err)
 		}
-		adjustments = append(adjustments, proposed)
-		if _, err := netCustomerCharge(rating.CustomerCharge, adjustments); err != nil {
+		remaining := new(big.Rat).Sub(rating.customerAmount, command.amount)
+		if _, err := netCustomerCharge(remaining, adjustments); err != nil {
 			return fmt.Errorf("%w: %w", errUsageJournalConflict, err)
 		}
 		if err := transaction.Omit(clause.Associations).Create(&proposed).Error; err != nil {
 			return fmt.Errorf("retain customer credit: %w", err)
 		}
-		if err := settle(transaction, proposed); err != nil {
+		if err := settle(transaction, command); err != nil {
 			return fmt.Errorf("settle customer credit %s: %w", proposed.ID, err)
 		}
 		return nil
 	})
 }
 
-func netCustomerCharge(original ExactMoney, adjustments []managedChargeAdjustmentRecord) (*big.Rat, error) {
-	net, err := parseExactMoney(original)
-	if err != nil {
-		return nil, err
-	}
+func netCustomerCharge(original *big.Rat, adjustments []managedChargeAdjustmentRecord) (*big.Rat, error) {
+	net := new(big.Rat).Set(original)
 	for _, adjustment := range adjustments {
-		credit, err := parseExactMoney(ExactMoney{Numerator: adjustment.CreditNumerator, Denominator: adjustment.CreditDenominator})
-		if err != nil || credit.Sign() <= 0 || !journalDimensionPattern.MatchString(adjustment.Reason) || adjustment.CreatedAt.IsZero() {
-			return nil, fmt.Errorf("invalid retained customer credit")
+		credit, err := decodeRetainedChargeAdjustment(adjustment)
+		if err != nil {
+			return nil, err
 		}
 		net.Sub(net, credit)
 	}
@@ -110,6 +110,17 @@ func netCustomerCharge(original ExactMoney, adjustments []managedChargeAdjustmen
 		return nil, fmt.Errorf("customer credits exceed original charge")
 	}
 	return net, nil
+}
+
+func decodeRetainedChargeAdjustment(adjustment managedChargeAdjustmentRecord) (*big.Rat, error) {
+	credit, err := parseExactMoney(ExactMoney{Numerator: adjustment.CreditNumerator, Denominator: adjustment.CreditDenominator})
+	if err != nil {
+		return nil, fmt.Errorf("decode retained customer credit %s: %w", adjustment.ID, err)
+	}
+	if credit.Sign() <= 0 || !journalDimensionPattern.MatchString(adjustment.Reason) || adjustment.CreatedAt.IsZero() {
+		return nil, fmt.Errorf("invalid retained customer credit %s", adjustment.ID)
+	}
+	return credit, nil
 }
 
 func (database *gormManagedTenantDatabase) billingChargeAdjustments(ctx context.Context, accountID string, ids []string) ([]managedChargeAdjustmentRecord, error) {

@@ -18,7 +18,11 @@ func buildRouterWithStoreForTest(t testing.TB, configuration Configuration, logg
 	if err != nil {
 		return nil, err
 	}
-	t.Cleanup(router.Close)
+	t.Cleanup(func() {
+		if err := router.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	return router.Engine, nil
 }
 
@@ -28,6 +32,10 @@ func buildProxyApplicationForTest(t testing.TB, configuration Configuration, log
 	if err != nil {
 		return nil, err
 	}
-	t.Cleanup(application.close)
+	t.Cleanup(func() {
+		if err := application.close(); err != nil {
+			t.Error(err)
+		}
+	})
 	return application, nil
 }

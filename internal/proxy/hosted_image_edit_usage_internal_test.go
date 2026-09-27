@@ -55,7 +55,7 @@ func TestHostedImageEditingRetainsUsageOnBothSurfaces(t *testing.T) {
 			}))
 			t.Cleanup(upstream.Close)
 			server, service := newHostedMediaAdmissionHTTPServer(t, database, hostedMediaWorkerProvider(upstream.URL))
-			if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-journal").Update("offerings", []byte(`[{"model":"gpt-image-2","operations":["image_editing"]}]`)).Error; err != nil {
+			if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", hostedJournalFixtureGrantID).Update("offerings", []byte(`[{"model":"gpt-image-2","operations":["image_editing"]}]`)).Error; err != nil {
 				t.Fatal(err)
 			}
 			service.adapters[mediaOperationAdapterKey(llmproxycontract.MediaCapabilityImageEdit, "openai", "gpt-image-2")] = service.adapters[mediaOperationAdapterKey(llmproxycontract.MediaCapabilityImageGenerate, "openai", "gpt-image-2")]
@@ -87,7 +87,11 @@ func TestHostedImageEditingRetainsUsageOnBothSurfaces(t *testing.T) {
 				t.Fatalf("edit quantities=%s", pending[0].Quantities)
 			}
 			entry := read("")["requests"].([]any)[0].(map[string]any)
-			if entry["operation"] != ModelOperationImageEditing || entry["usage_state"] != string(journalUsageUnknown) {
+			wantUsage := journalUsageComplete
+			if surface == "responses" {
+				wantUsage = journalUsageUnknown
+			}
+			if entry["operation"] != ModelOperationImageEditing || entry["usage_state"] != string(wantUsage) {
 				t.Fatalf("edit attribution=%v", entry)
 			}
 		})

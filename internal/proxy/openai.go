@@ -495,7 +495,7 @@ func (client *OpenAIClient) performResponsesRequest(httpRequest *http.Request, s
 		var transportError error
 		statusCode, responseBytes, responseHeader, latencyMillis, transportError = utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEvent)
 		responseError := providerResponseError(statusCode, responseHeader, transportError)
-		if responseError != nil && hostedTextExecutionFromContext(httpRequest.Context()) != nil && httpRequest.Method == http.MethodPost {
+		if responseError != nil && hostedTextExecutionFromContext(httpRequest.Context()) != nil && (httpRequest.Method == http.MethodPost || isHostedExecutionBoundaryFailure(responseError)) {
 			return backoff.Permanent(responseError)
 		}
 		if _, _, _, hasHTTPMetadata := providerHTTPMetadata(responseError); !hasHTTPMetadata {

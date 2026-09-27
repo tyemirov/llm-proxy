@@ -121,7 +121,7 @@ func TestHostedMediaAdmissionRetainsAcceptedAuthority(t *testing.T) {
 	var reservations int
 	service.hostedAdmission = func(*gorm.DB, managedJournalRequestRecord, mediaOperationRecord) error { reservations++; return nil }
 	first := hostedMediaAdmissionHTTP(t, server, "retained", "private image prompt", http.StatusAccepted)
-	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-journal").Update("state", hostedGrantRevoked).Error; err != nil {
+	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", hostedJournalFixtureGrantID).Update("state", hostedGrantRevoked).Error; err != nil {
 		t.Fatal(err)
 	}
 	second := hostedMediaAdmissionHTTP(t, server, "retained", "private image prompt", http.StatusOK)
@@ -187,7 +187,7 @@ func TestHostedMediaAdmissionRechecksAuthorityAfterValidation(t *testing.T) {
 			key := mediaOperationAdapterKey(llmproxycontract.MediaCapabilityImageGenerate, "openai", "gpt-image-2")
 			service.adapters[key] = hostedMediaValidationHook{MediaOperationAdapter: service.adapters[key], after: func() error {
 				if change == "revocation" {
-					return database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-journal").Update("state", hostedGrantRevoked).Error
+					return database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", hostedJournalFixtureGrantID).Update("state", hostedGrantRevoked).Error
 				}
 				return database.database.Transaction(func(transaction *gorm.DB) error {
 					if err := transaction.Create(&managedPlatformCredentialRecord{ConnectionID: "platform-journal", Version: 2, Fields: []byte(`{}`), QualifiedAt: time.Now(), CreatedAt: time.Now()}).Error; err != nil {
@@ -218,6 +218,58 @@ func TestHostedMediaAdmissionRequiresFundsOwner(t *testing.T) {
 	}
 }
 
+func TestHostedMediaAdmissionTenantLockFailureCreatesNoWork(t *testing.T) {
+	database, _, read := newJournalTransactionFixture(t)
+	server, service := newHostedMediaAdmissionHTTPServer(t, database)
+	var armed atomic.Bool
+	var failures atomic.Int64
+	key := mediaOperationAdapterKey(llmproxycontract.MediaCapabilityImageGenerate, "openai", "gpt-image-2")
+	service.adapters[key] = hostedMediaValidationHook{MediaOperationAdapter: service.adapters[key], after: func() error {
+		armed.Store(true)
+		return nil
+	}}
+	callback := database.database.Callback().Update()
+	const callbackName = "test:media_tenant_lock"
+	if err := callback.Before("gorm:update").Register(callbackName, func(tx *gorm.DB) {
+		if armed.Load() && !tx.DryRun && tx.Statement.Table == managedTenantTable {
+			failures.Add(1)
+			tx.AddError(errors.New("controlled_media_tenant_lock_failure"))
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := callback.Remove(callbackName); err != nil {
+			t.Error(err)
+		}
+	})
+	var reservations atomic.Int64
+	service.hostedAdmission = func(*gorm.DB, managedJournalRequestRecord, mediaOperationRecord) error {
+		reservations.Add(1)
+		return nil
+	}
+	for range 2 {
+		hostedMediaAdmissionHTTP(t, server, "tenant-lock-failure", "private image prompt", http.StatusUnprocessableEntity)
+		if len(read("")["requests"].([]any)) != 0 || len(service.queue) != 0 || reservations.Load() != 0 {
+			t.Fatal("failed tenant lock admitted media work")
+		}
+		var operations int64
+		if err := database.database.Model(&mediaOperationRecord{}).Count(&operations).Error; err != nil || operations != 0 {
+			t.Fatalf("failed tenant lock retained operation: count=%d error=%v", operations, err)
+		}
+	}
+	if failures.Load() != 2 {
+		t.Fatalf("tenant lock failures=%d want=2", failures.Load())
+	}
+	service.adapters[key] = service.adapters[key].(hostedMediaValidationHook).MediaOperationAdapter
+	armed.Store(false)
+	accepted := hostedMediaAdmissionHTTP(t, server, "tenant-lock-failure", "private image prompt", http.StatusAccepted)
+	replayed := hostedMediaAdmissionHTTP(t, server, "tenant-lock-failure", "private image prompt", http.StatusOK)
+	if reservations.Load() != 1 || accepted["operation_id"] != replayed["operation_id"] || len(read("")["requests"].([]any)) != 1 {
+		t.Fatal("restored tenant lock did not preserve one accepted operation")
+	}
+}
+
 type hostedMediaValidationHook struct {
 	MediaOperationAdapter
 	after func() error
@@ -244,7 +296,7 @@ func newHostedMediaAdmissionHTTPServer(t *testing.T, database *gormManagedTenant
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-journal").Updates(map[string]any{
+	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", hostedJournalFixtureGrantID).Updates(map[string]any{
 		"catalog_revision": catalog.Revision(), "offerings": []byte(`[{"model":"gpt-image-2","operations":["image_generation"]}]`),
 	}).Error; err != nil {
 		t.Fatal(err)

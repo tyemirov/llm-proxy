@@ -108,6 +108,11 @@ func TestHostedRatingCorruptSnapshotPreventsSettlement(t *testing.T) {
 		}},
 		{"excluded-component", func(document *hostedPriceSnapshotDocument) { document.ExcludedComponents = []string{"input_tokens"} }},
 		{"zero-dimension", func(document *hostedPriceSnapshotDocument) { document.ZeroDimensions = []string{"input_tokens"} }},
+		{"unbounded-zero-dimension", func(document *hostedPriceSnapshotDocument) { document.ZeroDimensions = []string{"unpriced_tokens"} }},
+		{"nonzero-zero-dimension", func(document *hostedPriceSnapshotDocument) {
+			document.ZeroDimensions = []string{"unpriced_tokens"}
+			document.Bounds = append(document.Bounds, CatalogUsageBound{Dimension: "unpriced_tokens", Unit: "token", Maximum: "1"})
+		}},
 		{"missing-bounds", func(document *hostedPriceSnapshotDocument) { document.Bounds = nil }},
 		{"invalid-bound", func(document *hostedPriceSnapshotDocument) { document.Bounds[0].Maximum = "invalid" }},
 		{"bound-unit", func(document *hostedPriceSnapshotDocument) { document.Bounds[0].Unit = "seconds" }},

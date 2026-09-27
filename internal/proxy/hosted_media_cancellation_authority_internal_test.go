@@ -12,6 +12,7 @@ import (
 	"time"
 
 	dictator "github.com/tyemirov/dictator/sdk/go/dictatorspeechv1"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -24,6 +25,16 @@ type hostedCancellationAuthorityUpstream struct {
 	reject        atomic.Bool
 }
 
+type hostedMediaCancellationProbe struct {
+	MediaOperationAdapter
+	probe func(context.Context, MediaOperationExecutionRequest)
+}
+
+func (adapter hostedMediaCancellationProbe) Cancel(ctx context.Context, request MediaOperationExecutionRequest) MediaOperationCancellationResult {
+	adapter.probe(ctx, request)
+	return adapter.MediaOperationAdapter.Cancel(ctx, request)
+}
+
 func (upstream *hostedCancellationAuthorityUpstream) CancelSynthesizeSpeechJob(ctx context.Context, request *dictator.CancelSynthesizeSpeechJobRequest) (*dictator.CancelSynthesizeSpeechJobResponse, error) {
 	upstream.cancellations.Add(1)
 	if upstream.reject.Load() {
@@ -33,7 +44,7 @@ func (upstream *hostedCancellationAuthorityUpstream) CancelSynthesizeSpeechJob(c
 }
 
 func TestHostedMediaCancellationAuthorityFailuresPreserveFundsAndPermitRetry(t *testing.T) {
-	for _, scenario := range []string{"authority-read", "authority-absent", "provider-error", "observation-write"} {
+	for _, scenario := range []string{"authority-read", "authority-absent", "provider-error", "observation-write", "confirmation-lock"} {
 		t.Run(scenario, func(t *testing.T) {
 			database, _, management, _ := newHostedRatingFixture(t)
 			upstream := &hostedCancellationAuthorityUpstream{}
@@ -51,6 +62,26 @@ func TestHostedMediaCancellationAuthorityFailuresPreserveFundsAndPermitRetry(t *
 			}()
 			t.Cleanup(grpcServer.Stop)
 			server, worker, intent := newHostedDictatorUsageFixture(t, database, ModelNameDictatorQwen3TTS, listener.Addr().String())
+			adapterKey := mediaOperationAdapterKey(llmproxycontract.MediaCapabilityAudioSpeechGenerate, ProviderNameDictator, ModelNameDictatorQwen3TTS)
+			adapter := worker.adapters[adapterKey].(*accountDictatorAdapter)
+			var probes atomic.Int64
+			worker.adapters[adapterKey] = hostedMediaCancellationProbe{MediaOperationAdapter: adapter, probe: func(ctx context.Context, request MediaOperationExecutionRequest) {
+				protocol, closeConnection, err := adapter.bindProtocol(ctx, request.TenantID, request.CredentialReference)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				defer closeConnection()
+				if _, err := dictator.NewVoiceServiceClient(protocol.connection).ListSynthesisVoices(ctx, &dictator.ListSynthesisVoicesRequest{}); !errors.Is(err, errHostedAuthorityDenied) {
+					t.Errorf("cancellation permitted metadata: %v", err)
+					return
+				}
+				if stream, err := dictator.NewArtifactServiceClient(protocol.connection).UploadArtifact(ctx); stream != nil || !errors.Is(err, errHostedAuthorityDenied) {
+					t.Errorf("cancellation permitted artifact upload: %v", err)
+					return
+				}
+				probes.Add(1)
+			}}
 			seedHostedFunds(t, database, 500)
 			id := hostedSpeechHTTP(t, server, "cancel-authority", intent, http.StatusAccepted)["operation_id"].(string)
 			started, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
@@ -97,6 +128,11 @@ func TestHostedMediaCancellationAuthorityFailuresPreserveFundsAndPermitRetry(t *
 				t.Cleanup(func() { _ = queries.Remove(callback) })
 			}
 			wantStatus, wantCalls := http.StatusOK, int64(0)
+			var repairLock func()
+			if scenario == "confirmation-lock" {
+				repairLock = (mediaCancellationStorageFailure{"confirmation-lock", "update", "media_operation_records", 3}).install(t, database.database)
+				wantStatus, wantCalls = http.StatusInternalServerError, 1
+			}
 			if scenario == "provider-error" {
 				upstream.reject.Store(true)
 				wantCalls = 1
@@ -108,6 +144,9 @@ func TestHostedMediaCancellationAuthorityFailuresPreserveFundsAndPermitRetry(t *
 				wantStatus, wantCalls = http.StatusInternalServerError, 1
 			}
 			cancelFundedMediaHTTP(t, server, id, wantStatus)
+			if repairLock != nil {
+				repairLock()
+			}
 			if scenario == "authority-read" || scenario == "authority-absent" {
 				if err := queries.Remove(callback); err != nil {
 					t.Fatal(err)
@@ -118,7 +157,7 @@ func TestHostedMediaCancellationAuthorityFailuresPreserveFundsAndPermitRetry(t *
 			}
 			current := hostedMediaWorkerStatus(t, server, id)
 			wantCancellation := MediaCancellationUnsupported
-			if scenario == "observation-write" {
+			if scenario == "observation-write" || scenario == "confirmation-lock" {
 				wantCancellation = MediaCancellationRequested
 			}
 			if current["state"] != MediaOperationStateRunning || current["cancellation_state"] != wantCancellation || upstream.cancellations.Load() != wantCalls || upstream.submissions.Load() != 1 || !reflect.DeepEqual(before, fixture.state(t)) {
@@ -133,6 +172,9 @@ func TestHostedMediaCancellationAuthorityFailuresPreserveFundsAndPermitRetry(t *
 			cancelled := cancelFundedMediaHTTP(t, server, id, http.StatusOK)
 			if cancelled["state"] != MediaOperationStateCancelled || cancelled["cancellation_state"] != MediaCancellationConfirmed || upstream.cancellations.Load() != wantCalls+1 {
 				t.Fatalf("restored cancellation did not finish once: %v calls=%d", cancelled, upstream.cancellations.Load())
+			}
+			if probes.Load() != 2 {
+				t.Fatalf("cancellation role checks=%d want=2", probes.Load())
 			}
 			releaseOnce.Do(func() { close(release) })
 			waitHostedMediaWorker(t, done)

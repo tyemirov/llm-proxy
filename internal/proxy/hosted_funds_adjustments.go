@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/big"
 	"time"
@@ -33,7 +32,8 @@ type fundsCreditEffect struct {
 
 // applyCustomerChargeAdjustment owns the account lock, credit authorization,
 // and idempotency. This callback shares its transaction with the Ledger effect.
-func settleHostedChargeAdjustment(transaction *gorm.DB, adjustment managedChargeAdjustmentRecord) error {
+func settleHostedChargeAdjustment(transaction *gorm.DB, command customerChargeAdjustment) error {
+	adjustment := command.record
 	var charge managedChargeRecord
 	if err := transaction.Where("id = ? AND billing_account_id = ?", adjustment.ChargeID, adjustment.BillingAccountID).First(&charge).Error; err != nil {
 		return fmt.Errorf("read financial credit charge %s: %w", adjustment.ChargeID, err)
@@ -51,11 +51,10 @@ func settleHostedChargeAdjustment(transaction *gorm.DB, adjustment managedCharge
 	default:
 		return fmt.Errorf("%w: credit requires a retained charge reservation", errUsageJournalConflict)
 	}
-	if err := authorizeSettledFundsCredit(transaction, charge.RequestID, adjustment); err != nil {
+	if err := authorizeHostedFundsCredit(transaction, adjustment.BillingAccountID, charge.RequestID, command.amount); err != nil {
 		return err
 	}
-	credit := ExactMoney{Numerator: adjustment.CreditNumerator, Denominator: adjustment.CreditDenominator}
-	effect, err := applyHostedFundsCredit(transaction, adjustment.BillingAccountID, charge.RequestID, credit, func(cents int64) error {
+	effect, err := applyHostedFundsCredit(transaction, adjustment.BillingAccountID, charge.RequestID, command.amount, func(cents int64) error {
 		return postHostedChargeCredit(transaction, adjustment, cents)
 	})
 	if err != nil {
@@ -68,12 +67,12 @@ func settleHostedChargeAdjustment(transaction *gorm.DB, adjustment managedCharge
 	return nil
 }
 
-func applyHostedFundsCredit(transaction *gorm.DB, accountID, requestID string, credit ExactMoney, post func(int64) error) (fundsCreditEffect, error) {
+func applyHostedFundsCredit(transaction *gorm.DB, accountID, requestID string, credit *big.Rat, post func(int64) error) (fundsCreditEffect, error) {
 	var financial managedFundsAccountRecord
 	if err := transaction.Where("billing_account_id = ?", accountID).First(&financial).Error; err != nil {
 		return fundsCreditEffect{}, fmt.Errorf("read financial credit account %s: %w", accountID, err)
 	}
-	calculation, err := calculateUSDCredit(credit, ExactMoney{Numerator: financial.RemainderNumerator, Denominator: financial.RemainderDenominator})
+	calculation, err := calculateValidatedUSDCredit(credit, ExactMoney{Numerator: financial.RemainderNumerator, Denominator: financial.RemainderDenominator})
 	if err != nil {
 		return fundsCreditEffect{}, fmt.Errorf("calculate financial credit for request %s: %w", requestID, err)
 	}
@@ -96,11 +95,7 @@ func applyHostedFundsCredit(transaction *gorm.DB, accountID, requestID string, c
 
 // Charge records preserve their original amount. A financial decision can
 // settle a smaller net amount, which bounds all subsequent request credits.
-func authorizeSettledFundsCredit(transaction *gorm.DB, requestID string, proposed managedChargeAdjustmentRecord) error {
-	return authorizeHostedFundsCredit(transaction, proposed.BillingAccountID, requestID, ExactMoney{Numerator: proposed.CreditNumerator, Denominator: proposed.CreditDenominator})
-}
-
-func authorizeHostedFundsCredit(transaction *gorm.DB, accountID, requestID string, proposed ExactMoney) error {
+func authorizeHostedFundsCredit(transaction *gorm.DB, accountID, requestID string, proposed *big.Rat) error {
 	var settlement managedFundsSettlementRecord
 	if err := transaction.Where("request_id = ? AND billing_account_id = ?", requestID, accountID).First(&settlement).Error; err != nil {
 		return fmt.Errorf("read credited settlement %s: %w", requestID, err)
@@ -114,19 +109,20 @@ func authorizeHostedFundsCredit(transaction *gorm.DB, accountID, requestID strin
 	if err := transaction.Where("id IN (?)", posted).Find(&credits).Error; err != nil {
 		return fmt.Errorf("read settled credits %s: %w", requestID, err)
 	}
-	amounts := []ExactMoney{proposed}
-	for _, credit := range credits {
-		amounts = append(amounts, ExactMoney{Numerator: credit.CreditNumerator, Denominator: credit.CreditDenominator})
-	}
 	var corrections []managedFundsCorrectionRecord
 	if err := transaction.Where("request_id = ? AND billing_account_id = ?", requestID, accountID).Find(&corrections).Error; err != nil {
 		return fmt.Errorf("read request credits %s: %w", requestID, err)
 	}
 	for _, correction := range corrections {
-		amounts = append(amounts, ExactMoney{Numerator: correction.CreditNumerator, Denominator: correction.CreditDenominator})
+		amount, err := decodeRetainedFundsCorrection(correction)
+		if err != nil {
+			return err
+		}
+		remaining.Sub(remaining, amount)
 	}
-	for _, credit := range amounts {
-		amount, err := parseExactMoney(credit)
+	remaining.Sub(remaining, proposed)
+	for _, credit := range credits {
+		amount, err := decodeRetainedChargeAdjustment(credit)
 		if err != nil {
 			return err
 		}
@@ -139,29 +135,18 @@ func authorizeHostedFundsCredit(transaction *gorm.DB, accountID, requestID strin
 }
 
 func postHostedChargeCredit(transaction *gorm.DB, adjustment managedChargeAdjustmentRecord, cents int64) error {
-	encoded, err := json.Marshal(struct {
-		AdjustmentID string `json:"adjustment_id"`
-		ChargeID     string `json:"charge_id"`
-	}{adjustment.ID, adjustment.ChargeID})
-	if err != nil {
-		return fmt.Errorf("encode financial credit metadata: %w", err)
-	}
-	return postHostedFundsCredit(transaction, adjustment.BillingAccountID, "usage-credit:"+adjustment.ID, cents, adjustment.CreatedAt, encoded)
+	metadata := newHostedLedgerMetadata(hostedLedgerChargeCreditMetadata{AdjustmentID: adjustment.ID, ChargeID: adjustment.ChargeID})
+	return postHostedFundsCredit(transaction, adjustment.BillingAccountID, "usage-credit:"+adjustment.ID, cents, adjustment.CreatedAt, metadata)
 }
 
-func postHostedFundsCredit(transaction *gorm.DB, accountID, eventKey string, cents int64, now time.Time, encoded []byte) error {
+func postHostedFundsCredit(transaction *gorm.DB, accountID, eventKey string, cents int64, now time.Time, metadata ledger.MetadataJSON) error {
 	account, err := newHostedLedgerAccount(transaction, accountID, now)
 	if err != nil {
 		return err
 	}
-	input, err := newHostedLedgerAmountInput(cents, eventKey)
-	if err != nil {
-		return fmt.Errorf("construct ledger credit %s: %w", eventKey, err)
-	}
-	metadata, err := ledger.NewMetadataJSON(string(encoded))
-	if err != nil {
-		return err
-	}
+	// Credit calculations and verified funding supply positive cents. Each
+	// caller derives the key from its retained credit or payment identity.
+	input, _ := newHostedLedgerAmountInput(cents, eventKey)
 	if err := account.service.Grant(transaction.Statement.Context, account.tenant, account.user, account.namespace, input.amount, input.key, 0, metadata); err != nil {
 		return fmt.Errorf("post shared ledger credit %s: %w", eventKey, err)
 	}

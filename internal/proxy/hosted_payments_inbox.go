@@ -87,15 +87,8 @@ type paddlePaymentInbox struct {
 	now         func() time.Time
 }
 
-func newPaddlePaymentInbox(database *gormManagedTenantDatabase, environment, accountID, secret string, tolerance time.Duration) (*paddlePaymentInbox, error) {
-	if database == nil || (environment != paymentEnvironmentSandbox && environment != paymentEnvironmentProduction) || !validIdempotencyKey(accountID) {
-		return nil, fmt.Errorf("invalid Paddle payment inbox configuration")
-	}
-	verifier, err := billing.NewPaddleWebhookVerifier(secret, tolerance)
-	if err != nil {
-		return nil, fmt.Errorf("configure Paddle event verification: %w", err)
-	}
-	return &paddlePaymentInbox{database: database, environment: environment, accountID: accountID, verifier: verifier, now: time.Now}, nil
+func newPaddlePaymentInbox(database *gormManagedTenantDatabase, catalog *fundingCatalog, verifier *billing.PaddleWebhookVerifier) *paddlePaymentInbox {
+	return &paddlePaymentInbox{database: database, environment: catalog.environment, accountID: catalog.processorAccountID, verifier: verifier, now: time.Now}
 }
 
 func (inbox *paddlePaymentInbox) decodeEvent(payload []byte) (managedPaymentInboxRecord, error) {

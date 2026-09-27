@@ -94,6 +94,11 @@ func (database *gormManagedTenantDatabase) reconcileHostedReservation(ctx contex
 		case journalRequestCompleted:
 			return settleHostedFunds(transaction, request.ID, now)
 		case journalRequestAccepted, journalRequestExecuting:
+			if request.ExecutionKind == journalExecutionMedia {
+				// The media worker owns dispatched recovery and records its outcome
+				// with the journal. Keep its hold and claimable state until then.
+				return nil
+			}
 			if err := retainInterruptedJournalExecution(transaction, &request, now); err != nil {
 				return err
 			}

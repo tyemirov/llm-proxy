@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"io"
@@ -38,6 +39,22 @@ func TestHostedMediaWorkerPublishesOneResultAndJournalOutcome(t *testing.T) {
 		reservations.Add(1)
 		return nil
 	}
+	adapterKey := mediaOperationAdapterKey(llmproxycontract.MediaCapabilityImageGenerate, "openai", "gpt-image-2")
+	service.adapters[adapterKey] = hostedMediaExecutionProbe{MediaOperationAdapter: service.adapters[adapterKey], probe: func(ctx context.Context, request MediaOperationExecutionRequest) {
+		for range 2 {
+			outbound, err := http.NewRequestWithContext(ctx, http.MethodGet, upstream.URL, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response, err := request.HTTP.Submission.Do(outbound)
+			if response != nil {
+				response.Body.Close()
+			}
+			if !errors.Is(err, errHostedAuthorityDenied) || calls.Load() != 0 {
+				t.Fatalf("invalid submission method reached provider: calls=%d error=%v", calls.Load(), err)
+			}
+		}
+	}}
 	accepted := hostedMediaAdmissionHTTP(t, server, "worker-result", "private image prompt", http.StatusAccepted)
 	id := accepted["operation_id"].(string)
 	service.runOperation("worker-first", id)
@@ -66,7 +83,7 @@ func TestHostedMediaWorkerRevocationPreventsSubmission(t *testing.T) {
 	t.Cleanup(upstream.Close)
 	server, service := newHostedMediaAdmissionHTTPServer(t, database, hostedMediaWorkerProvider(upstream.URL))
 	accepted := hostedMediaAdmissionHTTP(t, server, "revoked-worker", "private image prompt", http.StatusAccepted)
-	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-journal").Update("state", hostedGrantRevoked).Error; err != nil {
+	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", hostedJournalFixtureGrantID).Update("state", hostedGrantRevoked).Error; err != nil {
 		t.Fatal(err)
 	}
 	service.runOperation("revoked-worker", accepted["operation_id"].(string))
@@ -182,7 +199,7 @@ func TestHostedMediaWorkerProviderCancellationFinishesJournal(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("provider job did not reach its first poll")
 	}
-	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-journal").Update("state", hostedGrantRevoked).Error; err != nil {
+	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", hostedJournalFixtureGrantID).Update("state", hostedGrantRevoked).Error; err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {
@@ -324,7 +341,7 @@ func TestHostedMediaWorkerRecoversProviderHandleAfterRevocation(t *testing.T) {
 	if err := database.database.First(&attempt).Error; err != nil || attempt.ProviderRequestID != "resp_media_recovery" {
 		t.Fatalf("provider handle was not journaled before polling: id=%q error=%v", attempt.ProviderRequestID, err)
 	}
-	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-journal").Update("state", hostedGrantRevoked).Error; err != nil {
+	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", hostedJournalFixtureGrantID).Update("state", hostedGrantRevoked).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := database.database.Model(&mediaOperationClaimRecord{}).Where("operation_id = ?", id).Update("expires_at", time.Now().Add(-time.Second)).Error; err != nil {
@@ -339,7 +356,7 @@ func TestHostedMediaWorkerRecoversProviderHandleAfterRevocation(t *testing.T) {
 		t.Fatalf("recovery result=%v journal=%v posts=%d polls=%d reservations=%d", result, entry, posts.Load(), polls.Load(), reservations.Load())
 	}
 	observations, err := database.pendingJournalDeliveries(context.Background(), 100)
-	if err != nil || len(observations) != 1 || observations[0].AdapterRevision != CatalogProtocolOpenAIResponses+":image:1" {
+	if err != nil || len(observations) != 1 || observations[0].AdapterRevision != CatalogProtocolOpenAIResponses+":image:2" {
 		t.Fatalf("recovered usage=%v error=%v", observations, err)
 	}
 	var quantities []journalQuantity
@@ -366,6 +383,16 @@ func waitHostedMediaWorker(t *testing.T, done <-chan struct{}) {
 type hostedMediaExecuteHook struct {
 	MediaOperationAdapter
 	before func()
+}
+
+type hostedMediaExecutionProbe struct {
+	MediaOperationAdapter
+	probe func(context.Context, MediaOperationExecutionRequest)
+}
+
+func (adapter hostedMediaExecutionProbe) Execute(ctx context.Context, request MediaOperationExecutionRequest) MediaOperationExecutionResult {
+	adapter.probe(ctx, request)
+	return adapter.MediaOperationAdapter.Execute(ctx, request)
 }
 
 func (adapter hostedMediaExecuteHook) Execute(ctx context.Context, request MediaOperationExecutionRequest) MediaOperationExecutionResult {

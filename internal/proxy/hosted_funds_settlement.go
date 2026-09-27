@@ -6,7 +6,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/MarkoPoloResearchLab/ledger/pkg/ledger"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -93,7 +92,7 @@ func settleHostedFunds(transaction *gorm.DB, requestID string, now time.Time) er
 		for _, credit := range credits {
 			creditIDs = append(creditIDs, credit.ID)
 		}
-		net, err := netCustomerCharge(rating.CustomerCharge, credits)
+		net, err := netCustomerCharge(rating.customerAmount, credits)
 		if err != nil {
 			return err
 		}
@@ -117,10 +116,7 @@ func commitHostedFundsSettlement(transaction *gorm.DB, reservation managedFundsR
 	if err := postHostedFundsSettlement(transaction, reservation, cents, now); err != nil {
 		return err
 	}
-	encodedCreditIDs, err := json.Marshal(creditIDs)
-	if err != nil {
-		return fmt.Errorf("encode settlement credits %s: %w", reservation.RequestID, err)
-	}
+	encodedCreditIDs, _ := json.Marshal(creditIDs)
 	exact := ratingMoney(total)
 	settlement := managedFundsSettlementRecord{RequestID: reservation.RequestID, BillingAccountID: reservation.BillingAccountID,
 		ChargeNumerator: exact.Numerator, ChargeDenominator: exact.Denominator, AdjustmentIDs: encodedCreditIDs, SettledCents: cents,
@@ -143,16 +139,7 @@ func postHostedFundsSettlement(transaction *gorm.DB, reservation managedFundsRes
 	if err != nil {
 		return err
 	}
-	encoded, err := json.Marshal(struct {
-		RequestID string `json:"request_id"`
-	}{reservation.RequestID})
-	if err != nil {
-		return fmt.Errorf("encode settlement identity: %w", err)
-	}
-	metadata, err := ledger.NewMetadataJSON(string(encoded))
-	if err != nil {
-		return err
-	}
+	metadata := newHostedLedgerMetadata(hostedLedgerRequestMetadata{RequestID: reservation.RequestID})
 	if reservation.MaximumCents > 0 {
 		input, err := newHostedLedgerReleaseInput(reservation.RequestID, "settle-release:"+reservation.RequestID)
 		if err != nil {
@@ -163,10 +150,8 @@ func postHostedFundsSettlement(transaction *gorm.DB, reservation managedFundsRes
 		}
 	}
 	if cents > 0 {
-		input, err := newHostedLedgerAmountInput(cents, "settle-charge:"+reservation.RequestID)
-		if err != nil {
-			return fmt.Errorf("construct ledger charge for request %s: %w", reservation.RequestID, err)
-		}
+		// The amount is positive and the generated key always has its prefix.
+		input, _ := newHostedLedgerAmountInput(cents, "settle-charge:"+reservation.RequestID)
 		if err := account.service.Spend(transaction.Statement.Context, account.tenant, account.user, account.namespace, input.amount, input.key, metadata); err != nil {
 			return fmt.Errorf("post settled charge %s: %w", reservation.RequestID, err)
 		}

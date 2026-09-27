@@ -218,8 +218,6 @@ func writeUsageJournalError(ctx *gin.Context, err error) {
 		status, code = http.StatusBadRequest, errUsageJournalInvalid.Error()
 	case errors.Is(err, errUsageJournalNotFound):
 		status, code = http.StatusNotFound, errUsageJournalNotFound.Error()
-	case errors.Is(err, errUsageJournalConflict):
-		status, code = http.StatusConflict, errUsageJournalConflict.Error()
 	}
 	ctx.JSON(status, gin.H{"error": gin.H{"code": code}})
 }

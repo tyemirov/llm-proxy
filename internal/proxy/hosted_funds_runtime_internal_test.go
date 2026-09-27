@@ -17,7 +17,7 @@ import (
 func TestHostedFundsRuntimeFailurePreservesSettlementAndStopsHTTP(t *testing.T) {
 	database, _, management, prices := newHostedRatingFixture(t)
 	seedHostedFunds(t, database, 5)
-	application := &proxyApplication{router: management.Config.Handler.(*gin.Engine), database: database, now: ratingTestAcceptanceTime}
+	application := &proxyApplication{closeStore: func() error { return nil }, router: management.Config.Handler.(*gin.Engine), database: database, now: ratingTestAcceptanceTime}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +95,7 @@ func TestHostedFundsRuntimeStartupFailureClosesListener(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	application := &proxyApplication{router: management.Config.Handler.(*gin.Engine), database: database, now: ratingTestAcceptanceTime}
+	application := &proxyApplication{closeStore: func() error { return nil }, router: management.Config.Handler.(*gin.Engine), database: database, now: ratingTestAcceptanceTime}
 	if err := application.serve(ctx, listener); !errors.Is(err, context.Canceled) {
 		t.Fatalf("startup cancellation=%v", err)
 	}
@@ -115,7 +115,7 @@ func TestHostedFundsRuntimeShutdownCancelsRequests(t *testing.T) {
 		<-request.Request.Context().Done()
 		request.Status(http.StatusServiceUnavailable)
 	})
-	application := &proxyApplication{router: router, database: database, now: ratingTestAcceptanceTime}
+	application := &proxyApplication{closeStore: func() error { return nil }, router: router, database: database, now: ratingTestAcceptanceTime}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

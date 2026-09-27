@@ -86,3 +86,28 @@ func TestHostedMediaIgnoredJournalClaimPreventsDispatchAndRecoversOnce(t *testin
 	}
 	fixture.recover(t, MediaOperationStateQueued)
 }
+
+func TestHostedMediaIgnoredDispatchWritePreventsProviderWorkAndReleasesHold(t *testing.T) {
+	fixture := newFundedMediaRecoveryFixture(t)
+	before := fixture.state(t)
+	if err := fixture.database.database.Exec(`CREATE TRIGGER ignore_media_dispatch BEFORE UPDATE OF provider_execution_state ON media_operation_records
+		WHEN NEW.provider_execution_state = 'dispatched' BEGIN SELECT RAISE(IGNORE); END`).Error; err != nil {
+		t.Fatal(err)
+	}
+	fixture.worker.runOperation("ignored-dispatch-worker", fixture.operationID)
+	fixture.assertFailure(t, MediaOperationStateFailed, 0)
+	if !reflect.DeepEqual(before, fixture.state(t)) {
+		t.Fatal("ignored dispatch write changed financial resources")
+	}
+	for _, model := range []any{&managedJournalAttemptRecord{}, &managedJournalObservationRecord{}, &managedFundsSettlementRecord{}} {
+		var count int64
+		if err := fixture.database.database.Model(model).Count(&count).Error; err != nil || count != 0 {
+			t.Fatalf("ignored dispatch retained partial %T records=%d error=%v", model, count, err)
+		}
+	}
+	if err := fixture.database.database.Exec("DROP TRIGGER ignore_media_dispatch").Error; err != nil {
+		t.Fatal(err)
+	}
+	fixture.recover(t, MediaOperationStateFailed)
+	assertFundsCreditRemainder(t, fixture.database, "0", "1")
+}

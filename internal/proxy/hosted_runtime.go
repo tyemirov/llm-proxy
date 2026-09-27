@@ -23,8 +23,7 @@ func (settings *hostedRuntimeSettings) authorizeCompletion(transaction *gorm.DB,
 	var reserve journalReservation
 	var err error
 	if request.Operation == ModelOperationText {
-		input := chatRequestParameters{provider: intent.provider, model: textModelDefinition{identifier: intent.model}, maxTokens: intent.maxTokens, webSearchEnabled: intent.webSearch}
-		reserve, err = newHostedTextPriceAdmission(settings.catalog, input, request.CreatedAt, scope.conditions, scope.maximumAttempts)
+		reserve, err = scope.text.admission(intent.provider.activeTransport.responseCodec, request.CreatedAt, intent.webSearch)
 	} else {
 		reserve, err = newHostedMediaPriceAdmission(settings.catalog, request, intent.provider.activeTransport.requestCodec, scope.conditions, scope.maximumAttempts)
 	}
@@ -49,6 +48,7 @@ type hostedOfferingScope struct {
 	conditions      CatalogPriceConditions
 	maximumAttempts uint32
 	transport       string
+	text            *hostedTextPriceScope
 }
 
 type hostedRuntimeSettings struct {
@@ -98,6 +98,9 @@ func newHostedRuntimeSettings(input *HostedConfiguration, catalog ModelCatalog) 
 				return nil, fmt.Errorf("configure hosted execution: unsupported operation in scope %v", key)
 			}
 			scope.transport = resolved.Transport
+			if offering.Operation == ModelOperationText {
+				scope.text = &hostedTextPriceScope{catalog: prices, offering: resolved, conditions: offering.Conditions, maximumAttempts: offering.MaximumAttempts}
+			}
 		}
 		settings.offerings[key] = scope
 	}
@@ -111,10 +114,16 @@ func (settings *hostedRuntimeSettings) mediaAdmission(providers *providerRegistr
 			return errHostedAuthorityDenied
 		}
 		codec := providers.definitions[providerID(request.Provider)].transports[scope.transport].requestCodec
-		if err := matchHostedMediaPriceConditions(codec, scope.conditions, operation); err != nil {
+		controls, err := matchHostedMediaPriceConditions(codec, scope.conditions, operation)
+		if err != nil {
 			return fmt.Errorf("%w: select hosted media conditions: %w", errFinancialAdmissionUnavailable, err)
 		}
-		reserve, err := newHostedMediaPriceAdmission(settings.catalog, request, codec, scope.conditions, scope.maximumAttempts)
+		var reserve journalReservation
+		if codec == CatalogProtocolOpenAIImages && controls.Surface == "responses" {
+			reserve, err = newHostedResponsesImagePriceAdmission(settings.catalog, request, scope.conditions, scope.maximumAttempts, controls)
+		} else {
+			reserve, err = newHostedMediaPriceAdmission(settings.catalog, request, codec, scope.conditions, scope.maximumAttempts)
+		}
 		if err != nil {
 			return fmt.Errorf("%w: select hosted media price: %w", errFinancialAdmissionUnavailable, err)
 		}
@@ -122,29 +131,22 @@ func (settings *hostedRuntimeSettings) mediaAdmission(providers *providerRegistr
 	}
 }
 
-func matchHostedMediaPriceConditions(codec string, conditions CatalogPriceConditions, operation mediaOperationRecord) error {
+func matchHostedMediaPriceConditions(codec string, conditions CatalogPriceConditions, operation mediaOperationRecord) (imageGenerationControls, error) {
+	var controls imageGenerationControls
 	// Deployment conditions describe the selected provider account. Request
 	// conditions must match the normalized intent before a price can be used.
 	conditions.BillingMode, conditions.ServiceTier, conditions.Region = "", "", ""
 	if codec == CatalogProtocolOpenAIImages {
-		var controls struct {
-			Surface string `json:"surface"`
-			Quality string `json:"quality"`
-			Size    string `json:"size"`
-		}
 		if err := json.Unmarshal(operation.NormalizedControls, &controls); err != nil {
-			return fmt.Errorf("decode retained media controls: %w", err)
-		}
-		if controls.Surface == "responses" {
-			return fmt.Errorf("%w: Responses images require a combined response-model and image-tool cost bound", ErrCatalogRatingUnavailable)
+			return controls, fmt.Errorf("decode retained media controls: %w", err)
 		}
 		if (conditions.Quality != "" && conditions.Quality != controls.Quality) || (conditions.Resolution != "" && conditions.Resolution != controls.Size) {
-			return fmt.Errorf("%w: request differs from selected image price conditions", ErrCatalogRatingUnavailable)
+			return controls, fmt.Errorf("%w: request differs from selected image price conditions", ErrCatalogRatingUnavailable)
 		}
 		conditions.Quality, conditions.Resolution = "", ""
 	}
 	if conditions != (CatalogPriceConditions{}) {
-		return fmt.Errorf("%w: request condition mapping unavailable for codec=%s", ErrCatalogRatingUnavailable, codec)
+		return controls, fmt.Errorf("%w: request condition mapping unavailable for codec=%s", ErrCatalogRatingUnavailable, codec)
 	}
-	return nil
+	return controls, nil
 }

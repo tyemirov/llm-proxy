@@ -17,7 +17,7 @@ func rejectFundedJournalAdmission(t *testing.T, fixture fundsAdmissionFixture, s
 	t.Helper()
 	for range 2 {
 		body := hostedIdentityHTTP(t, fixture.generation, "recover-admission", "funded prompt", status)
-		if strings.Contains(body, "controlled_") || strings.Contains(body, "platform-journal") || strings.Contains(body, "grant-journal") {
+		if strings.Contains(body, "controlled_") || strings.Contains(body, "platform-journal") || strings.Contains(body, hostedJournalFixtureGrantID) {
 			t.Fatalf("admission exposed storage or authority details: %s", body)
 		}
 	}

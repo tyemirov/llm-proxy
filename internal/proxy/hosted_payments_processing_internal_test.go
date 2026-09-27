@@ -99,7 +99,7 @@ func TestHostedPaymentsCompletedCreditCommitsOnceAcrossEventsAndWorkers(t *testi
 func TestHostedPaymentsCompletedRejectsMismatchedEvidence(t *testing.T) {
 	for _, scenario := range []string{
 		"foreign-account", "currency", "amount", "discount", "uncaptured", "paid-only", "event-api-disagreement", "older-api-state",
-		"completion-time", "update-before-completion", "missing-totals", "totals-currency", "negative-amount", "invalid-fee",
+		"completion-time", "utc-range", "update-before-completion", "missing-totals", "totals-currency", "negative-amount", "invalid-fee",
 		"inconsistent-total", "wrong-funding-amount", "missing-line", "missing-line-totals", "wrong-line-price",
 		"missing-payment-id", "duplicate-payment", "invalid-payment-amount", "missing-capture-time", "capture-error", "invalid-capture-time",
 		"invalid-payout", "processor-unavailable", "changed-invoice",
@@ -138,6 +138,8 @@ func TestHostedPaymentsCompletedRejectsMismatchedEvidence(t *testing.T) {
 				transaction["status"] = "paid"
 			case "completion-time":
 				transaction["completed_at"] = "not-a-timestamp"
+			case "utc-range":
+				transaction["completed_at"], transaction["updated_at"] = financialUTCOverflowTimestamp, financialUTCOverflowTimestamp
 			case "update-before-completion":
 				transaction["updated_at"] = "2026-09-23T11:59:59Z"
 			case "missing-totals":

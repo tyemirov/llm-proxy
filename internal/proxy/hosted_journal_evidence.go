@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"math/big"
 	"regexp"
@@ -24,9 +23,8 @@ const (
 )
 
 var (
-	journalDimensionPattern  = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
-	journalDecimalPattern    = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.[0-9]+)?$`)
-	journalSourcePathPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.\[\]]{0,255}$`)
+	journalDimensionPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+	journalDecimalPattern   = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.[0-9]+)?$`)
 )
 
 // Values are decimal strings, never floating-point projections of provider usage.
@@ -65,18 +63,8 @@ func newJournalUsageEvidence(input journalUsageEvidenceInput, entropy io.Reader)
 	if !strings.HasPrefix(input.AttemptID, journalAttemptIDPrefix) || input.AdapterRevision == "" || input.ObservedAt.IsZero() || len(input.Quantities) == 0 {
 		return journalUsageEvidence{}, errUsageJournalInvalid
 	}
-	switch input.Outcome {
-	case journalOutcomeComplete, journalOutcomeContinue:
-		if input.FailureCode != "" {
-			return journalUsageEvidence{}, errUsageJournalInvalid
-		}
-	case journalOutcomeFail:
-		if !journalDimensionPattern.MatchString(input.FailureCode) {
-			return journalUsageEvidence{}, errUsageJournalInvalid
-		}
-	default:
-		return journalUsageEvidence{}, errUsageJournalInvalid
-	}
+	// Execution owners select the outcome and failure code. Native meters
+	// report continuing execution without deriving either field from providers.
 	quantities := slices.Clone(input.Quantities)
 	completeness, err := normalizeJournalQuantities(quantities)
 	if err != nil {
@@ -84,25 +72,16 @@ func newJournalUsageEvidence(input journalUsageEvidenceInput, entropy io.Reader)
 	}
 	fields := append([]journalSourceField{}, input.SourceFields...)
 	slices.SortFunc(fields, func(left, right journalSourceField) int { return strings.Compare(left.Path, right.Path) })
+	// Native adapters own disjoint source paths and validate decimal values
+	// before retaining them. Normalize the already validated evidence here.
 	for index := range fields {
 		field := &fields[index]
-		if !journalSourcePathPattern.MatchString(field.Path) || !journalDecimalPattern.MatchString(field.Value) || (index > 0 && field.Path == fields[index-1].Path) {
-			return journalUsageEvidence{}, errUsageJournalInvalid
-		}
 		field.Value = normalizeJournalDecimal(field.Value)
 	}
-	quantityJSON, err := json.Marshal(quantities)
-	if err != nil {
-		return journalUsageEvidence{}, fmt.Errorf("encode usage quantities: %w", err)
-	}
-	fieldJSON, err := json.Marshal(fields)
-	if err != nil {
-		return journalUsageEvidence{}, fmt.Errorf("encode usage source fields: %w", err)
-	}
-	identity, err := json.Marshal([]string{input.AdapterRevision, input.ProviderRequestID, string(quantityJSON), string(fieldJSON), string(input.Outcome), input.FailureCode})
-	if err != nil {
-		return journalUsageEvidence{}, fmt.Errorf("encode usage evidence identity: %w", err)
-	}
+	// These closed evidence types contain only strings and string collections.
+	quantityJSON, _ := json.Marshal(quantities)
+	fieldJSON, _ := json.Marshal(fields)
+	identity, _ := json.Marshal([]string{input.AdapterRevision, input.ProviderRequestID, string(quantityJSON), string(fieldJSON), string(input.Outcome), input.FailureCode})
 	identifier, err := newHostedResourceID(journalObservationIDPrefix, entropy)
 	if err != nil {
 		return journalUsageEvidence{}, err

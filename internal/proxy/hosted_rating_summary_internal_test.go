@@ -77,7 +77,7 @@ func TestHostedRatingRequestSummaryIncludesAttemptsAndCredits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := database.applyCustomerChargeAdjustment(t.Context(), credit, func(*gorm.DB, managedChargeAdjustmentRecord) error { return nil }); err != nil {
+	if err := database.applyCustomerChargeAdjustment(t.Context(), credit, func(*gorm.DB, customerChargeAdjustment) error { return nil }); err != nil {
 		t.Fatal(err)
 	}
 	expected["customer_credits"] = map[string]any{"numerator": "91", "denominator": "50000"}
@@ -202,7 +202,7 @@ func TestHostedRatingRequestSummaryUsesOneCreditSnapshot(t *testing.T) {
 	if err := database.database.Callback().Query().After("gorm:query").Register(hook, func(transaction *gorm.DB) {
 		if transaction.Statement.Table == "managed_journal_request_records" {
 			once.Do(func() {
-				if err := second.applyCustomerChargeAdjustment(t.Context(), credit, func(*gorm.DB, managedChargeAdjustmentRecord) error { return nil }); err != nil {
+				if err := second.applyCustomerChargeAdjustment(t.Context(), credit, func(*gorm.DB, customerChargeAdjustment) error { return nil }); err != nil {
 					transaction.AddError(err)
 				}
 			})

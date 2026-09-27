@@ -2,9 +2,9 @@ package proxy
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
@@ -33,7 +33,10 @@ type managedFundsCorrectionRecord struct {
 	CreatedAt         time.Time                   `gorm:"not null"`
 }
 
-type fundsCorrectionCommand struct{ record managedFundsCorrectionRecord }
+type fundsCorrectionCommand struct {
+	record managedFundsCorrectionRecord
+	amount *big.Rat
+}
 
 type managementFundsCreditResponse struct {
 	ID            string     `json:"id"`
@@ -64,14 +67,14 @@ func decodeFundsCorrection(ctx *gin.Context, now time.Time) (fundsCorrectionComm
 	}
 	credit := ratingMoney(amount)
 	accountID, requestID, creditID := ctx.Param("billing_account_id"), ctx.Param("request_id"), ctx.Param("credit_id")
-	return fundsCorrectionCommand{record: managedFundsCorrectionRecord{ID: fundsCorrectionID(accountID, requestID, creditID), RequestID: requestID, BillingAccountID: accountID, CreditID: creditID, ActorUserID: managementPrincipalFromContext(ctx).userID, CreditNumerator: credit.Numerator, CreditDenominator: credit.Denominator, Reason: input.Reason, EvidenceReference: input.EvidenceReference, CreatedAt: now}}, nil
+	return fundsCorrectionCommand{record: managedFundsCorrectionRecord{ID: fundsCorrectionID(accountID, requestID, creditID), RequestID: requestID, BillingAccountID: accountID, CreditID: creditID, ActorUserID: managementPrincipalFromContext(ctx).userID, CreditNumerator: credit.Numerator, CreditDenominator: credit.Denominator, Reason: input.Reason, EvidenceReference: input.EvidenceReference, CreatedAt: now}, amount: amount}, nil
 }
 
 func (database *gormManagedTenantDatabase) fundsCorrection(ctx context.Context, accountID, requestID, creditID string, command *fundsCorrectionCommand) (managementFundsCreditResponse, error) {
 	var record managedFundsCorrectionRecord
 	err := database.database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if command != nil {
-			if err := applyFundsCorrection(tx, command.record); err != nil {
+			if err := applyFundsCorrection(tx, *command); err != nil {
 				return err
 			}
 		}
@@ -82,14 +85,8 @@ func (database *gormManagedTenantDatabase) fundsCorrection(ctx context.Context, 
 		if err != nil {
 			return err
 		}
-		amount, err := parseExactMoney(ExactMoney{Numerator: record.CreditNumerator, Denominator: record.CreditDenominator})
-		if err != nil {
-			return fmt.Errorf("decode retained credit amount: %w", err)
-		}
-		if amount.Sign() == 0 || !journalDimensionPattern.MatchString(record.Reason) || record.CreatedAt.IsZero() {
-			return fmt.Errorf("invalid retained credit receipt")
-		}
-		return nil
+		_, err = decodeRetainedFundsCorrection(record)
+		return err
 	})
 	if err != nil {
 		return managementFundsCreditResponse{}, fmt.Errorf("financial credit for request %s: %w", requestID, err)
@@ -97,7 +94,28 @@ func (database *gormManagedTenantDatabase) fundsCorrection(ctx context.Context, 
 	return managementFundsCreditResponse{ID: record.CreditID, RequestID: record.RequestID, Currency: CatalogCurrencyUSD, Credit: ExactMoney{Numerator: record.CreditNumerator, Denominator: record.CreditDenominator}, CreditedCents: strconv.FormatInt(record.Effect.CreditedCents, 10), Reason: record.Reason, CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339Nano)}, nil
 }
 
-func applyFundsCorrection(tx *gorm.DB, proposed managedFundsCorrectionRecord) error {
+// Read persisted credit evidence once at the database boundary. The exact
+// credit must conserve its recorded Ledger cents and fractional remainder.
+func decodeRetainedFundsCorrection(record managedFundsCorrectionRecord) (*big.Rat, error) {
+	calculation, err := calculateUSDCredit(
+		ExactMoney{Numerator: record.CreditNumerator, Denominator: record.CreditDenominator},
+		ExactMoney{Numerator: record.Effect.RemainderBeforeNumerator, Denominator: record.Effect.RemainderBeforeDenominator})
+	if err != nil {
+		return nil, fmt.Errorf("decode retained credit %s: %w", record.ID, err)
+	}
+	after, err := parseUSDCentRemainder(ExactMoney{Numerator: record.Effect.RemainderAfterNumerator, Denominator: record.Effect.RemainderAfterDenominator})
+	if err != nil {
+		return nil, fmt.Errorf("decode retained credit remainder %s: %w", record.ID, err)
+	}
+	if calculation.amount.Sign() == 0 || !journalDimensionPattern.MatchString(record.Reason) || record.CreatedAt.IsZero() ||
+		calculation.creditedCents != record.Effect.CreditedCents || calculation.remainder != ratingMoney(after) {
+		return nil, fmt.Errorf("invalid retained credit receipt %s", record.ID)
+	}
+	return calculation.amount, nil
+}
+
+func applyFundsCorrection(tx *gorm.DB, command fundsCorrectionCommand) error {
+	proposed := command.record
 	lock := tx.Model(&managedBillingAccountRecord{}).Where("id = ?", proposed.BillingAccountID).UpdateColumn("id", gorm.Expr("id"))
 	if lock.Error != nil {
 		return lock.Error
@@ -126,21 +144,14 @@ func applyFundsCorrection(tx *gorm.DB, proposed managedFundsCorrectionRecord) er
 	if reservation.State != fundsReservationSettled {
 		return errBillingAccountConflict
 	}
-	credit := ExactMoney{Numerator: proposed.CreditNumerator, Denominator: proposed.CreditDenominator}
-	if err := authorizeHostedFundsCredit(tx, proposed.BillingAccountID, proposed.RequestID, credit); err != nil {
+	if err := authorizeHostedFundsCredit(tx, proposed.BillingAccountID, proposed.RequestID, command.amount); err != nil {
 		if errors.Is(err, errUsageJournalConflict) {
 			return errBillingAccountConflict
 		}
 		return err
 	}
-	metadata, err := json.Marshal(struct {
-		RequestID string `json:"request_id"`
-		CreditID  string `json:"credit_id"`
-	}{proposed.RequestID, proposed.CreditID})
-	if err != nil {
-		return err
-	}
-	effect, err := applyHostedFundsCredit(tx, proposed.BillingAccountID, proposed.RequestID, credit, func(cents int64) error {
+	metadata := newHostedLedgerMetadata(hostedLedgerCorrectionMetadata{RequestID: proposed.RequestID, CreditID: proposed.CreditID})
+	effect, err := applyHostedFundsCredit(tx, proposed.BillingAccountID, proposed.RequestID, command.amount, func(cents int64) error {
 		return postHostedFundsCredit(tx, proposed.BillingAccountID, proposed.ID, cents, proposed.CreatedAt, metadata)
 	})
 	if err != nil {

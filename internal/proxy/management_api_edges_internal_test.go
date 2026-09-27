@@ -288,6 +288,11 @@ func newInternalManagementService(t *testing.T, database *fakeManagedTenantDatab
 		t.Fatalf("new session validator: %v", validationError)
 	}
 	store := newManagedTenantStoreWithDatabase(database)
+	t.Cleanup(func() {
+		if err := store.close(); err != nil {
+			t.Error(err)
+		}
+	})
 	store.routingDefaults = providers
 	return newManagementService(
 		configuration,

@@ -32,8 +32,8 @@ func TestHostedRatingConcurrentCustomerCreditsCannotExceedCharge(t *testing.T) {
 		}
 		go func() {
 			<-ready
-			results <- instance.applyCustomerChargeAdjustment(t.Context(), command, func(transaction *gorm.DB, adjustment managedChargeAdjustmentRecord) error {
-				return transaction.Exec("INSERT INTO concurrent_credit_effects (id) VALUES (?)", adjustment.ID).Error
+			results <- instance.applyCustomerChargeAdjustment(t.Context(), command, func(transaction *gorm.DB, adjustment customerChargeAdjustment) error {
+				return transaction.Exec("INSERT INTO concurrent_credit_effects (id) VALUES (?)", adjustment.record.ID).Error
 			})
 		}()
 	}
@@ -84,8 +84,8 @@ func TestHostedRatingCustomerCreditsPreserveProviderCost(t *testing.T) {
 	if err := database.database.Exec("CREATE TABLE adjustment_effects (id TEXT PRIMARY KEY)").Error; err != nil {
 		t.Fatal(err)
 	}
-	apply := func(transaction *gorm.DB, adjustment managedChargeAdjustmentRecord) error {
-		return transaction.Exec("INSERT INTO adjustment_effects (id) VALUES (?)", adjustment.ID).Error
+	apply := func(transaction *gorm.DB, adjustment customerChargeAdjustment) error {
+		return transaction.Exec("INSERT INTO adjustment_effects (id) VALUES (?)", adjustment.record.ID).Error
 	}
 	first := command("billing-journal", "first-credit", "40")
 	for range 2 {
@@ -108,7 +108,7 @@ func TestHostedRatingCustomerCreditsPreserveProviderCost(t *testing.T) {
 	}
 	last := command("billing-journal", "last-credit", "51")
 	failure := errors.New("controlled adjustment settlement failure")
-	if err := database.applyCustomerChargeAdjustment(t.Context(), last, func(transaction *gorm.DB, adjustment managedChargeAdjustmentRecord) error {
+	if err := database.applyCustomerChargeAdjustment(t.Context(), last, func(transaction *gorm.DB, adjustment customerChargeAdjustment) error {
 		if err := apply(transaction, adjustment); err != nil {
 			return err
 		}

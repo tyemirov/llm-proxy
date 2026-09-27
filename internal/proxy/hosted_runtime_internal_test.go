@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -16,10 +17,49 @@ import (
 	"go.uber.org/zap"
 )
 
-func TestHostedRuntimeFundsAdmissionAndSettlementThroughNormalHTTP(t *testing.T) {
-	database, _, _, _ := newHostedRatingFixture(t)
-	var calls atomic.Int64
-	upstream := fundsUpstream(t, &calls)
+type hostedRuntimeTextFixture struct {
+	fundsStartupFixture
+	configuration Configuration
+	store         *managedTenantStore
+}
+
+// This database implementation serves the managed-store interface but does not
+// expose the shared transaction required for atomic financial admission.
+type hostedInterfaceOnlyDatabase struct{ managedTenantDatabase }
+
+func TestHostedRuntimeRejectsStoreWithoutFinancialTransaction(t *testing.T) {
+	fixture := newHostedRuntimeTextFixture(t)
+	seedHostedFunds(t, fixture.database, 5)
+	before := fixture.state(t)
+	openStore := func(_ ManagementConfiguration, providers *providerRegistry) (*managedTenantStore, error) {
+		store := newManagedTenantStoreWithDatabaseAndCipher(hostedInterfaceOnlyDatabase{fixture.database}, fixture.store.providerKeyCipher)
+		store.routingDefaults = providers
+		return store, nil
+	}
+	rejectHostedRecoveryApplication(t, fixture.configuration, openStore, "managed financial database is required")
+	if fixture.calls.Load() != 0 || !reflect.DeepEqual(before, fixture.state(t)) {
+		t.Fatal("unsupported financial store changed funds or dispatched provider work")
+	}
+	application, err := buildProxyApplicationForTest(t, fixture.configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
+		return fixture.store, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(application.router)
+	t.Cleanup(server.Close)
+	server.Client().Transport = hostedIdentityTransport{next: server.Client().Transport}
+	hostedIdentityHTTP(t, server, "financial-store-recovery", "funded prompt", http.StatusOK)
+	if fixture.calls.Load() != 1 {
+		t.Fatalf("canonical store failed to execute once: calls=%d", fixture.calls.Load())
+	}
+}
+
+func newHostedRuntimeTextFixture(t *testing.T) hostedRuntimeTextFixture {
+	t.Helper()
+	database, _, managementHTTP, _ := newHostedRatingFixture(t)
+	calls := &atomic.Int64{}
+	upstream := fundsUpstream(t, calls)
 	root := t.TempDir()
 	_, management, _ := newHostedIdentityHTTPHandler(t, database, upstream.URL, root)
 	var source struct{ File string }
@@ -46,6 +86,11 @@ func TestHostedRuntimeFundsAdmissionAndSettlementThroughNormalHTTP(t *testing.T)
 			if schema.Providers[index].ID != "openai" {
 				continue
 			}
+			for offering := range schema.Providers[index].Offerings {
+				if schema.Providers[index].Offerings[offering].Model == "gpt-4.1" {
+					schema.Providers[index].Offerings[offering].OutputTokenLimit = priced.Offerings[0].OutputTokenLimit
+				}
+			}
 			for transport := range schema.Providers[index].Transports {
 				if schema.Providers[index].Transports[transport].Endpoint.Protocol == CatalogEndpointProtocolHTTP {
 					schema.Providers[index].Transports[transport].Endpoint.DefaultBaseURL = upstream.URL
@@ -55,11 +100,17 @@ func TestHostedRuntimeFundsAdmissionAndSettlementThroughNormalHTTP(t *testing.T)
 	}
 	configuration := withInternalUpstreamCapacity(t, Configuration{Management: management.configuration, ProviderCatalog: catalog, AssetStorePath: root,
 		Hosted: &HostedConfiguration{Offerings: []HostedOfferingConfiguration{{Provider: "openai", Model: "gpt-4.1", Operation: ModelOperationText, MaximumAttempts: 1, Conditions: categoricalPriceConditions(conditions)}}}})
+	return hostedRuntimeTextFixture{fundsStartupFixture{database, managementHTTP, calls}, configuration, management.store}
+}
+
+func TestHostedRuntimeFundsAdmissionAndSettlementThroughNormalHTTP(t *testing.T) {
+	fixture := newHostedRuntimeTextFixture(t)
+	database, calls, configuration := fixture.database, fixture.calls, fixture.configuration
 	openStore := func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
-		return management.store, nil
+		return fixture.store, nil
 	}
 	excluded := configuration.Hosted.Offerings[0]
-	for _, offering := range catalog.modelCatalog.Offerings {
+	for _, offering := range configuration.ProviderCatalog.modelCatalog.Offerings {
 		if offering.Model != "gpt-4.1" && slices.Contains(offering.Operations, ModelOperationText) {
 			excluded.Provider, excluded.Model = offering.Provider, offering.Model
 			break
@@ -91,9 +142,7 @@ func TestHostedRuntimeFundsAdmissionAndSettlementThroughNormalHTTP(t *testing.T)
 			}
 		})
 	}
-	application, err := buildProxyApplicationForTest(t, configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
-		return management.store, nil
-	})
+	application, err := buildProxyApplicationForTest(t, configuration, zap.NewNop().Sugar(), openStore)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,6 +190,45 @@ func TestHostedRuntimeFundsAdmissionAndSettlementThroughNormalHTTP(t *testing.T)
 	}
 	assertHostedFundsBalance(t, database, 5, 5)
 	assertFundsCreditRemainder(t, database, "91", "25000")
+}
+
+func TestHostedRuntimeRejectsCatalogWithoutEnabledOfferings(t *testing.T) {
+	fixture := newHostedRuntimeTextFixture(t)
+	seedHostedFunds(t, fixture.database, 5)
+	before := fixture.state(t)
+	schema := cloneProviderCatalogSchema(fixture.configuration.ProviderCatalog.schema)
+	schema.ModelMigrations = nil
+	for index := range schema.Providers {
+		provider := &schema.Providers[index]
+		if provider.ID != "elevenlabs" {
+			provider.Enabled = ModelDisabled
+			continue
+		}
+		for offering := range provider.Offerings {
+			provider.Offerings[offering].Enabled = ModelDisabled
+			provider.Offerings[offering].DefaultOperations = nil
+		}
+	}
+	catalog, err := NewProviderCatalog(schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configuration := fixture.configuration
+	configuration.ProviderCatalog = catalog
+	configuration.UpstreamCapacity.Origins = nil
+	origins, err := configuration.ConfiguredUpstreamOrigins()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, origin := range origins {
+		configuration.UpstreamCapacity.Origins = append(configuration.UpstreamCapacity.Origins, UpstreamOriginCapacity{Origin: origin, Active: 4, Queued: 100})
+	}
+	if _, err := NewConfiguration(configuration); err == nil || !strings.Contains(err.Error(), "configure hosted price catalog") {
+		t.Fatalf("empty runtime catalog was not rejected before hosted startup: %v", err)
+	}
+	if fixture.calls.Load() != 0 || !reflect.DeepEqual(before, fixture.state(t)) {
+		t.Fatal("disabled provider catalog changed funds or dispatched provider work")
+	}
 }
 
 func hostedRuntimeHTTP(t *testing.T, baseURL, key string, status int) string {

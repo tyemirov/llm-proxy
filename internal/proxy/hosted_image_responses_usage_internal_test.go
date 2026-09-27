@@ -16,9 +16,12 @@ import (
 func TestHostedImageResponsesUsageRetainsSeparateEvidence(t *testing.T) {
 	encoded := base64.StdEncoding.EncodeToString(imageBoundaryPNG(t, image.NewNRGBA(image.Rect(0, 0, 1024, 1024))))
 	const exactUsage = `{"total_tokens":9007199254741000,"input_tokens":9007199254740993,"output_tokens":7,"input_tokens_details":{"cached_tokens":3,"cache_write_tokens":0},"output_tokens_details":{"reasoning_tokens":2}}`
+	const toolUsage = `{"image_gen":{"input_tokens":18,"input_tokens_details":{"image_tokens":0,"text_tokens":18},"output_tokens":196,"output_tokens_details":{"image_tokens":196,"text_tokens":0},"total_tokens":214},"web_search":{"num_requests":0}}`
 	for _, scenario := range []struct {
 		name, surface, status, usage, value, output, state string
+		toolUsage, toolValue                               string
 		unknown                                            journalUnknownReason
+		toolUnknown                                        journalUnknownReason
 		failWrite                                          bool
 	}{
 		{name: "json", surface: "json", status: "completed", usage: exactUsage, value: "9007199254740993", output: encoded, state: MediaOperationStateSucceeded},
@@ -26,9 +29,9 @@ func TestHostedImageResponsesUsageRetainsSeparateEvidence(t *testing.T) {
 		{name: "stream", surface: "stream", status: "completed", usage: exactUsage, value: "9007199254740993", output: encoded, state: MediaOperationStateSucceeded},
 		{name: "invalid-image", surface: "json", status: "completed", usage: exactUsage, value: "9007199254740993", output: "invalid", state: MediaOperationStateFailed},
 		{name: "invalid-stream-image", surface: "stream", status: "completed", usage: exactUsage, value: "9007199254740993", output: "invalid", state: MediaOperationStateFailed},
-		{name: "failed", surface: "poll", status: "failed", usage: exactUsage, value: "9007199254740993", state: MediaOperationStateFailed},
-		{name: "incomplete", surface: "stream", status: "incomplete", usage: exactUsage, value: "9007199254740993", state: MediaOperationStateFailed},
-		{name: "cancelled", surface: "poll", status: "cancelled", usage: exactUsage, value: "9007199254740993", state: MediaOperationStateCancelled},
+		{name: "failed", surface: "poll", status: "failed", usage: exactUsage, value: "9007199254740993", toolUsage: toolUsage, toolValue: "18", state: MediaOperationStateFailed},
+		{name: "incomplete", surface: "stream", status: "incomplete", usage: exactUsage, value: "9007199254740993", toolUsage: toolUsage, toolValue: "18", state: MediaOperationStateFailed},
+		{name: "cancelled", surface: "poll", status: "cancelled", usage: exactUsage, value: "9007199254740993", toolUsage: toolUsage, toolValue: "18", state: MediaOperationStateCancelled},
 		{name: "missing", surface: "json", status: "completed", usage: `null`, unknown: journalQuantityNotReported, output: encoded, state: MediaOperationStateSucceeded},
 		{name: "invalid-number", surface: "json", status: "completed", usage: `{"input_tokens":"12"}`, unknown: journalQuantityInvalid, output: encoded, state: MediaOperationStateSucceeded},
 		{name: "inconsistent-total", surface: "json", status: "completed", usage: `{"total_tokens":3,"input_tokens":2,"output_tokens":2}`, unknown: journalQuantityInvalid, output: encoded, state: MediaOperationStateSucceeded},
@@ -36,8 +39,23 @@ func TestHostedImageResponsesUsageRetainsSeparateEvidence(t *testing.T) {
 		{name: "write-failure", surface: "json", status: "completed", usage: exactUsage, output: encoded, failWrite: true, state: MediaOperationStateUncertain},
 		{name: "stream-write-failure", surface: "stream", status: "completed", usage: exactUsage, output: encoded, failWrite: true, state: MediaOperationStateUncertain},
 		{name: "poll-write-failure", surface: "poll", status: "completed", usage: exactUsage, output: encoded, failWrite: true, state: MediaOperationStateUncertain},
+		{name: "tool-json", surface: "json", status: "completed", usage: exactUsage, value: "9007199254740993", toolUsage: toolUsage, toolValue: "18", output: encoded, state: MediaOperationStateSucceeded},
+		{name: "tool-poll", surface: "poll", status: "completed", usage: exactUsage, value: "9007199254740993", toolUsage: toolUsage, toolValue: "18", output: encoded, state: MediaOperationStateSucceeded},
+		{name: "tool-stream", surface: "stream", status: "completed", usage: exactUsage, value: "9007199254740993", toolUsage: toolUsage, toolValue: "18", output: encoded, state: MediaOperationStateSucceeded},
+		{name: "tool-precision", surface: "json", status: "completed", usage: exactUsage, value: "9007199254740993", toolUsage: `{"image_gen":{"total_tokens":9007199254741000,"input_tokens":9007199254740993,"output_tokens":7,"input_tokens_details":{"text_tokens":9007199254740990,"image_tokens":3},"output_tokens_details":{"text_tokens":0,"image_tokens":7}}}`, toolValue: "9007199254740993", output: encoded, state: MediaOperationStateSucceeded},
+		{name: "tool-zero", surface: "json", status: "completed", usage: exactUsage, value: "9007199254740993", toolUsage: `{"image_gen":{"input_tokens":0,"input_tokens_details":{"image_tokens":0,"text_tokens":0},"output_tokens":0,"output_tokens_details":{"image_tokens":0,"text_tokens":0},"total_tokens":0}}`, toolValue: "0", output: encoded, state: MediaOperationStateSucceeded},
+		{name: "tool-inconsistent-total", surface: "json", status: "completed", usage: exactUsage, value: "9007199254740993", toolUsage: strings.Replace(toolUsage, `"total_tokens":214`, `"total_tokens":213`, 1), toolUnknown: journalQuantityInvalid, output: encoded, state: MediaOperationStateSucceeded},
+		{name: "tool-inconsistent-input", surface: "json", status: "completed", usage: exactUsage, value: "9007199254740993", toolUsage: strings.Replace(toolUsage, `"image_tokens":0`, `"image_tokens":1`, 1), toolUnknown: journalQuantityInvalid, output: encoded, state: MediaOperationStateSucceeded},
+		{name: "tool-invalid-number", surface: "json", status: "completed", usage: exactUsage, value: "9007199254740993", toolUsage: strings.Replace(toolUsage, `"input_tokens":18`, `"input_tokens":"18"`, 1), toolUnknown: journalQuantityInvalid, output: encoded, state: MediaOperationStateSucceeded},
+		{name: "tool-write-failure", surface: "json", status: "completed", usage: exactUsage, toolUsage: toolUsage, output: encoded, failWrite: true, state: MediaOperationStateUncertain},
+		{name: "tool-stream-write-failure", surface: "stream", status: "completed", usage: exactUsage, toolUsage: toolUsage, output: encoded, failWrite: true, state: MediaOperationStateUncertain},
+		{name: "tool-poll-write-failure", surface: "poll", status: "completed", usage: exactUsage, toolUsage: toolUsage, output: encoded, failWrite: true, state: MediaOperationStateUncertain},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
+			if scenario.toolUsage == "" {
+				scenario.toolUsage = `null`
+				scenario.toolUnknown = journalQuantityNotReported
+			}
 			database, _, read := newJournalTransactionFixture(t)
 			var posts, polls atomic.Int64
 			upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -47,7 +65,7 @@ func TestHostedImageResponsesUsageRetainsSeparateEvidence(t *testing.T) {
 				} else {
 					polls.Add(1)
 				}
-				terminal := fmt.Sprintf(`{"id":"resp_usage","status":%q,"usage":%s,"output":[{"id":"image_private","type":"image_generation_call","status":"completed","result":%q,"revised_prompt":"private rewritten prompt","usage":{"input_tokens":999}}]}`, scenario.status, scenario.usage, scenario.output)
+				terminal := fmt.Sprintf(`{"id":"resp_usage","status":%q,"usage":%s,"tool_usage":%s,"output":[{"id":"image_private","type":"image_generation_call","status":"completed","result":%q,"revised_prompt":"private rewritten prompt","usage":{"input_tokens":999}}]}`, scenario.status, scenario.usage, scenario.toolUsage, scenario.output)
 				if scenario.surface == "poll" && request.Method == http.MethodPost {
 					fmt.Fprint(writer, `{"id":"resp_usage","status":"queued","usage":{"input_tokens":111}}`)
 				} else if scenario.surface == "stream" {
@@ -92,7 +110,7 @@ func TestHostedImageResponsesUsageRetainsSeparateEvidence(t *testing.T) {
 				t.Fatalf("observations=%v", observations)
 			}
 			observation := observations[0]
-			if observation.AdapterRevision != CatalogProtocolOpenAIResponses+":image:1" {
+			if observation.AdapterRevision != CatalogProtocolOpenAIResponses+":image:2" {
 				t.Fatalf("wrong meter=%s", observation.AdapterRevision)
 			}
 			var quantities []journalQuantity
@@ -117,7 +135,24 @@ func TestHostedImageResponsesUsageRetainsSeparateEvidence(t *testing.T) {
 					}
 				}
 			}
-			for _, dimension := range []string{"input_tokens", "output_tokens", "cache_read_text_tokens", "cache_read_image_tokens"} {
+			toolInput := byDimension["input_tokens"]
+			if toolInput.Value != scenario.toolValue || toolInput.UnknownReason != scenario.toolUnknown || toolInput.IncludedIn != "total_tokens" {
+				t.Fatalf("image tool input=%+v", toolInput)
+			}
+			if scenario.toolValue != "" && !strings.Contains(string(observation.SourceFields), `"path":"tool_usage.image_gen.input_tokens","value":"`+scenario.toolValue+`"`) {
+				t.Fatalf("image tool source precision=%s", observation.SourceFields)
+			}
+			if scenario.toolUsage == toolUsage {
+				for dimension, value := range map[string]string{"total_tokens": "214", "output_tokens": "196", "input_text_tokens": "18", "input_image_tokens": "0", "output_text_tokens": "0", "output_image_tokens": "196"} {
+					if quantity := byDimension[dimension]; quantity.Value != value || quantity.UnknownReason != "" {
+						t.Fatalf("lost image tool quantity %s=%+v", dimension, quantity)
+					}
+				}
+				if !strings.Contains(string(observation.SourceFields), `"path":"tool_usage.image_gen.input_tokens","value":"18"`) {
+					t.Fatalf("image tool sources=%s", observation.SourceFields)
+				}
+			}
+			for _, dimension := range []string{"cache_read_text_tokens", "cache_read_image_tokens"} {
 				if byDimension[dimension].UnknownReason != journalQuantityUnsupported {
 					t.Fatalf("unqualified image usage=%s", observation.Quantities)
 				}

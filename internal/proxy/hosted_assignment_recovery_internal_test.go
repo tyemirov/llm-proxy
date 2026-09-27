@@ -1,16 +1,61 @@
 package proxy
 
 import (
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"reflect"
 	"testing"
+
+	"gorm.io/gorm/clause"
 )
 
 const hostedAssignmentRecoveryPath = "/tenants/managed-first/connections/openai"
-const hostedAssignmentRecoveryBody = `{"kind":"hosted_access_grant","resource_id":"grant-journal"}`
+const hostedAssignmentRecoveryBody = `{"kind":"hosted_access_grant","resource_id":"` + hostedJournalFixtureGrantID + `"}`
+
+func TestHostedAssignmentMissingProfileRejectsReadsWithoutFinancialChanges(t *testing.T) {
+	financial := newFinancialReadFixture(t)
+	fixture := hostedAssignmentRecoveryFixture{financial.database, financial.server, financial.cookie("owner")}
+	before := fixture.snapshot(t)
+	funds := financial.snapshot(t)
+	var profile managedProviderProfileRecord
+	if err := fixture.database.database.Where("tenant_id = ? AND provider_id = ?", "managed-first", "openai").First(&profile).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.database.database.Delete(&profile).Error; err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		request, err := http.NewRequest(http.MethodGet, fixture.server.URL+managementAPIPath+"/tenants/managed-first", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.AddCookie(fixture.owner)
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, err := io.ReadAll(response.Body)
+		response.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if response.StatusCode != http.StatusInternalServerError || string(payload) != errManagedTenantStorePersist.Error() {
+			t.Fatalf("missing profile returned partial or private data: status=%d body=%s", response.StatusCode, payload)
+		}
+		financial.assertUnchanged(t, funds)
+	}
+	if err := fixture.database.database.Omit(clause.Associations).Create(&profile).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, fixture.snapshot(t)) {
+		t.Fatal("failed profile read changed tenant or grant resources")
+	}
+	fixture.recover(t)
+	financial.assertUnchanged(t, funds)
+}
 
 type hostedAssignmentRecoveryFixture struct {
 	database *gormManagedTenantDatabase
@@ -45,7 +90,7 @@ func (fixture hostedAssignmentRecoveryFixture) exchange(t *testing.T, method, pa
 func (fixture hostedAssignmentRecoveryFixture) snapshot(t *testing.T) map[string]any {
 	t.Helper()
 	resources := map[string]any{}
-	for _, path := range []string{"/tenants/managed-first", "/tenants/managed-first/connections", "/hosted-access-grants/grant-journal", fundsBalanceTestPath} {
+	for _, path := range []string{"/tenants/managed-first", "/tenants/managed-first/connections", "/hosted-access-grants/" + hostedJournalFixtureGrantID, fundsBalanceTestPath} {
 		resources[path] = fixture.exchange(t, http.MethodGet, path, "", http.StatusOK)
 	}
 	return resources
@@ -57,7 +102,7 @@ func (fixture hostedAssignmentRecoveryFixture) recover(t *testing.T) {
 	fixture.server = restarted
 	fixture.exchange(t, http.MethodPut, hostedAssignmentRecoveryPath, hostedAssignmentRecoveryBody, http.StatusOK)
 	accepted := fixture.snapshot(t)
-	want := map[string]any{"assignments": []any{map[string]any{"provider": "openai", "kind": "hosted_access_grant", "resource_id": "grant-journal"}}}
+	want := map[string]any{"assignments": []any{map[string]any{"provider": "openai", "kind": "hosted_access_grant", "resource_id": hostedJournalFixtureGrantID}}}
 	if !reflect.DeepEqual(accepted["/tenants/managed-first/connections"], want) {
 		t.Fatalf("recovered assignment=%v", accepted)
 	}
@@ -114,4 +159,56 @@ func TestHostedAssignmentUnavailableReadsPreserveSelection(t *testing.T) {
 		})
 	}
 	fixture.recover(t)
+}
+
+func TestHostedAssignmentDetachFailuresPreserveFundedAccount(t *testing.T) {
+	for _, scenario := range []struct{ operation, table string }{
+		{"query", "managed_hosted_tenant_assignment_records"},
+		{"delete", "managed_hosted_tenant_assignment_records"},
+		{"update", managedTenantTable},
+		{"defaults", managedTenantTable},
+	} {
+		t.Run(scenario.operation+"/"+scenario.table, func(t *testing.T) {
+			financial := newFinancialReadFixture(t)
+			fixture := hostedAssignmentRecoveryFixture{financial.database, financial.server, financial.cookie("owner")}
+			before := fixture.snapshot(t)
+			funds := financial.snapshot(t)
+			if scenario.operation == "defaults" {
+				if err := fixture.database.database.Exec("CREATE TRIGGER reject_detached_defaults BEFORE UPDATE OF default_provider ON managed_tenant_records BEGIN SELECT RAISE(ABORT, 'controlled_default_write_failure'); END").Error; err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				registerManagedGORMError(t, fixture.database.database, "connection-failure", scenario.operation, scenario.table, errInternalTestDatabase)
+			}
+			for range 2 {
+				failure := fixture.exchange(t, http.MethodDelete, hostedAssignmentRecoveryPath+"?clear_defaults=true", "", http.StatusInternalServerError)
+				if !reflect.DeepEqual(failure, map[string]any{"error": map[string]any{"code": "managed_connection_store_failed"}}) {
+					t.Fatalf("failed detach exposed partial or private data: %v", failure)
+				}
+			}
+			if scenario.operation == "defaults" {
+				if err := fixture.database.database.Exec("DROP TRIGGER reject_detached_defaults").Error; err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				removeAccountConnectionFailure(t, fixture.database.database, scenario.operation)
+			}
+			if !reflect.DeepEqual(before, fixture.snapshot(t)) {
+				t.Fatal("failed detach changed the tenant, grant, or funds")
+			}
+			financial.assertUnchanged(t, funds)
+			for range 2 {
+				restarted, cookie := newFundsManagementHTTPFixture(t, openJournalTransactionInstance(t, fixture.database))
+				fixture.server, fixture.owner = restarted, cookie("owner")
+				fixture.exchange(t, http.MethodDelete, hostedAssignmentRecoveryPath+"?clear_defaults=true", "", http.StatusNoContent)
+				assignments := fixture.exchange(t, http.MethodGet, "/tenants/managed-first/connections", "", http.StatusOK)
+				if !reflect.DeepEqual(assignments, map[string]any{"assignments": []any{}}) {
+					t.Fatalf("detached assignments=%v", assignments)
+				}
+				financial.assertUnchanged(t, funds)
+			}
+			fixture.recover(t)
+			financial.assertUnchanged(t, funds)
+		})
+	}
 }

@@ -272,30 +272,22 @@ func applyPaymentAdjustments(tx *gorm.DB, order managedFundingOrderRecord, verif
 	}
 	next := managedPaymentAdjustmentRecord{OrderID: order.ID, BillingAccountID: order.BillingAccountID, Revision: previous.Revision + 1, ReversedCents: verified.reversed, PendingCents: verified.pending, Evidence: verified.encoded, EvidenceDigest: verified.digest, UpdatedAt: now}
 	key := next.ledgerKey()
-	metadata, err := json.Marshal(map[string]string{"funding_order_id": order.ID, "evidence_digest": verified.digest})
-	if err != nil {
-		return err
-	}
+	ledgerMetadata := newHostedLedgerMetadata(map[string]string{"funding_order_id": order.ID, "evidence_digest": verified.digest})
 	account, err := newHostedLedgerAccount(tx, order.BillingAccountID, now)
 	if err != nil {
 		return err
 	}
-	ledgerMetadata, err := ledger.NewMetadataJSON(string(metadata))
-	if err != nil {
-		return err
-	}
 	if previous.HeldCents > 0 {
-		input, err := newHostedLedgerReleaseInput(previous.HoldID, key+":release")
-		if err != nil {
-			return fmt.Errorf("construct refund hold release for order %s: %w", order.ID, err)
-		}
+		// decodedEvidence verified the retained hold identifier against its
+		// generated value. Both identifiers have nonempty fixed prefixes.
+		input, _ := newHostedLedgerReleaseInput(previous.HoldID, key+":release")
 		if err := account.service.Release(tx.Statement.Context, account.tenant, account.user, account.namespace, input.reservation, input.key, ledgerMetadata); err != nil {
 			return fmt.Errorf("release payment hold: %w", err)
 		}
 	}
 	delta := previous.ReversedCents - verified.reversed
 	if delta > 0 {
-		if err := postHostedFundsCredit(tx, order.BillingAccountID, key, delta, now, metadata); err != nil {
+		if err := postHostedFundsCredit(tx, order.BillingAccountID, key, delta, now, ledgerMetadata); err != nil {
 			return err
 		}
 	} else if delta < 0 {
@@ -307,18 +299,11 @@ func applyPaymentAdjustments(tx *gorm.DB, order managedFundingOrderRecord, verif
 		if err != nil {
 			return err
 		}
-		amount, err := ledger.NewEntryAmountCents(delta)
-		if err != nil {
-			return err
-		}
-		entryKey, err := ledger.NewIdempotencyKey(key)
-		if err != nil {
-			return err
-		}
-		entry, err := ledger.NewEntryInput(accountID, ledger.EntrySpend, amount, nil, nil, entryKey, 0, ledgerMetadata, now.Unix())
-		if err != nil {
-			return err
-		}
+		// This branch has a negative delta and a generated nonempty key.
+		// The store validated accountID; the metadata and entry type are closed.
+		amount, _ := ledger.NewEntryAmountCents(delta)
+		entryKey, _ := ledger.NewIdempotencyKey(key)
+		entry, _ := ledger.NewEntryInput(accountID, ledger.EntrySpend, amount, nil, nil, entryKey, 0, ledgerMetadata, now.Unix())
 		if _, err := store.InsertEntry(tx.Statement.Context, entry); err != nil {
 			return fmt.Errorf("post payment reversal: %w", err)
 		}
@@ -330,10 +315,8 @@ func applyPaymentAdjustments(tx *gorm.DB, order managedFundingOrderRecord, verif
 	next.HeldCents = min(verified.pending, max(int64(0), balance.AvailableCents.Int64()))
 	if next.HeldCents > 0 {
 		next.HoldID = next.holdIdentifier()
-		input, err := newHostedLedgerReservationInput(next.HeldCents, next.HoldID, next.HoldID)
-		if err != nil {
-			return fmt.Errorf("construct refund hold for order %s: %w", order.ID, err)
-		}
+		// The amount is positive and holdIdentifier generated a nonempty key.
+		input, _ := newHostedLedgerReservationInput(next.HeldCents, next.HoldID, next.HoldID)
 		if err := account.service.Reserve(tx.Statement.Context, account.tenant, account.user, account.namespace, input.amount, input.reservation, input.key, 0, ledgerMetadata); err != nil {
 			return fmt.Errorf("reserve payment hold: %w", err)
 		}

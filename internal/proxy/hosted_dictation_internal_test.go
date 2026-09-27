@@ -118,7 +118,7 @@ func TestHostedDictationConcurrencyRevocationAndExpiry(t *testing.T) {
 		t.Fatalf("pending result=%s", pending)
 	}
 	hostedIdentityStatusHTTP(t, second, "concurrent-audio", http.StatusAccepted)
-	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-journal").Update("state", hostedGrantRevoked).Error; err != nil {
+	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", hostedJournalFixtureGrantID).Update("state", hostedGrantRevoked).Error; err != nil {
 		t.Fatal(err)
 	}
 	unblock()
@@ -197,7 +197,7 @@ func TestHostedDictationUsageEvidence(t *testing.T) {
 
 func grantHostedDictation(t *testing.T, database *gormManagedTenantDatabase) {
 	t.Helper()
-	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-journal").Update("offerings", []byte(`[{"model":"gpt-4.1","operations":["text"]},{"model":"gpt-transcribe","operations":["dictation"]}]`)).Error; err != nil {
+	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", hostedJournalFixtureGrantID).Update("offerings", []byte(`[{"model":"gpt-4.1","operations":["text"]},{"model":"gpt-transcribe","operations":["dictation"]}]`)).Error; err != nil {
 		t.Fatal(err)
 	}
 }
@@ -260,15 +260,20 @@ func newHostedDictationServer(t *testing.T, database *gormManagedTenantDatabase,
 
 func newHostedDictationProviderServer(t *testing.T, database *gormManagedTenantDatabase, upstreamURL, root, providerName, model string, configure ...func(*hostedTextRequestDependencies)) *httptest.Server {
 	t.Helper()
+	return newHostedDictationProviderServerWithRegistry(t, database, upstreamURL, root, providerName, model, internalManagementProviderRegistry(), configure...)
+}
+
+func newHostedDictationProviderServerWithRegistry(t *testing.T, database *gormManagedTenantDatabase, upstreamURL, root, providerName, model string, providers *providerRegistry, configure ...func(*hostedTextRequestDependencies)) *httptest.Server {
+	t.Helper()
 	router, service, upstream := newHostedIdentityHTTPHandler(t, database, upstreamURL, root, configure...)
-	providers := service.store.routingDefaults
+	service.store.routingDefaults = providers
+	definition := providers.definitions[providerID(providerName)]
+	for identifier, transport := range definition.transports {
+		transport.endpointURLOverride = upstreamURL
+		definition.transports[identifier] = transport
+	}
+	providers.definitions[providerID(providerName)] = definition
 	if providerName != "openai" {
-		definition := providers.definitions[providerID(providerName)]
-		for identifier, transport := range definition.transports {
-			transport.endpointURLOverride = upstreamURL
-			definition.transports[identifier] = transport
-		}
-		providers.definitions[providerID(providerName)] = definition
 		credential, err := service.store.providerKeyCipher.encryptConnection(rand.Reader, platformCredentialReference("platform-dictation", 1), providerName, CatalogCredentialAPIKey, "sk-platform-dictation")
 		if err != nil {
 			t.Fatal(err)

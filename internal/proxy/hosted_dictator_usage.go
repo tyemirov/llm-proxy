@@ -3,6 +3,7 @@ package proxy
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"strconv"
 
 	dictator "github.com/tyemirov/dictator/sdk/go/dictatorspeechv1"
@@ -15,10 +16,7 @@ func (connection *hostedMediaGRPCConnection) recordResponseUsage(reply any) erro
 	if connection.recordUsage == nil {
 		return nil
 	}
-	input := journalUsageEvidenceInput{AdapterRevision: CatalogProtocolDictatorSpeechV1 + ":1", Outcome: journalOutcomeContinue}
-	// Input jobs do not report processed audio duration. Upload metadata and word
-	// timestamps describe different quantities and cannot establish this measure.
-	input.Quantities = []journalQuantity{{Dimension: "input_audio_seconds", Unit: "second", UnknownReason: journalQuantityUnsupported}}
+	input := journalUsageEvidenceInput{AdapterRevision: CatalogProtocolDictatorSpeechV1 + ":2", Outcome: journalOutcomeContinue}
 	var nativeState int32
 	switch response := reply.(type) {
 	case *dictator.GetSynthesizeSpeechJobResponse:
@@ -27,14 +25,19 @@ func (connection *hostedMediaGRPCConnection) recordResponseUsage(reply any) erro
 		recordDictatorOutputDuration(&input, response.AudioDurationSeconds, "audio_duration_seconds")
 	case *dictator.GetTranscribeJobResponse:
 		nativeState, input.ProviderRequestID = int32(response.State), response.JobId
+		recordDictatorInputDuration(&input, response.InputAudioUsage)
 	case *dictator.GetDiarizeAudioJobResponse:
 		nativeState, input.ProviderRequestID = int32(response.State), response.JobId
+		recordDictatorInputDuration(&input, response.InputAudioUsage)
 	case *dictator.GetAlignTranscriptJobResponse:
 		nativeState, input.ProviderRequestID = int32(response.State), response.JobId
+		recordDictatorInputDuration(&input, response.InputAudioUsage)
 	case *dictator.GetRenderSubtitlesJobResponse:
 		nativeState, input.ProviderRequestID = int32(response.State), response.JobId
+		recordDictatorInputDuration(&input, response.InputAudioUsage)
 	case *dictator.GetExtractReferenceSampleJobResponse:
 		nativeState, input.ProviderRequestID = int32(response.State), response.JobId
+		recordDictatorInputDuration(&input, response.InputAudioUsage)
 		recordDictatorOutputDuration(&input, response.GetSampleArtifact().GetAudioMetadata().GetDurationSeconds(), "sample_artifact.audio_metadata.duration_seconds")
 	default:
 		return nil
@@ -52,6 +55,27 @@ func (connection *hostedMediaGRPCConnection) recordResponseUsage(reply any) erro
 		return fmt.Errorf("record Dictator usage: %w: %w", errUsageJournalUnavailable, err)
 	}
 	return nil
+}
+
+func recordDictatorInputDuration(input *journalUsageEvidenceInput, usage *dictator.InputAudioUsage) {
+	quantity := journalQuantity{Dimension: "input_audio_seconds", Unit: "second", UnknownReason: journalQuantityNotReported}
+	if usage != nil {
+		input.SourceFields = append(input.SourceFields,
+			journalSourceField{Path: "input_audio_usage.sample_count", Value: strconv.FormatUint(usage.SampleCount, 10)},
+			journalSourceField{Path: "input_audio_usage.sample_rate_hz", Value: strconv.FormatUint(uint64(usage.SampleRateHz), 10)})
+		if usage.SampleRateHz == 0 {
+			quantity.UnknownReason = journalQuantityInvalid
+		} else {
+			duration := new(big.Rat).SetFrac(new(big.Int).SetUint64(usage.SampleCount), new(big.Int).SetUint64(uint64(usage.SampleRateHz)))
+			if _, finite := duration.FloatPrec(); finite {
+				quantity.Value, quantity.UnknownReason = ratingDecimal(duration), ""
+			} else {
+				// The journal requires exact decimal quantities. Never round a repeating fraction.
+				quantity.UnknownReason = journalQuantityUnsupported
+			}
+		}
+	}
+	input.Quantities = append(input.Quantities, quantity)
 }
 
 func recordDictatorOutputDuration(input *journalUsageEvidenceInput, duration float64, path string) {

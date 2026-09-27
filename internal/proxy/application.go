@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -19,18 +20,25 @@ import (
 const hostedFundsReconciliationInterval = time.Second
 
 type proxyApplication struct {
-	router   *gin.Engine
-	database managedTenantDatabase
-	address  string
-	now      func() time.Time
-	payments *paddlePaymentRuntime
-	media    *mediaOperationService
+	router     *gin.Engine
+	database   managedTenantDatabase
+	address    string
+	now        func() time.Time
+	payments   *paddlePaymentRuntime
+	media      *mediaOperationService
+	closeStore func() error
+	closeOnce  sync.Once
+	closeError error
 }
 
-func (application *proxyApplication) close() {
-	if application.media != nil {
-		application.media.stop()
-	}
+func (application *proxyApplication) close() error {
+	application.closeOnce.Do(func() {
+		if application.media != nil {
+			application.media.stop()
+		}
+		application.closeError = application.closeStore()
+	})
+	return application.closeError
 }
 
 func (application *proxyApplication) startMedia() {
@@ -45,18 +53,17 @@ func Serve(configuration Configuration, structuredLogger *zap.SugaredLogger) err
 	if err != nil {
 		return err
 	}
-	defer application.close()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	listener, err := net.Listen("tcp", application.address)
 	if err != nil {
-		return fmt.Errorf("listen for proxy requests: %w", err)
+		return errors.Join(fmt.Errorf("listen for proxy requests: %w", err), application.close())
 	}
 	return application.serve(ctx, listener)
 }
 
-func (application *proxyApplication) serve(ctx context.Context, listener net.Listener) error {
-	defer application.close()
+func (application *proxyApplication) serve(ctx context.Context, listener net.Listener) (serveError error) {
+	defer func() { serveError = errors.Join(serveError, application.close()) }()
 	if err := application.database.reconcileHostedFunds(ctx, application.now().UTC()); err != nil {
 		return errors.Join(fmt.Errorf("initialize funds reconciliation: %w", err), listener.Close())
 	}

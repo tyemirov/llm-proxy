@@ -3,6 +3,7 @@ package proxy
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"time"
 
 	"gorm.io/gorm"
@@ -72,37 +73,42 @@ func newJournalRatingDelivery(settle journalChargeSettlement) journalAccountingD
 		if charge.State != chargeRated {
 			return nil
 		}
-		return settle(transaction, charge)
+		return settle(transaction, charge.managedChargeRecord)
 	}
 }
 
-func rateJournalObservation(transaction *gorm.DB, observation managedJournalObservationRecord) (managedChargeRecord, error) {
+type ratedJournalObservation struct {
+	managedChargeRecord
+	authorizedMaximum *big.Rat
+}
+
+func rateJournalObservation(transaction *gorm.DB, observation managedJournalObservationRecord) (ratedJournalObservation, error) {
 	var attempt managedJournalAttemptRecord
 	if err := transaction.Where("id = ?", observation.AttemptID).First(&attempt).Error; err != nil {
-		return managedChargeRecord{}, fmt.Errorf("read rated attempt: %w", err)
+		return ratedJournalObservation{}, fmt.Errorf("read rated attempt: %w", err)
 	}
 	var request managedJournalRequestRecord
 	if err := transaction.Where("id = ?", attempt.RequestID).First(&request).Error; err != nil {
-		return managedChargeRecord{}, fmt.Errorf("read rated request: %w", err)
+		return ratedJournalObservation{}, fmt.Errorf("read rated request: %w", err)
 	}
 	var retained managedPriceSnapshotRecord
 	if err := transaction.Where("request_id = ? AND billing_account_id = ?", request.ID, request.BillingAccountID).First(&retained).Error; err != nil {
-		return managedChargeRecord{}, fmt.Errorf("read accepted price snapshot: %w", err)
+		return ratedJournalObservation{}, fmt.Errorf("read accepted price snapshot: %w", err)
 	}
 	snapshot, document, err := restoreHostedPriceSnapshot(retained)
 	if err != nil {
-		return managedChargeRecord{}, err
+		return ratedJournalObservation{}, err
 	}
 	if document.Provider != request.Provider || document.Model != request.Model || document.Operation != request.Operation || document.CatalogRevision != request.CatalogRevision {
-		return managedChargeRecord{}, fmt.Errorf("retained price route differs from request")
+		return ratedJournalObservation{}, fmt.Errorf("retained price route differs from request")
 	}
 	var quantities []journalQuantity
 	if err := decodeRatingJSON(observation.Quantities, &quantities); err != nil {
-		return managedChargeRecord{}, err
+		return ratedJournalObservation{}, err
 	}
 	result, err := snapshot.Rate(quantities)
 	if err != nil {
-		return managedChargeRecord{}, fmt.Errorf("rate observation %s: %w", observation.ID, err)
+		return ratedJournalObservation{}, fmt.Errorf("rate observation %s: %w", observation.ID, err)
 	}
 	state := chargeRated
 	switch {
@@ -110,18 +116,16 @@ func rateJournalObservation(transaction *gorm.DB, observation managedJournalObse
 		state = chargeUsageUnresolved
 	case observation.Outcome == journalOutcomeFail:
 		state = chargePolicyUnresolved
-	case exceedsHostedPriceBound(document, attempt.Number, quantities):
+	case exceedsHostedPriceBound(document.hostedPriceSnapshotDocument, attempt.Number, quantities):
 		state = chargeLimitUnresolved
 	}
-	encoded, err := json.Marshal(result)
-	if err != nil {
-		return managedChargeRecord{}, fmt.Errorf("encode rated observation: %w", err)
-	}
+	// Rated amounts and conditions contain exact strings and integer counts.
+	encoded, _ := json.Marshal(result)
 	charge := managedChargeRecord{ID: chargeIDPrefix + sha256Hex(observation.ID)[:32], BillingAccountID: request.BillingAccountID, RequestID: request.ID, AttemptID: attempt.ID, ObservationID: observation.ID, PriceSnapshotID: retained.ID, State: state, Rating: encoded, RatingDigest: sha256Hex(string(encoded)), CreatedAt: observation.ObservedAt}
 	if err := transaction.Omit(clause.Associations).Create(&charge).Error; err != nil {
-		return managedChargeRecord{}, fmt.Errorf("retain charge for observation %s: %w", observation.ID, err)
+		return ratedJournalObservation{}, fmt.Errorf("retain charge for observation %s: %w", observation.ID, err)
 	}
-	return charge, nil
+	return ratedJournalObservation{charge, document.authorizedMaximum}, nil
 }
 
 func exceedsHostedPriceBound(document hostedPriceSnapshotDocument, attempt uint64, quantities []journalQuantity) bool {
@@ -141,20 +145,32 @@ func exceedsHostedPriceBound(document hostedPriceSnapshotDocument, attempt uint6
 	return false
 }
 
-func decodeRetainedCharge(record managedChargeRecord) (CatalogRatedUsage, error) {
-	var result CatalogRatedUsage
+type retainedChargeRating struct {
+	CatalogRatedUsage
+	providerAmount *big.Rat
+	customerAmount *big.Rat
+	minimumAmount  *big.Rat
+}
+
+func decodeRetainedCharge(record managedChargeRecord) (retainedChargeRating, error) {
+	var result retainedChargeRating
 	if record.RatingDigest != sha256Hex(string(record.Rating)) {
 		return result, fmt.Errorf("invalid retained charge digest")
 	}
-	if err := decodeRatingJSON(record.Rating, &result); err != nil {
+	if err := decodeRatingJSON(record.Rating, &result.CatalogRatedUsage); err != nil {
 		return result, err
 	}
 	switch result.State {
 	case CatalogRatingResolved:
-		for _, amount := range []ExactMoney{result.ProviderCost, result.CustomerCharge, result.MinimumAdjustment} {
-			if _, err := parseExactMoney(amount); err != nil {
+		for _, amount := range []struct {
+			value  ExactMoney
+			parsed **big.Rat
+		}{{result.ProviderCost, &result.providerAmount}, {result.CustomerCharge, &result.customerAmount}, {result.MinimumAdjustment, &result.minimumAmount}} {
+			value, err := parseExactMoney(amount.value)
+			if err != nil {
 				return result, err
 			}
+			*amount.parsed = value
 		}
 	case CatalogRatingUnresolved:
 		if record.State != chargeUsageUnresolved || len(result.UnresolvedDimensions) == 0 {

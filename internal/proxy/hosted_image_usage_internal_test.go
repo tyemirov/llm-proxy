@@ -78,7 +78,7 @@ func TestHostedImageUsageRetainsExactEvidenceBeforePublication(t *testing.T) {
 				t.Fatalf("observations=%v calls=%d error=%v", observations, calls.Load(), err)
 			}
 			observation := observations[0]
-			if observation.AdapterRevision != CatalogProtocolOpenAIImages+":1" {
+			if observation.AdapterRevision != CatalogProtocolOpenAIImages+":2" {
 				t.Fatalf("image meter not retained: %s", observation.AdapterRevision)
 			}
 			var quantities []journalQuantity
@@ -97,8 +97,8 @@ func TestHostedImageUsageRetainsExactEvidenceBeforePublication(t *testing.T) {
 				t.Fatalf("missing inclusion rules: %s", observation.Quantities)
 			}
 			for _, dimension := range []string{"cache_read_text_tokens", "cache_read_image_tokens"} {
-				if byDimension[dimension].UnknownReason != journalQuantityUnsupported {
-					t.Fatalf("unqualified cache measurement: %s", observation.Quantities)
+				if _, present := byDimension[dimension]; present {
+					t.Fatalf("direct Images usage requires a Responses-only cache measurement: %s", observation.Quantities)
 				}
 			}
 			if strings.Contains(string(observation.SourceFields), "private") || strings.Contains(string(observation.SourceFields), "b64_json") {
@@ -108,8 +108,12 @@ func TestHostedImageUsageRetainsExactEvidenceBeforePublication(t *testing.T) {
 				t.Fatalf("source precision lost: %s", observation.SourceFields)
 			}
 			entry := read("")["requests"].([]any)[0].(map[string]any)
-			if entry["usage_state"] != string(journalUsageUnknown) {
-				t.Fatalf("unqualified cache usage became complete: %v", entry)
+			wantUsage := journalUsageComplete
+			if scenario.unknown != "" {
+				wantUsage = journalUsageUnknown
+			}
+			if entry["usage_state"] != string(wantUsage) {
+				t.Fatalf("direct Images usage state=%v want=%s", entry, wantUsage)
 			}
 		})
 	}
@@ -157,21 +161,35 @@ func TestHostedImageUsageObsoleteResponseCannotRecordEvidence(t *testing.T) {
 }
 
 func TestHostedImageUsagePersistenceFailurePreventsPublication(t *testing.T) {
-	for _, failedTable := range []string{"managed_journal_observation_records", "managed_journal_delivery_records"} {
-		t.Run(failedTable, func(t *testing.T) {
+	for _, scenario := range []struct {
+		name, table string
+		stream      bool
+	}{
+		{"json-observation", "managed_journal_observation_records", false},
+		{"json-delivery", "managed_journal_delivery_records", false},
+		{"stream-observation", "managed_journal_observation_records", true},
+		{"stream-delivery", "managed_journal_delivery_records", true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
 			database, _, read := newJournalTransactionFixture(t)
 			encoded := base64.StdEncoding.EncodeToString(imageBoundaryPNG(t, image.NewNRGBA(image.Rect(0, 0, 1024, 1024))))
 			var calls atomic.Int64
 			upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 				calls.Add(1)
+				if scenario.stream {
+					writer.Header().Set("Content-Type", "text/event-stream")
+					fmt.Fprintf(writer, "event: image_generation.completed\ndata: {\"type\":\"image_generation.completed\",\"b64_json\":%q,\"output_format\":\"png\",\"usage\":{\"input_tokens\":10}}\n\n", encoded)
+					return
+				}
 				fmt.Fprintf(writer, `{"data":[{"b64_json":%q}],"usage":{"input_tokens":10}}`, encoded)
 			}))
 			t.Cleanup(upstream.Close)
 			core, logs := observer.New(zap.InfoLevel)
 			server, service := newHostedMediaAdmissionHTTPServer(t, database, hostedMediaWorkerProvider(upstream.URL), func(service *mediaOperationService) { service.logger = zap.New(core).Sugar() })
-			accepted := hostedMediaAdmissionHTTP(t, server, "failed-observation", "private image prompt", http.StatusAccepted)
+			controls := json.RawMessage(fmt.Sprintf(`{"surface":"images","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1,"stream":%t}`, scenario.stream))
+			accepted := hostedMediaAdmissionHTTP(t, server, "failed-observation", "private image prompt", http.StatusAccepted, controls)
 			id := accepted["operation_id"].(string)
-			if err := database.database.Exec("CREATE TRIGGER reject_image_usage BEFORE INSERT ON " + failedTable + " BEGIN SELECT RAISE(ABORT, 'controlled image evidence failure'); END").Error; err != nil {
+			if err := database.database.Exec("CREATE TRIGGER reject_image_usage BEFORE INSERT ON " + scenario.table + " BEGIN SELECT RAISE(ABORT, 'controlled image evidence failure'); END").Error; err != nil {
 				t.Fatal(err)
 			}
 			service.runOperation("failed-observation-worker", id)
@@ -191,7 +209,7 @@ func TestHostedImageUsagePersistenceFailurePreventsPublication(t *testing.T) {
 				t.Fatal(err)
 			}
 			service.runOperation("replacement-worker", id)
-			hostedMediaAdmissionHTTP(t, server, "failed-observation", "private image prompt", http.StatusOK)
+			hostedMediaAdmissionHTTP(t, server, "failed-observation", "private image prompt", http.StatusOK, controls)
 			entry := read("")["requests"].([]any)[0].(map[string]any)
 			if calls.Load() != 1 || entry["state"] != string(journalRequestUncertain) || entry["usage_state"] != string(journalUsageUnknown) {
 				t.Fatalf("lost evidence replay calls=%d journal=%v", calls.Load(), entry)

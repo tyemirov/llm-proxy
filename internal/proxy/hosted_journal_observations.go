@@ -83,19 +83,6 @@ func persistJournalObservation(transaction *gorm.DB, request managedJournalReque
 	return observation, nil
 }
 
-func (database *gormManagedTenantDatabase) pendingJournalDeliveries(ctx context.Context, limit int) ([]managedJournalObservationRecord, error) {
-	if limit < 1 || limit > 100 {
-		return nil, errUsageJournalInvalid
-	}
-	observations := []managedJournalObservationRecord{}
-	err := database.database.WithContext(ctx).Where("id IN (?)", database.database.Model(&managedJournalDeliveryRecord{}).Select("observation_id").Where("delivered_at IS NULL")).
-		Order("created_at, id").Limit(limit).Find(&observations).Error
-	if err != nil {
-		return nil, fmt.Errorf("read pending usage delivery: %w", err)
-	}
-	return observations, nil
-}
-
 type journalAccountingDelivery func(*gorm.DB, managedJournalObservationRecord) error
 
 func (database *gormManagedTenantDatabase) deliverJournalObservation(ctx context.Context, observationID string, now time.Time, apply journalAccountingDelivery) error {

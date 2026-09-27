@@ -138,6 +138,58 @@ func TestHostedJournalInterruptionRecoveryWriteFailuresPreserveEvidence(t *testi
 	}
 }
 
+func TestHostedJournalInvalidStoredStatePreventsFinancialRecovery(t *testing.T) {
+	fixture := newJournalInterruptionFixture(t, "dispatched")
+	before := fixture.resources(t)
+	var reads atomic.Int64
+	queries := fixture.database.database.Callback().Query()
+	const callback = "test:unknown_journal_state"
+	if err := queries.After("gorm:query").Register(callback, func(tx *gorm.DB) {
+		if tx.DryRun || tx.Error != nil || tx.RowsAffected != 1 {
+			return
+		}
+		if record, ok := tx.Statement.Dest.(*managedJournalRequestRecord); ok {
+			record.State = "unknown_stored_state"
+			reads.Add(1)
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		ratingHTTPExchange(t, fixture.management, http.MethodGet, "/billing-accounts/billing-journal/requests/"+fixture.request.ID+"/charge-summary", "", http.StatusInternalServerError)
+		failFundsApplicationAt(t, fixture.database, fixture.management, func() time.Time { return time.Unix(0, fixture.now.Load()) })
+	}
+	if err := queries.Remove(callback); err != nil {
+		t.Fatal(err)
+	}
+	if reads.Load() < 4 || fixture.calls.Load() != 1 || !reflect.DeepEqual(before, fixture.resources(t)) {
+		t.Fatalf("invalid stored state changed effects: reads=%d calls=%d", reads.Load(), fixture.calls.Load())
+	}
+	fixture.recover(t, "dispatched")
+}
+
+func TestHostedJournalAcceptedStateCannotRepeatRetainedDispatch(t *testing.T) {
+	fixture := newJournalInterruptionFixture(t, "dispatched")
+	before := fixture.resources(t)
+	if err := fixture.database.database.Model(&managedJournalRequestRecord{}).Where("id = ?", fixture.request.ID).UpdateColumn("state", journalRequestAccepted).Error; err != nil {
+		t.Fatal(err)
+	}
+	retained := fixture.resources(t)
+	for range 2 {
+		hostedIdentityHTTP(t, fixture.generation, textExecutionRecoveryKey, "funded prompt", http.StatusConflict)
+		if fixture.calls.Load() != 1 || !reflect.DeepEqual(retained, fixture.resources(t)) {
+			t.Fatal("accepted request state repeated a retained dispatch or changed financial evidence")
+		}
+	}
+	if err := fixture.database.database.Model(&managedJournalRequestRecord{}).Where("id = ?", fixture.request.ID).UpdateColumn("state", fixture.request.State).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, fixture.resources(t)) {
+		t.Fatal("rejected retry changed restored journal evidence")
+	}
+	fixture.recover(t, "dispatched")
+}
+
 func TestHostedJournalInterruptionRecoveryReadFailuresPreserveEvidence(t *testing.T) {
 	for _, table := range []string{"managed_hosted_grant_records", "managed_journal_attempt_records"} {
 		t.Run(table, func(t *testing.T) {

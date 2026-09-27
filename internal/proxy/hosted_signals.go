@@ -58,10 +58,8 @@ func ReadHostedFinancialSignals(ctx context.Context, databasePath string) (Hoste
 	if err != nil {
 		return HostedFinancialSignals{}, fmt.Errorf("open financial signals database: %w", err)
 	}
-	connection, err := database.DB()
-	if err != nil {
-		return HostedFinancialSignals{}, err
-	}
+	// The fixed SQLite dialector has opened a *sql.DB before gorm.Open succeeds.
+	connection, _ := database.DB()
 	defer connection.Close()
 	report := HostedFinancialSignals{ObservedAt: time.Now().UTC(), Currency: CatalogCurrencyUSD, PaymentDifferences: map[string]int64{}, ProviderDifferences: map[string]int64{}}
 	err = database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

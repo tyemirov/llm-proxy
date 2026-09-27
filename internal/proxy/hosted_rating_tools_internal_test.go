@@ -20,14 +20,10 @@ func hostedSearchRatingAuthorization(t *testing.T) func(*hostedTextRequestDepend
 	maximum := 2
 	catalog.Offerings[0].Limits = append(catalog.Offerings[0].Limits, CatalogLimit{ID: "web_search_calls", Unit: "calls", Value: &maximum})
 	catalog.Prices[0].Rates = append(catalog.Prices[0].Rates, CatalogPriceRate{Component: "web_search_calls", Currency: "USD", Rate: "0.01", Unit: "USD/call", Conditions: conditions})
-	prices, err := NewCatalogService(catalog)
-	if err != nil {
-		t.Fatal(err)
-	}
+	scope := hostedTextPriceScopeForTest(t, catalog, categoricalPriceConditions(conditions), 2)
 	return func(dependencies *hostedTextRequestDependencies) {
 		dependencies.authorize = func(transaction *gorm.DB, request managedJournalRequestRecord, _ hostedCompletionIntent) error {
-			input := chatRequestParameters{provider: providerDefinition{identifier: providerID(request.Provider), activeTransport: providerTransportDefinition{responseCodec: CatalogProtocolOpenAIResponses}}, model: textModelDefinition{identifier: newModelID(request.Model)}, webSearchEnabled: true}
-			reserve, err := newHostedTextPriceAdmission(prices, input, request.CreatedAt, categoricalPriceConditions(conditions), 2)
+			reserve, err := scope.admission(CatalogProtocolOpenAIResponses, request.CreatedAt, true)
 			if err != nil {
 				return err
 			}
@@ -54,12 +50,8 @@ func TestHostedRatingSearchReservesAndEnforcesAcceptedToolBound(t *testing.T) {
 			callLimit := 2
 			catalog.Offerings[0].Limits = append(catalog.Offerings[0].Limits, CatalogLimit{ID: "web_search_calls", Unit: "calls", Value: &callLimit})
 			catalog.Prices[0].Rates = append(catalog.Prices[0].Rates, CatalogPriceRate{Component: "web_search_calls", Currency: "USD", Rate: "0.01", Unit: "USD/call", Conditions: conditions})
-			prices, err := NewCatalogService(catalog)
-			if err != nil {
-				t.Fatal(err)
-			}
-			priceRequest := chatRequestParameters{provider: providerDefinition{identifier: providerID("openai"), activeTransport: providerTransportDefinition{responseCodec: CatalogProtocolOpenAIResponses}}, model: textModelDefinition{identifier: newModelID("gpt-4.1")}, webSearchEnabled: scenario.enabled}
-			reserve, err := newHostedTextPriceAdmission(prices, priceRequest, ratingTestAcceptanceTime(), categoricalPriceConditions(conditions), 1)
+			scope := hostedTextPriceScopeForTest(t, catalog, categoricalPriceConditions(conditions), 1)
+			reserve, err := scope.admission(CatalogProtocolOpenAIResponses, ratingTestAcceptanceTime(), scenario.enabled)
 			if err != nil {
 				t.Fatal(err)
 			}

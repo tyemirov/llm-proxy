@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -111,16 +112,30 @@ func TestHostedMediaCredentialReadFailuresPreventProviderCalls(t *testing.T) {
 }
 
 func TestHostedTextIncompleteCredentialsPreventProviderCalls(t *testing.T) {
-	for _, fields := range []string{`{}`, `null`} {
-		t.Run(fields, func(t *testing.T) {
+	for _, scenario := range []string{"missing-fields", "null-fields", "empty-plaintext"} {
+		t.Run(scenario, func(t *testing.T) {
 			fixture := newFundsAdmissionFixture(t)
+			fields := []byte(`{}`)
+			if scenario == "null-fields" {
+				fields = []byte(`null`)
+			} else if scenario == "empty-plaintext" {
+				cipher := internalManagedProviderKeyCipher()
+				nonce := make([]byte, cipher.aeadCipher.NonceSize())
+				sealed := cipher.aeadCipher.Seal(nil, nonce, nil, managedProviderConnectionAssociatedData(platformCredentialReference("platform-journal", 1), "openai", CatalogCredentialAPIKey))
+				ciphertext := managedProviderKeyCiphertextPrefix + base64.StdEncoding.EncodeToString(append(nonce, sealed...))
+				var err error
+				fields, err = json.Marshal(map[string]string{CatalogCredentialAPIKey: ciphertext})
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
 			var failures atomic.Int64
 			queries := fixture.database.database.Callback().Query()
 			const callback = "test:text_incomplete_credential"
 			if err := queries.After("gorm:query").Register(callback, func(tx *gorm.DB) {
 				if tx.Error == nil && !tx.DryRun && tx.Statement.Table == "managed_platform_credential_records" && hostedTextExecutionFromContext(tx.Statement.Context) != nil {
 					failures.Add(1)
-					tx.Statement.Dest.(*managedPlatformCredentialRecord).Fields = []byte(fields)
+					tx.Statement.Dest.(*managedPlatformCredentialRecord).Fields = fields
 				}
 			}); err != nil {
 				t.Fatal(err)

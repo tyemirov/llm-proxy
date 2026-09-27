@@ -20,6 +20,7 @@ type checkoutProtocolFixture struct {
 	adjustments  []map[string]any
 	creates      atomic.Int64
 	portalCalls  atomic.Int64
+	portalStatus atomic.Int64
 	portalURL    string
 	dropResponse atomic.Bool
 	wrongAccount atomic.Bool
@@ -56,6 +57,11 @@ func newCheckoutProtocolFixture(t *testing.T) *checkoutProtocolFixture {
 			encode(map[string]any{"data": map[string]any{"id": "pri_01hv8x2axb33yr5y238zfwcn5p", "billing_cycle": cycle, "unit_price": map[string]any{"amount": "500", "currency_code": "USD"}}})
 		case request.Method == http.MethodPost && request.URL.Path == "/customers/ctm_01hv8x2axb33yr5y238zfwcn5p/portal-sessions":
 			fixture.portalCalls.Add(1)
+			if status := fixture.portalStatus.Load(); status != 0 {
+				writer.WriteHeader(int(status))
+				encode(map[string]any{"error": map[string]any{"code": "private_portal_unavailable"}})
+				return
+			}
 			writer.WriteHeader(http.StatusCreated)
 			encode(map[string]any{"data": map[string]any{"urls": map[string]any{"general": map[string]any{"overview": fixture.portalURL}}}})
 		case request.Method == http.MethodGet && request.URL.Path == "/adjustments":

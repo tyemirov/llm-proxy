@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const grantTransitionRecoveryPath = "/hosted-access-grants/grant-journal"
+const grantTransitionRecoveryPath = "/hosted-access-grants/" + hostedJournalFixtureGrantID
 
 func TestHostedGrantTransitionReadFailurePreservesRevisionHistory(t *testing.T) {
 	for _, scenario := range []struct {

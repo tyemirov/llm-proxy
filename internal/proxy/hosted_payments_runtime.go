@@ -34,11 +34,10 @@ type PaymentOfferConfiguration struct {
 }
 
 type paymentSettings struct {
-	catalog       *fundingCatalog
-	apiKey        string
-	apiBaseURL    string
-	webhookSecret string
-	clientToken   string
+	catalog     *fundingCatalog
+	client      billing.PaddleCommerceClient
+	verifier    *billing.PaddleWebhookVerifier
+	clientToken string
 }
 
 var paymentClientTokenPattern = regexp.MustCompile(`^(test|live)_[a-zA-Z0-9]+$`)
@@ -53,9 +52,6 @@ func newPaymentSettings(input *PaymentConfiguration) (*paymentSettings, error) {
 	}
 	if !paymentClientTokenPattern.MatchString(input.ClientToken) || !strings.HasPrefix(input.ClientToken, prefix) {
 		return nil, fmt.Errorf("configure payments: client_token must match the payment environment")
-	}
-	if strings.TrimSpace(input.APIKey) == "" || strings.TrimSpace(input.WebhookSecret) == "" {
-		return nil, fmt.Errorf("configure payments: api_key and webhook_secret are required")
 	}
 	if input.APIBaseURL != "" {
 		parsed, err := url.Parse(input.APIBaseURL)
@@ -75,7 +71,15 @@ func newPaymentSettings(input *PaymentConfiguration) (*paymentSettings, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &paymentSettings{catalog: catalog, apiKey: input.APIKey, apiBaseURL: input.APIBaseURL, webhookSecret: input.WebhookSecret, clientToken: input.ClientToken}, nil
+	client, err := billing.NewPaddleCommerceClient(catalog.environment, input.APIKey, input.APIBaseURL, &http.Client{Timeout: paymentCheckoutRetry})
+	if err != nil {
+		return nil, fmt.Errorf("configure payments client: %w", err)
+	}
+	verifier, err := billing.NewPaddleWebhookVerifier(input.WebhookSecret, 5*time.Minute)
+	if err != nil {
+		return nil, fmt.Errorf("configure payments event verification: %w", err)
+	}
+	return &paymentSettings{catalog: catalog, client: client, verifier: verifier, clientToken: input.ClientToken}, nil
 }
 
 type paddlePaymentRuntime struct {
@@ -90,20 +94,13 @@ func newPaddlePaymentRuntime(settings *paymentSettings, database *gormManagedTen
 	if settings == nil {
 		return nil, nil
 	}
-	client, err := billing.NewPaddleCommerceClient(settings.catalog.environment, settings.apiKey, settings.apiBaseURL, &http.Client{Timeout: paymentCheckoutRetry})
-	if err != nil {
-		return nil, fmt.Errorf("configure shared Paddle client: %w", err)
-	}
-	checkout := newPaddleCheckoutDelivery(database, settings.catalog, client)
-	processor := newPaddlePaymentProcessor(database, settings.catalog, client)
-	inbox, err := newPaddlePaymentInbox(database, settings.catalog.environment, settings.catalog.processorAccountID, settings.webhookSecret, 5*time.Minute)
-	if err != nil {
-		return nil, err
-	}
+	checkout := newPaddleCheckoutDelivery(database, settings.catalog, settings.client)
+	processor := newPaddlePaymentProcessor(database, settings.catalog, settings.client)
+	inbox := newPaddlePaymentInbox(database, settings.catalog, settings.verifier)
 	if err := bindPaymentEnvironment(database.database, settings.catalog.environment); err != nil {
 		return nil, err
 	}
-	return &paddlePaymentRuntime{checkout, processor, inbox, client, settings.catalog}, nil
+	return &paddlePaymentRuntime{checkout, processor, inbox, settings.client, settings.catalog}, nil
 }
 
 type managedPaymentEnvironmentRecord struct {

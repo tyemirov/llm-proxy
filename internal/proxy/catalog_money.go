@@ -80,6 +80,12 @@ func calculateUSDCredit(credit, remainder ExactMoney) (usdCreditCalculation, err
 	if err != nil {
 		return usdCreditCalculation{}, err
 	}
+	return calculateValidatedUSDCredit(amount, remainder)
+}
+
+// Credit commands supply a validated amount. The retained remainder is read
+// from storage and must still pass validation at this boundary.
+func calculateValidatedUSDCredit(amount *big.Rat, remainder ExactMoney) (usdCreditCalculation, error) {
 	carry, err := parseUSDCentRemainder(remainder)
 	if err != nil {
 		return usdCreditCalculation{}, err

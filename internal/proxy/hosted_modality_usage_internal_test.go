@@ -14,7 +14,7 @@ import (
 
 func TestHostedModalityUsageRetainsProviderBreakdowns(t *testing.T) {
 	for _, provider := range []string{"gemini", "vertex"} {
-		for _, mode := range []string{"exact", "missing", "partial", "duplicate", "unknown_modality", "invalid_count", "exceeds_total", "cache_exceeds_modality", "zero", "wrong_array", "invalid_item", "missing_count", "default_text"} {
+		for _, mode := range []string{"exact", "missing", "partial", "duplicate", "unknown_modality", "numeric_modality", "invalid_count", "exceeds_total", "cache_exceeds_modality", "zero", "wrong_array", "invalid_item", "missing_count", "default_text"} {
 			t.Run(provider+"/"+mode, func(t *testing.T) {
 				database, _, read := newJournalTransactionFixture(t)
 				var calls atomic.Int64
@@ -76,7 +76,7 @@ func TestHostedModalityUsageRetainsProviderBreakdowns(t *testing.T) {
 					dimension, value, reason = "input_modality_tokens", "", journalQuantityInvalid
 				case "missing_count":
 					value, reason = "", journalQuantityNotReported
-				case "unknown_modality":
+				case "unknown_modality", "numeric_modality":
 					dimension, value, reason = "input_modality_tokens", "", journalQuantityUnsupported
 				case "duplicate", "invalid_count", "exceeds_total":
 					value, reason = "", journalQuantityInvalid
@@ -139,6 +139,8 @@ func hostedModalityResponse(t *testing.T, provider, mode string) []byte {
 		input = append(input, entry("audio", 1))
 	case "unknown_modality":
 		input[1] = entry("private_modality", json.Number("9007199254740993"))
+	case "numeric_modality":
+		input[1].(map[string]any)["modality"] = 42
 	case "invalid_count":
 		input[1] = entry("audio", "private invalid quantity")
 	case "exceeds_total":

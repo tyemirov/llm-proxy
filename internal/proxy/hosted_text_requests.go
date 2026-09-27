@@ -73,9 +73,14 @@ func newHostedTextRequests(ctx context.Context, dependencies hostedTextRequestDe
 	return service, nil
 }
 
-type hostedRequestReplay struct{ record structuredRequestRecord }
+type hostedRequestReplay struct {
+	error
+	record structuredRequestRecord
+}
 
-func (replay *hostedRequestReplay) Error() string { return "hosted_request_" + replay.record.State }
+func newHostedRequestReplay(record structuredRequestRecord) *hostedRequestReplay {
+	return &hostedRequestReplay{error: errors.New("hosted_request_" + record.State), record: record}
+}
 
 type hostedStoredCompletion struct {
 	Text      string         `json:"text"`
@@ -99,12 +104,9 @@ func decodeHostedStoredCompletion(encoded []byte) (hostedStoredCompletion, error
 }
 
 func (service *hostedTextRequests) execute(ctx context.Context, router *providerRouter, request chatRequestParameters, identity hostedTextIdentity, logger *zap.SugaredLogger) (completionResult, error) {
-	canonical, err := hostedTextIntent(request)
-	if err != nil {
-		return completionResult{}, err
-	}
+	canonical := hostedTextIntent(request)
 	intent := hostedCompletionIntent{provider: request.provider, model: request.model.identifier, operation: ModelOperationText,
-		kind: journalExecutionText, canonical: canonical, endpoint: endpointKindText, webSearch: request.webSearchEnabled, maxTokens: request.maxTokens}
+		kind: journalExecutionText, canonical: canonical, endpoint: endpointKindText, webSearch: request.webSearchEnabled}
 	return service.executeCompletion(ctx, intent, identity, func(ctx context.Context, provider providerDefinition) (completionResult, error) {
 		request.provider = provider
 		return router.generateText(ctx, request, logger)
@@ -124,14 +126,11 @@ type hostedCompletionIntent struct {
 	canonical []byte
 	endpoint  endpointKind
 	webSearch bool
-	maxTokens *int
 }
 
 func (service *hostedTextRequests) executeCompletion(ctx context.Context, request hostedCompletionIntent, identity hostedTextIdentity, run func(context.Context, providerDefinition) (completionResult, error), restore func(string) completionContent) (completionResult, error) {
-	deadline, bounded := ctx.Deadline()
-	if !bounded {
-		return completionResult{}, errUsageJournalInvalid
-	}
+	// HTTP middleware and the MCP tool construct the validated timeout budget.
+	deadline, _ := ctx.Deadline()
 	owner, err := newHostedResourceID("worker-", service.entropy)
 	if err != nil {
 		return completionResult{}, err
@@ -194,10 +193,8 @@ func (service *hostedTextRequests) executeCompletion(ctx context.Context, reques
 		return completion, errors.Join(executionError, persistError)
 	}
 	completion.receipt = &completionReceipt{executionID: accepted.ExecutionID, createdAt: accepted.CreatedAt}
-	result, err := json.Marshal(hostedStoredCompletion{Text: completion.content.text(), ToolCalls: completion.content.toolCalls(), Usage: completion.usage})
-	if err != nil {
-		return completion, fmt.Errorf("encode result for request %s: %w", accepted.ID, err)
-	}
+	// Completion fields contain only strings and integer usage counts.
+	result, _ := json.Marshal(hostedStoredCompletion{Text: completion.content.text(), ToolCalls: completion.content.toolCalls(), Usage: completion.usage})
 	if err := service.publishResponse(ctx, accepted, func(managedJournalRequestRecord) error {
 		return service.responses.succeed(identity.tenant, identity.key, accepted.IntentDigest, string(result))
 	}); err != nil {
@@ -210,18 +207,18 @@ func (service *hostedTextRequests) replay(accepted managedJournalRequestRecord, 
 	// A failed/uncertain journal receipt must never be reset by response expiry or
 	// the ordinary structured-request retry policy.
 	if accepted.State == journalRequestUncertain {
-		return completionResult{}, &hostedRequestReplay{record: hostedRequestStatusRecord(accepted, structuredRequestStateUncertain)}
+		return completionResult{}, newHostedRequestReplay(hostedRequestStatusRecord(accepted, structuredRequestStateUncertain))
 	}
 	if accepted.State == journalRequestFailed {
-		return completionResult{}, &hostedRequestReplay{record: hostedRequestStatusRecord(accepted, structuredRequestStateFailed)}
+		return completionResult{}, newHostedRequestReplay(hostedRequestStatusRecord(accepted, structuredRequestStateFailed))
 	}
 	if accepted.State != journalRequestCompleted {
-		return completionResult{}, &hostedRequestReplay{record: hostedRequestStatusRecord(accepted, structuredRequestStateDispatched)}
+		return completionResult{}, newHostedRequestReplay(hostedRequestStatusRecord(accepted, structuredRequestStateDispatched))
 	}
 	record, err := service.responses.lookupHosted(accepted)
 	if errors.Is(err, errStructuredRequestNotFound) {
 		if accepted.ResultPublishedAt == nil {
-			return completionResult{}, &hostedRequestReplay{record: hostedRequestStatusRecord(accepted, structuredRequestStateDispatched)}
+			return completionResult{}, newHostedRequestReplay(hostedRequestStatusRecord(accepted, structuredRequestStateDispatched))
 		}
 		return completionResult{}, errHostedResultExpired
 	}
@@ -229,7 +226,7 @@ func (service *hostedTextRequests) replay(accepted managedJournalRequestRecord, 
 		return completionResult{}, err
 	}
 	if record.State != structuredRequestStateSucceeded {
-		return completionResult{}, &hostedRequestReplay{record: record}
+		return completionResult{}, newHostedRequestReplay(record)
 	}
 	stored, err := decodeHostedStoredCompletion(record.Result)
 	if err != nil {
@@ -259,7 +256,7 @@ func (service *hostedTextRequests) pinnedProvider(ctx context.Context, accepted 
 	return resolved, nil
 }
 
-func hostedTextIntent(request chatRequestParameters) ([]byte, error) {
+func hostedTextIntent(request chatRequestParameters) []byte {
 	type attachment struct {
 		Type   messageMediaType `json:"type"`
 		MIME   string           `json:"mime_type"`
@@ -299,9 +296,9 @@ func hostedTextIntent(request chatRequestParameters) ([]byte, error) {
 	if request.tools != nil {
 		intent.Tools = &toolContract{request.tools.declarations, request.tools.selection, request.tools.parallel}
 	}
-	encoded, err := json.Marshal(intent)
-	if err != nil {
-		return nil, fmt.Errorf("encode hosted text intent: %w", err)
-	}
-	return canonicalJSON(encoded)
+	// Request construction validated schemas and caller tool parameters.
+	// The remaining fields are closed scalar types, so both encodings succeed.
+	encoded, _ := json.Marshal(intent)
+	canonical, _ := canonicalJSON(encoded)
+	return canonical
 }

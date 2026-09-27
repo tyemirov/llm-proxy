@@ -460,3 +460,40 @@ func TestHostedAuthorityUnreadableGrantPreservesTransition(t *testing.T) {
 		}
 	}
 }
+
+func TestHostedAuthorityIgnoredCreationReceiptPreservesInventory(t *testing.T) {
+	fixture := newAuthorityRecoveryFixture(t)
+	before, counts := fixture.publicSnapshot(t), fixture.recordCounts(t)
+	if err := fixture.database.Exec(`CREATE TRIGGER ignore_creation_receipt
+		BEFORE INSERT ON managed_hosted_creation_records BEGIN SELECT RAISE(IGNORE); END`).Error; err != nil {
+		t.Fatal(err)
+	}
+	const key = "ignored-creation-receipt"
+	for range 2 {
+		response := requireHostedHTTP(t, fixture.server, fixture.operator, http.MethodPost, authorityConnectionsPath, authorityConnectionBody, key, http.StatusInternalServerError)
+		if strings.TrimSpace(string(response.body)) != `{"error":{"code":"hosted_access_store_failed"}}` || !reflect.DeepEqual(before, fixture.publicSnapshot(t)) || !reflect.DeepEqual(counts, fixture.recordCounts(t)) {
+			t.Fatalf("ignored creation receipt changed inventory: body=%s", response.body)
+		}
+	}
+	if err := fixture.database.Exec("DROP TRIGGER ignore_creation_receipt").Error; err != nil {
+		t.Fatal(err)
+	}
+	var accepted string
+	var recoveredCounts map[string]int64
+	for iteration := range 3 {
+		fixture.server.Close()
+		fixture.server = httptest.NewServer(newManagementRouterWithDatabasePath(t, fixture.configuration, fixture.databasePath))
+		t.Cleanup(fixture.server.Close)
+		response := requireHostedHTTP(t, fixture.server, fixture.operator, http.MethodPost, authorityConnectionsPath, authorityConnectionBody, key, http.StatusCreated)
+		if iteration == 0 {
+			accepted, recoveredCounts = string(response.body), fixture.recordCounts(t)
+		} else if string(response.body) != accepted || !reflect.DeepEqual(recoveredCounts, fixture.recordCounts(t)) {
+			t.Fatal("creation receipt recovery repeated credentials or inventory")
+		}
+	}
+	for _, table := range []string{"managed_hosted_creation_records", "managed_platform_connection_records", "managed_platform_credential_records"} {
+		if recoveredCounts[table] != counts[table]+1 {
+			t.Fatalf("restored creation count %s=%d want=%d", table, recoveredCounts[table], counts[table]+1)
+		}
+	}
+}

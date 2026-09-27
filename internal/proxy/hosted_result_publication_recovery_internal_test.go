@@ -24,6 +24,7 @@ type publicationRecoveryFixture struct {
 	now        *atomic.Int64
 	request    managedJournalRequestRecord
 	resultPath string
+	responses  *structuredRequestStore
 }
 
 func TestHostedResultPublicationReplaysToolCallsWithoutText(t *testing.T) {
@@ -132,7 +133,7 @@ func newPublicationRecoveryFixture(t *testing.T, failure string) publicationReco
 	}
 	now.Store(request.ClaimExpiresAt.Add(time.Second).UnixNano())
 	assertHostedFundsBalance(t, fixture.database, 5, 2)
-	return publicationRecoveryFixture{fixture, now, request, path}
+	return publicationRecoveryFixture{fixture, now, request, path, responses}
 }
 
 func (fixture publicationRecoveryFixture) assertRetained(t *testing.T, before map[string]any) {

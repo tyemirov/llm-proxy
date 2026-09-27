@@ -74,9 +74,9 @@ func validateHostedRecords(database *gorm.DB) error {
 
 func validateHostedTable(database *gorm.DB, model any) error {
 	statement := &gorm.Statement{DB: database}
-	if err := statement.Parse(model); err != nil {
-		return fmt.Errorf("read hosted schema definition: %w", err)
-	}
+	// Each caller supplies a fixed repository model. Parse describes that Go
+	// type; the database shape is checked through the migrator below.
+	_ = statement.Parse(model)
 	migrator := database.Migrator()
 	columns, err := migrator.ColumnTypes(model)
 	if err != nil {

@@ -12,7 +12,7 @@ func TestHostedPaymentsAdjustmentInvalidEvidencePreservesFundsAndRecovers(t *tes
 	for _, scenario := range []string{
 		"missing-adjusted-totals", "adjusted-currency", "invalid-adjusted-amount", "inconsistent-adjusted-total", "excess-remaining",
 		"foreign-transaction", "foreign-customer", "subscription", "currency", "duplicate", "missing-item",
-		"invalid-created-time", "creation-before-payment", "update-before-creation", "foreign-line", "line-total-mismatch",
+		"invalid-created-time", "utc-range", "creation-before-payment", "update-before-creation", "foreign-line", "line-total-mismatch",
 		"invalid-fee", "inconsistent-adjustment-total", "unsupported-action", "pending-reversal", "unsupported-status",
 		"uncorroborated-refund", "missing-adjustment", "processor-unavailable", "changed-original-payment",
 	} {
@@ -66,6 +66,8 @@ func TestHostedPaymentsAdjustmentInvalidEvidencePreservesFundsAndRecovers(t *tes
 				adjustment["items"] = []any{}
 			case "invalid-created-time":
 				adjustment["created_at"] = "not-a-timestamp"
+			case "utc-range":
+				transaction["updated_at"] = financialUTCOverflowTimestamp
 			case "creation-before-payment":
 				adjustment["created_at"] = "2026-09-23T11:59:59Z"
 			case "update-before-creation":

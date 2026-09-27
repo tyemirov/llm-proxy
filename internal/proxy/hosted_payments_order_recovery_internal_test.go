@@ -120,6 +120,7 @@ func TestHostedPaymentsFundingReadRejectionsPreserveFinancialResources(t *testin
 		{"unauthenticated-offers", offersPath, "", http.StatusUnauthorized},
 		{"offer-query", offersPath + "?currency=EUR", "owner", http.StatusBadRequest},
 		{"order-query", paymentOrdersTestPath + "/" + fixture.orderID + "?amount=1", "owner", http.StatusBadRequest},
+		{"missing-order", paymentOrdersTestPath + "/funding-absent", "owner", http.StatusNotFound},
 		{"invalid-history-cursor", paymentOrdersTestPath + "?cursor=other-resource", "owner", http.StatusBadRequest},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -110,7 +111,7 @@ func TestHostedFundsRecoveryRetainsUncertainDispatch(t *testing.T) {
 }
 
 func TestHostedFundsRecoveryFencesExpiredUndispatchedWorker(t *testing.T) {
-	database, _, _, prices := newHostedRatingFixture(t)
+	database, _, management, prices := newHostedRatingFixture(t)
 	seedHostedFunds(t, database, 5)
 	var calls atomic.Int64
 	upstream := fundsUpstream(t, &calls)
@@ -166,6 +167,28 @@ func TestHostedFundsRecoveryFencesExpiredUndispatchedWorker(t *testing.T) {
 	live := newHostedIdentityHTTPServer(t, openJournalTransactionInstance(t, database), upstream.URL, root, fundsDependencies(prices))
 	assertHostedFundsBalance(t, database, 5, 2)
 	hostedIdentityStatusHTTP(t, live, "expired-undispatched", http.StatusAccepted)
+	financial := fundsStartupFixture{database, management, &calls}
+	before := financial.state(t)
+	if err := database.database.Exec("CREATE TRIGGER reject_expired_request BEFORE UPDATE OF failure_code ON managed_journal_request_records BEGIN SELECT RAISE(ABORT, 'controlled_expired_request_failure'); END").Error; err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		failFundsApplicationAt(t, database, management, func() time.Time { return original.ClaimExpiresAt.Add(time.Second) })
+		assertHostedFundsBalance(t, database, 5, 2)
+		if !reflect.DeepEqual(before, financial.state(t)) {
+			t.Fatal("failed expiry recovery changed financial resources")
+		}
+		var retained managedJournalRequestRecord
+		if err := database.database.Where("id = ?", original.ID).First(&retained).Error; err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(original, retained) || calls.Load() != 0 {
+			t.Fatalf("failed expiry recovery changed the request or dispatched work: request=%+v calls=%d", retained, calls.Load())
+		}
+	}
+	if err := database.database.Exec("DROP TRIGGER reject_expired_request").Error; err != nil {
+		t.Fatal(err)
+	}
 	restarted := newHostedIdentityHTTPServer(t, openJournalTransactionInstance(t, database), upstream.URL, root, fundsDependencies(prices), func(dependencies *hostedTextRequestDependencies) {
 		dependencies.now = func() time.Time { return original.ClaimExpiresAt.Add(time.Second) }
 	})

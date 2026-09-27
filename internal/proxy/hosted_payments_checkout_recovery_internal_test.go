@@ -44,7 +44,7 @@ func newCheckoutRecoveryFixture(t *testing.T) checkoutRecoveryFixture {
 func (fixture checkoutRecoveryFixture) application(t *testing.T, database *gormManagedTenantDatabase) *proxyApplication {
 	t.Helper()
 	checkout := newPaddleCheckoutDelivery(database, fixture.worker.catalog, fixture.worker.client)
-	return &proxyApplication{
+	return &proxyApplication{closeStore: func() error { return nil },
 		router: fixture.server.Config.Handler.(*gin.Engine), database: database, now: time.Now,
 		payments: &paddlePaymentRuntime{checkout: checkout, processor: paymentProcessorFixture(t, checkout, database)},
 	}

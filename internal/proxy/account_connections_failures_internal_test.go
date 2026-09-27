@@ -40,6 +40,7 @@ func TestAccountConnectionStorageFailuresAreAtomic(t *testing.T) {
 		{"assign", "query", managedTenantTable},
 		{"assign", "query", connectionTable},
 		{"assign", "query", assignmentTable},
+		{"assign", "query", "managed_hosted_tenant_assignment_records"},
 		{"assign", "create", assignmentTable},
 		{"assign", "create", managedProviderProfileTable},
 		{"assign", "update", connectionTable},
@@ -57,6 +58,7 @@ func TestAccountConnectionStorageFailuresAreAtomic(t *testing.T) {
 		{"prompt", "update", managedProviderProfileTable},
 		{"delete-tenant", "update", connectionTable},
 		{"delete-tenant", "delete", assignmentTable},
+		{"delete-tenant", "query", "managed_hosted_grant_records"},
 	} {
 		t.Run(scenario.action+"/"+scenario.operation+"/"+scenario.table, func(t *testing.T) {
 			_, database, server := newAccountConnectionHTTPFixture(t)

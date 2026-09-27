@@ -19,9 +19,16 @@ func TestHostedToolLimitReadFailuresPreventUnboundedDispatch(t *testing.T) {
 		name  string
 		calls int64
 	}{{"initial", 0}, {"continuation", 1}} {
-		for _, failure := range []string{"read", "digest"} {
+		for _, failure := range []string{"read", "digest", "missing_bound"} {
 			t.Run(phase.name+"/"+failure, func(t *testing.T) {
 				database, _, management, _ := newHostedRatingFixture(t)
+				var nonSearch managedPriceSnapshotRecord
+				if failure == "missing_bound" {
+					source, _, charges := newFundsCreditFixture(t)
+					if err := source.database.Where("request_id = ?", charges[0].RequestID).First(&nonSearch).Error; err != nil {
+						t.Fatal(err)
+					}
+				}
 				seedHostedFunds(t, database, 100)
 				var calls, failures atomic.Int64
 				upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -62,7 +69,11 @@ func TestHostedToolLimitReadFailuresPreventUnboundedDispatch(t *testing.T) {
 						return
 					}
 					record := tx.Statement.Dest.(*managedPriceSnapshotRecord)
-					record.Document = []byte("corrupt retained price")
+					if failure == "missing_bound" {
+						record.Document, record.Digest = nonSearch.Document, nonSearch.Digest
+					} else {
+						record.Document = []byte("corrupt retained price")
+					}
 				}); err != nil {
 					t.Fatal(err)
 				}

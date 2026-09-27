@@ -132,7 +132,7 @@ func (fixture delayedAccountingFixture) recover(t *testing.T, before map[string]
 	t.Helper()
 	var previousCharges, previousReservation map[string]any
 	for iteration := 0; iteration < 2; iteration++ {
-		restartFundsApplication(t, fixture.database, fixture.management)
+		restartFundsApplication(t, fixture.database, fixture.management, ratingTestAcceptanceTime)
 		if !reflect.DeepEqual(before, fixture.financialState(t)) {
 			t.Fatal("late accounting changed the operator decision or customer funds")
 		}

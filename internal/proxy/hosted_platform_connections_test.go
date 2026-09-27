@@ -5,10 +5,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 )
 
 func TestHostedPlatformConnectionOperatorBoundaryAndRotation(t *testing.T) {
@@ -83,5 +86,71 @@ func TestHostedPlatformConnectionOperatorBoundaryAndRotation(t *testing.T) {
 	replayedAfterRotation := requireHostedHTTP(t, restarted, admin, http.MethodPost, collection, intent, "platform-key", http.StatusCreated)
 	if string(replayedAfterRotation.body) != string(created.body) {
 		t.Fatal("rotation changed the immutable creation receipt")
+	}
+}
+
+func TestHostedPlatformConnectionDisabledVerificationPreservesCredentials(t *testing.T) {
+	fixture := newAuthorityRecoveryFixture(t)
+	before, counts := fixture.publicSnapshot(t), fixture.recordCounts(t)
+	schema := testfixtures.ProviderCatalog(t).Schema()
+	schema.ModelMigrations = nil
+	for providerIndex := range schema.Providers {
+		provider := &schema.Providers[providerIndex]
+		if provider.ID != "openai" {
+			continue
+		}
+		selected := provider.Verification.Model
+		for index := range provider.Offerings {
+			offering := &provider.Offerings[index]
+			if offering.Model == selected {
+				offering.Enabled = proxy.ModelDisabled
+				offering.DefaultOperations = nil
+			}
+		}
+		for index := range provider.Offerings {
+			offering := &provider.Offerings[index]
+			if offering.Model != selected && slices.Contains(offering.Operations, proxy.ModelOperationText) {
+				offering.DefaultOperations = []string{proxy.ModelOperationText}
+				break
+			}
+		}
+	}
+	catalog, err := proxy.NewProviderCatalog(schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disabled := fixture.configuration
+	disabled.ProviderCatalog = catalog
+	fixture.server.Close()
+	fixture.server = httptest.NewServer(newManagementRouterWithDatabasePath(t, disabled, fixture.databasePath))
+	t.Cleanup(fixture.server.Close)
+	for range 2 {
+		for _, operation := range []struct{ method, path, body, key string }{
+			{http.MethodPost, authorityConnectionsPath, authorityConnectionBody, "disabled-verification"},
+			{http.MethodPut, authorityConnectionsPath + "/" + fixture.connection, authorityRotationBody, ""},
+		} {
+			response := requireHostedHTTP(t, fixture.server, fixture.operator, operation.method, operation.path, operation.body, operation.key, http.StatusServiceUnavailable)
+			if string(response.body) != "provider_key_verification_unavailable" {
+				t.Fatalf("disabled verification response=%s", response.body)
+			}
+		}
+		if !reflect.DeepEqual(before, fixture.publicSnapshot(t)) || !reflect.DeepEqual(counts, fixture.recordCounts(t)) {
+			t.Fatal("disabled verification changed qualified credentials or creation receipts")
+		}
+	}
+	fixture.server.Close()
+	fixture.server = httptest.NewServer(newManagementRouterWithDatabasePath(t, fixture.configuration, fixture.databasePath))
+	t.Cleanup(fixture.server.Close)
+	created := requireHostedHTTP(t, fixture.server, fixture.operator, http.MethodPost, authorityConnectionsPath, authorityConnectionBody, "disabled-verification", http.StatusCreated)
+	for range 2 {
+		replay := requireHostedHTTP(t, fixture.server, fixture.operator, http.MethodPost, authorityConnectionsPath, authorityConnectionBody, "disabled-verification", http.StatusCreated)
+		if string(replay.body) != string(created.body) {
+			t.Fatal("restored verification changed the creation receipt")
+		}
+	}
+	requireHostedHTTP(t, fixture.server, fixture.operator, http.MethodPut, authorityConnectionsPath+"/"+fixture.connection, authorityRotationBody, "", http.StatusOK)
+	recovered := fixture.recordCounts(t)
+	if recovered["managed_platform_connection_records"] != counts["managed_platform_connection_records"]+1 || recovered["managed_platform_credential_records"] != counts["managed_platform_credential_records"]+2 || recovered["managed_hosted_creation_records"] != counts["managed_hosted_creation_records"]+1 {
+		t.Fatalf("restored verification repeated effects: before=%v after=%v", counts, recovered)
 	}
 }

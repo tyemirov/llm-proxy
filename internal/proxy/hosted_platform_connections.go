@@ -131,15 +131,18 @@ func platformConnectionResponse(record managedPlatformConnectionRecord) manageme
 	}
 }
 
-func (service *managementService) hostedCreationIntent(ctx *gin.Context, kind string, request any) (managedHostedCreationRecord, error) {
+type hostedCreationRequest interface {
+	managementPlatformConnectionRequest | managementHostedGrantRequest
+}
+
+func newHostedCreationIntent[Request hostedCreationRequest](service *managementService, ctx *gin.Context, kind string, request Request) (managedHostedCreationRecord, error) {
 	key, err := hostedCreationKey(ctx)
 	if err != nil {
 		return managedHostedCreationRecord{}, errHostedAccessInvalid
 	}
-	payload, err := json.Marshal(request)
-	if err != nil {
-		return managedHostedCreationRecord{}, fmt.Errorf("encode %s creation intent: %w", kind, err)
-	}
+	// Both closed request shapes contain only strings, integers, string maps,
+	// and slices of those values. Their JSON encoding cannot fail.
+	payload, _ := json.Marshal(request)
 	mac := hmac.New(sha256.New, []byte(service.configuration.ProviderKeyEncryptionKey))
 	_, _ = mac.Write(payload)
 	return managedHostedCreationRecord{
@@ -273,10 +276,8 @@ func (service *managementService) qualifiedPlatformCredential(ctx *gin.Context, 
 		return managedPlatformCredentialRecord{}, errProviderKeyVerificationUnavailable
 	}
 	provider.connectionValues = cloneStringMap(values)
-	provider, transportAvailable := provider.resolvedTransport(provider.verification.Transport)
-	if !transportAvailable {
-		return managedPlatformCredentialRecord{}, errProviderKeyVerificationUnavailable
-	}
+	// Catalog construction validates this transport reference before registration.
+	provider, _ = provider.resolvedTransport(provider.verification.Transport)
 	if err := service.keyVerifier.verify(ctx.Request.Context(), provider, model, values[provider.activeTransport.authentication.Field]); err != nil {
 		return managedPlatformCredentialRecord{}, err
 	}
@@ -290,10 +291,7 @@ func (service *managementService) qualifiedPlatformCredential(ctx *gin.Context, 
 			fields[fieldID] = encrypted
 		}
 	}
-	payload, err := json.Marshal(fields)
-	if err != nil {
-		return managedPlatformCredentialRecord{}, fmt.Errorf("encode platform credential: %w", err)
-	}
+	payload, _ := json.Marshal(fields)
 	return managedPlatformCredentialRecord{ConnectionID: record.ID, Version: record.Version, Fields: payload, QualifiedAt: service.store.now().UTC(), CreatedAt: record.UpdatedAt}, nil
 }
 
@@ -328,7 +326,7 @@ func (service *managementService) createPlatformConnectionHandler() gin.HandlerF
 			writeHostedAccessError(ctx, errHostedAccessInvalid)
 			return
 		}
-		intent, err := service.hostedCreationIntent(ctx, hostedCreationPlatformConnection, request)
+		intent, err := newHostedCreationIntent(service, ctx, hostedCreationPlatformConnection, request)
 		if err != nil {
 			writeHostedAccessError(ctx, err)
 			return
@@ -355,11 +353,7 @@ func (service *managementService) createPlatformConnectionHandler() gin.HandlerF
 			return
 		}
 		intent.ResourceID = id
-		intent.Response, err = json.Marshal(platformConnectionResponse(record))
-		if err != nil {
-			writeHostedAccessError(ctx, err)
-			return
-		}
+		intent.Response, _ = json.Marshal(platformConnectionResponse(record))
 		receipt, err = service.store.database.createPlatformConnection(ctx.Request.Context(), record, credential, intent)
 		if err != nil {
 			writeHostedAccessError(ctx, err)

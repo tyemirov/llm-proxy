@@ -49,6 +49,129 @@ func TestCatalogRatingRejectsInvalidMeasurementBoundaries(t *testing.T) {
 	}
 }
 
+func TestCatalogRatingRequiresConstructedSnapshot(t *testing.T) {
+	for _, snapshot := range []*proxy.CatalogRatingSnapshot{nil, {}} {
+		usage := []proxy.CatalogUsageQuantity{{Dimension: "input_tokens", Unit: "token", Value: "1"}}
+		if result, err := snapshot.Rate(usage); !errors.Is(err, proxy.ErrCatalogRatingInvalid) || result.CustomerCharge != (proxy.ExactMoney{}) {
+			t.Fatalf("unavailable snapshot produced a charge: result=%+v error=%v", result, err)
+		}
+		bounds := []proxy.CatalogUsageBound{{Dimension: "input_tokens", Unit: "token", Maximum: "1"}}
+		if result, err := snapshot.MaximumCharge(bounds, 1); !errors.Is(err, proxy.ErrCatalogRatingInvalid) || result.ReservedCents != 0 {
+			t.Fatalf("unavailable snapshot reserved funds: result=%+v error=%v", result, err)
+		}
+	}
+}
+
+func TestCatalogRatingRejectsIncompatibleCompoundReservationUnits(t *testing.T) {
+	catalog, provider, model, operation := ratingCatalog(t, []proxy.CatalogPriceRate{
+		{Component: "output_tokens", Currency: "USD", Rate: "2", Unit: "USD/1M_tokens"},
+	}, nil)
+	service, err := proxy.NewCatalogService(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := service.NewRatingSnapshot(provider, model, operation, ratingTestAcceptanceTime(), []proxy.CatalogRateBinding{
+		{Component: "output_tokens", Dimension: "output_tokens", AdditionalDimension: "reasoning_tokens"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bounds := []proxy.CatalogUsageBound{
+		{Dimension: "output_tokens", Unit: "token", Maximum: "10"},
+		{Dimension: "reasoning_tokens", Unit: "token", Maximum: "5"},
+	}
+	before, err := snapshot.MaximumCharge(bounds, 1)
+	if err != nil || before.CustomerCharge != (proxy.ExactMoney{Numerator: "39", Denominator: "1000000"}) {
+		t.Fatalf("compound reservation=%+v error=%v", before, err)
+	}
+	bounds[1].Unit = "second"
+	for range 2 {
+		if result, err := snapshot.MaximumCharge(bounds, 1); !errors.Is(err, proxy.ErrCatalogRatingInvalid) || result.ReservedCents != 0 || result.CustomerCharge != (proxy.ExactMoney{}) {
+			t.Fatalf("incompatible quantities reserved funds: result=%+v error=%v", result, err)
+		}
+	}
+	bounds[1].Unit = "token"
+	after, err := snapshot.MaximumCharge(bounds, 1)
+	if err != nil || !reflect.DeepEqual(before, after) {
+		t.Fatalf("rejected quantities changed the snapshot: result=%+v error=%v", after, err)
+	}
+}
+
+func TestCatalogRatingRejectsReservationBelowFirstAvailableTier(t *testing.T) {
+	catalog, provider, model, operation := ratingCatalog(t, []proxy.CatalogPriceRate{
+		{Component: "input_tokens", Currency: "USD", Rate: "2", Unit: "USD/1M_tokens", Conditions: proxy.CatalogPriceConditions{InputTokens: proxy.CatalogTokenRange{Minimum: 20}}},
+	}, nil)
+	service, err := proxy.NewCatalogService(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := service.NewRatingSnapshot(provider, model, operation, ratingTestAcceptanceTime(), []proxy.CatalogRateBinding{{Component: "input_tokens", Dimension: "input_tokens"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, maximum := range []string{"0", "19"} {
+		bounds := []proxy.CatalogUsageBound{{Dimension: "input_tokens", Unit: "token", Maximum: maximum}}
+		if result, err := snapshot.MaximumCharge(bounds, 1); !errors.Is(err, proxy.ErrCatalogRatingUnavailable) || result.ReservedCents != 0 || result.CustomerCharge != (proxy.ExactMoney{}) {
+			t.Fatalf("unpriced tier reserved funds: maximum=%s result=%+v error=%v", maximum, result, err)
+		}
+	}
+	rated, err := snapshot.Rate([]proxy.CatalogUsageQuantity{{Dimension: "input_tokens", Unit: "token", Value: "20"}})
+	if err != nil || rated.State != proxy.CatalogRatingResolved || rated.CustomerCharge != (proxy.ExactMoney{Numerator: "13", Denominator: "250000"}) {
+		t.Fatalf("priced quantity changed after rejection: result=%+v error=%v", rated, err)
+	}
+}
+
+func TestCatalogRatingRejectsCacheChildrenThatExceedTheirParent(t *testing.T) {
+	rates := []proxy.CatalogPriceRate{
+		{Component: "input_tokens", Currency: "USD", Rate: "3", Unit: "USD/1M_tokens"},
+		{Component: "cache_read", Currency: "USD", Rate: "1", Unit: "USD/1M_tokens"},
+		{Component: "cache_write", Currency: "USD", Rate: "2", Unit: "USD/1M_tokens"},
+	}
+	catalog, provider, model, operation := ratingCatalog(t, rates, nil)
+	service, err := proxy.NewCatalogService(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindings := []proxy.CatalogRateBinding{
+		{Component: "input_tokens", Dimension: "input_tokens"},
+		{Component: "cache_read", Dimension: "cache_read_tokens"},
+		{Component: "cache_write", Dimension: "cache_write_tokens"},
+	}
+	snapshot, err := service.NewRatingSnapshot(provider, model, operation, ratingTestAcceptanceTime(), bindings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	quantities := []proxy.CatalogUsageQuantity{
+		{Dimension: "input_tokens", Unit: "token", Value: "100"},
+		{Dimension: "cache_read_tokens", Unit: "token", Value: "60", IncludedIn: "input_tokens"},
+		{Dimension: "cache_write_tokens", Unit: "token", Value: "40", IncludedIn: "input_tokens"},
+	}
+	before, err := snapshot.Rate(quantities)
+	if err != nil || before.ProviderCost != (proxy.ExactMoney{Numerator: "7", Denominator: "50000"}) {
+		t.Fatalf("valid cache partition: result=%+v error=%v", before, err)
+	}
+	quantities[2].Value = "50"
+	for range 2 {
+		result, err := snapshot.Rate(quantities)
+		if !errors.Is(err, proxy.ErrCatalogRatingInvalid) || result.CustomerCharge != (proxy.ExactMoney{}) || len(result.Lines) != 0 {
+			t.Fatalf("overlapping cache quantities produced a charge: result=%+v error=%v", result, err)
+		}
+	}
+	maximum, err := snapshot.MaximumCharge([]proxy.CatalogUsageBound{
+		{Dimension: "input_tokens", Unit: "token", Maximum: "100"},
+		{Dimension: "cache_read_tokens", Unit: "token", Maximum: "60"},
+		{Dimension: "cache_write_tokens", Unit: "token", Maximum: "50"},
+	}, 1)
+	if err != nil || maximum.CustomerCharge != (proxy.ExactMoney{Numerator: "299", Denominator: "500000"}) || maximum.ReservedCents != 1 {
+		t.Fatalf("bounds applied an inclusive discount: maximum=%+v error=%v", maximum, err)
+	}
+	quantities[2].Value = "40"
+	after, err := snapshot.Rate(quantities)
+	if err != nil || !reflect.DeepEqual(before, after) {
+		t.Fatalf("rejected cache quantities changed the snapshot: result=%+v error=%v", after, err)
+	}
+}
+
 func TestCatalogRatingRejectsIncompletePriceSelection(t *testing.T) {
 	for _, scenario := range []struct {
 		name       string

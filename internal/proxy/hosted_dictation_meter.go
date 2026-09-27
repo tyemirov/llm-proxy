@@ -11,10 +11,12 @@ type journalResponseMeter interface {
 	observe([]byte, int, string, time.Time) (journalUsageEvidenceInput, bool)
 }
 
-func newCompletionJournalMeter(codec, operation string) (journalResponseMeter, error) {
+func newCompletionJournalMeter(codec, operation string) journalResponseMeter {
 	if operation == ModelOperationDictation && (codec == CatalogProtocolMultipartTranscription || codec == CatalogProtocolMetaTranscription) {
-		return dictationJournalMeter{codec: codec}, nil
+		return dictationJournalMeter{codec: codec}
 	}
+	// The other validated dictation protocols are Gemini and Vertex, whose
+	// token meters also serve text requests.
 	return newTextJournalMeter(codec)
 }
 

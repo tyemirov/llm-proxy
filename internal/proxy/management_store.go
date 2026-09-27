@@ -136,6 +136,7 @@ type managedTenantStore struct {
 	randomReader      io.Reader
 	now               func() time.Time
 	usageWriter       *managedUsageWriter
+	close             func() error
 }
 
 type managedTenantStoreMutex struct {
@@ -525,6 +526,8 @@ func newManagedTenantStore(configuration ManagementConfiguration, providers *pro
 	}
 	store := newManagedTenantStoreWithDatabaseAndCipherAndUsageQueue(database, providerKeyCipher, configuration.UsageQueueSize)
 	store.routingDefaults = providers
+	closeWriter := store.close
+	store.close = sync.OnceValue(func() error { return errors.Join(closeWriter(), database.close()) })
 	return store, nil
 }
 
@@ -545,6 +548,10 @@ func newManagedTenantStoreWithDatabaseAndCipherAndUsageQueue(database managedTen
 		now:               func() time.Time { return time.Now().UTC() },
 	}
 	store.usageWriter = newManagedUsageWriter(store, usageQueueSize)
+	store.close = sync.OnceValue(func() error {
+		store.usageWriter.close()
+		return nil
+	})
 	return store
 }
 
@@ -652,9 +659,20 @@ func newGORMManagedTenantDatabase(configuration ManagementConfiguration, provide
 		return nil, fmt.Errorf("%w: %v", errManagedTenantStoreOpen, openError)
 	}
 	if initializeError := initializeManagedTenantSchema(database, providerKeyCipher, providers); initializeError != nil {
-		return nil, fmt.Errorf("%w: %w", errManagedTenantStoreOpen, initializeError)
+		return nil, errors.Join(fmt.Errorf("%w: %w", errManagedTenantStoreOpen, initializeError), (&gormManagedTenantDatabase{database: database}).close())
 	}
 	return &gormManagedTenantDatabase{database: database}, nil
+}
+
+func (database *gormManagedTenantDatabase) close() error {
+	connection, err := database.database.DB()
+	if err != nil {
+		return fmt.Errorf("resolve managed database for shutdown: %w", err)
+	}
+	if err := connection.Close(); err != nil {
+		return fmt.Errorf("close managed database: %w", err)
+	}
+	return nil
 }
 
 func managementDatabaseDialector(configuration ManagementConfiguration) gorm.Dialector {

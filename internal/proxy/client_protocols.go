@@ -49,12 +49,16 @@ func RegisterClientProtocols(router *gin.Engine, adapters []ClientProtocolAdapte
 			seen[key] = adapter.Name
 		}
 	}
+	registerClientProtocolRoutes(router, adapters)
+	return nil
+}
+
+func registerClientProtocolRoutes(router *gin.Engine, adapters []ClientProtocolAdapter) {
 	for _, adapter := range adapters {
 		for _, route := range adapter.Routes {
 			router.Handle(route.Method, route.Path, route.Handler)
 		}
 	}
-	return nil
 }
 
 type clientErrorEncoder func(*gin.Context, int, string, string)

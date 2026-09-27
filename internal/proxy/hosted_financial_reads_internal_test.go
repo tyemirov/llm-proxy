@@ -52,6 +52,11 @@ func newFinancialReadFixture(t *testing.T) financialReadFixture {
 		{"charge", "/charges/" + charge.ID, "/charges/{charge_id}", "usage_journal_unavailable"},
 		{"price", "/price-snapshots/" + charge.PriceSnapshotID, "/price-snapshots/{price_snapshot_id}", "usage_journal_unavailable"},
 		{"summary", "/requests/" + charge.RequestID + "/charge-summary", "/requests/{request_id}/charge-summary", "usage_journal_unavailable"},
+		{"requests", "/requests", "/requests", "usage_journal_unavailable"},
+		{"request", "/requests/" + charge.RequestID, "/requests/{request_id}", "usage_journal_unavailable"},
+		{"attempts", "/requests/" + charge.RequestID + "/attempts", "/requests/{request_id}/attempts", "usage_journal_unavailable"},
+		{"observations", "/requests/" + charge.RequestID + "/observations", "/requests/{request_id}/observations", "usage_journal_unavailable"},
+		{"cases", "/requests/" + charge.RequestID + "/reconciliation-cases", "/requests/{request_id}/reconciliation-cases", "usage_journal_unavailable"},
 		{"tenant", "/tenant-limits/managed-first", "/tenant-limits/{tenant_id}", "billing_account_store_failed"},
 	} {
 		resource.path = "/billing-accounts/billing-journal" + resource.path
@@ -115,6 +120,40 @@ func (fixture financialReadFixture) assertUnchanged(t *testing.T, before map[str
 	}
 }
 
+func TestHostedFinancialRequestPagesPreserveFundsAcrossRestart(t *testing.T) {
+	fixture := newFinancialReadFixture(t)
+	upstream := fundsUpstream(t, fixture.calls)
+	generation := newHostedIdentityHTTPServer(t, fixture.database, upstream.URL, t.TempDir(), fundsDependencies(hostedRatingFixtureAdmission(t, 2)))
+	hostedIdentityHTTP(t, generation, "second-request-page", "second funded prompt", http.StatusOK)
+	restartFundsApplication(t, fixture.database, fixture.management, ratingTestAcceptanceTime)
+	before := fixture.snapshot(t)
+	resource := fixture.resources["requests"]
+	complete := fixture.read(t, resource, fixture.cookie("owner"), http.StatusOK)
+	requests := complete["requests"].([]any)
+	if len(requests) != 2 || complete["next_cursor"] != "" {
+		t.Fatalf("request collection=%v", complete)
+	}
+	for range 2 {
+		firstResource := resource
+		firstResource.path += "?limit=1"
+		first := fixture.read(t, firstResource, fixture.cookie("owner"), http.StatusOK)
+		firstID := requests[0].(map[string]any)["id"].(string)
+		if !reflect.DeepEqual(first["requests"], requests[:1]) || first["next_cursor"] != firstID {
+			t.Fatalf("first request page=%v", first)
+		}
+		secondResource := resource
+		secondResource.path += "?limit=1&cursor=" + firstID
+		second := fixture.read(t, secondResource, fixture.cookie("owner"), http.StatusOK)
+		if !reflect.DeepEqual(second["requests"], requests[1:]) || second["next_cursor"] != "" {
+			t.Fatalf("second request page=%v", second)
+		}
+		if !reflect.DeepEqual(before, fixture.snapshot(t)) || fixture.calls.Load() != 2 {
+			t.Fatal("request pagination changed financial resources or dispatched provider work")
+		}
+		restartFundsApplication(t, fixture.database, fixture.management, ratingTestAcceptanceTime)
+	}
+}
+
 func TestHostedFinancialReadsRejectStorageFailuresWithoutPartialData(t *testing.T) {
 	fixture := newFinancialReadFixture(t)
 	before := fixture.snapshot(t)
@@ -150,6 +189,11 @@ func TestHostedFinancialReadsRejectStorageFailuresWithoutPartialData(t *testing.
 		{"summary", "managed_journal_attempt_records", "query", 1},
 		{"summary", "managed_charge_records", "query", 1},
 		{"summary", "managed_charge_adjustment_records", "query", 1},
+		{"requests", "managed_journal_request_records", "query", 1},
+		{"request", "managed_journal_request_records", "query", 1},
+		{"attempts", "managed_journal_attempt_records", "query", 1},
+		{"observations", "managed_journal_observation_records", "query", 1},
+		{"cases", "managed_journal_case_records", "query", 1},
 		{"tenant", "managed_tenant_records", "query", 1},
 		{"tenant", "managed_funds_tenant_records", "query", 1},
 		{"tenant", "managed_funds_reservation_records", "row", 1},
@@ -198,6 +242,12 @@ func TestHostedFinancialReadsRejectInvalidQueriesWithoutWrites(t *testing.T) {
 		{"charges", "?limit=0"},
 		{"charges", "?cursor=invalid"},
 		{"charges", "?unexpected=1"},
+		{"requests", "?limit=0"},
+		{"requests", "?cursor=invalid"},
+		{"requests", "?unexpected=1"},
+		{"attempts", "?limit=0"},
+		{"observations", "?cursor=invalid"},
+		{"cases", "?unexpected=1"},
 	} {
 		t.Run(scenario.resource+scenario.query, func(t *testing.T) {
 			resource := fixture.resources[scenario.resource]

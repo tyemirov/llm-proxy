@@ -44,31 +44,19 @@ func newJournalAdmissionIntent(input journalAdmissionInput, entropy io.Reader) (
 			return journalAdmissionIntent{}, errUsageJournalInvalid
 		}
 	}
-	if input.Model != strings.TrimSpace(input.Model) || (input.Model == "" && input.ExecutionKind != journalExecutionMedia) {
-		return journalAdmissionIntent{}, errUsageJournalInvalid
-	}
 	if !validIdempotencyKey(input.IdempotencyKey) || input.Now.IsZero() || !input.ClaimExpiresAt.After(input.Now) {
 		return journalAdmissionIntent{}, errUsageJournalInvalid
 	}
-	switch input.ExecutionKind {
-	case journalExecutionText, journalExecutionMedia, journalExecutionDictation:
-	default:
-		return journalAdmissionIntent{}, errUsageJournalInvalid
-	}
-	canonical, err := canonicalJSON(input.CanonicalIntent)
-	if err != nil {
-		return journalAdmissionIntent{}, fmt.Errorf("%w: normalize request intent: %w", errUsageJournalInvalid, err)
-	}
+	// Execution owners supply constant kinds, catalog-resolved models, and JSON
+	// serialized from their validated intent. Normalize its key order for replay.
+	canonical, _ := canonicalJSON(input.CanonicalIntent)
 	identifier, err := newHostedResourceID(journalRequestIDPrefix, entropy)
 	if err != nil {
 		return journalAdmissionIntent{}, err
 	}
 	// Only caller intent participates in replay identity. A new worker, execution ID,
 	// or catalog revision must not change a previously accepted request.
-	identity, err := json.Marshal([]string{string(input.ExecutionKind), input.Provider, input.Model, input.Operation, string(canonical)})
-	if err != nil {
-		return journalAdmissionIntent{}, fmt.Errorf("encode request identity: %w", err)
-	}
+	identity, _ := json.Marshal([]string{string(input.ExecutionKind), input.Provider, input.Model, input.Operation, string(canonical)})
 	return journalAdmissionIntent{owner: input.OwnerUserID, record: managedJournalRequestRecord{
 		ID: identifier, TenantID: input.TenantID, KeyDigest: sha256Hex(input.IdempotencyKey), IntentDigest: sha256Hex(string(identity)),
 		Provider: input.Provider, Model: input.Model, Operation: input.Operation, CatalogRevision: input.CatalogRevision,

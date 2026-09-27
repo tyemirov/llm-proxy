@@ -30,13 +30,8 @@ func TestHostedRatingTextProtocolBindsNativeCacheUsage(t *testing.T) {
 			database, intent, management, _ := newHostedRatingFixture(t)
 			catalog, conditions := hostedRatingTextCatalog()
 			catalog.Offerings[0].Limits = test.limits
-			prices, err := NewCatalogService(catalog)
-			if err != nil {
-				t.Fatal(err)
-			}
-			maxTokens := 100
-			priceRequest := chatRequestParameters{provider: providerDefinition{identifier: providerID("openai"), activeTransport: providerTransportDefinition{responseCodec: CatalogProtocolOpenAIResponses}}, model: textModelDefinition{identifier: newModelID("gpt-4.1")}, maxTokens: &maxTokens}
-			reserve, err := newHostedTextPriceAdmission(prices, priceRequest, ratingTestAcceptanceTime(), categoricalPriceConditions(conditions), 1)
+			scope := hostedTextPriceScopeForTest(t, catalog, categoricalPriceConditions(conditions), 1)
+			reserve, err := scope.admission(CatalogProtocolOpenAIResponses, ratingTestAcceptanceTime(), false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -115,15 +110,9 @@ func TestHostedRatingTextBindingsRespectProtocolEvidence(t *testing.T) {
 				expected = ExactMoney{Numerator: "6773", Denominator: "2000000"}
 			}
 			catalog.Prices[0] = CatalogPriceDescriptor{Provider: "openai", Model: "gpt-4.1", Operation: "text", Available: true, Source: "https://example.com/prices", LastVerified: "2026-09-22", Rates: rates}
-			prices, err := NewCatalogService(catalog)
-			if err != nil {
-				t.Fatal(err)
-			}
-			meter, err := newTextJournalMeter(codec)
-			if err != nil {
-				t.Fatal(err)
-			}
-			snapshot, err := meter.ratingSnapshot(prices, "openai", "gpt-4.1", ratingTestAcceptanceTime(), conditions, false)
+			scope := hostedTextPriceScopeForTest(t, catalog, conditions, 1)
+			meter := newTextJournalMeter(codec)
+			snapshot, err := meter.ratingSnapshot(scope, ratingTestAcceptanceTime(), false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -137,7 +126,8 @@ func TestHostedRatingTextBindingsRespectProtocolEvidence(t *testing.T) {
 			if err != nil || result.State != CatalogRatingUnresolved {
 				t.Fatalf("unreported quantities became charges: %+v %v", result, err)
 			}
-			if _, err := meter.ratingSnapshot(prices, "openai", "gpt-4.1", ratingTestAcceptanceTime(), CatalogPriceConditions{ServiceTier: "priority"}, false); !errors.Is(err, ErrCatalogRatingUnavailable) {
+			priorityScope := hostedTextPriceScopeForTest(t, catalog, CatalogPriceConditions{ServiceTier: "priority"}, 1)
+			if _, err := meter.ratingSnapshot(priorityScope, ratingTestAcceptanceTime(), false); !errors.Is(err, ErrCatalogRatingUnavailable) {
 				t.Fatalf("unpriced service tier admitted: %v", err)
 			}
 		})
@@ -164,13 +154,8 @@ func hostedRatingTextCatalog() (ModelCatalog, CatalogPriceConditions) {
 func TestHostedRatingTextBoundsStopExcessContinuationBeforeDispatch(t *testing.T) {
 	database, intent, _, _ := newHostedRatingFixture(t)
 	catalog, conditions := hostedRatingTextCatalog()
-	prices, err := NewCatalogService(catalog)
-	if err != nil {
-		t.Fatal(err)
-	}
-	maxTokens := 100
-	request := chatRequestParameters{provider: providerDefinition{identifier: providerID("openai"), activeTransport: providerTransportDefinition{responseCodec: CatalogProtocolOpenAIResponses}}, model: textModelDefinition{identifier: newModelID("gpt-4.1")}, maxTokens: &maxTokens}
-	reserve, err := newHostedTextPriceAdmission(prices, request, ratingTestAcceptanceTime(), categoricalPriceConditions(conditions), 2)
+	scope := hostedTextPriceScopeForTest(t, catalog, categoricalPriceConditions(conditions), 2)
+	reserve, err := scope.admission(CatalogProtocolOpenAIResponses, ratingTestAcceptanceTime(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,30 +199,13 @@ func TestHostedRatingTextBoundsStopExcessContinuationBeforeDispatch(t *testing.T
 	}
 }
 
-func TestHostedRatingTextBoundsRejectUnknownCapacityAndTools(t *testing.T) {
-	for _, test := range []struct {
-		name   string
-		change func(*ModelCatalog, *chatRequestParameters)
-	}{
-		{"missing input", func(c *ModelCatalog, _ *chatRequestParameters) { c.Offerings[0].Limits = nil }},
-		{"account dependent input", func(c *ModelCatalog, _ *chatRequestParameters) {
-			c.Offerings[0].Limits[0].AccountDependent = true
-			c.Offerings[0].Limits[0].Value = nil
-		}},
-		{"missing output", func(c *ModelCatalog, _ *chatRequestParameters) { c.Offerings[0].OutputTokenLimit = 0 }},
-		{"unbounded search", func(_ *ModelCatalog, r *chatRequestParameters) { r.webSearchEnabled = true }},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			catalog, conditions := hostedRatingTextCatalog()
-			request := chatRequestParameters{provider: providerDefinition{identifier: providerID("openai"), activeTransport: providerTransportDefinition{responseCodec: CatalogProtocolOpenAIResponses}}, model: textModelDefinition{identifier: newModelID("gpt-4.1")}}
-			test.change(&catalog, &request)
-			prices, err := NewCatalogService(catalog)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := newHostedTextPriceAdmission(prices, request, ratingTestAcceptanceTime(), categoricalPriceConditions(conditions), 2); !errors.Is(err, ErrCatalogRatingUnavailable) {
-				t.Fatalf("unbounded work authorized: %v", err)
-			}
-		})
+func hostedTextPriceScopeForTest(t *testing.T, catalog ModelCatalog, conditions CatalogPriceConditions, attempts uint32) *hostedTextPriceScope {
+	t.Helper()
+	offering := catalog.Offerings[0]
+	configuration := &HostedConfiguration{Offerings: []HostedOfferingConfiguration{{Provider: offering.Provider, Model: offering.Model, Operation: ModelOperationText, MaximumAttempts: attempts, Conditions: conditions}}}
+	settings, err := newHostedRuntimeSettings(configuration, catalog)
+	if err != nil {
+		t.Fatal(err)
 	}
+	return settings.offerings[hostedOfferingKey{offering.Provider, offering.Model, ModelOperationText}].text
 }

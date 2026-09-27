@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -81,6 +82,86 @@ func (fixture fundsAdmissionFixture) recoverAdmission(t *testing.T) {
 	if fixture.calls.Load() != 1 || !reflect.DeepEqual(before, fixture.state(t)) {
 		t.Fatalf("restart replay changed effects: calls=%d", fixture.calls.Load())
 	}
+}
+
+func TestHostedFundsAdmissionRejectsEmptyStoredBillingAccountIdentity(t *testing.T) {
+	fixture := newFundsAdmissionFixture(t)
+	before := fixture.state(t)
+	replaceIdentity := func(previous, next string) {
+		t.Helper()
+		if err := fixture.database.database.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Exec("PRAGMA defer_foreign_keys = ON").Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&managedBillingAccountRecord{}).Where("id = ?", previous).UpdateColumn("id", next).Error; err != nil {
+				return err
+			}
+			return tx.Model(&managedHostedGrantRecord{}).Where("id = ?", hostedJournalFixtureGrantID).UpdateColumn("billing_account_id", next).Error
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	replaceIdentity("billing-journal", "")
+	fixture.reject(t)
+	replaceIdentity("", "billing-journal")
+	fixture.assertRolledBack(t, before)
+	fixture.recoverAdmission(t)
+}
+
+func TestHostedFundsAdmissionRejectsUnsetClockWithoutConsumingIdentity(t *testing.T) {
+	fixture := newFundsAdmissionFixture(t)
+	fixture.generation.Close()
+	var broken atomic.Bool
+	fixture.generation = newHostedIdentityHTTPServer(t, fixture.database, fixture.upstreamURL, fixture.responseRoot, fundsDependencies(fixture.prices), func(dependencies *hostedTextRequestDependencies) {
+		now := dependencies.now
+		dependencies.now = func() time.Time {
+			if broken.Load() {
+				return time.Time{}
+			}
+			return now()
+		}
+	})
+	before := fixture.state(t)
+	broken.Store(true)
+	for range 2 {
+		hostedIdentityHTTP(t, fixture.generation, "recover-admission", "funded prompt", http.StatusBadGateway)
+		fixture.assertRolledBack(t, before)
+	}
+	if fixture.calls.Load() != 0 {
+		t.Fatal("unset admission clock permitted provider work")
+	}
+	broken.Store(false)
+	fixture.recoverAdmission(t)
+}
+
+func TestHostedFundsAdmissionRejectsEmptyTenantOwnerRead(t *testing.T) {
+	fixture := newFundsAdmissionFixture(t)
+	before := fixture.state(t)
+	queries := fixture.database.database.Callback().Query()
+	const callback = "test:empty_admission_tenant_owner"
+	var reads atomic.Int64
+	if err := queries.After("gorm:query").Register(callback, func(tx *gorm.DB) {
+		record, ok := tx.Statement.Dest.(*managedTenantRecord)
+		if !ok || tx.DryRun || tx.Error != nil || record.TenantID != "managed-first" {
+			return
+		}
+		record.OwnerUserID = ""
+		reads.Add(1)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = queries.Remove(callback) })
+	for range 2 {
+		hostedIdentityHTTP(t, fixture.generation, "recover-admission", "funded prompt", http.StatusBadGateway)
+	}
+	if err := queries.Remove(callback); err != nil {
+		t.Fatal(err)
+	}
+	if reads.Load() != 2 || fixture.calls.Load() != 0 {
+		t.Fatalf("invalid tenant owner permitted dispatch: reads=%d calls=%d", reads.Load(), fixture.calls.Load())
+	}
+	fixture.assertRolledBack(t, before)
+	fixture.recoverAdmission(t)
 }
 
 func TestHostedFundsAdmissionWriteFailuresRollBackBeforeDispatch(t *testing.T) {

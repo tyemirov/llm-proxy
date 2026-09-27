@@ -55,6 +55,55 @@ func TestHostedPaymentsProviderReconciliationRetainsExactCostsWithoutChargeChang
 	}
 }
 
+func TestHostedPaymentsProviderReconciliationRetainsDuplicateAndUnknownEvidence(t *testing.T) {
+	database, intent, server, reserve := newHostedRatingFixture(t)
+	for _, unknown := range []bool{false, true} {
+		key := "provider-known"
+		quantity := journalQuantity{Dimension: "output_tokens", Unit: "token", Value: "100"}
+		if unknown {
+			key = "provider-unknown"
+			quantity.Value, quantity.UnknownReason = "", journalQuantityNotReported
+		}
+		_, observation := observeRatedFixture(t, database, intent(key), reserve, journalOutcomeComplete, []journalQuantity{{Dimension: "input_tokens", Unit: "token", Value: "1000"}, quantity})
+		if err := database.deliverJournalObservation(t.Context(), observation.ID, observation.CreatedAt, newJournalRatingDelivery(func(*gorm.DB, managedChargeRecord) error { return nil })); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := ratingHTTPExchange(t, server, http.MethodGet, "/billing-accounts/billing-journal/charges", "", http.StatusOK)
+	input, source := providerCostEvidenceFixture()
+	input["attempt_count"] = 2
+	encoded, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configuration := ManagementConfiguration{DatabaseDialector: database.database.Dialector}
+	var original ProviderCostReconciliationReport
+	for iteration := range 3 {
+		report, err := ReconcileProviderCosts(t.Context(), configuration, "provider-duplicate-unknown", strings.NewReader(string(encoded)), strings.NewReader(source))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if report.AttemptCount != 2 || report.IncompleteAttempts != 1 || report.KnownProviderCost != (ExactMoney{"7", "2500"}) || len(report.Differences) != 2 {
+			t.Fatalf("report invented complete usage or lost duplicate evidence: %+v", report)
+		}
+		codes := map[string]string{}
+		for _, difference := range report.Differences {
+			codes[difference.Code] = difference.Category
+		}
+		if codes["provider_request_reused"] != "duplicate_effect" || codes["unrated_provider_attempts"] != "missing_usage" {
+			t.Fatalf("differences=%+v", report.Differences)
+		}
+		if iteration == 0 {
+			original = report
+		} else if !reflect.DeepEqual(original, report) {
+			t.Fatal("replayed reconciliation changed retained evidence")
+		}
+		if after := ratingHTTPExchange(t, server, http.MethodGet, "/billing-accounts/billing-journal/charges", "", http.StatusOK); !reflect.DeepEqual(before, after) {
+			t.Fatal("reconciliation changed customer charges")
+		}
+	}
+}
+
 func TestHostedPaymentsProviderReconciliationRejectsUnboundSource(t *testing.T) {
 	database, _, _ := newJournalTransactionFixture(t)
 	configuration := ManagementConfiguration{DatabaseDialector: database.database.Dialector}

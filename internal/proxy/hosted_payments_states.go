@@ -59,13 +59,11 @@ func validatePaymentState(transaction billing.PaddleTransactionCompletedWebhookD
 	return updated.UTC(), nil
 }
 
-func paymentStateObservation(event managedPaymentInboxRecord, order managedFundingOrderRecord, transaction billing.PaddleTransactionCompletedWebhookData, updated, now time.Time) (managedPaymentStateObservationRecord, error) {
-	encoded, err := json.Marshal(transaction)
-	if err != nil {
-		return managedPaymentStateObservationRecord{}, fmt.Errorf("encode processor state: %w", err)
-	}
+func paymentStateObservation(event managedPaymentInboxRecord, order managedFundingOrderRecord, transaction billing.PaddleTransactionCompletedWebhookData, updated, now time.Time) managedPaymentStateObservationRecord {
+	// The SDK decoded this transaction from JSON; timestamps remain strings.
+	encoded, _ := json.Marshal(transaction)
 	digest := sha256Hex(string(encoded))
-	return managedPaymentStateObservationRecord{ID: "payment-state-" + sha256Hex(event.ID + "\x00" + digest)[:32], OrderID: order.ID, InboxID: event.ID, ProcessorUpdatedAt: updated, ProcessorStatus: transaction.Status, Evidence: string(encoded), EvidenceDigest: digest, CreatedAt: now}, nil
+	return managedPaymentStateObservationRecord{ID: "payment-state-" + sha256Hex(event.ID + "\x00" + digest)[:32], OrderID: order.ID, InboxID: event.ID, ProcessorUpdatedAt: updated, ProcessorStatus: transaction.Status, Evidence: string(encoded), EvidenceDigest: digest, CreatedAt: now}
 }
 
 // The caller holds the financial account writer lock.
@@ -118,10 +116,7 @@ func (worker *paddlePaymentProcessor) processState(ctx context.Context, event ma
 		completedDigest = evidence.digest
 	}
 	now := worker.now().UTC()
-	observation, err := paymentStateObservation(event, order, current, updated, now)
-	if err != nil {
-		return err
-	}
+	observation := paymentStateObservation(event, order, current, updated, now)
 	privateQuery := worker.database.database.Session(&gorm.Session{Logger: paymentInboxLogger{worker.database.database.Logger}})
 	err = privateQuery.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		lock := tx.Model(&managedBillingAccountRecord{}).Where("id = ?", order.BillingAccountID).UpdateColumn("id", gorm.Expr("id"))

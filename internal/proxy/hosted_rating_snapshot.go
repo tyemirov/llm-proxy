@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"slices"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -19,7 +21,16 @@ type hostedSnapshotRate struct {
 	CustomerRate ExactMoney       `json:"customer_rate"`
 }
 
+type catalogPriceOrigin struct {
+	Provider     string `json:"provider"`
+	Model        string `json:"model"`
+	Operation    string `json:"operation"`
+	Source       string `json:"source"`
+	LastVerified string `json:"last_verified"`
+}
+
 type hostedSnapshotComponent struct {
+	Origin              *catalogPriceOrigin  `json:"origin,omitempty"`
 	Dimension           string               `json:"dimension"`
 	AdditionalDimension string               `json:"additional_dimension"`
 	Rates               []hostedSnapshotRate `json:"rates"`
@@ -39,6 +50,11 @@ type hostedPriceSnapshotDocument struct {
 	MinimumCharge      *CatalogMinimumCharge     `json:"minimum_charge"`
 	Bounds             []CatalogUsageBound       `json:"bounds"`
 	Maximum            CatalogAuthorizedMaximum  `json:"maximum"`
+}
+
+type restoredHostedPriceDocument struct {
+	hostedPriceSnapshotDocument
+	authorizedMaximum *big.Rat
 }
 
 type managedPriceSnapshotRecord struct {
@@ -67,16 +83,14 @@ func newHostedPriceAdmission(snapshot *CatalogRatingSnapshot, bounds []CatalogUs
 		document.Bounds[index].Maximum = normalizeJournalDecimal(document.Bounds[index].Maximum)
 	}
 	for _, component := range snapshot.components {
-		retained := hostedSnapshotComponent{Dimension: component.binding.Dimension, AdditionalDimension: component.binding.AdditionalDimension, Rates: make([]hostedSnapshotRate, 0, len(component.rates))}
+		retained := hostedSnapshotComponent{Origin: component.origin, Dimension: component.binding.Dimension, AdditionalDimension: component.binding.AdditionalDimension, Rates: make([]hostedSnapshotRate, 0, len(component.rates))}
 		for _, rate := range component.rates {
 			retained.Rates = append(retained.Rates, hostedSnapshotRate{ProviderRate: rate, CustomerRate: ratingMoney(snapshot.customerAmount(ratingRational(string(rate.Rate))))})
 		}
 		document.Components = append(document.Components, retained)
 	}
-	encoded, err := json.Marshal(document)
-	if err != nil {
-		return nil, fmt.Errorf("encode accepted price snapshot: %w", err)
-	}
+	// The retained document contains closed exact-money and catalog types.
+	encoded, _ := json.Marshal(document)
 	digest := sha256Hex(string(encoded))
 	return func(transaction *gorm.DB, request managedJournalRequestRecord) error {
 		for _, component := range document.Components {
@@ -87,9 +101,8 @@ func newHostedPriceAdmission(snapshot *CatalogRatingSnapshot, bounds []CatalogUs
 				}
 			}
 		}
-		if !snapshot.acceptedAt.Equal(request.CreatedAt) {
-			return fmt.Errorf("%w: price acceptance time differs", errUsageJournalConflict)
-		}
+		// Text and media admission construct the snapshot at request.CreatedAt.
+		// Catalog revisions still require comparison when accepted work resumes.
 		if request.CatalogRevision != document.CatalogRevision || request.Provider != document.Provider || request.Model != document.Model || request.Operation != document.Operation {
 			return fmt.Errorf("%w: price snapshot route differs", errUsageJournalConflict)
 		}
@@ -132,12 +145,12 @@ func decodeRatingJSON(encoded []byte, destination any) error {
 }
 
 // Historical prices are validated directly, without consulting a current catalog.
-func restoreHostedPriceSnapshot(record managedPriceSnapshotRecord) (*CatalogRatingSnapshot, hostedPriceSnapshotDocument, error) {
-	var document hostedPriceSnapshotDocument
+func restoreHostedPriceSnapshot(record managedPriceSnapshotRecord) (*CatalogRatingSnapshot, restoredHostedPriceDocument, error) {
+	var document restoredHostedPriceDocument
 	if record.Digest != sha256Hex(string(record.Document)) {
 		return nil, document, fmt.Errorf("invalid retained price digest")
 	}
-	if err := decodeRatingJSON(record.Document, &document); err != nil {
+	if err := decodeRatingJSON(record.Document, &document.hostedPriceSnapshotDocument); err != nil {
 		return nil, document, err
 	}
 	descriptor := CatalogPriceDescriptor{Provider: document.Provider, Model: document.Model, Operation: document.Operation, Available: true, Source: document.Source, LastVerified: document.LastVerified, MinimumCharge: document.MinimumCharge}
@@ -170,7 +183,15 @@ func restoreHostedPriceSnapshot(record managedPriceSnapshotRecord) (*CatalogRati
 		if err := claimRatingDimensions(binding, dimensions); err != nil {
 			return nil, document, err
 		}
-		restored := catalogSnapshotComponent{binding: binding}
+		if origin := component.Origin; origin != nil {
+			if origin.Provider != document.Provider || origin.Model == "" || len(origin.Model) > 128 || strings.TrimSpace(origin.Model) != origin.Model || (origin.Operation != ModelOperationText && origin.Operation != document.Operation) {
+				return nil, document, fmt.Errorf("invalid retained price origin")
+			}
+			if err := validateCatalogPriceSource(origin.Source, origin.LastVerified, "retained_price_origin"); err != nil {
+				return nil, document, err
+			}
+		}
+		restored := catalogSnapshotComponent{binding: binding, origin: component.Origin}
 		for _, entry := range component.Rates {
 			rate := entry.ProviderRate
 			conditions := rate.Conditions
@@ -194,12 +215,13 @@ func restoreHostedPriceSnapshot(record managedPriceSnapshotRecord) (*CatalogRati
 	if err := validateRatingRules(document.ExcludedComponents, document.ZeroDimensions, dimensions, components); err != nil {
 		return nil, document, err
 	}
-	maximum, err := snapshot.MaximumCharge(document.Bounds, document.Maximum.Attempts)
+	maximum, err := snapshot.authorizedMaximum(document.Bounds, document.Maximum.Attempts)
 	if err != nil {
 		return nil, document, fmt.Errorf("validate retained authorization maximum: %w", err)
 	}
-	if maximum != document.Maximum {
+	if maximum.CatalogAuthorizedMaximum != document.Maximum {
 		return nil, document, fmt.Errorf("invalid retained authorization maximum")
 	}
+	document.authorizedMaximum = maximum.customerCharge
 	return snapshot, document, nil
 }

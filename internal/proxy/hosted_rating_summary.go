@@ -21,9 +21,11 @@ const (
 )
 
 type requestChargeSummary struct {
-	knownProviderCost       ExactMoney
-	knownCustomerQuote      ExactMoney
-	retainedCustomerCredits ExactMoney
+	customerAmount          *big.Rat
+	netCustomerAmount       *big.Rat
+	knownProviderCost       *big.Rat
+	knownCustomerQuote      *big.Rat
+	retainedCustomerCredits *big.Rat
 	providerCostComplete    bool
 	RequestID               string                    `json:"request_id"`
 	State                   requestChargeSummaryState `json:"state"`
@@ -38,6 +40,44 @@ type requestChargeSummary struct {
 // One SQLite read transaction gives the request, attempts, charges, and credits
 // one snapshot. Charge pages limit the number of attempts held in memory.
 func (database *gormManagedTenantDatabase) billingRequestChargeSummary(ctx context.Context, accountID, requestID string) (requestChargeSummary, error) {
+	var summary requestChargeSummary
+	err := database.database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
+		reader := &gormManagedTenantDatabase{database: transaction}
+		var err error
+		summary, err = reader.billingUsageChargeSummary(ctx, accountID, requestID)
+		if err != nil {
+			return err
+		}
+		var corrections []managedFundsCorrectionRecord
+		if err := transaction.Where("billing_account_id = ? AND request_id = ?", accountID, requestID).Find(&corrections).Error; err != nil {
+			return fmt.Errorf("read request credits for %s: %w", requestID, err)
+		}
+		net := new(big.Rat).Set(summary.netCustomerAmount)
+		for _, correction := range corrections {
+			credit, err := decodeRetainedFundsCorrection(correction)
+			if err != nil {
+				return fmt.Errorf("read request credit %s: %w", correction.ID, err)
+			}
+			net.Sub(net, credit)
+		}
+		if summary.State == requestChargeRated {
+			if net.Sign() < 0 {
+				return fmt.Errorf("request %s credits exceed its customer charge", requestID)
+			}
+			credits, adjusted := ratingMoney(new(big.Rat).Sub(summary.customerAmount, net)), ratingMoney(net)
+			summary.CustomerCredits, summary.NetCustomerCharge = &credits, &adjusted
+		}
+		return nil
+	})
+	if err != nil {
+		return requestChargeSummary{}, fmt.Errorf("read customer charge summary for request %s: %w", requestID, err)
+	}
+	return summary, nil
+}
+
+// Usage totals retain the accepted charge and charge-level adjustments used by
+// financial authorization. Later request credits affect the customer view.
+func (database *gormManagedTenantDatabase) billingUsageChargeSummary(ctx context.Context, accountID, requestID string) (requestChargeSummary, error) {
 	var summary requestChargeSummary
 	err := database.database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		reader := &gormManagedTenantDatabase{database: transaction}
@@ -77,16 +117,12 @@ func (database *gormManagedTenantDatabase) billingRequestChargeSummary(ctx conte
 				}
 				for _, amount := range []struct {
 					total *big.Rat
-					value *ExactMoney
-				}{{provider, charge.Rating.ProviderCost}, {customer, charge.CustomerCharge}, {net, charge.NetCustomerCharge}, {quoted, charge.Rating.CustomerCharge}} {
+					value *big.Rat
+				}{{provider, charge.providerAmount}, {customer, charge.customerAmount}, {net, charge.netCustomerAmount}, {quoted, charge.quotedAmount}} {
 					if amount.value == nil {
 						continue
 					}
-					value, err := parseExactMoney(*amount.value)
-					if err != nil {
-						return fmt.Errorf("read amount for charge %s: %w", record.ID, err)
-					}
-					amount.total.Add(amount.total, value)
+					amount.total.Add(amount.total, amount.value)
 				}
 				providerComplete = providerComplete && charge.Rating.ProviderCost != nil
 				customerComplete = customerComplete && charge.CustomerCharge != nil
@@ -100,9 +136,10 @@ func (database *gormManagedTenantDatabase) billingRequestChargeSummary(ctx conte
 		if summary.ChargeCount > summary.AttemptCount {
 			return fmt.Errorf("request %s has more charges than attempts", request.ID)
 		}
-		summary.knownProviderCost = ratingMoney(provider)
-		summary.knownCustomerQuote = ratingMoney(quoted)
-		summary.retainedCustomerCredits = ratingMoney(new(big.Rat).Sub(customer, net))
+		summary.customerAmount, summary.netCustomerAmount = customer, net
+		summary.knownProviderCost = provider
+		summary.knownCustomerQuote = quoted
+		summary.retainedCustomerCredits = new(big.Rat).Sub(customer, net)
 		summary.providerCostComplete = request.State != journalRequestAccepted && request.State != journalRequestExecuting && summary.ChargeCount == summary.AttemptCount && providerComplete
 		switch request.State {
 		case journalRequestAccepted, journalRequestExecuting:

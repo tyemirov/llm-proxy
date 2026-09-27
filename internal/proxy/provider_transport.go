@@ -32,7 +32,7 @@ func (doer providerTransportHTTPDoer) Do(request *http.Request) (*http.Response,
 	}
 	if execution := hostedTextExecutionFromContext(request.Context()); execution != nil {
 		response, err := execution.do(doer.next, authorizedRequest, doer.transport)
-		if err != nil && request.Method == http.MethodPost {
+		if err != nil && (request.Method == http.MethodPost || isHostedExecutionBoundaryFailure(err)) {
 			return response, backoff.Permanent(err)
 		}
 		return response, err

@@ -469,12 +469,19 @@ func catalogPriceIdentifier(provider string, model string, operation string) str
 	return strings.TrimSpace(provider) + "\x00" + strings.TrimSpace(model) + "\x00" + strings.TrimSpace(operation)
 }
 
-func validateCatalogPriceValues(descriptor CatalogPriceDescriptor, field string) error {
-	if !strings.HasPrefix(descriptor.Source, "https://") || descriptor.Source != strings.TrimSpace(descriptor.Source) {
+func validateCatalogPriceSource(source, verified, field string) error {
+	if !strings.HasPrefix(source, "https://") || source != strings.TrimSpace(source) {
 		return fmt.Errorf("%w: field=%s.source", ErrInvalidModelCatalog, field)
 	}
-	if verifiedAt, parseError := time.Parse(time.DateOnly, descriptor.LastVerified); parseError != nil || verifiedAt.Format(time.DateOnly) != descriptor.LastVerified {
+	if verifiedAt, parseError := time.Parse(time.DateOnly, verified); parseError != nil || verifiedAt.Format(time.DateOnly) != verified {
 		return fmt.Errorf("%w: field=%s.last_verified", ErrInvalidModelCatalog, field)
+	}
+	return nil
+}
+
+func validateCatalogPriceValues(descriptor CatalogPriceDescriptor, field string) error {
+	if err := validateCatalogPriceSource(descriptor.Source, descriptor.LastVerified, field); err != nil {
+		return err
 	}
 	if descriptor.Available {
 		if len(descriptor.Rates) == 0 || descriptor.UnavailableReason != constants.EmptyString {

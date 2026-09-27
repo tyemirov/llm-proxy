@@ -173,6 +173,9 @@ func fundsResolutionHTTP(t *testing.T, server *httptest.Server, cookie *http.Coo
 		t.Fatal(err)
 	}
 	template := "/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-resolution"
+	if strings.HasSuffix(path, "/charge-summary") {
+		template = "/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/charge-summary"
+	}
 	if strings.Contains(path, "/reservations/") {
 		template = "/api/management/billing-accounts/{billing_account_id}/reservations/{request_id}"
 	}

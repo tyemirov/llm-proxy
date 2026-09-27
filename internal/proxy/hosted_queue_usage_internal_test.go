@@ -16,7 +16,7 @@ import (
 )
 
 func TestHostedQueueUsageRetainsBilledUnits(t *testing.T) {
-	for _, mode := range []string{"exact", "zero", "missing", "invalid", "duplicate", "submit_error", "status_error", "result_error", "malformed_result", "artifact_error", "observation_failure", "delivery_failure"} {
+	for _, mode := range []string{"exact", "zero", "missing", "invalid", "duplicate", "submit_error", "status_error", "result_error", "malformed_result", "artifact_error", "observation_failure", "delivery_failure", "submit_observation_failure", "status_observation_failure"} {
 		t.Run(mode, func(t *testing.T) {
 			database, _, read := newJournalTransactionFixture(t)
 			data := imageBoundaryPNG(t, image.NewNRGBA(image.Rect(0, 0, 16, 16)))
@@ -58,7 +58,7 @@ func TestHostedQueueUsageRetainsBilledUnits(t *testing.T) {
 				switch request.Method + " " + request.URL.Path {
 				case "POST /reve/2.1/text-to-image":
 					submits.Add(1)
-					if mode == "submit_error" {
+					if mode == "submit_error" || mode == "submit_observation_failure" {
 						headers(writer)
 						writer.WriteHeader(400)
 						fmt.Fprint(writer, `{"error":"private failure"}`)
@@ -66,7 +66,7 @@ func TestHostedQueueUsageRetainsBilledUnits(t *testing.T) {
 					}
 					fmt.Fprintf(writer, `{"request_id":"private-queue","status_url":%q,"response_url":%q,"cancel_url":%q}`, upstream.URL+"/reve/requests/private-queue/status", upstream.URL+"/reve/requests/private-queue", upstream.URL+"/reve/requests/private-queue/cancel")
 				case "GET /reve/requests/private-queue/status":
-					if mode == "status_error" {
+					if mode == "status_error" || mode == "status_observation_failure" {
 						headers(writer)
 						fmt.Fprint(writer, `{"request_id":"private-queue","status":"COMPLETED","error":"private failure"}`)
 						return
@@ -92,7 +92,7 @@ func TestHostedQueueUsageRetainsBilledUnits(t *testing.T) {
 			accepted := hostedSpeechHTTP(t, server, "queue-usage", intent, http.StatusAccepted)
 			id := accepted["operation_id"].(string)
 			failureTable := ""
-			if mode == "observation_failure" {
+			if mode == "observation_failure" || mode == "submit_observation_failure" || mode == "status_observation_failure" {
 				failureTable = "managed_journal_observation_records"
 			}
 			if mode == "delivery_failure" {
@@ -109,7 +109,7 @@ func TestHostedQueueUsageRetainsBilledUnits(t *testing.T) {
 			switch mode {
 			case "submit_error", "status_error":
 				wantState = MediaOperationStateFailed
-			case "result_error", "malformed_result", "artifact_error", "observation_failure", "delivery_failure":
+			case "result_error", "malformed_result", "artifact_error", "observation_failure", "delivery_failure", "submit_observation_failure", "status_observation_failure":
 				wantState = MediaOperationStateUncertain
 			}
 			if result["state"] != wantState {

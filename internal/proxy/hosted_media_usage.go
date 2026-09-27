@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -16,9 +17,8 @@ func (request MediaOperationExecutionRequest) recordImageUsage(body []byte) erro
 		return nil
 	}
 	input, _ := imageJournalMeter().observe(body, http.StatusOK, "", time.Time{})
-	// The documented Images response has no separate cached modality counters.
-	// Retain the gap instead of billing all input as uncached or inventing zeros.
-	input.Quantities = append(input.Quantities, unknownImageCacheQuantities()...)
+	// Cached input pricing applies to Responses tools, not direct Images calls.
+	input.AdapterRevision = CatalogProtocolOpenAIImages + ":2"
 	return request.recordUsage(input)
 }
 
@@ -42,18 +42,17 @@ func unknownImageCacheQuantities() []journalQuantity {
 }
 
 // Responses reports model usage separately from its image-generation tool.
-// Preserve the reported layer without inventing tool counters or cached splits.
+// Preserve both reported layers without inventing cached input splits.
 func (request MediaOperationExecutionRequest) recordResponsesImageUsage(snapshot imageResponsesSnapshot) error {
 	if request.recordUsage == nil {
 		return nil
 	}
-	body, err := json.Marshal(struct {
-		ID    string          `json:"id"`
-		Usage json.RawMessage `json:"usage"`
-	}{snapshot.ID, snapshot.Usage})
-	if err != nil {
-		return fmt.Errorf("encode response usage: %w", err)
-	}
+	// Both raw fields come from successful provider JSON decoding.
+	body, _ := json.Marshal(struct {
+		ID        string          `json:"id"`
+		Usage     json.RawMessage `json:"usage"`
+		ToolUsage json.RawMessage `json:"tool_usage"`
+	}{snapshot.ID, snapshot.Usage, snapshot.ToolUsage})
 	profile := journalTokenMeter{codec: CatalogProtocolOpenAIResponses + ":image", fields: []journalMeterField{
 		{"total_tokens", "usage.total_tokens", ""},
 		{"input_tokens", "usage.input_tokens", "total_tokens"},
@@ -63,6 +62,7 @@ func (request MediaOperationExecutionRequest) recordResponsesImageUsage(snapshot
 		{"reasoning_tokens", "usage.output_tokens_details.reasoning_tokens", "output_tokens"},
 	}}
 	input, _ := profile.observe(body, http.StatusOK, "", time.Time{})
+	input.AdapterRevision = CatalogProtocolOpenAIResponses + ":image:2"
 	for index := range input.Quantities {
 		quantity := &input.Quantities[index]
 		quantity.Dimension = "responses_" + quantity.Dimension
@@ -70,9 +70,14 @@ func (request MediaOperationExecutionRequest) recordResponsesImageUsage(snapshot
 			quantity.IncludedIn = "responses_" + quantity.IncludedIn
 		}
 	}
-	for _, field := range imageJournalMeter().fields {
-		input.Quantities = append(input.Quantities, journalQuantity{Dimension: field.dimension, Unit: "token", IncludedIn: field.includedIn, UnknownReason: journalQuantityUnsupported})
+	toolProfile := imageJournalMeter()
+	for index := range toolProfile.fields {
+		field := &toolProfile.fields[index]
+		field.path = "tool_usage.image_gen." + strings.TrimPrefix(field.path, "usage.")
 	}
+	toolInput, _ := toolProfile.observe(body, http.StatusOK, "", time.Time{})
+	input.Quantities = append(input.Quantities, toolInput.Quantities...)
+	input.SourceFields = append(input.SourceFields, toolInput.SourceFields...)
 	input.Quantities = append(input.Quantities, unknownImageCacheQuantities()...)
 	return request.recordUsage(input)
 }

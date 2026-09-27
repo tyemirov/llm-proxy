@@ -134,6 +134,12 @@ type MediaOperationProviderReceipt struct {
 	RequestID string
 }
 
+// An adapter can retain running work across shutdown only when its saved
+// receipt proves that recovery cannot repeat paid submission.
+type mediaOperationShutdownRecovery interface {
+	canRecoverAfterShutdown(binding, handle string) bool
+}
+
 // MediaOperationHTTPClients supplies tenant-bound network admission for each
 // execution phase. Adapters must close each response body before the next poll.
 type MediaOperationHTTPClients struct {
@@ -1113,7 +1119,41 @@ func (service *mediaOperationService) executeOperation(workerID string, operatio
 			return adapter.Execute(requestContext, request)
 		})
 	}
+	if service.workerContext.Err() != nil {
+		if recovery, supported := adapter.(mediaOperationShutdownRecovery); supported {
+			retained, err := service.retainShutdownRecovery(operationID, generation, recovery)
+			if err != nil || retained {
+				return err
+			}
+		}
+	}
 	return service.finish(operationID, generation, result)
+}
+
+func (service *mediaOperationService) retainShutdownRecovery(operationID string, generation uint64, recovery mediaOperationShutdownRecovery) (bool, error) {
+	now := service.store.now()
+	retained := false
+	err := service.store.database.Transaction(func(transaction *gorm.DB) error {
+		if err := lockMediaOperationClaim(transaction, operationID, generation, now); err != nil {
+			return err
+		}
+		var record mediaOperationRecord
+		if err := transaction.Where("operation_id = ?", operationID).First(&record).Error; err != nil {
+			return fmt.Errorf("read shutdown receipt for operation %s: %w", operationID, err)
+		}
+		if !recovery.canRecoverAfterShutdown(record.ExecutionBinding, record.ProviderHandle) {
+			return nil
+		}
+		if err := transaction.Model(&mediaOperationClaimRecord{}).Where("operation_id = ? AND generation = ?", operationID, generation).Update("expires_at", now).Error; err != nil {
+			return fmt.Errorf("release shutdown claim for operation %s: %w", operationID, err)
+		}
+		if err := service.store.bindMediaJournalClaim(transaction, mediaOperationClaimRecord{OperationID: operationID, Generation: generation, ExpiresAt: now}, now); err != nil {
+			return err
+		}
+		retained = true
+		return nil
+	})
+	return retained, err
 }
 
 func (service *mediaOperationService) reportPersistenceFailure(operationID, phase string, err error) error {
@@ -1161,21 +1201,24 @@ func (service *mediaOperationService) runWithClaimRenewal(requestContext context
 	service.workers.Go(func() { resultChannel <- execute() })
 	ticker := time.NewTicker(service.claimRenewal)
 	defer ticker.Stop()
+	var result MediaOperationExecutionResult
+waiting:
 	for {
 		select {
-		case result := <-resultChannel:
-			if err := requestContext.Err(); err != nil {
-				return interruptedMediaExecution(err)
-			}
-			return result
+		case result = <-resultChannel:
+			break waiting
 		case <-requestContext.Done():
-			return interruptedMediaExecution(requestContext.Err())
+			break waiting
 		case <-ticker.C:
 			if err := service.reportPersistenceFailure(operationID, "renew_claim", service.renewMediaClaim(operationID, generation)); err != nil {
 				return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ErrorCode: "worker_claim_lost"}
 			}
 		}
 	}
+	if err := requestContext.Err(); err != nil {
+		return interruptedMediaExecution(err)
+	}
+	return result
 }
 
 func interruptedMediaExecution(err error) MediaOperationExecutionResult {

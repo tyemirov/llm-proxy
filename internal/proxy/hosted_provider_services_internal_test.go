@@ -34,22 +34,40 @@ func TestHostedProviderServiceDictionaryReceiptEvidence(t *testing.T) {
 	}
 }
 
+func TestHostedProviderServiceAlignmentReceiptRecovery(t *testing.T) {
+	for _, requestID := range []string{"private-alignment-trace", ""} {
+		t.Run("trace="+requestID, func(t *testing.T) {
+			testHostedProviderService(t, ModelOperationAudioAlignment, requestID, "publication")
+		})
+	}
+	for _, fault := range []string{"receipt_write", "invalid_receipt", "stored_json", "stored_output", "stored_start", "stored_end", "stored_trace", "stored_binding"} {
+		t.Run(fault, func(t *testing.T) {
+			testHostedProviderService(t, ModelOperationAudioAlignment, "private-alignment-trace", fault)
+		})
+	}
+}
+
 func testHostedProviderService(t *testing.T, operation, requestID, fault string) {
 	t.Helper()
 	database, _, read := newJournalTransactionFixture(t)
 	const audio = "controlled audio input"
 	var submissions, reservations atomic.Int64
 	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		submissions.Add(1)
 		if request.Method != http.MethodPost || request.Header.Get("xi-api-key") != "hosted-service-secret" {
 			t.Errorf("service submission lost pinned authority: %s", request.Method)
 		}
 		writer.Header().Set("Content-Type", "application/json")
+		if request.URL.Path == alignmentUsagePath {
+			fmt.Fprint(writer, `{"columns":["total_minutes","total_cost","usage_count"],"column_types":["Float","Float","Int"],"column_units":["min","usd",null],"rows":[[0.0299375,0.00010977083333333333,1]]}`)
+			return
+		}
+		submissions.Add(1)
 		if fault == "invalid_receipt" {
 			fmt.Fprint(writer, `{}`)
 			return
 		}
 		if operation == ModelOperationAudioAlignment {
+			writer.Header().Set("x-trace-id", requestID)
 			if err := request.ParseMultipartForm(4096); err != nil {
 				t.Error(err)
 				return
@@ -156,7 +174,9 @@ func testHostedProviderService(t *testing.T, operation, requestID, fault string)
 	}
 	accepted := exchange("hosted-service", intent, http.StatusAccepted)
 	id := accepted["operation_id"].(string)
-	if fault == "publication" || fault == "usage" {
+	storedFault := strings.HasPrefix(fault, "stored_")
+	recoveryFault := fault == "publication" || fault == "usage" || storedFault
+	if recoveryFault {
 		if err := database.database.Exec("CREATE TRIGGER reject_dictionary_publication BEFORE UPDATE OF public_state ON media_operation_records WHEN OLD.public_state = 'running' AND NEW.public_state != 'running' BEGIN SELECT RAISE(ABORT, 'controlled dictionary publication failure'); END").Error; err != nil {
 			t.Fatal(err)
 		}
@@ -166,8 +186,13 @@ func testHostedProviderService(t *testing.T, operation, requestID, fault string)
 			t.Fatal(err)
 		}
 	}
+	if fault == "receipt_write" {
+		if err := database.database.Exec("CREATE TRIGGER reject_service_receipt BEFORE UPDATE OF provider_handle ON media_operation_records WHEN NEW.provider_handle != '' BEGIN SELECT RAISE(ABORT, 'controlled service receipt failure'); END").Error; err != nil {
+			t.Fatal(err)
+		}
+	}
 	service.runOperation("service-worker", id)
-	if fault == "invalid_receipt" {
+	if fault == "invalid_receipt" || fault == "receipt_write" {
 		if result := hostedMediaWorkerStatus(t, server, id); result["state"] != MediaOperationStateUncertain {
 			t.Fatalf("invalid receipt result=%v", result)
 		}
@@ -182,6 +207,22 @@ func testHostedProviderService(t *testing.T, operation, requestID, fault string)
 		if observations != 0 {
 			t.Fatal("invalid receipt acquired measured usage")
 		}
+		var retained mediaOperationRecord
+		if err := database.database.Where("operation_id = ?", id).First(&retained).Error; err != nil {
+			t.Fatal(err)
+		}
+		var attempt managedJournalAttemptRecord
+		if err := database.database.Where("request_id = ?", entry["id"]).First(&attempt).Error; err != nil {
+			t.Fatal(err)
+		}
+		if retained.ProviderHandle != "" || attempt.ProviderRequestID != "" {
+			t.Fatal("failed receipt retained partial provider evidence")
+		}
+		if fault == "receipt_write" {
+			if err := database.database.Exec("DROP TRIGGER reject_service_receipt").Error; err != nil {
+				t.Fatal(err)
+			}
+		}
 		exchange("hosted-service", intent, http.StatusOK)
 		service.runOperation("duplicate-uncertain", id)
 		if submissions.Load() != 1 {
@@ -189,9 +230,12 @@ func testHostedProviderService(t *testing.T, operation, requestID, fault string)
 		}
 		return
 	}
-	if fault == "publication" || fault == "usage" {
+	if recoveryFault {
 		if result := hostedMediaWorkerStatus(t, server, id); result["state"] != MediaOperationStateRunning {
 			t.Fatalf("failed publication result=%v", result)
+		}
+		if storedFault {
+			testHostedAlignmentStoredReceiptFailure(t, database, service, server, id, fault, &submissions)
 		}
 		if err := database.database.Exec("DROP TRIGGER reject_dictionary_publication").Error; err != nil {
 			t.Fatal(err)
@@ -229,7 +273,7 @@ func testHostedProviderService(t *testing.T, operation, requestID, fault string)
 		t.Fatalf("service journal invented model: %v", entry)
 	}
 	wantUsage := journalUsageUnknown
-	if operation == ModelOperationPronunciationDictionaryCreation {
+	if operation == ModelOperationPronunciationDictionaryCreation || requestID != "" {
 		wantUsage = journalUsageComplete
 	}
 	if entry["state"] != string(journalRequestCompleted) || entry["operation"] != operation || entry["usage_state"] != string(wantUsage) {
@@ -239,15 +283,22 @@ func testHostedProviderService(t *testing.T, operation, requestID, fault string)
 	if err := database.database.Where("request_id = ?", entry["id"]).First(&attempt).Error; err != nil {
 		t.Fatal(err)
 	}
-	wantRequestID := ""
+	wantRequestID := requestID
 	if operation == ModelOperationPronunciationDictionaryCreation {
-		wantRequestID = requestID
 		var retained mediaOperationRecord
 		if err := database.database.Where("operation_id = ?", id).First(&retained).Error; err != nil {
 			t.Fatal(err)
 		}
 		if !strings.Contains(retained.ProviderHandle, "private dictionary") {
 			t.Fatal("operation lost the recovery receipt")
+		}
+	} else {
+		var retained mediaOperationRecord
+		if err := database.database.Where("operation_id = ?", id).First(&retained).Error; err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(retained.ProviderHandle, "Names") || requestID != "" && !strings.Contains(retained.ProviderHandle, requestID) {
+			t.Fatal("alignment lost its output or provider trace receipt")
 		}
 	}
 	if attempt.ProviderRequestID != wantRequestID {
@@ -266,5 +317,66 @@ func testHostedProviderService(t *testing.T, operation, requestID, fault string)
 	service.runOperation("duplicate-service-worker", id)
 	if submissions.Load() != 1 || reservations.Load() != 2 {
 		t.Fatalf("service effects: submissions=%d reservations=%d", submissions.Load(), reservations.Load())
+	}
+}
+
+func testHostedAlignmentStoredReceiptFailure(t *testing.T, database *gormManagedTenantDatabase, service *mediaOperationService, server *httptest.Server, id, fault string, submissions *atomic.Int64) {
+	t.Helper()
+	var original mediaOperationRecord
+	if err := database.database.Where("operation_id = ?", id).First(&original).Error; err != nil {
+		t.Fatal(err)
+	}
+	var initialObservations int64
+	if err := database.database.Model(&managedJournalObservationRecord{}).Count(&initialObservations).Error; err != nil {
+		t.Fatal(err)
+	}
+	var receipt map[string]any
+	if err := json.Unmarshal([]byte(original.ProviderHandle), &receipt); err != nil {
+		t.Fatal(err)
+	}
+	changes := map[string]any{}
+	switch fault {
+	case "stored_json":
+		changes["provider_handle"] = "{"
+	case "stored_output":
+		receipt["output"] = map[string]any{"characters": []any{}, "words": []any{}}
+	case "stored_start":
+		delete(receipt, "started_at")
+	case "stored_end":
+		receipt["completed_at"] = "2020-01-01T00:00:00Z"
+	case "stored_trace":
+		receipt["trace_id"] = " private-alignment-trace "
+	case "stored_binding":
+		changes["execution_binding"] = "changed-alignment-binding"
+	}
+	if len(changes) == 0 {
+		encoded, err := json.Marshal(receipt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		changes["provider_handle"] = string(encoded)
+	}
+	if err := database.database.Model(&mediaOperationRecord{}).Where("operation_id = ?", id).Updates(changes).Error; err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := database.database.Model(&mediaOperationClaimRecord{}).Where("operation_id = ?", id).Update("expires_at", time.Now().Add(-time.Hour)).Error; err != nil {
+			t.Fatal(err)
+		}
+		service.runOperation("invalid-receipt-worker", id)
+		result := hostedMediaWorkerStatus(t, server, id)
+		var outputs, observations int64
+		if err := database.database.Model(&mediaOperationAssetReferenceRecord{}).Where("operation_id = ? AND role = ?", id, "output").Count(&outputs).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := database.database.Model(&managedJournalObservationRecord{}).Count(&observations).Error; err != nil {
+			t.Fatal(err)
+		}
+		if result["state"] != MediaOperationStateRunning || outputs != 0 || observations != initialObservations || submissions.Load() != 1 {
+			t.Fatalf("invalid receipt changed accepted work: result=%v outputs=%d observations=%d calls=%d", result, outputs, observations, submissions.Load())
+		}
+	}
+	if err := database.database.Model(&mediaOperationRecord{}).Where("operation_id = ?", id).Updates(map[string]any{"provider_handle": original.ProviderHandle, "execution_binding": original.ExecutionBinding}).Error; err != nil {
+		t.Fatal(err)
 	}
 }

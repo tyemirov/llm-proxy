@@ -61,6 +61,11 @@ func (fixture fundsStartupFixture) failStartup(t *testing.T) {
 
 func failFundsApplication(t *testing.T, database *gormManagedTenantDatabase, management *httptest.Server) {
 	t.Helper()
+	failFundsApplicationAt(t, database, management, ratingTestAcceptanceTime)
+}
+
+func failFundsApplicationAt(t *testing.T, database *gormManagedTenantDatabase, management *httptest.Server, now func() time.Time) {
+	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -68,7 +73,7 @@ func failFundsApplication(t *testing.T, database *gormManagedTenantDatabase, man
 	t.Cleanup(func() { _ = listener.Close() })
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	application := &proxyApplication{router: management.Config.Handler.(*gin.Engine), database: database, now: ratingTestAcceptanceTime}
+	application := &proxyApplication{closeStore: func() error { return nil }, router: management.Config.Handler.(*gin.Engine), database: database, now: now}
 	stopped := make(chan error, 1)
 	go func() { stopped <- application.serve(ctx, listener) }()
 	select {
@@ -104,7 +109,7 @@ func (fixture fundsStartupFixture) assertPending(t *testing.T, before map[string
 
 func (fixture fundsStartupFixture) restart(t *testing.T) {
 	t.Helper()
-	restartFundsApplication(t, fixture.database, fixture.management)
+	restartFundsApplication(t, fixture.database, fixture.management, ratingTestAcceptanceTime)
 	var pending int64
 	if err := fixture.database.database.Model(&managedJournalDeliveryRecord{}).Where("delivered_at IS NULL").Count(&pending).Error; err != nil || pending != 0 {
 		t.Fatalf("delivery not acknowledged: pending=%d error=%v", pending, err)
@@ -114,7 +119,7 @@ func (fixture fundsStartupFixture) restart(t *testing.T) {
 	}
 }
 
-func restartFundsApplication(t *testing.T, retained *gormManagedTenantDatabase, management *httptest.Server) {
+func restartFundsApplication(t *testing.T, retained *gormManagedTenantDatabase, management *httptest.Server, now func() time.Time) {
 	t.Helper()
 	database := openJournalTransactionInstance(t, retained)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -124,7 +129,7 @@ func restartFundsApplication(t *testing.T, retained *gormManagedTenantDatabase, 
 	t.Cleanup(func() { _ = listener.Close() })
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	application := &proxyApplication{router: management.Config.Handler.(*gin.Engine), database: database, now: ratingTestAcceptanceTime}
+	application := &proxyApplication{closeStore: func() error { return nil }, router: management.Config.Handler.(*gin.Engine), database: database, now: now}
 	stopped := make(chan error, 1)
 	go func() { stopped <- application.serve(ctx, listener) }()
 	client := &http.Client{Timeout: 5 * time.Second}
@@ -249,6 +254,42 @@ func TestHostedFundsStartupUnresolvedUsageRetainsHoldAfterWriteRecovery(t *testi
 			if !reflect.DeepEqual(after, fixture.state(t)) {
 				t.Fatal("unresolved recovery repeated financial effects")
 			}
+		})
+	}
+}
+
+func TestHostedFundsStartupRejectsCorruptUsageBeforeSettlement(t *testing.T) {
+	for _, scenario := range []struct{ name, quantities string }{
+		{"invalid-json", `{`},
+		{"wrong-type", `{}`},
+		{"unknown-field", `[{"dimension":"input_tokens","unit":"token","value":"1000","private":"invalid"}]`},
+		{"trailing-value", `[] {}`},
+		{"invalid-dimension", `[{"dimension":"invalid dimension","unit":"token","value":"1000"}]`},
+		{"duplicate-dimension", `[{"dimension":"input_tokens","unit":"token","value":"1000"},{"dimension":"input_tokens","unit":"token","value":"1000"}]`},
+		{"negative-quantity", `[{"dimension":"input_tokens","unit":"token","value":"-1"}]`},
+		{"invalid-inclusion", `[{"dimension":"cached_tokens","unit":"token","value":"1000","included_in":"input_tokens"}]`},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			fixture := newFundsStartupFixture(t, startupCompleteUsage)
+			before := fixture.state(t)
+			var original managedJournalObservationRecord
+			if err := fixture.database.database.First(&original).Error; err != nil {
+				t.Fatal(err)
+			}
+			write := func(quantities []byte) {
+				t.Helper()
+				result := fixture.database.database.Model(&managedJournalObservationRecord{}).Where("id = ?", original.ID).UpdateColumn("quantities", quantities)
+				if result.Error != nil || result.RowsAffected != 1 {
+					t.Fatalf("usage evidence write rows=%d error=%v", result.RowsAffected, result.Error)
+				}
+			}
+			write([]byte(scenario.quantities))
+			for range 2 {
+				fixture.failStartup(t)
+				fixture.assertPending(t, before)
+			}
+			write(original.Quantities)
+			fixture.assertSettledOnce(t, before)
 		})
 	}
 }

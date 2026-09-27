@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/tyemirov/utils/billing"
@@ -104,11 +103,7 @@ func ReconcilePayments(ctx context.Context, management ManagementConfiguration, 
 	if binding.Environment != settings.catalog.environment {
 		return PaymentReconciliationReport{}, fmt.Errorf("payment environment differs from the database binding")
 	}
-	client, err := billing.NewPaddleCommerceClient(settings.catalog.environment, settings.apiKey, settings.apiBaseURL, &http.Client{Timeout: paymentCheckoutRetry})
-	if err != nil {
-		return PaymentReconciliationReport{}, fmt.Errorf("configure payment reconciliation client: %w", err)
-	}
-	auditor := paymentReconciler{database: database, catalog: settings.catalog, client: client, now: time.Now}
+	auditor := paymentReconciler{database: database, catalog: settings.catalog, client: settings.client, now: time.Now}
 	if err := auditor.prepare(ctx, runID); err != nil {
 		return PaymentReconciliationReport{}, err
 	}
@@ -214,10 +209,9 @@ func (auditor paymentReconciler) record(ctx context.Context, item managedPayment
 			return err
 		}
 		report.EvidenceDigest = sha256Hex(evidence)
-		encoded, err := json.Marshal(report)
-		if err != nil {
-			return err
-		}
+		// The report contains strings and the auditor's current UTC time.
+		// Stored timestamps remain subject to evidence encoding above.
+		encoded, _ := json.Marshal(report)
 		if err := tx.Model(&managedPaymentReconciliationItemRecord{}).Where("run_id = ? AND order_id = ?", item.RunID, item.OrderID).Updates(map[string]any{"state": paymentReconciliationCompleted, "result": string(encoded), "evidence": evidence, "evidence_digest": report.EvidenceDigest, "observed_at": report.ObservedAt}).Error; err != nil {
 			return fmt.Errorf("retain reconciliation item: %w", err)
 		}

@@ -58,7 +58,7 @@ func (database *gormManagedTenantDatabase) billingFundsReservation(ctx context.C
 		if err != nil {
 			return err
 		}
-		exposure, err := readHostedFundsExposure(tx, accountID, requestID, document.Maximum.CustomerCharge)
+		exposure, err := readHostedFundsExposure(tx, accountID, requestID, document.authorizedMaximum)
 		if err != nil {
 			return err
 		}

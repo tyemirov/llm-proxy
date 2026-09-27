@@ -66,7 +66,7 @@ func TestHostedRuntimeMediaFundsAdmissionAndSettlementThroughNormalHTTP(t *testi
 			}
 		}
 	}
-	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-journal").Updates(map[string]any{
+	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", hostedJournalFixtureGrantID).Updates(map[string]any{
 		"catalog_revision": catalog.modelCatalog.Revision, "offerings": []byte(`[{"model":"gpt-image-2","operations":["image_generation"]}]`),
 	}).Error; err != nil {
 		t.Fatal(err)
