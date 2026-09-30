@@ -66,6 +66,14 @@ Caller tools execute in the client. Event streams contain buffered results.
 See [client protocols](docs/client-protocols.md) for the supported fields, tested clients, and OpenCode examples.
 The official Go package, Python package, and CLI continue to use `/v2`.
 
+### Goose and external integrations
+
+Goose can connect through its existing OpenAI custom provider.
+A [Goose maintainer confirmed the configuration path](https://github.com/aaif-goose/goose/issues/12482#issuecomment-5902687237).
+See the [Goose guide](docs/integrations/goose.md) for setup and the pending execution qualification.
+The [integration register](docs/integrations.md) records consumer evidence and required updates after client or protocol changes.
+The [integration promotional materials](docs/marketing/integrations.md) contain the current Goose copy.
+
 ## REST Contract
 
 llm-proxy exposes a blocking REST contract for text generation. Canonical

@@ -6,6 +6,13 @@ Cadence: two posts per day from 2026-07-06 through 2026-09-03.
 
 Constraint: every post in the `Post` column is under 300 characters.
 
+## Integration posts
+
+Use the current [integration promotional materials](integrations.md) for Goose copy and its qualification status.
+The [integration register](../integrations.md) supplies the evidence for these claims.
+
+## Original campaign
+
 | Day | Date | Slot | Post |
 | --- | --- | --- | --- |
 | 1 | 2026-07-06 | AM | Teams keep leaking provider keys into scripts, notebooks, and browser apps. LLM Proxy keeps upstream API keys server-side and gives clients a tenant secret instead. |

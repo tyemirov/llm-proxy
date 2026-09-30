@@ -53,46 +53,39 @@ func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.
 		testingInstance.Fatalf("lifecycle manifest must contain only owner, release, and resources: %#v", resourcesDocument)
 	}
 
-	resources, resourcesAvailable := resourcesDocument["resources"].([]any)
+	resources, resourcesAvailable := resourcesDocument["resources"].(map[string]any)
 	if !resourcesAvailable {
-		testingInstance.Fatalf("lifecycle manifest has no resources list: %#v", resourcesDocument["resources"])
+		testingInstance.Fatalf("lifecycle manifest has no resources map: %#v", resourcesDocument["resources"])
 	}
 	resourceIdentities := make([]string, 0, len(resources))
 	resourcesByIdentity := make(map[string]map[string]any, len(resources))
 	composeProjectFound := false
-	for _, resourceValue := range resources {
+	for resourceID, resourceValue := range resources {
 		resource, resourceAvailable := resourceValue.(map[string]any)
 		if !resourceAvailable {
 			testingInstance.Fatalf("lifecycle resource is not a mapping: %#v", resourceValue)
 		}
 		resourceKind := lifecycleStringField(testingInstance, resource, "kind")
-		resourceID := lifecycleStringField(testingInstance, resource, "id")
 		resourceIdentity := resourceKind + "/" + resourceID
 		resourceIdentities = append(resourceIdentities, resourceIdentity)
 		resourcesByIdentity[resourceIdentity] = resource
 		if resourceKind != "compose_project" || resourceID != "runtime" {
 			continue
 		}
-		for _, imageValue := range resource["images"].([]any) {
+		for _, imageValue := range resource["images"].(map[string]any) {
 			image := imageValue.(map[string]any)
 			if _, visibilityAvailable := image["visibility"]; visibilityAvailable {
 				testingInstance.Fatalf("GHCR visibility must remain provider-owned: %#v", image)
 			}
 		}
 		composeProjectFound = true
-		retiredServices, retiredServicesAvailable := resource["retired_services"].([]any)
-		if !retiredServicesAvailable || len(retiredServices) != 1 {
-			testingInstance.Fatalf("unexpected retired runtime services: %#v", resource["retired_services"])
+		retiredServices, available := resource["retired_services"].(map[string]any)
+		if !available || len(retiredServices) != 1 {
+			testingInstance.Fatalf("unexpected retired services: %#v", retiredServices)
 		}
-		retiredService, retiredServiceAvailable := retiredServices[0].(map[string]any)
-		if !retiredServiceAvailable {
-			testingInstance.Fatalf("retired runtime service is not a mapping: %#v", retiredServices[0])
-		}
-		if project := lifecycleStringField(testingInstance, retiredService, "project"); project != "mprlab-nginx-gateway" {
-			testingInstance.Fatalf("unexpected retired runtime project: %q", project)
-		}
-		if service := lifecycleStringField(testingInstance, retiredService, "service"); service != "llm-proxy" {
-			testingInstance.Fatalf("unexpected retired runtime service: %q", service)
+		retiredService, available := retiredServices["mprlab-nginx-gateway/llm-proxy"].(map[string]any)
+		if !available || len(retiredService) != 0 {
+			testingInstance.Fatalf("unexpected retirement identity or body: %#v", retiredServices)
 		}
 	}
 	if !composeProjectFound {
@@ -130,38 +123,34 @@ func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.
 		"refresh_token_ttl":               "720h",
 		"consent_ttl":                     "720h",
 		"allow_client_metadata_documents": true,
-		"resources": []any{map[string]any{
-			"identifier":   "https://llm-proxy-api.mprlab.com",
+		"resources": map[string]any{"https://llm-proxy-api.mprlab.com": map[string]any{
 			"display_name": "LLM Proxy API",
-			"scopes": []any{map[string]any{
-				"identifier":   "llm-proxy:use",
+			"scopes": map[string]any{"llm-proxy:use": map[string]any{
 				"display_name": "Use LLM Proxy",
 				"description":  "Use the LLM Proxy API.",
 			}},
 		}},
-		"clients": []any{},
+		"clients": map[string]any{},
 	}
 	if !reflect.DeepEqual(authenticationTenant["oauth"], expectedOAuthPolicy) {
 		testingInstance.Fatalf("unexpected TAuth tenant OAuth policy: %#v", authenticationTenant["oauth"])
 	}
 
-	runtimeServices, servicesAvailable := resourcesByIdentity["compose_project/runtime"]["services"].([]any)
+	runtimeServices, servicesAvailable := resourcesByIdentity["compose_project/runtime"]["services"].(map[string]any)
 	if !servicesAvailable || len(runtimeServices) != 1 {
 		testingInstance.Fatalf("unexpected runtime services: %#v", resourcesByIdentity["compose_project/runtime"]["services"])
 	}
-	runtimeService, runtimeServiceAvailable := runtimeServices[0].(map[string]any)
+	runtimeService, runtimeServiceAvailable := runtimeServices["llm-proxy"].(map[string]any)
 	if !runtimeServiceAvailable {
-		testingInstance.Fatalf("runtime service is not a mapping: %#v", runtimeServices[0])
+		testingInstance.Fatalf("runtime service is not a mapping: %#v", runtimeServices["llm-proxy"])
 	}
-	expectedRuntimeAssets := []any{
-		map[string]any{
+	expectedRuntimeAssets := map[string]any{
+		"/app/config.yml": map[string]any{
 			"source": "configs/config.yml",
-			"target": "/app/config.yml",
 			"mode":   "0444",
 		},
-		map[string]any{
+		"/app/providers.yml": map[string]any{
 			"source": "configs/providers.yml",
-			"target": "/app/providers.yml",
 			"mode":   "0444",
 		},
 	}
