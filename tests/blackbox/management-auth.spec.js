@@ -501,7 +501,7 @@ test("public Log In opens the authenticated app and the TAuth session survives u
 
 async function expectAuthenticatedDashboard(page) {
   await expect(page.locator("llm-proxy-management-application")).toHaveAttribute("data-auth-state", "authenticated");
-  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tenants → connections → models" })).toBeVisible();
   const usageTenantSelector = page.getByRole("combobox", { name: "Usage tenant" });
   await expect(usageTenantSelector.locator("option:checked")).toHaveText("Default");
   await expect(page.locator("tenant-context-bar")).toHaveCount(0);

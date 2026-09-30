@@ -948,6 +948,39 @@ test("the route explorer applies each canonical theme palette", async ({ page })
   expect(new Set(routeCanvasImages).size).toBe(4);
 });
 
+test("route filters stay compact and aligned at desktop and narrow widths", async ({ page }) => {
+  await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
+  await page.goto(baseURL);
+  const tree = page.locator('routing-tree');
+  await expect(tree).toHaveAttribute('data-enhanced', 'true');
+  await selectModelTask(tree, 'vision');
+  for (const width of [1440, 899, 390, 320]) {
+    await page.setViewportSize({width, height:1050});
+    const geometry = await tree.locator('.routing-tree__filters').evaluate(filters => {
+      const bounds = filters.getBoundingClientRect();
+      const tasks = filters.querySelector('[data-task-filter]').getBoundingClientRect();
+      const input = filters.querySelector('[data-route-input]').getBoundingClientRect();
+      const output = filters.querySelector('[data-route-output]').getBoundingClientRect();
+      return {height:bounds.height, taskCenter:tasks.y+tasks.height/2, inputCenter:input.y+input.height/2, outputCenter:output.y+output.height/2};
+    });
+    if (width >= 899) {
+      expect(geometry.height).toBeLessThanOrEqual(80);
+      expect(Math.abs(geometry.taskCenter-geometry.inputCenter)).toBeLessThanOrEqual(1);
+    }
+    expect(Math.abs(geometry.inputCenter-geometry.outputCenter)).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+    for (const selector of ['[data-task-filter]', '[data-route-input]', '[data-route-output]']) {
+      const bounds = await tree.locator(selector).boundingBox();
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.x+bounds.width).toBeLessThanOrEqual(width);
+    }
+    await tree.getByLabel('Input', {exact:true}).selectOption('image');
+    await expect(tree.locator('[data-route-counts]')).not.toContainText('0 families');
+    await tree.getByLabel('Input', {exact:true}).selectOption('');
+    await tree.locator('.routing-tree__header').screenshot({path:`/tmp/llm-proxy-annotations/route-filters-${width}.png`});
+  }
+});
+
 test("the route explorer starts with Text and exposes media capabilities through task toggles", async ({ page }) => {
   await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
   await page.goto(baseURL);
@@ -2166,7 +2199,7 @@ test("dashboard combines tenant configuration with usage and a direct menu actio
   await installManagementRoutes(page);
   await page.goto(baseURL + applicationPath);
   const dashboard = page.locator("connection-dashboard");
-  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tenants → connections → models" })).toBeVisible();
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
   await expect(page.locator("usage-card").filter({ hasText: "Tokens" }).locator("strong")).toHaveText("12,345");
   await expect(dashboard.getByRole("heading", {name: "Tenants → connections → models"})).toBeVisible();
@@ -2183,10 +2216,13 @@ test("tenant selection clears unsaved model and prompt previews", async ({ page 
   await page.goto(baseURL + applicationPath);
   const dashboard = page.locator("connection-dashboard");
   await dashboard.locator('[data-model="gpt-4.1"]').click();
+  await dashboard.locator('summary').filter({hasText:'Tenant system prompt'}).click();
   await dashboard.getByRole("textbox", {name:"Tenant system prompt",exact:true}).fill("Unsaved draft for Default");
   await dashboard.locator('[data-tenant="tenant_2"]').click();
   await expect(dashboard.locator("[data-default-form]")).toHaveCount(0);
   await dashboard.locator('[data-model="gpt-4.1"]').click();
+  await expect(dashboard.getByLabel("Tenant system prompt", {exact:true})).toBeHidden();
+  await dashboard.locator('summary').filter({hasText:'Tenant system prompt'}).click();
   await expect(dashboard.getByRole("textbox", {name:"Tenant system prompt",exact:true})).toHaveValue("");
 });
 
@@ -3088,6 +3124,7 @@ test("model previews require an explicit save and preserve the other capability 
   const dashboard = page.locator("connection-dashboard");
   await dashboard.getByRole("button",{name:"Default DeepSeek",exact:true}).click();
   await dashboard.locator('[data-model="deepseek-v4-flash"]').click();
+  await dashboard.locator('summary').filter({hasText:'Tenant system prompt'}).click();
   await dashboard.getByRole("textbox",{name:"Tenant system prompt",exact:true}).fill("Use tenant guidance.");
   await page.keyboard.press("Tab");
   expect(mutations).toHaveLength(0);
@@ -3197,6 +3234,7 @@ test("failed model default saves preserve the draft and saved route for retry", 
   await page.goto(baseURL + applicationPath);
   const dashboard=page.locator("connection-dashboard");
   await dashboard.locator('[data-model="gpt-5.5"]').click();
+  await dashboard.locator('summary').filter({hasText:'Tenant system prompt'}).click();
   await dashboard.getByRole("textbox",{name:"Tenant system prompt",exact:true}).fill("Keep my draft after a failed save.");
   await dashboard.getByRole("combobox",{name:"Reasoning effort"}).selectOption("high");
   await dashboard.getByRole("button",{name:"Save text default"}).click();
@@ -3371,7 +3409,7 @@ test("public Log In authenticates through MPR UI before opening the app", async 
 
   await expect(page).toHaveURL(`${baseURL}${applicationPath}`);
   expect(await page.evaluate(() => history.length)).toBe(landingHistoryLength);
-  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tenants → connections → models" })).toBeVisible();
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
   await expect.poll(() => profileRequests.length).toBeGreaterThanOrEqual(1);
 });
@@ -3383,7 +3421,7 @@ test("a restored authenticated session replaces the anonymous landing with the a
   await page.goto(baseURL);
 
   await expect(page).toHaveURL(`${baseURL}${applicationPath}`);
-  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tenants → connections → models" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Integrate once. Use the model that fits." })).toHaveCount(0);
 });
 
@@ -3400,7 +3438,7 @@ test("startup reconciles MPR UI authentication after the lifecycle event has pas
   await page.goto(`${baseURL}${applicationPath}`);
 
   await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "authenticated");
-  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tenants → connections → models" })).toBeVisible();
   await expect.poll(() => profileRequests.length).toBeGreaterThanOrEqual(1);
 });
 

@@ -35,6 +35,8 @@ test('hosted onboarding creates tenant access without provider credentials at de
   const hosted=dashboard.getByRole('region',{name:'Hosted access',exact:true});
   await expect(hosted).toBeVisible();
   await expect(hosted.getByRole('button',{name:'Create billing account'})).toBeVisible();
+  await expect(hosted.locator('header').getByRole('button',{name:'Create billing account'})).toBeVisible();
+  expect((await hosted.boundingBox()).height).toBeLessThanOrEqual(140);
   await hosted.getByRole('button',{name:'Create billing account'}).click();
   await expect(hosted).toContainText('USD billing account');
   const funds=dashboard.getByRole('region',{name:'Prepaid balance',exact:true});
@@ -102,7 +104,7 @@ test('hosted onboarding creates tenant access without provider credentials at de
     await expect(card).toContainText('gpt-4.1');
     await card.getByRole('button',{name:'Use hosted access'}).click();
     await expect(card).toContainText('Assigned');
-    await expect(hosted).toContainText('Hosted requests use your prepaid balance.');
+    await expect(hosted).toContainText('with your prepaid balance.');
     await dashboard.getByRole('button',{name:'API access',exact:true}).click();
     await page.getByRole('dialog').getByRole('button',{name:'Create API key',exact:true}).click();
     await expect(page.getByRole('dialog').getByLabel('Tenant API key')).toHaveValue(/^llmp_/);
