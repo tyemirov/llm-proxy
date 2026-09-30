@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -51,16 +52,18 @@ func copyFundsDatabase(t *testing.T, source, destination string) {
 	command := exec.CommandContext(t.Context(), "make", "--silent", "snapshot-managed-database")
 	command.Dir = root
 	command.Env = append(os.Environ(), "SNAPSHOT_SOURCE="+source, "SNAPSHOT_DESTINATION="+destination)
-	output, err := command.CombinedOutput()
+	var diagnostics bytes.Buffer
+	command.Stderr = &diagnostics
+	output, err := command.Output()
 	if err != nil {
-		t.Fatalf("database snapshot: %v output=%s", err, output)
+		t.Fatalf("database snapshot: %v output=%s diagnostics=%s", err, output, diagnostics.String())
 	}
 	var receipt struct {
 		SHA256    string `json:"sha256"`
 		SizeBytes int64  `json:"size_bytes"`
 	}
 	if err := json.Unmarshal(output, &receipt); err != nil || len(receipt.SHA256) != 64 || receipt.SizeBytes <= 0 {
-		t.Fatalf("snapshot receipt=%s error=%v", output, err)
+		t.Fatalf("snapshot receipt=%s error=%v diagnostics=%s", output, err, diagnostics.String())
 	}
 }
 
