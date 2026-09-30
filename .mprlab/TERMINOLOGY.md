@@ -5,6 +5,10 @@ This file contains approved technical nouns and technical verbs for repository d
 Use this file with ASD-STE100 Simplified Technical English, Issue 9.
 Give each term one meaning. Use the same term for the same concept in all documents.
 
+- `integration record`: A dated record of a consumer, its protocol, source revisions, test results, and required updates.
+- `integration qualification`: Execution of the consumer against LLM Proxy to establish the specified public behavior.
+- `SDK`: A published client package that an application imports.
+
 - `characterization test`: An integration test that records current public behavior before a refactor.
 - `file permission mode`: A number or symbol that gives filesystem access bits.
 - `GitHub Pages`: The GitHub service that hosts a static website from a repository branch.

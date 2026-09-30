@@ -1951,6 +1951,31 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## Improvements
 
+- [!] [I295] (P0) Record external integrations and their promotional evidence.
+  Goal: Give integrations one evidence register and a procedure for consumer updates.
+  Requirements:
+  - Record Goose, PAL, OpenCode, official clients, and the MCP evidence map.
+  - Separate configuration evidence, execution results, upstream acceptance, and publication.
+  - Add Goose configuration instructions and promotional copy with the current qualification state.
+  - Define review triggers for SDK releases, protocol changes, and consumer updates.
+  Validation: Review source facts, document links, issue identifiers, and changed prose.
+  Progress: The integration register, Goose guide, promotional materials, and recurring update procedure are written.
+  Blocked: Governor returned `deployable browser frontend requires at least one github_pages resource` for the unchanged deployment manifest.
+  Validation notes: New document links, 553 unique issue IDs, changed prose, and whitespace checks pass.
+  Governor also reports seven existing managed-file differences. The full prose check retains 260 findings outside this change.
+
+- [ ] [I296] (P0) Qualify the Goose custom-provider integration.
+  Goal: Establish executable evidence for Goose through the current LLM Proxy HTTP contract.
+  Requirements:
+  - Use the configuration path confirmed in https://github.com/aaif-goose/goose/issues/12482#issuecomment-5902687237.
+  - Run a real Goose build against LLM Proxy with controlled provider responses.
+  - Verify text, buffered events, a local file-read tool, and the following model turn.
+  - Verify authorization failures, unsupported fields, timeouts, and provider errors.
+  - Record exact builds, proxy revision, commands, results, and safe evidence in the integration register.
+  - File each reproduced contract defect as a separate BugFix issue.
+  Deliverables: Executable qualification, integration evidence, and promotional claim updates.
+  Validation: Run the affected public-entrypoint tests and the real Goose scenarios.
+
 - [ ] [I288] (P0) Simplify installation of the official Python client.
   Goal: Make the official client easy to install in external applications.
   Requirements:
@@ -3293,6 +3318,18 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
     the final run after the last code edit.
 
 ## Maintenance
+
+- [ ] [M023R] (P0) Keep external integrations current with LLM Proxy releases.
+  Goal: Keep consumer configuration and promotional claims consistent with the current contract.
+  Requirements:
+  - Use the update procedure in `docs/integrations.md`.
+  - Review each SDK release, proxy release, relevant protocol change, and consumer update.
+  - Review upstream releases monthly when no release triggers a check.
+  - Update affected Goose configuration and adapters before claiming current integration support.
+  - Record a reason when an SDK-only change requires no Goose source update.
+  Deliverables: Current integration records, consumer update links, and promotional evidence.
+  Validation: Record exact revisions, applicable tests, failures, and follow-up issue IDs for each affected integration.
+  Last run: September 29, 2026. Initial source review only. Goose execution qualification remains under I296.
 
 - [ ] [M004R] (P1) Dependency and security audit.
   Goal:
