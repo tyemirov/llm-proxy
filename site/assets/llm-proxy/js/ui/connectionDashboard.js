@@ -169,16 +169,17 @@ export class ConnectionDashboard extends HTMLElement {
     this.setBusy();
     const dialog = this.querySelector('dialog[open]');
     if (dialog) { this.updateNotice(); return; }
+    const promptDisclosures = this.promptDisclosures();
     this.innerHTML = `<section class="connection-dashboard" aria-label="Tenant connections">
-      <header class="cw-header"><div><p class="eyebrow">Your dashboard</p><h2>Tenants → connections → models</h2></div>
-      <button data-action="copy-mcp" ${this.busy?'disabled':''}>Copy MCP URL</button><label><span class="visually-hidden">Search dashboard</span><input name="dashboard-search" type="search" placeholder="Find a tenant, connection, or model" value="${escapeHTML(this.search)}"></label></header>
+      <header class="cw-header"><h1>Tenants → connections → models</h1>
+      <label class="cw-search"><span class="visually-hidden">Search dashboard</span><input name="dashboard-search" type="search" placeholder="Find a tenant, connection, or model" value="${escapeHTML(this.search)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m16 16 4 4"></path></svg></label><button data-action="copy-mcp" ${this.busy?'disabled':''}>Copy MCP URL</button></header>
       <div class="cw-map" data-map></div><footer class="cw-route" data-route></footer>
       <p class="cw-notice" role="status" aria-live="polite" data-notice></p>
       <section class="cw-details" aria-label="Selection details" data-details></section>
       <section class="cw-details" aria-label="Hosted access" data-hosted-access></section>
       ${this.billingAccount?`<prepaid-balance billing-account-id="${escapeHTML(this.billingAccount.id)}" tenant-id="${escapeHTML(this.tenantID)}" tenant-name="${escapeHTML(this.tenantName)}"></prepaid-balance><funding-checkout billing-account-id="${escapeHTML(this.billingAccount.id)}"></funding-checkout><payment-history billing-account-id="${escapeHTML(this.billingAccount.id)}"></payment-history><usage-journal billing-account-id="${escapeHTML(this.billingAccount.id)}"></usage-journal>`:''}
     </section>`;
-    this.renderMap(); this.renderDetails(); this.renderHostedAccess(); this.updateNotice();
+    this.renderMap(); this.renderDetails(promptDisclosures); this.renderHostedAccess(); this.updateNotice();
   }
   updateNotice() {
     this.querySelectorAll('[data-notice]').forEach(notice => { notice.textContent = this.failure || (this.busy ? 'Saving…' : this.message); notice.setAttribute('role',this.failure ? 'alert':'status'); });
@@ -224,31 +225,42 @@ export class ConnectionDashboard extends HTMLElement {
       if(connection) this.querySelectorAll('[data-model]').forEach(model=>line(connection,model,model.getAttribute('data-model')===this.modelID && !this.isDefaultModel(this.modelID)));
     }
   }
-  renderDetails() {
+  promptDisclosures() {
+    return Array.from(this.querySelectorAll('details[data-prompt-scope]'), element => {
+      const details = /** @type {HTMLDetailsElement} */ (element);
+      return {scope:details.dataset.promptScope, context:details.dataset.promptContext, expanded:details.open};
+    });
+  }
+  get promptContext() { return `${this.tenantID}:${this.connectionID}:${this.modelID}`; }
+  /** @param {ReturnType<ConnectionDashboard['promptDisclosures']>} [disclosures] */
+  renderDetails(disclosures = this.promptDisclosures()) {
     const details=this.querySelector('[data-details]');if(!details)return;
     const disabled=this.busy?'disabled':'';
     const c=this.connection;
     if(c) {
-      details.innerHTML=`<header class="cw-row"><h3>${escapeHTML(c.name)}</h3><button data-action="edit-connection" ${disabled}>Edit connection</button>${this.attached?`<button data-action="detach" ${disabled}>Detach from ${escapeHTML(this.tenantName)}</button>`:''}${c.tenant_ids.length===0?`<button data-action="delete-connection" ${disabled}>Delete connection</button>`:''}</header>
+      details.innerHTML=`<header class="cw-detail-header"><h3>${escapeHTML(c.name)}</h3><div class="cw-actions"><button data-action="edit-connection" ${disabled}>Edit connection</button>${this.attached?`<button data-action="detach" ${disabled}>Detach from ${escapeHTML(this.tenantName)}</button>`:''}${c.tenant_ids.length===0?`<button data-action="delete-connection" ${disabled}>Delete connection</button>`:''}</div></header>
       <p class="cw-muted">${c.tenant_ids.length?'Used by '+c.tenant_ids.map(id=>escapeHTML(this.tenants.find(t=>t.id===id)?.name || id)).join(', '):'Unassigned'}</p>
       <dl class="cw-fields">${c.fields.map(f=>`<div><dt>${escapeHTML(f.label)}</dt><dd>${escapeHTML(f.secret?(f.masked_value||'Not configured'):f.value)}</dd></div>`).join('')}</dl>
       ${this.provider?.services.length ? `<section data-provider-services><h4>Provider services</h4><ul>${this.provider.services.map(service=>`<li>${escapeHTML(PROVIDER_CAPABILITY_LABELS[/** @type {keyof typeof PROVIDER_CAPABILITY_LABELS} */(service.operation)])}</li>`).join('')}</ul></section>` : ''}
       ${this.provider?.resources.length ? `<section data-provider-resources><h4>Provider resources</h4><ul>${this.provider.resources.map(kind=>`<li>${escapeHTML(PROVIDER_RESOURCE_LABELS[/** @type {keyof typeof PROVIDER_RESOURCE_LABELS} */(kind)])}</li>`).join('')}</ul></section>` : ''}
       ${this.attached && this.modelID ? this.modelDetails() : ''}
-      ${this.attached && this.provider?.text_models.length ? `<form data-provider-profile><label>Provider system prompt for ${escapeHTML(this.tenantName)}<textarea name="provider_prompt">${escapeHTML(this.profile?.providers.find(p=>p.id===c.provider)?.system_prompt || '')}</textarea></label><button type="button" data-action="save-provider-profile" ${disabled}>Save provider prompt</button></form>` : ''}`;
+      ${this.attached && this.provider?.text_models.length ? `<details class="cw-prompt" data-prompt-scope="provider" data-prompt-context="${escapeHTML(this.promptContext)}"><summary>Provider system prompt for ${escapeHTML(this.tenantName)}</summary><form data-provider-profile><label><span class="visually-hidden">Provider system prompt for ${escapeHTML(this.tenantName)}</span><textarea name="provider_prompt">${escapeHTML(this.profile?.providers.find(p=>p.id===c.provider)?.system_prompt || '')}</textarea></label><button type="button" data-action="save-provider-profile" ${disabled}>Save provider prompt</button></form></details>` : ''}`;
     } else {
-      details.innerHTML=`<header class="cw-row"><h3>${escapeHTML(this.tenantName)}</h3>${this.tenantID?`<button data-action="rename-tenant" ${disabled}>Rename tenant</button><button data-action="tenant-access" ${disabled}>API access</button><button data-action="delete-tenant" ${this.tenants.length===1?'disabled':disabled}>Delete tenant</button>`:''}</header><p class="cw-muted">${this.tenantID?'Connect providers to keep this tenant’s usage separate.':'Choose a tenant to manage its connections.'}</p>`;
+      details.innerHTML=`<header class="cw-detail-header"><h3>${escapeHTML(this.tenantName)}</h3>${this.tenantID?`<div class="cw-actions"><button data-action="rename-tenant" ${disabled}>Rename tenant</button><button data-action="tenant-access" ${disabled}>API access</button><button data-action="delete-tenant" ${this.tenants.length===1?'disabled':disabled}>Delete tenant</button></div>`:''}</header><p class="cw-muted">${this.tenantID?'Connect providers to keep this tenant’s usage separate.':'Choose a tenant to manage its connections.'}</p>`;
     }
-    if(this.tenantID && c) details.insertAdjacentHTML('beforeend',`<footer class="cw-row"><span>${escapeHTML(this.tenantName)}</span><button data-action="tenant-details">Tenant details and API access</button></footer>`);
+    if(this.tenantID && c) details.insertAdjacentHTML('beforeend',`<footer class="cw-detail-footer"><span>${escapeHTML(this.tenantName)}</span><button data-action="tenant-details">Tenant details and API access</button></footer>`);
+    for (const disclosure of disclosures) {
+      const prompt = details.querySelector(`details[data-prompt-scope="${disclosure.scope}"]`);
+      if (prompt instanceof HTMLDetailsElement && prompt.dataset.promptContext === disclosure.context) prompt.open = disclosure.expanded;
+    }
   }
   renderHostedAccess() {
     const section=this.querySelector('[data-hosted-access]');if(!section)return;
     const disabled=this.busy?'disabled':'';
     const grants=this.hostedGrants.filter(grant=>grant.tenant_id===this.tenantID);
-    section.innerHTML=`<header class="cw-row"><h3>Hosted access</h3><button data-action="refresh-hosted" ${disabled}>Refresh hosted access</button></header>
-      <p>Use provider access supplied by LLM Proxy. No provider API key is required.</p>
-      ${this.billingAccount ? '<p>USD billing account</p>' : `<button data-action="create-billing" ${disabled}>Create billing account</button>`}
-      <p>Hosted requests use your prepaid balance. Availability depends on the selected offering.</p>
+    section.innerHTML=`<header class="cw-detail-header"><h3>Hosted access</h3><div class="cw-actions">${this.billingAccount ? '<span class="cw-muted">USD billing account</span>' : `<button data-action="create-billing" ${disabled}>Create billing account</button>`}<button data-action="refresh-hosted" ${disabled}>Refresh hosted access</button></div></header>
+      <p class="cw-muted">Use provider access supplied by LLM Proxy with your prepaid balance. No provider API key is required.</p>
+      <p class="cw-muted">Availability depends on the selected offering.</p>
       ${grants.map(grant=>{
         const assignment=this.assignments.find(assignment=>assignment.provider===grant.provider);
         const assigned=assignment?.kind==='hosted_access_grant' && assignment.resource_id===grant.id;
@@ -287,7 +299,7 @@ export class ConnectionDashboard extends HTMLElement {
     const defaults=this.profile?.tenant.defaults;
     return `${offeringDetails}<form data-default-form><h4>${escapeHTML(this.modelID)}</h4><p class="cw-muted">${this.isDefaultModel(this.modelID,this.capability)?'Saved default':'Preview'} · Save to change ${escapeHTML(this.tenantName)}’s ${this.capability} default.</p>
     ${efforts.length?`<label>Reasoning effort<select aria-label="Reasoning effort" name="reasoning_effort"><option value="">Provider default</option>${efforts.map(e=>`<option ${e===defaults?.reasoning_effort?'selected':''}>${escapeHTML(e)}</option>`).join('')}</select></label>`:''}
-    ${this.capability==='text'?`<label>Tenant system prompt<textarea name="system_prompt">${escapeHTML(defaults?.system_prompt||'')}</textarea></label>`:''}
+    ${this.capability==='text'?`<details class="cw-prompt" data-prompt-scope="tenant" data-prompt-context="${escapeHTML(this.promptContext)}"><summary>Tenant system prompt</summary><label><span class="visually-hidden">Tenant system prompt</span><textarea name="system_prompt">${escapeHTML(defaults?.system_prompt||'')}</textarea></label></details>`:''}
     <button class="cw-primary" data-action="save-default" type="button" ${this.busy?'disabled':''}>Save ${this.capability} default</button></form>`;
   }
   /** @param {MouseEvent} event */

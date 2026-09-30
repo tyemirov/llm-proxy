@@ -31,14 +31,6 @@ export function createAdminDashboardResponsibility() {
       return Boolean(this.account && this.account.user.is_admin);
     },
 
-    get dashboardEyebrow() {
-      return this.dashboardView === DASHBOARD_VIEWS.ADMIN ? COPY.adminDashboardEyebrow : COPY.dashboardEyebrow;
-    },
-
-    get dashboardTitle() {
-      return this.dashboardView === DASHBOARD_VIEWS.ADMIN ? COPY.adminDashboardTitle : COPY.dashboardTitle;
-    },
-
     get hasAdminUsers() {
       return this.adminUsers.length > 0;
     },

@@ -561,6 +561,7 @@ provider-request-track i {
   box-shadow: none;
   padding: 0.75rem;
 }
+.dashboard-hero .section-header {margin-bottom:0;align-items:center}
 
 usage-metrics {
   display: grid;
@@ -2012,15 +2013,16 @@ settings-section,
 }
 
 /* Tenant, connection, and model dashboard. */
-connection-dashboard {display:block;min-width:0;margin:12px 0 18px;--cw-line:#343b44;--cw-accent:#36ceb4;--cw-muted:#a1a9b7}
-.connection-dashboard {border:1px solid var(--cw-line);border-radius:9px;background:#101519;overflow:hidden}
-.cw-header,.cw-row {display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-.cw-header {padding:14px 16px;border-bottom:1px solid var(--cw-line)}
-.cw-header h2 {margin:0;font-size:16px}.cw-header .eyebrow{margin:0 0 4px}
+connection-dashboard {display:block;min-width:0;margin:0 0 12px;--cw-line:#343b44;--cw-accent:#36ceb4;--cw-muted:#a1a9b7}
+.connection-dashboard {border:1px solid var(--cw-line);border-radius:6px;background:#101519;overflow:hidden}
+.cw-row {display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.cw-header {display:grid;grid-template-columns:max-content minmax(180px,1fr) max-content;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--cw-line)}
+.cw-header h1 {margin:0;font-size:14px;font-weight:600}
 connection-dashboard button,connection-dashboard input,connection-dashboard select,connection-dashboard textarea{font-size:12px;min-height:32px;border-radius:5px}
 connection-dashboard input,connection-dashboard select,connection-dashboard textarea{width:100%;background:#11161b;color:#e0e5ec;border:1px solid var(--cw-line);padding:7px 9px}
 connection-dashboard button:focus-visible,connection-dashboard input:focus-visible,connection-dashboard select:focus-visible,connection-dashboard textarea:focus-visible{outline:2px solid #7daaff;outline-offset:3px}
-.cw-header label {width:min(290px,100%)}
+.cw-search {position:relative;min-width:0;display:flex}
+.cw-search input{padding-right:32px}.cw-search svg{position:absolute;right:9px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--cw-muted);pointer-events:none}
 .cw-map{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:48px;padding:18px 16px;position:relative;isolation:isolate}
 .cw-column{min-width:0;z-index:1}.cw-column>header{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:12px;min-height:35px;flex-wrap:wrap}
 .cw-column h3{font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;margin:0;color:var(--cw-muted)}.cw-column h3 span{font-size:10px}
@@ -2039,12 +2041,17 @@ connection-dashboard button:focus-visible,connection-dashboard input:focus-visib
 .cw-empty{padding:22px 12px;border:1px dashed var(--cw-line);border-radius:6px;line-height:1.7}
 .cw-wires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}.cw-wires path{fill:none;stroke:var(--cw-accent);stroke-width:1.5;opacity:.5}.cw-wires path.preview{stroke:#e8b75e;stroke-dasharray:5 4}
 .cw-route{border-top:1px solid var(--cw-line);padding:9px 16px;font-size:11px;color:var(--cw-muted)}
-.cw-details{border-top:1px solid var(--cw-line);padding:13px 16px;background:#151a20}.cw-details h3,.cw-dialog h3{font-size:14px;margin:0}.cw-details h4{font-size:13px;margin:8px 0}
+.cw-details{border-top:1px solid var(--cw-line);padding:10px 12px;background:#151a20}.cw-details h3,.cw-dialog h3{font-size:13px;margin:0}.cw-details h4{font-size:13px;margin:8px 0}
+.cw-detail-header,.cw-detail-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}.cw-detail-header h3{min-width:0;overflow-wrap:anywhere}
+.cw-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px}.cw-detail-footer{justify-content:flex-start;margin-top:8px;color:var(--cw-muted);font-size:12px}
+.cw-details>p{font-size:12px;line-height:1.5;margin:6px 0}.cw-details button,.cw-details form>button{width:fit-content;justify-self:start;max-width:100%}
+.cw-details[data-hosted-access]>.cw-node{margin-top:8px}
 .cw-fields{display:flex;gap:24px;flex-wrap:wrap;margin:12px 0}.cw-fields dt{font-size:11px;color:var(--cw-muted)}.cw-fields dd{font-size:12px;margin:4px 0 0}
 .cw-details form{display:grid;gap:10px;border-top:1px solid var(--cw-line);padding:12px 0;margin-top:12px}.cw-details label,.cw-dialog label{display:grid;gap:6px;font-size:12px}.cw-details textarea{min-height:90px}
+.cw-prompt{font-size:12px}.cw-prompt>summary{cursor:pointer;padding:6px 0;color:var(--cw-muted)}.cw-prompt>summary:focus-visible{outline:2px solid #7daaff;outline-offset:3px}.cw-prompt>form{border:0;margin:0;padding:6px 0}.cw-prompt[open]>label{margin-top:6px}
 .cw-primary{border-color:#478177!important;color:#65ddc9!important;justify-self:start}.cw-notice{margin:0;padding:0 16px;font-size:12px;color:#7cdbbd}.cw-notice:not(:empty){padding-top:10px;padding-bottom:10px}.cw-notice[role=alert]{color:#f2a8a8}
 .cw-dialog{width:min(480px,calc(100% - 28px));border:1px solid var(--cw-line);border-radius:9px;padding:20px;background:#171c23;color:#e0e5ec;max-height:85vh;overflow:auto}.cw-dialog::backdrop{background:#0009}.cw-dialog form,.cw-dialog [data-credential-fields]{display:grid;gap:14px}.cw-dialog p{font-size:12px;line-height:1.6}.cw-dialog label.cw-row{display:flex;align-items:center;justify-content:flex-start;gap:8px}.cw-dialog input[type=checkbox]{width:16px;min-width:16px;height:16px;min-height:16px;margin:0;accent-color:#3cceb6}.cw-dialog pre{font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere}.cw-dialog [role=alert]{color:#f2a8a8}
-@media(max-width:760px){.cw-map{grid-template-columns:1fr;gap:20px}.cw-wires{display:none}.cw-list{max-height:280px}.cw-header{align-items:flex-start}.cw-header label{width:100%}.cw-node{min-height:62px}}
+@media(max-width:760px){.cw-map{grid-template-columns:1fr;gap:20px}.cw-wires{display:none}.cw-list{max-height:280px}.cw-header{grid-template-columns:minmax(0,1fr) auto;gap:8px}.cw-header h1{grid-column:1 / -1}.cw-search input{font-size:11px}.cw-detail-header{align-items:flex-start}.cw-actions{justify-content:flex-start}.cw-node{min-height:62px}}
 @media(prefers-reduced-motion:reduce){connection-dashboard *{transition:none!important;animation:none!important}}
 connection-dashboard *,connection-dashboard *::before,connection-dashboard *::after{box-sizing:border-box}
 .cw-list>.cw-node{min-width:0}
