@@ -35,6 +35,22 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B298] (P2) Keep dashboard system prompts out of view until selected.
+  Evidence: Annotation 2 shows an expanded provider prompt on initial selection.
+  Expected: Tenant and provider prompt editors start collapsed, as specified by I034.
+  Requirements:
+  - Put both prompt editors in native disclosures.
+  - Remove the disclosure `open` attribute after its tenant, connection, or model context changes.
+  - Keep expanded editors and their drafts available after a failed save.
+  Validation: Verify initial state, keyboard access, context changes, saved values, and failed saves through the browser.
+  Progress: The browser check failed because the tenant prompt was visible. Both editors now use native disclosures.
+  Keyboard access, tenant and connection changes, model changes, saved values, and both failed save retries passed in the real management browser test.
+  Logs: `/tmp/llm-proxy-b298-before.log`, `/tmp/llm-proxy-b298-final-browser.log`, and `/tmp/llm-proxy-annotations-ci-final.log`.
+  Resolution: Both editors start collapsed and retain expanded drafts after failed saves.
+  Final `make ci` passed all 14 gates, including 165 frontend browser tests and 11 real management browser tests.
+  Deliverables: `connectionDashboard.js`, `styles.css`, `connection-dashboard.spec.js`, `management-ui.spec.js`, `docs/tenant-connections.md`, and repository terminology.
+  API and event contracts remain unchanged.
+
 - [x] [B296] (P1) Accept documented Paddle payment timestamps.
   Evidence:
   Completed transactions without `completed_at` remain pending with `transaction_event_mismatch`.
@@ -1950,6 +1966,47 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   Blocked: The operator must publish the qualified shared UI assets and complete cache convergence under mpr-ui I009.
 
 ## Improvements
+
+- [x] [I298] (P2) Parse database snapshot receipts from standard output.
+  Evidence: The snapshot restoration test parsed combined CLI output as JSON during annotation validation.
+  A `uv` diagnostic caused `invalid character 'W' looking for beginning of value` in `make ci`.
+  Requirements:
+  - Parse the JSON receipt from standard output.
+  - Keep standard error available in test failure output.
+  - Verify financial evidence after restoration through the existing acceptance scenario.
+  Validation: Run the focused snapshot restoration test and final CI.
+  Initial log: `/tmp/llm-proxy-annotations-ci.log`.
+  Progress: The focused restoration scenario passed with separate output streams.
+  Logs: `/tmp/llm-proxy-annotations-snapshot-after.log` and `/tmp/llm-proxy-annotations-ci-final.log`.
+  Resolution: The test separates receipt data and diagnostics. Final CI passed all 14 gates with 100.0 percent Go statement coverage.
+  Deliverable: `internal/proxy/hosted_funds_backup_internal_test.go`. Product contracts remain unchanged.
+
+- [x] [I297] (P2) Apply the recovered interface annotations.
+  Goal: Make route filters and tenant controls compact and clear.
+  Requirements:
+  - Align route filter groups and input/output selectors. Annotation 1 specifies the affected surface.
+  - Keep connection detail actions together. Annotation 3 identifies excessive spacing.
+  - Remove the duplicate Resources card from the app. Retain the footer links for annotation 4.
+  - Align Hosted access text and actions in a compact panel for annotation 5.
+  - Put search between the tenant workspace title and the MCP copy action for annotations 6 and 8.
+  - Put a search icon at the right of the search field.
+  - Remove redundant dashboard headings for annotations 7 and 8.
+  Validation: Verify filter behavior, search, copy, action alignment, footer links, and narrow layouts through the browser.
+  Progress: The initial browser checks reproduced the filter height, duplicate title, and account action placement defects.
+  The corrected public filters passed at 1440, 899, 390, and 320 pixels.
+  Real management browser checks passed for grouped actions, search, clipboard copy, footer links, and hosted onboarding.
+  Frontend lint passed. Screenshots are in `/tmp/llm-proxy-annotations/`.
+  Resolution: All seven layout changes are completed. B298 resolves the prompt annotation.
+  Final `make ci` passed all 14 gates with 100.0 percent Go statement coverage.
+  All 165 frontend browser tests and 11 real management browser tests passed.
+  The initial CI found the snapshot test defect in I298 and a timing threshold failure.
+  I298 corrects the snapshot test. The timing scenario and full race suite passed in the final CI.
+  The Governor check retained the existing manifest finding recorded in I295.
+  Logs: `/tmp/llm-proxy-i297-app-before.log`, `/tmp/llm-proxy-i297-filters-before.log`, `/tmp/llm-proxy-i297-app-after.log`, and `/tmp/llm-proxy-i297-filters-after.log`.
+  Stack log: `/tmp/llm-proxy-annotations-ci-final.log`.
+  Deliverables: `render_public_site.mjs`, `site/app/index.html`, `constants.js`, `adminDashboard.js`, `connectionDashboard.js`, `landing.css`, and `styles.css`.
+  Browser files: `connection-dashboard.spec.js`, `hosted-access.spec.js`, `management-auth.spec.js`, and `management-ui.spec.js`.
+  The current interface contract is in `docs/tenant-connections.md`. API and event contracts remain unchanged.
 
 - [!] [I295] (P0) Record external integrations and their promotional evidence.
   Goal: Give integrations one evidence register and a procedure for consumer updates.

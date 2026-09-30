@@ -25,6 +25,11 @@ Give each term one meaning. Use the same term for the same concept in all docume
 
 ## Repository Technical Nouns
 
+- `native disclosure`: An HTML `details` element with a `summary` control.
+- `prompt editor`: A browser text field for a tenant or provider system prompt.
+- `collapsed editor`: A prompt editor inside a native disclosure without the HTML `open` attribute.
+- `expanded editor`: A prompt editor inside a native disclosure with the HTML `open` attribute.
+
 - `emulator`: Software that reproduces a device runtime for application tests.
 - `physical device`: Hardware used to run an application or do a device test.
 - `simulator`: Software that models a device environment for application tests.
