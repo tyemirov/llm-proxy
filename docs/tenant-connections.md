@@ -24,6 +24,14 @@ Account-wide usage remains available through the usage scope selector.
 Usage summaries refresh automatically every 30 seconds while the user is authenticated.
 Search filters the visible lists. Each column scrolls when its list exceeds the available space.
 
+The workspace header shows `Tenants → connections → models`, search, and `Copy MCP URL` in that order.
+The search field has a search icon on its right side. The copy action stays at the right of the header.
+Connection detail actions stay together. The app footer supplies the Resources link without a duplicate card.
+
+Tenant and provider system prompts use native disclosures. Each editor starts collapsed.
+A tenant, connection, or model change removes the `open` attribute from both disclosures.
+Keyboard and pointer actions show each editor. A failed save keeps expanded editors and their drafts available for retry.
+
 1. Create a tenant with a descriptive name.
 2. Select an existing connection, create a connection, or complete configuration later.
 3. Select `Connect` on the required connection card.
@@ -111,6 +119,9 @@ Each grant shows its state and permitted models and operations.
 An assigned grant remains visible after suspension or revocation.
 The service does not expose platform credentials in customer responses.
 Hosted execution remains disabled until the shared F070 acceptance requirements pass.
+
+The Hosted access header groups account creation and refresh actions beside its title.
+The account label replaces the creation action when the account exists. Descriptive text remains below the actions.
 
 1. Select `Create billing account` to create the USD account.
 2. Select `Refresh hosted access` after an operator provisions a grant.
