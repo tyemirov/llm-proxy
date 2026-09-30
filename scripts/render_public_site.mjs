@@ -857,9 +857,10 @@ function renderRoutingTree(catalog) {
   <header class="routing-tree__header">
     <h2>One integration. Choose the exact route.</h2>
     <div class="routing-tree__filters" aria-label="Route filters">
-      <div class="routing-tree__filter-group" role="group" aria-label="Choose one or both weight access types">${accessButtons}</div>
+      <div class="routing-tree__filter-options"><div class="routing-tree__filter-group" role="group" aria-label="Choose one or both weight access types">${accessButtons}</div>
       <span class="routing-tree__filter-divider" aria-hidden="true"></span>
-      <div class="routing-tree__modalities">${taskPicker}${modalityFilters}</div><div class="routing-tree__filter-group" role="group" aria-label="Additional capabilities">${capabilityButtons}</div>
+      <div class="routing-tree__filter-group" role="group" aria-label="Additional capabilities">${capabilityButtons}</div></div>
+      <div class="routing-tree__modalities">${taskPicker}${modalityFilters}</div>
     </div>
     <output class="routing-tree__counts" aria-live="polite" data-route-counts>${countLabel(defaultFamilies.length, "family", "families")} · ${countLabel(defaultModels.length, "exact model")} · ${countLabel(defaultOfferings.length, "offering")}</output>
   </header>
