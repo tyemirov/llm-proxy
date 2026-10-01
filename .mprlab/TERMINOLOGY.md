@@ -58,6 +58,7 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `protocol variation`: A declared, typed difference within one protocol family.
 - `provider catalog`: The canonical YAML file that defines all supported models, providers, provider offerings, controls, limits, and prices.
 - `provider connection`: An account-owned named resource with credentials and settings for one provider definition.
+- `prepaid provider access`: Customer use of LLM Proxy provider connections against a prepaid balance.
 - `provider definition`: One provider record in the provider catalog.
 - `provider field`: One credential input or setting input in a provider definition.
 - `provider gateway`: The service that authorizes tenant requests and owns shared provider access.
