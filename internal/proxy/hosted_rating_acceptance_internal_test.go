@@ -12,12 +12,17 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+var hostedRatingContract = sync.OnceValues(func() (*openapitest.Contract, error) {
+	return openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+})
 
 func newHostedRatingFixture(t *testing.T) (*gormManagedTenantDatabase, func(string) journalAdmissionIntent, *httptest.Server, journalReservation) {
 	t.Helper()
@@ -385,7 +390,7 @@ func ratingHTTPExchange(t *testing.T, server *httptest.Server, method, path, bod
 	} else if strings.Contains(path, "/charges/") {
 		template += "/{charge_id}"
 	}
-	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	contract, err := hostedRatingContract()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2004,6 +2004,23 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## Improvements
 
+- [x] [I306] (P2) Reuse the unchanged OpenAPI document in financial HTTP tests.
+  Evidence: PR 347 backend coverage reaches the native ten-minute deadline during active financial tests.
+  Its stack shows repeated OpenAPI parsing in `ratingHTTPExchange`.
+  The local startup scenario spends 13 percent of sampled CPU time in `openapitest.Load`.
+  Requirements:
+  - Load the canonical document once per financial test process.
+  - Preserve response validation for every HTTP exchange.
+  - Keep production code and test deadlines unchanged.
+  Validation: Run the startup scenario, race checks, and the complete financial coverage group.
+  GitHub log: https://github.com/tyemirov/llm-proxy/actions/runs/36831563341/job/110269126937
+  Files: `internal/proxy/hosted_rating_acceptance_internal_test.go`.
+  New event contracts: None.
+  Resolution: `sync.OnceValues` loads the unchanged document once for the financial HTTP helper.
+  Validation: The startup scenario passed in 3.611 seconds, compared with 6.263 seconds before the change.
+  Three race scenarios passed. The complete financial coverage group passed in 185.156 seconds.
+  Logs: `/tmp/llm-proxy-pr347-funds-after.log`, `/tmp/llm-proxy-pr347-funds-race.log`, and `/tmp/llm-proxy-pr347-funds-group.log`.
+
 - [x] [I305] (P2) Wait for the financial history update before the focus test.
   Evidence: PR 347 frontend qualification reports no new balance read after the focus event.
   The test observes request arrival before the previous automatic update completes its history reads.
