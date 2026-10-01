@@ -2004,6 +2004,22 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## Improvements
 
+- [x] [I307] (P2) Allocate the hosted coverage job budget for all six native groups.
+  Evidence: PR 347 completes financial coverage in 439.839 seconds and payment coverage in 330.712 seconds.
+  The fifteen-minute job limit cancels the third group before complete coverage can merge.
+  Requirements:
+  - Set the coverage job limit to 45 minutes.
+  - Preserve the native Go test deadline and all six coverage groups.
+  - Preserve the 100 percent coverage requirement and executable probes.
+  - Keep the other qualification job limits unchanged.
+  Validation: Run the hosted workflow contract through its public Make target.
+  GitHub log: https://github.com/tyemirov/llm-proxy/actions/runs/36833995280/job/110276884313
+  Files: `.github/workflows/test.yml`, `tests/hosted_ci_contract_test.go`, and `README.md`.
+  New event contracts: None.
+  Resolution: The coverage job has a 45-minute limit. Each native test pass retains its ten-minute limit.
+  Validation: The old workflow failed the updated contract. The corrected workflow passed it.
+  Logs: `/tmp/llm-proxy-pr347-budget-before.log` and `/tmp/llm-proxy-pr347-budget-after.log`.
+
 - [x] [I306] (P2) Reuse the unchanged OpenAPI document in financial HTTP tests.
   Evidence: PR 347 backend coverage reaches the native ten-minute deadline during active financial tests.
   Its stack shows repeated OpenAPI parsing in `ratingHTTPExchange`.
