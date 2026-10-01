@@ -31,7 +31,9 @@ run_coverage_probe() {
 
 "$GO_BIN" test -count=1 ./... -run='^TestHostedFunds' -covermode=count -coverpkg="$COVERPKG" -coverprofile="$TMP_DIR/funds-test.coverprofile"
 "$GO_BIN" test -count=1 ./... -run='^TestHostedPayments' -covermode=count -coverpkg="$COVERPKG" -coverprofile="$TMP_DIR/payments-test.coverprofile"
-"$GO_BIN" test -count=1 ./... -run='^TestHosted' -skip='^TestHosted(Funds|Payments)' -covermode=count -coverpkg="$COVERPKG" -coverprofile="$TMP_DIR/hosted-test.coverprofile"
+"$GO_BIN" test -count=1 ./... -run='^TestHostedMedia' -covermode=count -coverpkg="$COVERPKG" -coverprofile="$TMP_DIR/media-test.coverprofile"
+"$GO_BIN" test -count=1 ./... -run='^TestHostedRuntime' -covermode=count -coverpkg="$COVERPKG" -coverprofile="$TMP_DIR/runtime-test.coverprofile"
+"$GO_BIN" test -count=1 ./... -run='^TestHosted' -skip='^TestHosted(Funds|Payments|Media|Runtime)' -covermode=count -coverpkg="$COVERPKG" -coverprofile="$TMP_DIR/hosted-test.coverprofile"
 "$GO_BIN" test -count=1 ./... -skip='^TestHosted' -covermode=count -coverpkg="$COVERPKG" -coverprofile="$TMP_DIR/remaining-test.coverprofile"
 "$GO_BIN" build -cover -covermode=count -coverpkg="$RUNTIME_COVERPKG" -o "$TMP_DIR/llm-proxy.cover" ./cmd/cli
 "$GO_BIN" build -cover -covermode=count -coverpkg="$CLIENT_COVERPKG" -o "$TMP_DIR/llm-proxy-client.cover" ./llm-proxy-client
@@ -64,7 +66,7 @@ awk '
       print block, statements[block], counts[block]
     }
   }
-' "$TMP_DIR/funds-test.coverprofile" "$TMP_DIR/payments-test.coverprofile" "$TMP_DIR/hosted-test.coverprofile" "$TMP_DIR/remaining-test.coverprofile" "$TMP_DIR/bin-help.coverprofile" "$TMP_DIR/bin-missing-config.coverprofile" "$TMP_DIR/bin-obsolete-config.coverprofile" "$TMP_DIR/bin-client-missing-config.coverprofile" >"$COVERAGE_FILE"
+' "$TMP_DIR/funds-test.coverprofile" "$TMP_DIR/payments-test.coverprofile" "$TMP_DIR/media-test.coverprofile" "$TMP_DIR/runtime-test.coverprofile" "$TMP_DIR/hosted-test.coverprofile" "$TMP_DIR/remaining-test.coverprofile" "$TMP_DIR/bin-help.coverprofile" "$TMP_DIR/bin-missing-config.coverprofile" "$TMP_DIR/bin-obsolete-config.coverprofile" "$TMP_DIR/bin-client-missing-config.coverprofile" >"$COVERAGE_FILE"
 
 coverage_output="$("$GO_BIN" tool cover -func="$COVERAGE_FILE")"
 printf '%s\n' "$coverage_output"

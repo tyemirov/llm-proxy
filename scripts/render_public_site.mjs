@@ -1,10 +1,10 @@
-import {MODEL_TASKS, MODALITY_LABELS, tasksForOffering, renderTaskPicker, renderTaskIcon, renderTaskDetails} from '../site/assets/llm-proxy/js/modelTasks.js';
+import {MODALITY_LABELS, tasksForOffering, renderTaskIcon, renderTaskDetails} from '../site/assets/llm-proxy/js/modelTasks.js';
 // @ts-check
 
 import { cp, lstat, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { renderBrandIcon } from "../site/assets/llm-proxy/js/brandIcons.js";
-import { ROUTE_CAPABILITY_ALL, PROVIDER_RESOURCE_LABELS } from "../site/assets/llm-proxy/js/constants.js";
+import { ROUTE_CAPABILITY_ALL, ROUTE_CAPABILITY_FILTERS, PROVIDER_RESOURCE_LABELS } from "../site/assets/llm-proxy/js/constants.js";
 import { validateBrandAssets } from "./brand_icon_validation.mjs";
 
 const publicCapabilitiesPath = "/api/public/capabilities";
@@ -798,13 +798,9 @@ function renderRoutingTree(catalog) {
   const accessButtons = weightAccessDefinitions.map((definition) => (
     `<button type="button" class="routing-tree__filter" data-route-weight-access="${escapeAttribute(definition.identifier)}" aria-pressed="true" disabled>${escapeHTML(definition.label)}</button>`
   )).join("");
-  const capabilityButtons = `<button type="button" class="routing-tree__filter" data-route-capability="${ROUTE_CAPABILITY_ALL}" aria-label="All capabilities" title="All capabilities" aria-pressed="true" disabled>All capabilities</button>` + capabilityDefinitions.filter((definition) => ["caller_tools", "web_search", "reasoning"].includes(definition.identifier) && availableCapabilities.has(definition.identifier)).map((definition) => (
-    `<button type="button" class="routing-tree__filter" data-route-capability="${escapeAttribute(definition.identifier)}" aria-label="${escapeAttribute(definition.label)}" title="${escapeAttribute(definition.label)}" aria-pressed="false" disabled>${escapeHTML(definition.routeLabel)}</button>`
-  )).join("");
-  const taskIDs = new Set(catalog.offerings.flatMap(offering=>tasksForOffering(offering).map(task=>task.id)));
-  const tasks = MODEL_TASKS.filter(task=>taskIDs.has(task.id));
-  const initialTaskIDs = tasks.some(task=>task.id==='text') ? ['text'] : tasks.slice(0, 1).map(task=>task.id);
-  const taskPicker = renderTaskPicker(tasks, initialTaskIDs, true);
+  const capabilityButtons = ROUTE_CAPABILITY_FILTERS.filter(filter=>filter.id===ROUTE_CAPABILITY_ALL || filter.capabilities.some(capability=>availableCapabilities.has(capability))).map(filter=>
+    `<button type="button" class="routing-tree__filter" data-route-capability="${escapeAttribute(filter.id)}" aria-pressed="${filter.id===ROUTE_CAPABILITY_ALL}" disabled>${escapeHTML(filter.label)}</button>`
+  ).join('');
   const modalityFilters = ['Input','Output'].map(direction=>`<label>${direction}<select aria-label="${direction}" data-route-${direction.toLowerCase()} disabled><option value="">Any</option>${Object.entries(MODALITY_LABELS).map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label>`).join('');
   const familyButtons = catalog.families.map((family) => {
     const familyModels = modelsByFamily.get(family.identifier) ?? [];
@@ -859,8 +855,8 @@ function renderRoutingTree(catalog) {
     <div class="routing-tree__filters" aria-label="Route filters">
       <div class="routing-tree__filter-options"><div class="routing-tree__filter-group" role="group" aria-label="Choose one or both weight access types">${accessButtons}</div>
       <span class="routing-tree__filter-divider" aria-hidden="true"></span>
-      <div class="routing-tree__filter-group" role="group" aria-label="Additional capabilities">${capabilityButtons}</div></div>
-      <div class="routing-tree__modalities">${taskPicker}${modalityFilters}</div>
+      <div class="routing-tree__filter-group" role="group" aria-label="Capabilities">${capabilityButtons}</div></div>
+      <div class="routing-tree__modalities">${modalityFilters}</div>
     </div>
     <output class="routing-tree__counts" aria-live="polite" data-route-counts>${countLabel(defaultFamilies.length, "family", "families")} · ${countLabel(defaultModels.length, "exact model")} · ${countLabel(defaultOfferings.length, "offering")}</output>
   </header>
