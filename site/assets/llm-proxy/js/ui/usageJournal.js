@@ -1,4 +1,5 @@
 // @ts-check
+import {startAutomaticUpdates, updateManagementData, reloadVisibleCollection} from '../core/automaticUpdates.js?v=20260903f037';
 import * as backend from '../core/backendClient.js?v=20260903f037';
 import {profileFailureMessage} from '../core/managementProfile.js?v=20260903f037';
 import {formatExactUSD} from '../core/exactMoney.js?v=20260903f037';
@@ -33,7 +34,6 @@ class UsageJournal extends HTMLElement {
       const requestID=button.dataset.journalRequest;
       if (requestID) { void this.run(()=>this.selectRequest(requestID)); return; }
       switch(button.dataset.journalAction) {
-        case 'refresh':void this.run(()=>this.loadRequests());break;
         case 'requests':void this.run(()=>this.loadRequests(this.page.next_cursor));break;
         case 'attempts':void this.run(()=>this.loadMoreAttempts());break;
         case 'observations':void this.run(()=>this.loadMoreObservations());break;
@@ -43,6 +43,8 @@ class UsageJournal extends HTMLElement {
       }
     },{signal:this.controller.signal});
     this.render();
+    startAutomaticUpdates(this,this.controller.signal,()=>this.updateLiveData());
+    void this.updateLiveData();
   }
   disconnectedCallback() { this.controller.abort(); this.page={requests:[],next_cursor:''}; this.evidence=null; this.loaded=false; this.charges=null; this.chargesRequested=false; }
   /** @param {()=>Promise<void>} action */
@@ -59,6 +61,28 @@ class UsageJournal extends HTMLElement {
         if (replacement instanceof HTMLButtonElement) replacement.focus();
       }
     }
+  }
+  async updateLiveData() {
+    await updateManagementData(this,async()=>{
+      const page=await reloadVisibleCollection(async cursor=>{const value=await backend.fetchJournalRequests(this.accountID,cursor,this.controller.signal);return {items:value.requests,next_cursor:value.next_cursor};},this.page.requests.length);
+      let evidence=this.evidence;
+      if (evidence) {
+        const id=evidence.request.id;
+        const [request,summary,attempts,observations,cases]=await Promise.all([
+          backend.fetchJournalRequest(this.accountID,id,this.controller.signal),backend.fetchRequestChargeSummary(this.accountID,id,this.controller.signal),
+          reloadVisibleCollection(async cursor=>{const value=await backend.fetchJournalAttempts(this.accountID,id,cursor,this.controller.signal);return {items:value.attempts,next_cursor:value.next_cursor};},evidence.attempts.attempts.length),
+          reloadVisibleCollection(async cursor=>{const value=await backend.fetchJournalObservations(this.accountID,id,cursor,this.controller.signal);return {items:value.observations,next_cursor:value.next_cursor};},evidence.observations.observations.length),
+          reloadVisibleCollection(async cursor=>{const value=await backend.fetchJournalCases(this.accountID,id,cursor,this.controller.signal);return {items:value.cases,next_cursor:value.next_cursor};},evidence.cases.cases.length),
+        ]);
+        evidence={request,summary,attempts:{attempts:attempts.items,next_cursor:attempts.next_cursor},observations:{observations:observations.items,next_cursor:observations.next_cursor},cases:{cases:cases.items,next_cursor:cases.next_cursor}};
+      }
+      let charges=this.charges;
+      if(this.chargesRequested) {
+        const values=await reloadVisibleCollection(async cursor=>{const value=await backend.fetchCustomerCharges(this.accountID,cursor,this.controller.signal);return {items:value.charges,next_cursor:value.next_cursor};},charges?.charges.length || 0);
+        charges={charges:values.items,next_cursor:values.next_cursor};
+      }
+      this.page={requests:page.items,next_cursor:page.next_cursor};this.evidence=evidence;this.charges=charges;this.loaded=true;this.failure='';
+    },()=>this.render(),error=>{this.page={requests:[],next_cursor:''};this.evidence=null;this.charges=null;this.loaded=false;this.failure=profileFailureMessage(error);});
   }
   /** @param {string} [cursor] */
   async loadRequests(cursor='') {
@@ -105,12 +129,12 @@ class UsageJournal extends HTMLElement {
   moreButton(kind,cursor) { return cursor?`<button data-journal-action="${kind}" ${this.busy?'disabled':''}>Load more ${kind}</button>`:''; }
   render() {
     this.innerHTML=`<section class="usage-journal cw-details" aria-label="Usage journal" aria-busy="${this.busy}">
-      <header class="cw-row"><h3>Usage journal</h3><button data-journal-action="refresh" ${this.busy?'disabled':''}>${this.loaded?'Refresh':'Load'} usage journal</button></header>
-      <p>Hosted request history and measured usage.</p>
-      <button data-journal-action="charges" ${this.busy?'disabled':''}>${this.chargesRequested?'Refresh':'Load'} charges</button>
+      <header class="cw-row"><h3>Usage journal</h3></header>
+      <p>Provider request history and measured usage.</p>
+      ${!this.chargesRequested?`<button data-journal-action="charges" ${this.busy?'disabled':''}>Load charges</button>`:''}
       ${this.failure?`<p role="alert">${escapeHTML(this.failure)}</p>`:''}
       ${this.busy?'<p role="status">Loading journal…</p>':''}
-      ${this.loaded&&!this.page.requests.length?'<p>No hosted requests yet.</p>':''}
+      ${this.loaded&&!this.page.requests.length?'<p>No provider requests yet.</p>':''}
       <ul class="journal-list">${this.page.requests.map(request=>`<li><strong>${escapeHTML(request.provider)} · ${escapeHTML(request.model || 'Provider service')}</strong>
         <p>${escapeHTML(label(request.operation))} · ${escapeHTML(title(request.state))} · Usage ${escapeHTML(request.usage_state)}</p>
         <p>Tenant: ${escapeHTML(request.tenant_id)}</p><code>${escapeHTML(request.id)}</code>

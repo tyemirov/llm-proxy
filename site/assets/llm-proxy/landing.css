@@ -1709,20 +1709,17 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
 /* Task filter buttons wrap and remain usable at narrow widths. */
 .routing-tree__header{grid-template-columns:minmax(0,1fr) auto}
 .routing-tree__header h2{grid-column:1}.routing-tree__counts{grid-column:2;grid-row:1}
-.routing-tree__filters{display:grid;grid-column:1 / -1;grid-row:2;overflow:visible;gap:8px}
-.routing-tree__filter-options{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
-.routing-tree .task-filter{margin:0;align-self:center;max-width:100%;padding:3px}
-.routing-tree .routing-tree__modalities{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:12px;min-width:0}
+.routing-tree__filters{display:flex;grid-column:1 / -1;grid-row:2;overflow:visible;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.routing-tree__filter-options{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;flex:1 1 650px} .routing-tree__filter-options>.routing-tree__filter-group{flex:0 1 auto;max-width:100%;flex-wrap:wrap}
+.routing-tree .routing-tree__modalities{display:grid;grid-template-columns:auto auto;align-items:center;gap:12px;min-width:0}
 .routing-tree__modalities label{display:flex;align-items:center;gap:6px}
 .routing-tree .routing-tree__modalities select{min-width:70px;min-height:30px;padding:4px 6px;font-size:12px}
 .routing-tree [data-route-task-details]{padding:0 20px 20px}
 .routing-tree [data-route-task-flow]{display:flex;gap:12px;flex-wrap:wrap;text-align:left;font-size:11px}
-.routing-tree .task-filter,.routing-tree .model-task-details li{background:var(--panel);color:var(--text);border-color:var(--border-strong)}
-.routing-tree .task-filter{border:0;background:transparent}
-.routing-tree .task-filter button{color:var(--text)}.routing-tree .model-flow,.routing-tree .model-task-details small{color:var(--text-muted)}
-.routing-tree .task-filter button[aria-pressed=true]{background:var(--overlay);color:var(--routing-tree-accent)}
+.routing-tree .model-task-details li{background:var(--panel);color:var(--text);border-color:var(--border-strong)}
+.routing-tree .model-flow,.routing-tree .model-task-details small{color:var(--text-muted)}
 .routing-tree .routing-tree__modalities select{background:var(--panel);color:var(--text)}
-@media(max-width:680px){.routing-tree__header{grid-template-columns:minmax(0,1fr);padding:12px}.routing-tree__counts{grid-column:1;grid-row:3}.routing-tree .routing-tree__modalities{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.routing-tree .task-filter{grid-column:1 / -1}.routing-tree__modalities label{min-width:0}.routing-tree .routing-tree__modalities select{min-width:0;width:100%}.routing-tree__filter-divider{display:none}.routing-tree__filter-options>.routing-tree__filter-group{flex-wrap:wrap}}
+@media(max-width:680px){.routing-tree__header{grid-template-columns:minmax(0,1fr);padding:12px}.routing-tree__counts{grid-column:1;grid-row:3}.routing-tree .routing-tree__modalities{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.routing-tree__modalities label{min-width:0}.routing-tree .routing-tree__modalities select{min-width:0;width:100%}.routing-tree__filter-divider{display:none}.routing-tree__filter-options>.routing-tree__filter-group{flex-wrap:wrap}}
 .routing-tree__provider,.routing-tree__model{flex-direction:column;align-items:stretch;gap:8px}
 .routing-tree__model [data-route-model-tasks]{text-align:left}
 .routing-tree [data-route-task-flow] .model-flow{flex-wrap:nowrap}

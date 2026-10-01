@@ -1,4 +1,5 @@
 // @ts-check
+import {startAutomaticUpdates, updateManagementData, reloadVisibleCollection} from '../core/automaticUpdates.js?v=20260903f037';
 import {FUNDING_CHANGED_EVENT,FUNDING_RESUME_EVENT} from '../constants.js?v=20260903f037';
 import * as backend from '../core/backendClient.js?v=20260903f037';
 import {profileFailureMessage} from '../core/managementProfile.js?v=20260903f037';
@@ -27,20 +28,21 @@ class PaymentHistory extends HTMLElement {
     window.addEventListener(FUNDING_CHANGED_EVENT,event=>{
       if (!(event instanceof CustomEvent) || event.detail.accountID!==this.accountID) return;
       if (this.busy) this.refreshRequested=true;
-      else void this.run(()=>this.refresh());
+      else void this.updateLiveData();
     },{signal:this.controller.signal});
     this.addEventListener('click',event=>{
       if (!(event.target instanceof Element) || this.busy) return;
       const button=event.target.closest('button');
       switch(button?.dataset.paymentAction) {
         case 'resume':window.dispatchEvent(new CustomEvent(FUNDING_RESUME_EVENT,{detail:{accountID:this.accountID,orderID:button.dataset.orderId}}));break;
-        case 'refresh':void this.run(()=>this.refresh());break;
         case 'more':void this.run(()=>this.more());break;
         case 'receipt':void this.run(()=>this.readReceipt(button.dataset.orderId || ''));break;
         case 'portal':void this.run(()=>this.openPortal());break;
       }
     },{signal:this.controller.signal});
     this.render();
+    startAutomaticUpdates(this,this.controller.signal,()=>this.updateLiveData());
+    void this.updateLiveData();
   }
   disconnectedCallback() {
     this.controller.abort();this.pendingPortal?.close();this.pendingPortal=null;
@@ -58,13 +60,19 @@ class PaymentHistory extends HTMLElement {
         this.busy=false;this.render();
         const button=focusAction?this.querySelector(`[data-payment-action="${CSS.escape(focusAction)}"]${focusOrder?`[data-order-id="${CSS.escape(focusOrder)}"]`:''}`):null;
         if (button instanceof HTMLButtonElement) button.focus();
-        if (this.refreshRequested) {this.refreshRequested=false;void this.run(()=>this.refresh());}
+        if (this.refreshRequested) {this.refreshRequested=false;void this.updateLiveData();}
       }
     }
   }
-  async refresh() {
-    this.loaded=false;this.receipt=null;this.page={orders:[],next_cursor:''};
-    this.page=await backend.fetchFundingOrders(this.accountID,'',this.controller.signal);this.loaded=true;
+  async updateLiveData() {
+    await updateManagementData(this,async()=>{
+      const [page,receipt]=await Promise.all([
+        reloadVisibleCollection(async cursor=>{const value=await backend.fetchFundingOrders(this.accountID,cursor,this.controller.signal);return {items:value.orders,next_cursor:value.next_cursor};},this.page.orders.length),
+        this.receipt?backend.fetchPaymentReceipt(this.accountID,this.receipt.funding_order_id,this.controller.signal):Promise.resolve(null),
+      ]);
+      this.page={orders:page.items,next_cursor:page.next_cursor};this.receipt=receipt;this.loaded=true;this.failure='';
+    },()=>this.render(),error=>{this.page={orders:[],next_cursor:''};this.receipt=null;this.loaded=false;this.failure=error instanceof backend.BackendClientError?backend.managementFailureMessage(error):profileFailureMessage(error);});
+    if(this.refreshRequested && !this.controller.signal.aborted){this.refreshRequested=false;void this.updateLiveData();}
   }
   async more() {
     const page=await backend.fetchFundingOrders(this.accountID,this.page.next_cursor,this.controller.signal);
@@ -88,7 +96,7 @@ class PaymentHistory extends HTMLElement {
   render() {
     const disabled=this.busy?'disabled':'';
     this.innerHTML=`<section class="prepaid-balance cw-details" aria-label="Funding history" aria-busy="${this.busy}">
-      <header class="cw-row"><h3>Funding history</h3><button data-payment-action="refresh" ${disabled}>Refresh payments</button></header>
+      <header class="cw-row"><h3>Funding history</h3></header>
       <p>Funds become available after the server verifies payment. A checkout confirmation alone does not change your balance.</p>
       ${this.failure?`<p role="alert">${escapeHTML(this.failure)}</p>`:''}
       ${this.busy?'<p role="status">Loading payment records…</p>':''}
@@ -101,7 +109,7 @@ class PaymentHistory extends HTMLElement {
         ${['paid','partially_refunded','refunded','disputed'].includes(order.state)?`<button data-payment-action="receipt" data-order-id="${escapeHTML(order.id)}" ${disabled}>View receipt</button>`:''}
       </li>`).join('')}</ul>
       ${this.page.next_cursor?`<button data-payment-action="more" ${disabled}>Load more payments</button>`:''}
-      ${this.page.orders.some(order=>order.state!=='created')?`<button data-payment-action="portal" ${disabled}>Open Paddle invoices</button>`:''}
+      ${this.page.orders.some(order=>order.state!=='created')?`<button data-payment-action="portal" ${disabled}>Paddle invoices</button>`:''}
       ${this.receipt?this.renderReceipt(this.receipt):''}
     </section>`;
   }
