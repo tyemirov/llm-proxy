@@ -122,6 +122,36 @@ func (fixture checkoutRecoveryFixture) recover(t *testing.T, before map[string]a
 	}
 }
 
+func TestHostedPaymentsCheckoutStaleCandidatePreservesOneTransaction(t *testing.T) {
+	fixture := newCheckoutRecoveryFixture(t)
+	before := fixture.funds(t)
+	other := checkoutWorkerFixture(t, openJournalTransactionInstance(t, fixture.database), fixture.worker.catalog, fixture.processor, fixture.now)
+	var interleaved atomic.Bool
+	callback := fixture.database.database.Callback().Query()
+	const callbackName = "test:checkout_stale_candidate"
+	if err := callback.After("gorm:query").Register(callbackName, func(tx *gorm.DB) {
+		if tx.Statement.Table == "managed_payment_delivery_records" && interleaved.CompareAndSwap(false, true) {
+			if err := other.reconcile(t.Context()); err != nil {
+				tx.AddError(err)
+			}
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := callback.Remove(callbackName); err != nil {
+			t.Error(err)
+		}
+	})
+	if err := fixture.worker.reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !interleaved.Load() || fixture.processor.creates.Load() != 1 || !reflect.DeepEqual(before, fixture.funds(t)) {
+		t.Fatal("stale checkout candidate changed funds or processor transaction count")
+	}
+	fixture.recover(t, before)
+}
+
 func TestHostedPaymentsCheckoutWriteFailuresRecoverWithoutDuplicateCreation(t *testing.T) {
 	for _, scenario := range []struct {
 		name, statement string
