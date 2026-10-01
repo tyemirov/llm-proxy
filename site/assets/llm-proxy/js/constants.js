@@ -9,6 +9,15 @@ export const AUTH_STATES = Object.freeze({
 
 export const PUBLIC_SITE_PATH = "/";
 export const ROUTE_CAPABILITY_ALL = "all";
+export const ROUTE_CAPABILITY_FILTERS = Object.freeze([
+  {id:ROUTE_CAPABILITY_ALL,label:'All capabilities',kind:'all',capabilities:[]},
+  {id:'caller_tools',label:'Tools',kind:'feature',capabilities:['caller_tools']},
+  {id:'web_search',label:'Web search',kind:'feature',capabilities:['web_search']},
+  {id:'reasoning',label:'Reasoning',kind:'feature',capabilities:['reasoning']},
+  {id:'images',label:'Images',kind:'media',capabilities:['image_input','image_generation','image_editing']},
+  {id:'audio',label:'Audio',kind:'media',capabilities:['audio_input','dictation','audio_transcription','speech_generation','speech_conversion','voice_extraction','audio_diarization','audio_alignment','subtitle_creation','pronunciation_dictionary_creation']},
+  {id:'video',label:'Video',kind:'media',capabilities:['video_input','video_generation']},
+]);
 export const APPLICATION_PATH = "/app/";
 export const LANDING_AUTHENTICATED_REDIRECT_ATTRIBUTE = "data-llm-proxy-authenticated-redirect-url";
 
@@ -102,6 +111,8 @@ export const USAGE_OUTCOME_LABELS = Object.freeze({
 
 export const USAGE_STATUS_LABELS = Object.freeze({
   400: "Bad request",
+  402: "Payment required",
+  403: "Forbidden",
   409: "Conflict",
   413: "Payload too large",
   429: "Rate limited",
@@ -245,11 +256,9 @@ export const COPY = Object.freeze({
   tenantCreated: "Tenant created",
   tenantRenamed: "Tenant renamed",
   tenantDeleted: "Tenant deleted",
-  dashboardEyebrow: "Dashboard",
-  dashboardTitle: "Usage overview",
   adminDashboardEyebrow: "Admin",
   adminDashboardTitle: "All users",
-  openUsageDashboard: "Usage overview",
+  openUsageDashboard: "Connections and usage",
   usageRequests: "Requests",
   usageTokens: "Tokens",
   usageSuccessRate: "Success rate",

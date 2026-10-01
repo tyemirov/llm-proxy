@@ -58,6 +58,7 @@ const applicationModuleFiles = Object.freeze([
   "constants.js",
   "startupGuard.js",
   "core/backendClient.js",
+  "core/automaticUpdates.js",
   "core/managementProfile.js",
   "core/mprShell.js",
   "core/runtimeTransition.js",
@@ -803,8 +804,9 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(routingTree.locator("[data-route-provider]")).toHaveCount(89);
   await expect(routingTree.locator("[data-route-model]")).toHaveCount(86);
   await expect(routingTree.locator("[data-route-weight-access]")).toHaveCount(2);
-  await expect(routingTree.locator("[data-route-capability]")).toHaveCount(4);
-  await expect(routingTree.locator('[data-task="image_editing"]')).toHaveCount(1);
+  await expect(routingTree.locator("[data-route-capability]")).toHaveCount(7);
+  await expect(routingTree.locator('[data-route-capability="images"]')).toHaveCount(1);
+  await expect(routingTree.locator('[data-task]')).toHaveCount(0);
   await expect(routingTree.locator('[data-route-weight-access="proprietary"]')).toHaveAttribute("aria-pressed", "true");
   await expect(routingTree.locator('[data-route-weight-access="open_weights"]')).toHaveAttribute("aria-pressed", "true");
   await expect(routingTree.locator('[data-route-capability="all"]')).toHaveAttribute("aria-pressed", "true");
@@ -948,40 +950,67 @@ test("the route explorer applies each canonical theme palette", async ({ page })
   expect(new Set(routeCanvasImages).size).toBe(4);
 });
 
-test("the route explorer starts with Text and exposes media capabilities through task toggles", async ({ page }) => {
+test("route filters use one labeled capability row and independent modalities", async ({ page }) => {
+  await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
+  await page.goto(baseURL);
+  const tree = page.locator('routing-tree');
+  await expect(tree).toHaveAttribute('data-enhanced', 'true');
+  await expect(tree.locator('.routing-tree__filters [data-task]')).toHaveCount(0);
+  await expect(tree.locator('[data-route-capability="images"]')).toHaveText('Images');
+  await expect(tree.locator('[data-route-capability="audio"]')).toHaveText('Audio');
+  for (const width of [1440, 899, 390, 320]) {
+    await page.setViewportSize({width, height:1050});
+    const geometry = await tree.locator('.routing-tree__filters').evaluate(filters => {
+      const bounds = filters.getBoundingClientRect();
+      const input = filters.querySelector('[data-route-input]').getBoundingClientRect();
+      const output = filters.querySelector('[data-route-output]').getBoundingClientRect();
+      return {height:bounds.height, inputCenter:input.y+input.height/2, outputCenter:output.y+output.height/2};
+    });
+    if (width >= 899) {
+      expect(geometry.height).toBeLessThanOrEqual(120);
+    }
+    expect(Math.abs(geometry.inputCenter-geometry.outputCenter)).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+    for (const control of await tree.locator('.routing-tree__filters button, [data-route-input], [data-route-output]').all()) {
+      const bounds = await control.boundingBox();
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.x+bounds.width).toBeLessThanOrEqual(width);
+    }
+    await tree.getByLabel('Input', {exact:true}).selectOption('image');
+    await expect(tree.locator('[data-route-counts]')).not.toContainText('0 families');
+    await tree.getByLabel('Input', {exact:true}).selectOption('');
+    await tree.locator('.routing-tree__header').evaluate(header=>header.scrollIntoView({block:'start'}));
+    await tree.locator('.routing-tree__header').screenshot({path:`/tmp/llm-proxy-annotations/route-filters-${width}.png`});
+  }
+});
+
+test("the route explorer exposes all capabilities and filters media through labeled controls", async ({ page }) => {
   await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
   await page.goto(baseURL);
   const routingTree = page.locator("routing-tree");
   await expect(routingTree).toHaveAttribute("data-enhanced", "true");
   await expect(routingTree.getByRole("button", { name: "All capabilities", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(routingTree.locator('[data-route-weight-access][aria-pressed="true"]')).toHaveCount(2);
-  await expect(routingTree.locator('[data-task="text"]')).toHaveAttribute("aria-pressed", "true");
-  await expect(routingTree.locator('[data-task-filter] [data-task][disabled]')).toHaveCount(0);
-  await expect(routingTree.locator('[data-route-family="gpt-image"]')).toBeHidden();
-  for (const family of ["reve", "whisper", "qwen3", "silero", "grok-imagine", "eleven-voice-conversion", "eleven-speech"]) {
-    await expect(routingTree.locator(`[data-route-family="${family}"]`)).toBeHidden();
+  await expect(routingTree.locator('.routing-tree__filters [data-task]')).toHaveCount(0);
+  for (const family of ['gpt-image','reve','whisper','qwen3','silero','grok-imagine','eleven-voice-conversion','eleven-speech','claude-fable']) {
+    await expect(routingTree.locator(`[data-route-family="${family}"]`)).toBeVisible();
   }
-  await expect(routingTree.locator('[data-route-family="claude-fable"]')).toBeVisible();
-  await selectModelTask(routingTree,'speech_conversion');
-  await expect(routingTree.locator("[data-route-counts]")).toHaveText("1 family · 2 exact models · 2 offerings");
+  await selectRouteFilters(routingTree,'audio','audio','audio');
   await routingTree.locator('[data-route-family="eleven-voice-conversion"]').click();
   await expect(routingTree.locator('[data-route-model="eleven_english_sts_v2"]')).toBeVisible();
   await expect(routingTree.locator('[data-route-model="eleven_multilingual_sts_v2"]')).toBeVisible();
   await routingTree.locator('[data-route-model="eleven_multilingual_sts_v2"]').click();
   await expect(routingTree.locator("[data-route-selected-model]")).toHaveText("eleven_multilingual_sts_v2");
   await expect(routingTree.locator("[data-route-selected-provider]")).toHaveText("elevenlabs");
-  await selectModelTask(routingTree,'image_generation');
+  await selectRouteFilters(routingTree,'images','text','image');
   await routingTree.locator('[data-route-family="reve"]').click();
   await expect(routingTree.locator("[data-route-selected-model]")).toHaveText("reve-2.1");
   await expect(routingTree.locator("[data-route-selected-provider]")).toHaveText("fal");
   await routingTree.locator('[data-route-family="gpt-image"]').click();
   await expect(routingTree.locator("[data-route-selected-model]")).toHaveText("gpt-image-2");
   await expect(routingTree.locator("[data-route-selected-provider]")).toHaveText("openai");
-  await expect(routingTree.locator('[data-task="image_generation"] svg')).toBeVisible();
-  await expect(routingTree.locator('[data-task="image_generation"]')).toHaveAttribute("title", "Generate images");
-  await expect(routingTree.locator('[data-task="vision"] svg')).toBeVisible();
-  await expect(routingTree.locator('[data-task="vision"]')).toHaveAttribute("title", "Understand images");
-  await selectModelTask(routingTree,'speech_generation');
+  await expect(routingTree.getByRole('button',{name:'Images',exact:true})).toHaveAttribute('aria-pressed','true');
+  await selectRouteFilters(routingTree,'audio','text','audio');
   await expect(routingTree.locator('[data-route-family="gpt-image"]')).toBeHidden();
   await expect(routingTree.locator('[data-route-family="qwen3"]')).toBeVisible();
   await expect(routingTree.locator('[data-route-family="silero"]')).toBeVisible();
@@ -993,19 +1022,19 @@ test("the route explorer starts with Text and exposes media capabilities through
   await routingTree.locator('[data-route-model="eleven_v3"]').click();
   await expect(routingTree.locator("[data-route-selected-model]")).toHaveText("eleven_v3");
   await expect(routingTree.locator("[data-route-selected-provider]")).toHaveText("elevenlabs");
-  await selectModelTask(routingTree,'text');
+  await selectRouteFilters(routingTree,'all','text','text');
   await expect(routingTree.locator('[data-route-family="claude-fable"]')).toBeVisible();
   await expect(routingTree.locator('[data-route-family="gpt-image"]')).toBeHidden();
 });
 
-test("visitors can filter tasks and input/output pairs on exact provider offerings", async ({ page }) => {
+test("visitors can filter labeled capabilities and input/output pairs on exact provider offerings", async ({ page }) => {
   await installAssetRoutes(page, {initialAuthStatus:'unauthenticated'});
   await page.setViewportSize({width:1280,height:900});
   await page.goto(baseURL);
   const tree=page.locator('routing-tree');
   await expect(tree).toHaveAttribute('data-enhanced','true');
   await expect(tree).toHaveAttribute('data-route-lines-rendered','true');
-  await selectModelTask(tree,'vision');
+  await selectRouteFilters(tree,'images','image','text');
   await tree.getByLabel('Input',{exact:true}).selectOption('image');
   await tree.getByLabel('Output',{exact:true}).selectOption('text');
   await expect(tree.locator('[data-route-family="kimi-k3"]')).toBeVisible();
@@ -1018,19 +1047,20 @@ test("visitors can filter tasks and input/output pairs on exact provider offerin
   const modelIcons = tree.locator('[data-route-model="kimi-k3"] .model-task-icon');
   const supportedTasks = await modelIcons.evaluateAll(icons => icons.map(icon => icon.getAttribute('aria-label')));
   expect(supportedTasks).toContain('Generate text');
-  await selectModelTask(tree, 'text');
+  await selectRouteFilters(tree,'all','image','text');
   await expect(modelIcons).toHaveCount(supportedTasks.length);
   expect(await modelIcons.evaluateAll(icons => icons.map(icon => icon.getAttribute('aria-label')))).toEqual(supportedTasks);
-  await selectModelTask(tree, 'vision');
+  await selectRouteFilters(tree,'images','image','text');
   await expect(tree.locator('[data-route-model]:visible .model-flow')).toHaveCount(0);
   await expectFiveStageRouteOrder(tree);
   await expectSelectedRoutingFanEndpoints(tree);
   await tree.getByLabel('Output',{exact:true}).selectOption('image');
+  await tree.getByLabel('Input',{exact:true}).selectOption('audio');
   await expect(tree.locator('[data-route-empty]')).toBeVisible();
   await expect(tree.locator('[data-route-stage]:visible')).toHaveCount(0);
   await expect(tree.locator('[data-route-task-details]')).toBeHidden();
   await tree.getByLabel('Input',{exact:true}).selectOption('');
-  await selectModelTask(tree,'image_generation');
+  await selectRouteFilters(tree,'images','text','image');
   await expect(tree.locator('[data-route-family="kimi-k3"]')).toBeHidden();
   await expect(tree.locator('[data-route-family="gpt-image"]')).toBeVisible();
   await tree.locator('[data-route-family="gpt-image"]').click();
@@ -1039,11 +1069,11 @@ test("visitors can filter tasks and input/output pairs on exact provider offerin
   await tree.getByLabel('Input',{exact:true}).selectOption('audio');
   await expect(tree.locator('[data-route-empty]')).toBeVisible();
   await tree.getByLabel('Output',{exact:true}).selectOption('text');
-  await selectModelTask(tree,'transcription');
+  await selectRouteFilters(tree,'audio','audio','text');
   await expect(tree.locator('[data-route-empty]')).toBeHidden();
   await expect(tree.locator('[data-route-family="whisper"]')).toBeVisible();
   await tree.locator('[data-route-capability="reasoning"]').click();
-  await expect(tree.locator('[data-route-empty]')).toBeVisible();
+  await expect(tree.locator('[data-route-family="whisper"]')).toBeHidden();
   await tree.locator('[data-route-capability="all"]').click();
   await expect(tree.locator('[data-route-empty]')).toBeHidden();
   await tree.locator('[data-route-weight-access="proprietary"]').click();
@@ -1052,10 +1082,10 @@ test("visitors can filter tasks and input/output pairs on exact provider offerin
   await expect(tree.locator('[data-route-weight-access][aria-pressed="true"]')).toHaveCount(1);
   for (const width of [320,390,1280]) {
     await page.setViewportSize({width,height:900});
-    await tree.locator('[data-task="transcription"]').focus();
+    await tree.locator('[data-route-capability="audio"]').focus();
     await page.keyboard.press('Enter');
-    await expect(tree.locator('[data-task="transcription"]')).toHaveAttribute('aria-pressed','true');
-    await expect(tree.locator('[data-task="transcription"]')).toBeFocused();
+    await expect(tree.locator('[data-route-capability="audio"]')).toHaveAttribute('aria-pressed','true');
+    await expect(tree.locator('[data-route-capability="audio"]')).toBeFocused();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
   }
 });
@@ -1089,7 +1119,7 @@ test("B248 voice extraction supports required text and audio inputs", async ({pa
   await page.goto(baseURL);
   const tree = page.locator('routing-tree');
   await expect(tree).toHaveAttribute('data-enhanced', 'true');
-  await selectModelTask(tree, 'voice_extraction');
+  await selectRouteFilters(tree,'audio','audio','audio');
   await tree.locator('[data-route-family="whisper"]').click();
   await tree.locator('[data-route-model="whisper-base"]').click();
   const task = tree.locator('[data-route-task-details] li').filter({has:page.getByText('Extract a voice', {exact:true})});
@@ -2166,7 +2196,7 @@ test("dashboard combines tenant configuration with usage and a direct menu actio
   await installManagementRoutes(page);
   await page.goto(baseURL + applicationPath);
   const dashboard = page.locator("connection-dashboard");
-  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tenants → connections → models" })).toBeVisible();
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
   await expect(page.locator("usage-card").filter({ hasText: "Tokens" }).locator("strong")).toHaveText("12,345");
   await expect(dashboard.getByRole("heading", {name: "Tenants → connections → models"})).toBeVisible();
@@ -2183,10 +2213,13 @@ test("tenant selection clears unsaved model and prompt previews", async ({ page 
   await page.goto(baseURL + applicationPath);
   const dashboard = page.locator("connection-dashboard");
   await dashboard.locator('[data-model="gpt-4.1"]').click();
+  await dashboard.locator('summary').filter({hasText:'Tenant system prompt'}).click();
   await dashboard.getByRole("textbox", {name:"Tenant system prompt",exact:true}).fill("Unsaved draft for Default");
   await dashboard.locator('[data-tenant="tenant_2"]').click();
   await expect(dashboard.locator("[data-default-form]")).toHaveCount(0);
   await dashboard.locator('[data-model="gpt-4.1"]').click();
+  await expect(dashboard.getByLabel("Tenant system prompt", {exact:true})).toBeHidden();
+  await dashboard.locator('summary').filter({hasText:'Tenant system prompt'}).click();
   await expect(dashboard.getByRole("textbox", {name:"Tenant system prompt",exact:true})).toHaveValue("");
 });
 
@@ -3088,6 +3121,7 @@ test("model previews require an explicit save and preserve the other capability 
   const dashboard = page.locator("connection-dashboard");
   await dashboard.getByRole("button",{name:"Default DeepSeek",exact:true}).click();
   await dashboard.locator('[data-model="deepseek-v4-flash"]').click();
+  await dashboard.locator('summary').filter({hasText:'Tenant system prompt'}).click();
   await dashboard.getByRole("textbox",{name:"Tenant system prompt",exact:true}).fill("Use tenant guidance.");
   await page.keyboard.press("Tab");
   expect(mutations).toHaveLength(0);
@@ -3197,6 +3231,7 @@ test("failed model default saves preserve the draft and saved route for retry", 
   await page.goto(baseURL + applicationPath);
   const dashboard=page.locator("connection-dashboard");
   await dashboard.locator('[data-model="gpt-5.5"]').click();
+  await dashboard.locator('summary').filter({hasText:'Tenant system prompt'}).click();
   await dashboard.getByRole("textbox",{name:"Tenant system prompt",exact:true}).fill("Keep my draft after a failed save.");
   await dashboard.getByRole("combobox",{name:"Reasoning effort"}).selectOption("high");
   await dashboard.getByRole("button",{name:"Save text default"}).click();
@@ -3371,7 +3406,7 @@ test("public Log In authenticates through MPR UI before opening the app", async 
 
   await expect(page).toHaveURL(`${baseURL}${applicationPath}`);
   expect(await page.evaluate(() => history.length)).toBe(landingHistoryLength);
-  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tenants → connections → models" })).toBeVisible();
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
   await expect.poll(() => profileRequests.length).toBeGreaterThanOrEqual(1);
 });
@@ -3383,7 +3418,7 @@ test("a restored authenticated session replaces the anonymous landing with the a
   await page.goto(baseURL);
 
   await expect(page).toHaveURL(`${baseURL}${applicationPath}`);
-  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tenants → connections → models" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Integrate once. Use the model that fits." })).toHaveCount(0);
 });
 
@@ -3400,7 +3435,7 @@ test("startup reconciles MPR UI authentication after the lifecycle event has pas
   await page.goto(`${baseURL}${applicationPath}`);
 
   await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "authenticated");
-  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tenants → connections → models" })).toBeVisible();
   await expect.poll(() => profileRequests.length).toBeGreaterThanOrEqual(1);
 });
 
@@ -5923,24 +5958,7 @@ test("model task taxonomy separates vision from image generation", async ({ page
   expect(new Set(filterRows).size).toBe(1);
 });
 
-test("F084 filters model tasks with independently selectable buttons", async ({ page }) => {
-  await installAssetRoutes(page, {initialAuthStatus:'unauthenticated'});
-  await page.goto(baseURL);
-  const tree = page.locator('routing-tree');
-  await expect(tree).toHaveAttribute('data-enhanced', 'true');
-  const explorerFilter = tree.locator('[data-task-filter]');
-  await expect(explorerFilter).toBeVisible();
-  await expect(tree.locator('[data-task="text"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(tree.locator('[data-task-filter] [data-task][disabled]')).toHaveCount(0);
-  await tree.locator('[data-task="image_generation"]').click();
-  await expect(tree.locator('[data-task="text"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(tree.locator('[data-task="image_generation"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(tree.locator('[data-route-family="kimi-k3"]')).toBeHidden();
-  await tree.locator('[data-task="text"]').click();
-  await expect(tree.locator('[data-task="image_generation"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(tree.locator('[data-route-family="gpt-image"]')).toBeVisible();
-  await tree.locator('[data-task="image_generation"]').click();
-  await expect(tree.locator('[data-task="image_generation"]')).toHaveAttribute('aria-pressed', 'true');
+test("F084 filters dashboard model tasks with independently selectable buttons", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page);
   let defaultWrites = 0;
@@ -5983,6 +6001,12 @@ test("F084 filters model tasks with independently selectable buttons", async ({ 
   expect(await dashboard.evaluate(element => element.scrollWidth <= element.clientWidth)).toBeTruthy();
   expect(defaultWrites).toBe(0);
 });
+
+async function selectRouteFilters(root, capability, input='', output='') {
+  await root.locator(`[data-route-capability="${capability}"]`).click();
+  await root.getByLabel('Input',{exact:true}).selectOption(input);
+  await root.getByLabel('Output',{exact:true}).selectOption(output);
+}
 
 async function selectModelTask(root, task) {
   const target = root.locator(`[data-task="${task}"]`);

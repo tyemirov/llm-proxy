@@ -389,6 +389,10 @@ Each request has separate collections for attempts, usage observations, and reco
 The collections use ascending opaque identifiers and cursor pagination with at most 100 records per response.
 The browser loads each additional page only when the customer requests it.
 
+The browser updates the loaded pages every 30 seconds while the application is visible.
+It also updates them when the application receives focus.
+Successful updates preserve the selected request and its loaded evidence pages.
+
 The account and request ownership checks apply to every collection read.
 Journal GET requests do not change retained evidence. Responses use `Cache-Control: no-store`.
 Provider identifiers, source fields, adapter details, and private resolution notes stay private.
@@ -408,7 +412,8 @@ The browser validates financial responses before display and formats exact integ
 The display uses at most six decimal places and marks nonterminating or smaller fractions as approximate amounts.
 Values below USD 0.000001 display `Less than $0.000001`.
 Each amount retains its exact numerator and denominator in its title.
-A failed charge refresh removes the prior charge list and provides a retry control.
+A failed charge read removes the prior charge list and shows an error.
+The next automatic update reads the charges again.
 
 The request children are `attempts`, `observations`, and `reconciliation-cases` under the current account request resource.
 The browser shows open and resolved cases through safe identifiers and reasons.

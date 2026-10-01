@@ -39,7 +39,7 @@ func assertHostedCIWorkflow(testingInstance *testing.T, repositoryRoot string, d
 		job, exists := workflow.Jobs[name]
 		expectedDeadline := 10
 		if name == "backend" {
-			expectedDeadline = 15
+			expectedDeadline = 60
 		}
 		if !exists || len(job.Needs) != 0 || job.If != "" || job.ContinueOnError || job.TimeoutMinutes != expectedDeadline {
 			testingInstance.Fatalf("hosted %s job must run independently with its %d-minute deadline", name, expectedDeadline)

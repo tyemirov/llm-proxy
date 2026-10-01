@@ -35,6 +35,100 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B302] (P2) Split remaining coverage before the native test deadline.
+  Evidence: PR 347 passes all six hosted groups, then the remaining group reaches its ten-minute limit.
+  The active oversized-body test runs for less than one second before the group times out.
+  Requirements:
+  - Split the non-hosted tests into three disjoint complete passes.
+  - Include examples and tests outside the two selected name ranges in the final pass.
+  - Merge all profiles with the existing hosted groups and executable probes.
+  - Preserve every package, test, native deadline, job budget, and coverage requirement.
+  - Update the runner contract and current automation documentation.
+  Validation: Run the public coverage contract and all three real non-hosted coverage groups.
+  GitHub log: https://github.com/tyemirov/llm-proxy/actions/runs/36840782335/job/110299130017
+  Files: `scripts/check_coverage.sh`, `tests/operational_contract_test.go`, and `README.md`.
+  New event contracts: None.
+  Resolution: Three disjoint passes replace the remaining pass. The coverage merge includes all three profiles.
+  The final pass includes examples and test names outside the selected ranges.
+  Native test deadlines, the job budget, and the 100 percent coverage gate stay unchanged.
+  Validation: The old runner failed the updated contract. The corrected public runner contract passed.
+  All three real proxy coverage groups passed in 132.811, 68.866, and 82.719 seconds.
+  Every declared test and example belongs to exactly one of the nine groups. Go analysis and format checks passed.
+  Logs: `/tmp/llm-proxy-pr347-remaining-after.log`, `/tmp/llm-proxy-pr347-remaining-first.log`,
+  `/tmp/llm-proxy-pr347-remaining-middle.log`, and `/tmp/llm-proxy-pr347-remaining-final.log`.
+
+- [x] [B301] (P2) Split other hosted coverage before the native test deadline.
+  Evidence: PR 347 completes funds, payments, media, and runtime coverage, then the other hosted group times out.
+  The active result publication test runs for eight seconds before the group reaches its ten-minute limit.
+  Requirements:
+  - Split the other hosted tests into two disjoint complete passes.
+  - Merge both profiles with the existing coverage groups and executable probes.
+  - Preserve every package, test, native deadline, and coverage requirement.
+  - Allocate 60 minutes for the seven passes, setup, compilation, and executable probes.
+  - Update the runner contract and current automation documentation.
+  Validation: Run the public coverage contract and both real hosted coverage groups.
+  GitHub log: https://github.com/tyemirov/llm-proxy/actions/runs/36835857992/job/110282979252
+  Files: `scripts/check_coverage.sh`, `tests/operational_contract_test.go`, `.github/workflows/test.yml`, `tests/hosted_ci_contract_test.go`, and `README.md`.
+  New event contracts: None.
+  Resolution: Two disjoint passes replace the other hosted pass. The coverage merge includes both profiles.
+  The overall job budget is 60 minutes. Native test deadlines and the 100 percent coverage gate stay unchanged.
+  Validation: The old runner failed the updated contract. The corrected runner and hosted workflow contracts passed.
+  Both real hosted groups passed in 216.808 and 123.523 seconds. Go analysis and format checks passed.
+  Logs: `/tmp/llm-proxy-pr347-partition-after.log`, `/tmp/llm-proxy-pr347-hosted-first.log`, and `/tmp/llm-proxy-pr347-hosted-remaining.log`.
+
+- [x] [B300] (P2) Install the snapshot dependency before hosted backend coverage.
+  Evidence: PR 347 backend coverage fails with `/bin/bash: line 1: uv: command not found`.
+  The financial backup test runs `make snapshot-managed-database`, which requires `uv`.
+  Requirements:
+  - Install `uv` after Python setup and before backend coverage.
+  - Use the same installation command as the existing backend supporting job.
+  - Preserve all qualification targets and job deadlines.
+  Validation: Run the database snapshot scenario and the hosted workflow contract.
+  GitHub log: https://github.com/tyemirov/llm-proxy/actions/runs/36829903605/job/110263886150
+  Files: `.github/workflows/test.yml`.
+  New event contracts: None.
+  Resolution: The backend job installs `uv` after Python setup and before coverage.
+  Validation: Both snapshot tests, the financial backup test, and the hosted workflow contract passed.
+  Logs: `/tmp/llm-proxy-pr347-snapshot.log` and `/tmp/llm-proxy-pr347-workflow.log`.
+
+- [x] [B299] (P2) Render prepaid request denials in usage status summaries.
+  Evidence: An automatic usage update throws `app_integrity_error` after an unfunded request returns HTTP 402.
+  The browser status labels omit HTTP 402 and HTTP 403, which prepaid requests currently return.
+  Requirements:
+  - Add explicit labels for both current statuses.
+  - Verify the labels after real unfunded and suspended requests.
+  - Keep automatic usage updates and failure details usable.
+  Validation: Use the real management browser scenario and final CI.
+  Initial log: `/tmp/llm-proxy-new-annotations-ci-bounded.log`.
+  Initial focused error: The HTTP 402 summary has no `Payment required` label.
+  Log: `/tmp/llm-proxy-b299-before.log`.
+  Progress: Both status summaries and failed request details pass after real unfunded and suspended requests.
+  Focused log: `/tmp/llm-proxy-b299-after.log`.
+  Files: `constants.js`, `hosted-service.spec.js`, and `docs/tenant-connections.md`.
+  New event contracts: None.
+  Resolution: Usage summaries and failed request details label both current prepaid denial statuses.
+  Final validation: `make ci` passed all 14 gates with 100.0 percent Go statement coverage.
+  Final log: `/tmp/llm-proxy-annotations-ci-accepted.log`.
+  Browser evidence: Chromium at viewport widths from 320 to 1440 pixels. All 165 frontend and 11 real management scenarios passed.
+  Documentation review: No findings in changed prose. The checker reports 197 existing findings outside the changed lines.
+
+
+- [x] [B298] (P2) Keep dashboard system prompts out of view until selected.
+  Evidence: Annotation 2 shows an expanded provider prompt on initial selection.
+  Expected: Tenant and provider prompt editors start collapsed, as specified by I034.
+  Requirements:
+  - Put both prompt editors in native disclosures.
+  - Remove the disclosure `open` attribute after its tenant, connection, or model context changes.
+  - Keep expanded editors and their drafts available after a failed save.
+  Validation: Verify initial state, keyboard access, context changes, saved values, and failed saves through the browser.
+  Progress: The browser check failed because the tenant prompt was visible. Both editors now use native disclosures.
+  Keyboard access, tenant and connection changes, model changes, saved values, and both failed save retries passed in the real management browser test.
+  Logs: `/tmp/llm-proxy-b298-before.log`, `/tmp/llm-proxy-b298-final-browser.log`, and `/tmp/llm-proxy-annotations-ci-final.log`.
+  Resolution: Both editors start collapsed and retain expanded drafts after failed saves.
+  Final `make ci` passed all 14 gates, including 165 frontend browser tests and 11 real management browser tests.
+  Deliverables: `connectionDashboard.js`, `styles.css`, `connection-dashboard.spec.js`, `management-ui.spec.js`, `docs/tenant-connections.md`, and repository terminology.
+  API and event contracts remain unchanged.
+
 - [x] [B296] (P1) Accept documented Paddle payment timestamps.
   Evidence:
   Completed transactions without `completed_at` remain pending with `transaction_event_mismatch`.
@@ -1951,6 +2045,228 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## Improvements
 
+- [x] [I308] (P2) Complete account creation before the payment history test reads the account.
+  Evidence: PR 347 payment history qualification reads an empty account collection after the setup button click.
+  The test then reports `Cannot read properties of undefined (reading 'id')`.
+  Requirements:
+  - Reproduce delayed account creation through the public HTTP boundary.
+  - Wait for rendered funding history before the direct account read.
+  - Preserve the payment, receipt, refund hold, and pagination assertions.
+  - Keep production code and test deadlines unchanged.
+  Validation: Run repeated payment scenarios and the complete browser acceptance target.
+  GitHub log: https://github.com/tyemirov/llm-proxy/actions/runs/36835857992/job/110282979355
+  Files: `tests/blackbox/hosted-payments.spec.js`.
+  New event contracts: None.
+  Resolution: The existing funding history check now precedes the direct account read.
+  Validation: A controlled 100-millisecond creation delay reproduced the initial failure.
+  Five delayed payment scenarios and all eleven browser acceptance scenarios passed after the correction.
+  Logs: `/tmp/llm-proxy-pr347-payment-before.log`, `/tmp/llm-proxy-pr347-payment-after.log`, and `/tmp/llm-proxy-pr347-blackbox-final.log`.
+
+- [x] [I307] (P2) Allocate the hosted coverage job budget for all six native groups.
+  Evidence: PR 347 completes financial coverage in 439.839 seconds and payment coverage in 330.712 seconds.
+  The fifteen-minute job limit cancels the third group before complete coverage can merge.
+  Requirements:
+  - Set the coverage job limit to 45 minutes.
+  - Preserve the native Go test deadline and all six coverage groups.
+  - Preserve the 100 percent coverage requirement and executable probes.
+  - Keep the other qualification job limits unchanged.
+  Validation: Run the hosted workflow contract through its public Make target.
+  GitHub log: https://github.com/tyemirov/llm-proxy/actions/runs/36833995280/job/110276884313
+  Files: `.github/workflows/test.yml`, `tests/hosted_ci_contract_test.go`, and `README.md`.
+  New event contracts: None.
+  Resolution: The coverage job has a 45-minute limit. Each native test pass retains its ten-minute limit.
+  Validation: The old workflow failed the updated contract. The corrected workflow passed it.
+  Logs: `/tmp/llm-proxy-pr347-budget-before.log` and `/tmp/llm-proxy-pr347-budget-after.log`.
+
+- [x] [I306] (P2) Reuse the unchanged OpenAPI document in financial HTTP tests.
+  Evidence: PR 347 backend coverage reaches the native ten-minute deadline during active financial tests.
+  Its stack shows repeated OpenAPI parsing in `ratingHTTPExchange`.
+  The local startup scenario spends 13 percent of sampled CPU time in `openapitest.Load`.
+  Requirements:
+  - Load the canonical document once per financial test process.
+  - Preserve response validation for every HTTP exchange.
+  - Keep production code and test deadlines unchanged.
+  Validation: Run the startup scenario, race checks, and the complete financial coverage group.
+  GitHub log: https://github.com/tyemirov/llm-proxy/actions/runs/36831563341/job/110269126937
+  Files: `internal/proxy/hosted_rating_acceptance_internal_test.go`.
+  New event contracts: None.
+  Resolution: `sync.OnceValues` loads the unchanged document once for the financial HTTP helper.
+  Validation: The startup scenario passed in 3.611 seconds, compared with 6.263 seconds before the change.
+  Three race scenarios passed. The complete financial coverage group passed in 185.156 seconds.
+  Logs: `/tmp/llm-proxy-pr347-funds-after.log`, `/tmp/llm-proxy-pr347-funds-race.log`, and `/tmp/llm-proxy-pr347-funds-group.log`.
+
+- [x] [I305] (P2) Wait for the financial history update before the focus test.
+  Evidence: PR 347 frontend qualification reports no new balance read after the focus event.
+  The test observes request arrival before the previous automatic update completes its history reads.
+  Requirements:
+  - Wait for changed financial history to appear before the focus event.
+  - Preserve the request count, draft, pagination, and financial value checks.
+  - Keep production code and test deadlines unchanged.
+  Validation: Repeat the hosted access scenario through the real browser and local services.
+  GitHub log: https://github.com/tyemirov/llm-proxy/actions/runs/36831563341/job/110269127306
+  Files: `tests/blackbox/hosted-access.spec.js`.
+  New event contracts: None.
+  Resolution: The test waits for the changed ledger amount before it sends the focus event.
+  Validation: Five repeated hosted access browser scenarios passed through the real local services.
+  Log: `/tmp/llm-proxy-pr347-hosted-access.log`.
+
+- [x] [I304] (P2) Cancel the rate-limit test after the request starts its rate wait.
+  Evidence: PR 347 fails `backend-checks` because cancellation expires during tenant authentication.
+  The test then reports `expected one delayed rate-limit log`.
+  Requirements:
+  - Reproduce request preparation that exceeds the cancellation interval.
+  - Observe the current `rate_wait` admission event before the cancellation timer starts.
+  - Preserve the 40-millisecond interval, HTTP 499, one upstream call, and both rate-limit logs.
+  - Keep production code unchanged.
+  Validation: Run repeated real HTTP scenarios under the race detector and the failing race target.
+  GitHub log: https://github.com/tyemirov/llm-proxy/actions/runs/36829903605/job/110263886229
+  Files: `tests/integration/upstream_rate_limit_test.go`.
+  New event contracts: None.
+  Resolution: The 40-millisecond timer starts after the real request enters its rate wait.
+  Validation: Ten focused scenarios and the full admission race target passed.
+  Logs: `/tmp/llm-proxy-pr347-before.log`, `/tmp/llm-proxy-pr347-focused.log`, and `/tmp/llm-proxy-pr347-race-suite.log`.
+
+- [x] [I303] (P2) Align the reversal test clock with its accepted price interval.
+  Evidence: Refund and chargeback scenarios return `financial_admission_unavailable` after the UTC month changes.
+  The test admits requests at the current time but retains September prices.
+  Requirements:
+  - Capture one acceptance time for each reversal scenario.
+  - Construct prices for that time and use the same request clock.
+  - Retain real HTTP execution, background reconciliation, and payment reversals.
+  Validation: Run repeated reversal scenarios and final CI.
+  Initial logs: `/tmp/llm-proxy-annotations-ci-verified.log` and `/tmp/llm-proxy-funds-reversal-investigation.log`.
+  Initial error: HTTP 503 instead of HTTP 200 for both payment reversals.
+  Progress: Refund and chargeback scenarios pass ten consecutive runs with one acceptance clock per scenario.
+  Focused log: `/tmp/llm-proxy-i303-after.log`.
+  Files: `internal/proxy/hosted_funds_reversal_internal_test.go`.
+  New event contracts: None.
+  Resolution: Each reversal scenario uses one acceptance time for its request and price interval.
+  Final validation: `make ci` passed all 14 gates with 100.0 percent Go statement coverage.
+  Final log: `/tmp/llm-proxy-annotations-ci-accepted.log`.
+
+
+- [x] [I302] (P2) Verify telemetry phases against observed admission waits.
+  Evidence: Race validation measured 88 milliseconds of rate wait after 51 milliseconds of authentication.
+  The test incorrectly required at least 100 milliseconds of rate wait in a 140-millisecond window.
+  Requirements:
+  - Reproduce provider latency that consumes part of the rate window.
+  - Compare the summary with the limiter's measured wait for the same request.
+  - Keep queue and rate wait in separate telemetry phases.
+  - Start the queue hold after the queued admission event.
+  - Keep the current intervals and test timeouts.
+  Validation: Run repeated HTTP scenarios under the race detector and final CI.
+  Initial log: `/tmp/llm-proxy-new-annotations-ci-final.log`.
+  Initial controlled scenario: The old assertion rejected 43 milliseconds of remaining-window wait.
+  Progress: Both telemetry scenarios pass ten consecutive runs under the race detector.
+  Logs: `/tmp/llm-proxy-i302-before.log` and `/tmp/llm-proxy-i302-after.log`.
+  Files: `tests/integration/request_telemetry_test.go`.
+  New event contracts: None.
+  Resolution: Telemetry assertions use observed waits and deterministic queue admission.
+  Final validation: `make ci` passed all 14 gates with 100.0 percent Go statement coverage.
+  Final log: `/tmp/llm-proxy-annotations-ci-accepted.log`.
+
+
+- [x] [I301] (P2) Verify stale checkout candidates with a controlled worker interleaving.
+  Evidence: CI reported an uncovered block at `hosted_payments_checkout.go:85.4,85.12` after all test groups passed.
+  Requirements:
+  - Make one worker read a candidate before another worker completes its checkout.
+  - Verify that the stale worker does not create another processor transaction.
+  - Verify checkout retrieval, funds, and payment replay through HTTP.
+  - Cover the lost-claim branch without a scheduling race.
+  Validation: Use the focused payment scenario with coverage and final CI.
+  Initial log: `/tmp/llm-proxy-new-annotations-ci-final.log`.
+  Progress: A controlled interleaving passes checkout and payment replay through HTTP.
+  The lost-claim coverage block executes once.
+  Logs: `/tmp/llm-proxy-i301-after.log` and `/tmp/llm-proxy-i301-coverage.out`.
+  Files: `internal/proxy/hosted_payments_checkout_recovery_internal_test.go`.
+  New event contracts: None.
+  Resolution: The test controls worker ordering and verifies one processor transaction and payment replay.
+  Final validation: `make ci` passed all 14 gates with 100.0 percent Go statement coverage.
+  Final log: `/tmp/llm-proxy-annotations-ci-accepted.log`.
+
+
+- [x] [I300] (P2) Split the combined hosted coverage group into bounded workloads.
+  Evidence: Annotation CI stopped with `panic: test timed out after 10m0s` in the combined hosted group.
+  The active `TestHostedRuntimeTextCatalogFinancialAcceptance` scenario ran for 23 seconds before the group limit expired.
+  Requirements:
+  - Run media and runtime coverage in separate groups.
+  - Keep the current test timeout.
+  - Execute every test and merge every coverage profile.
+  - Preserve the 100 percent statement coverage gate.
+  Validation: Use the coverage script acceptance scenario and final CI.
+  Initial log: `/tmp/llm-proxy-new-annotations-ci.log`.
+  Initial acceptance error: `coverage test group missing`, exit status 27.
+  Progress: The script acceptance scenario passes with separate media and runtime groups and six merged test profiles.
+  Logs: `/tmp/llm-proxy-i300-before.log` and `/tmp/llm-proxy-i300-after.log`.
+  Environment failure: A later CI run stopped with `no space left on device` during coverage and SQLite writes.
+  Log: `/tmp/llm-proxy-new-annotations-ci-complete.log`.
+  Recovery: Go build-cache and download-archive cleanup restored about 10 GiB of free space.
+  Final CI uses `GOFLAGS=-p=1` and `GOMEMLIMIT=1GiB` to limit peak resource use.
+  Files: `scripts/check_coverage.sh`, `tests/operational_contract_test.go`, and `README.md`.
+  New event contracts: None.
+  Resolution: Six bounded coverage groups execute every test and merge every profile with the existing coverage gate.
+  Final validation: `make ci` passed all 14 gates with 100.0 percent Go statement coverage.
+  Final log: `/tmp/llm-proxy-annotations-ci-accepted.log`.
+
+
+- [x] [I299] (P2) Keep tenant access in the connection action header.
+  Evidence: Browser comment 1 identifies a separate footer action below the connection details.
+  Requirements:
+  - Put tenant details and API access beside Edit connection and Detach.
+  - Remove the separate tenant action footer.
+  - Preserve keyboard actions and narrow layouts.
+  Validation: Use the real management browser scenario.
+  Progress: The header action and tenant API flow pass the real management browser scenario from 320 to 1440 pixels.
+  Logs: `/tmp/llm-proxy-i299-before.log` and `/tmp/llm-proxy-new-annotations-blackbox.log`.
+  Files: `connectionDashboard.js`, `styles.css`, `connection-dashboard.spec.js`, and `docs/tenant-connections.md`.
+  New event contracts: None.
+  Resolution: Tenant details and API access now share the connection action header.
+  Final validation: `make ci` passed all 14 gates with 100.0 percent Go statement coverage.
+  Final log: `/tmp/llm-proxy-annotations-ci-accepted.log`.
+  Browser evidence: Chromium at viewport widths from 320 to 1440 pixels. All 165 frontend and 11 real management scenarios passed.
+
+
+- [x] [I298] (P2) Parse database snapshot receipts from standard output.
+  Evidence: The snapshot restoration test parsed combined CLI output as JSON during annotation validation.
+  A `uv` diagnostic caused `invalid character 'W' looking for beginning of value` in `make ci`.
+  Requirements:
+  - Parse the JSON receipt from standard output.
+  - Keep standard error available in test failure output.
+  - Verify financial evidence after restoration through the existing acceptance scenario.
+  Validation: Run the focused snapshot restoration test and final CI.
+  Initial log: `/tmp/llm-proxy-annotations-ci.log`.
+  Progress: The focused restoration scenario passed with separate output streams.
+  Logs: `/tmp/llm-proxy-annotations-snapshot-after.log` and `/tmp/llm-proxy-annotations-ci-final.log`.
+  Resolution: The test separates receipt data and diagnostics. Final CI passed all 14 gates with 100.0 percent Go statement coverage.
+  Deliverable: `internal/proxy/hosted_funds_backup_internal_test.go`. Product contracts remain unchanged.
+
+- [x] [I297] (P2) Apply the recovered interface annotations.
+  Goal: Make route filters and tenant controls compact and clear.
+  Requirements:
+  - Align route filter groups and input/output selectors. Annotation 1 specifies the affected surface.
+  - Keep connection detail actions together. Annotation 3 identifies excessive spacing.
+  - Remove the duplicate Resources card from the app. Retain the footer links for annotation 4.
+  - Align Hosted access text and actions in a compact panel for annotation 5.
+  - Put search between the tenant workspace title and the MCP copy action for annotations 6 and 8.
+  - Put a search icon at the right of the search field.
+  - Remove redundant dashboard headings for annotations 7 and 8.
+  Validation: Verify filter behavior, search, copy, action alignment, footer links, and narrow layouts through the browser.
+  Progress: The initial browser checks reproduced the filter height, duplicate title, and account action placement defects.
+  The corrected public filters passed at 1440, 899, 390, and 320 pixels.
+  Real management browser checks passed for grouped actions, search, clipboard copy, footer links, and hosted onboarding.
+  Frontend lint passed. Screenshots are in `/tmp/llm-proxy-annotations/`.
+  Resolution: All seven layout changes are completed. B298 resolves the prompt annotation.
+  Final `make ci` passed all 14 gates with 100.0 percent Go statement coverage.
+  All 165 frontend browser tests and 11 real management browser tests passed.
+  The initial CI found the snapshot test defect in I298 and a timing threshold failure.
+  I298 corrects the snapshot test. The timing scenario and full race suite passed in the final CI.
+  The Governor check retained the existing manifest finding recorded in I295.
+  Logs: `/tmp/llm-proxy-i297-app-before.log`, `/tmp/llm-proxy-i297-filters-before.log`, `/tmp/llm-proxy-i297-app-after.log`, and `/tmp/llm-proxy-i297-filters-after.log`.
+  Stack log: `/tmp/llm-proxy-annotations-ci-final.log`.
+  Deliverables: `render_public_site.mjs`, `site/app/index.html`, `constants.js`, `adminDashboard.js`, `connectionDashboard.js`, `landing.css`, and `styles.css`.
+  Browser files: `connection-dashboard.spec.js`, `hosted-access.spec.js`, `management-auth.spec.js`, and `management-ui.spec.js`.
+  The current interface contract is in `docs/tenant-connections.md`. API and event contracts remain unchanged.
+
 - [!] [I295] (P0) Record external integrations and their promotional evidence.
   Goal: Give integrations one evidence register and a procedure for consumer updates.
   Requirements:
@@ -3506,6 +3822,53 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   was required.
 
 ## Features
+
+- [x] [F088] (P2) Update prepaid provider access and financial data automatically.
+  Goal: Give customers current access and financial data without manual Refresh actions.
+  Requirements:
+  - Replace Hosted access labels with clear prepaid provider access labels.
+  - Keep account creation beside its billing context.
+  - Remove all customer Refresh actions from access, balance, payments, usage, and charges.
+  - Update visible data every 30 seconds and when the application returns to the foreground.
+  - Preserve tenant selection, drafts, selected records, and visible collection pages.
+  - Stop updates when the component disconnects or the session ends.
+  - Show read failures and recover on the next automatic update.
+  Validation: Use browser timers and real management HTTP endpoints. Verify errors, drafts, and lifecycle cleanup.
+  Progress: Controlled browser timers verify updates, failure recovery, draft preservation, loaded pages, foreground focus, and component removal.
+  Logs: `/tmp/llm-proxy-f088-before.log`, `/tmp/llm-proxy-f088-after.log`, and `/tmp/llm-proxy-new-annotations-blackbox.log`.
+  Files: `automaticUpdates.js`, `connectionDashboard.js`, `prepaidBalance.js`, `paymentHistory.js`, and `usageJournal.js`.
+  Browser scenarios: `hosted-access.spec.js`, `hosted-payments.spec.js`, and `hosted-service.spec.js`.
+  Documents: `docs/tenant-connections.md`, `docs/hosted-billing.md`, and `.mprlab/TERMINOLOGY.md`.
+  New event contracts: None. The application uses the existing management REST resources and funding event.
+  Resolution: Prepaid provider access and financial data update automatically every 30 seconds and on foreground focus. Drafts and visible pages remain available.
+  Final validation: `make ci` passed all 14 gates with 100.0 percent Go statement coverage.
+  Final log: `/tmp/llm-proxy-annotations-ci-accepted.log`.
+  Browser evidence: Chromium at viewport widths from 320 to 1440 pixels. All 165 frontend and 11 real management scenarios passed.
+
+
+- [x] [F089] (P2) Filter public routes with labeled capabilities and modalities.
+  Goal: Replace the task icon strip with one clear capability control group.
+  Requirements:
+  - Keep Proprietary and Open weights controls.
+  - Put All capabilities, Tools, Web search, Reasoning, and available media capabilities in the same control row.
+  - Keep Input and Output selectors.
+  - Remove the independent task filter state and icon strip from the public route header.
+  - Filter exact provider offerings through the selected capability and modalities.
+  - Preserve route details, keyboard actions, and narrow layouts.
+  Validation: Use browser checks for text, media, empty results, and viewport widths from 320 to 1440 pixels.
+  Progress: Labeled feature and media controls pass exact-offering, modality, keyboard, and static-renderer checks.
+  A screenshot review found clipped labels at 320 pixels. The layout check now measures each control.
+  Initial layout error: A control ended at 413.73 pixels in a 390-pixel viewport.
+  Logs: `/tmp/llm-proxy-f089-before.log`, `/tmp/llm-proxy-f089-after.log`, and `/tmp/llm-proxy-new-annotations-focused.log`.
+  Initial renderer error: The HTML test expected the former `Additional capabilities` group and button attributes.
+  Corrected renderer checks pass in `/tmp/llm-proxy-f089-renderer-after.log`.
+  Files: `constants.js`, `routingTree.js`, `landing.css`, `scripts/render_public_site.mjs`, `management-ui.spec.js`, `public-site-renderer.spec.js`, and `README.md`.
+  New event contracts: None.
+  Resolution: Labeled weight, feature, and media filters share the public route controls with Input and Output.
+  Final validation: `make ci` passed all 14 gates with 100.0 percent Go statement coverage.
+  Final log: `/tmp/llm-proxy-annotations-ci-accepted.log`.
+  Browser evidence: Chromium at viewport widths from 320 to 1440 pixels. All 165 frontend and 11 real management scenarios passed.
+
 
 - [ ] [F087] (P1) Configure and qualify the LLM Proxy Paddle sandbox.
   Status:

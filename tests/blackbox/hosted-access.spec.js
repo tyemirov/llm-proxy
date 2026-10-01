@@ -1,6 +1,6 @@
 // @ts-check
 import {expect, test} from '@playwright/test';
-import {readFile} from 'node:fs/promises';
+import {mkdir,readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {assets, directory} from './sharedUIAssets.mjs';
 import {localManagementProfile, startLocalManagementStack} from './localManagementStack.mjs';
@@ -10,6 +10,7 @@ test.beforeAll(async()=>{stack=await startLocalManagementStack('frontend', {admi
 test.afterAll(async()=>{if(stack)await stack.stop();});
 
 test('hosted onboarding creates tenant access without provider credentials at desktop and phone widths', async({page, context, browser})=>{
+  await page.clock.install();
   for(const name of Object.keys(assets)) {
     const body=await readFile(path.join(directory,name));
     await page.route(`https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/${name}*`,route=>route.fulfill({body,contentType:name.endsWith('.css')?'text/css':'application/javascript'}));
@@ -32,15 +33,22 @@ test('hosted onboarding creates tenant access without provider credentials at de
   await page.goto(stack.frontendOrigin);
   await page.getByRole('button',{name:'Sign in with Google',exact:true}).click();
   const dashboard=page.locator('connection-dashboard');
-  const hosted=dashboard.getByRole('region',{name:'Hosted access',exact:true});
+  const hosted=dashboard.getByRole('region',{name:'Prepaid provider access',exact:true});
   await expect(hosted).toBeVisible();
-  await expect(hosted.getByRole('button',{name:'Create billing account'})).toBeVisible();
-  await hosted.getByRole('button',{name:'Create billing account'}).click();
-  await expect(hosted).toContainText('USD billing account');
+  await expect(dashboard.getByRole('button',{name:/Refresh/i})).toHaveCount(0);
+  await expect(hosted.getByRole('button',{name:'Set up prepaid balance'})).toBeVisible();
+  await expect(hosted.locator('header').getByRole('button',{name:'Set up prepaid balance'})).toBeVisible();
+  expect((await hosted.boundingBox()).height).toBeLessThanOrEqual(140);
+  await mkdir('/tmp/llm-proxy-new-annotations',{recursive:true});
+  await page.setViewportSize({width:803,height:956});
+  await hosted.screenshot({path:'/tmp/llm-proxy-new-annotations/prepaid-access-803.png'});
+  await hosted.getByRole('button',{name:'Set up prepaid balance'}).click();
+  await expect(hosted).toContainText('USD prepaid account');
+  await expect(dashboard.getByRole('button',{name:/Refresh/i})).toHaveCount(0);
   const funds=dashboard.getByRole('region',{name:'Prepaid balance',exact:true});
   await expect(funds).toBeVisible();
   await expect(funds.locator('[data-funds-value="available_cents"]')).toHaveText('$0.00');
-  await expect(funds).toContainText('No funds available for hosted requests.');
+  await expect(funds).toContainText('No funds available for prepaid usage.');
   await expect(funds).toContainText('Minimum funding: $5.00');
   const tenantLimit=funds.getByRole('region',{name:'Tenant spending limit',exact:true});
   await expect(tenantLimit).toContainText('No tenant limit');
@@ -59,8 +67,8 @@ test('hosted onboarding creates tenant access without provider credentials at de
   await expect(funds).toContainText('No ledger entries yet.');
   const journalView=dashboard.getByRole('region',{name:'Usage journal',exact:true});
   await expect(journalView).toBeVisible();
-  await journalView.getByRole('button',{name:'Load usage journal',exact:true}).click();
-  await expect(journalView).toContainText('No hosted requests yet.');
+  await page.clock.fastForward(30_001);
+  await expect(journalView).toContainText('No provider requests yet.');
   await expect(page.getByLabel('API key',{exact:false})).toHaveCount(0);
   const base=`${stack.llmProxyOrigin}/api/management`;
   const account=await (await context.request.get(`${base}/account`,{headers})).json();
@@ -97,19 +105,19 @@ test('hosted onboarding creates tenant access without provider credentials at de
     const platform=await provision('/platform-connections',{name:'Browser hosted',provider:'openai',fields:{api_key:'sk-private-platform-browser'}});
     const catalog=await (await context.request.get(`${stack.llmProxyOrigin}/api/public/capabilities`)).json();
     const grant=await provision('/hosted-access-grants',{billing_account_id:billing.billing_accounts[0].id,tenant_id:tenant,platform_connection_id:platform.id,catalog_revision:catalog.revision,offerings:[{model:'gpt-4.1',operations:['text']}],reason:'Browser acceptance'});
-    await hosted.getByRole('button',{name:'Refresh hosted access'}).click();
+    await page.clock.fastForward(30_001);
     const card=hosted.locator(`[data-hosted-grant="${grant.id}"]`);
     await expect(card).toContainText('gpt-4.1');
-    await card.getByRole('button',{name:'Use hosted access'}).click();
+    await card.getByRole('button',{name:'Use provider access'}).click();
     await expect(card).toContainText('Assigned');
-    await expect(hosted).toContainText('Hosted requests use your prepaid balance.');
+    await expect(hosted).toContainText('with your prepaid balance.');
     await dashboard.getByRole('button',{name:'API access',exact:true}).click();
     await page.getByRole('dialog').getByRole('button',{name:'Create API key',exact:true}).click();
     await expect(page.getByRole('dialog').getByLabel('Tenant API key')).toHaveValue(/^llmp_/);
     await page.getByRole('button',{name:'Close dialog',exact:true}).click();
     for (const width of [1440,390,320]) {
       await page.setViewportSize({width,height:1000});
-      await expect(card.getByRole('button',{name:'Detach hosted access'})).toBeVisible();
+      await expect(card.getByRole('button',{name:'Detach provider access'})).toBeVisible();
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
     }
     const suspension=await operator.request.patch(`${base}/hosted-access-grants/${grant.id}`,{headers,data:{revision:1,state:'suspended',reason:'Browser suspension'}});
@@ -117,23 +125,23 @@ test('hosted onboarding creates tenant access without provider credentials at de
     await page.reload();
     await expect(card).toContainText('Suspended');
     await expect(card).toContainText('Assigned');
-    await card.getByRole('button',{name:'Detach hosted access'}).click();
+    await card.getByRole('button',{name:'Detach provider access'}).click();
     await page.getByRole('dialog').getByRole('button',{name:'Confirm',exact:true}).click();
     await expect(card).not.toContainText('Assigned');
-    await expect(card.getByRole('button',{name:'Use hosted access'})).toHaveCount(0);
+    await expect(card.getByRole('button',{name:'Use provider access'})).toHaveCount(0);
     await expect(dashboard).not.toContainText(platform.id);
     await expect(dashboard).not.toContainText('sk-private-platform-browser');
     const servicePlatform=await provision('/platform-connections',{name:'Browser hosted services',provider:'elevenlabs',fields:{api_key:'local-eleven-key'}});
     const serviceGrant=await provision('/hosted-access-grants',{billing_account_id:billing.billing_accounts[0].id,tenant_id:tenant,platform_connection_id:servicePlatform.id,catalog_revision:catalog.revision,offerings:[{operations:['audio_alignment','pronunciation_dictionary_creation']}],reason:'Service browser acceptance'});
-    await hosted.getByRole('button',{name:'Refresh hosted access'}).click();
+    await page.clock.fastForward(30_001);
     const serviceCard=hosted.locator(`[data-hosted-grant="${serviceGrant.id}"]`);
     await expect(serviceCard).toContainText('Provider services');
     await expect(serviceCard).toContainText('audio_alignment');
-    await serviceCard.getByRole('button',{name:'Use hosted access'}).click();
+    await serviceCard.getByRole('button',{name:'Use provider access'}).click();
     for(const width of [1440,390,320]) {
       await page.setViewportSize({width,height:1000});
       await expect(serviceCard).toContainText('Assigned');
-      await expect(serviceCard.getByRole('button',{name:'Detach hosted access'})).toBeVisible();
+      await expect(serviceCard.getByRole('button',{name:'Detach provider access'})).toBeVisible();
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
     }
     await expect(dashboard).not.toContainText(servicePlatform.id);
@@ -164,7 +172,7 @@ test('hosted onboarding creates tenant access without provider credentials at de
       else throw new Error('Unexpected journal request: '+url.pathname);
       await route.fulfill({json:body});
     });
-    await journalView.getByRole('button',{name:'Load usage journal',exact:true}).click();
+    await page.clock.fastForward(30_001);
     await journalView.getByRole('button',{name:'Load more requests',exact:true}).click();
     await expect(journalView.locator('[data-journal-request]')).toHaveCount(2);
     await expect(journalView).toContainText('audio alignment');
@@ -180,6 +188,10 @@ test('hosted onboarding creates tenant access without provider credentials at de
     await expect(details).toContainText('1.25 token');
     await expect(details).toContainText('Resolved');
     await expect(details).toContainText('Execution result unknown');
+    await page.clock.fastForward(30_001);
+    await expect(journalView.locator('[data-journal-request]')).toHaveCount(2);
+    await expect(details).toContainText('Attempt 2');
+    await expect(details).toContainText('1.25 token');
     for(const reason of ['usage_unresolved','policy_unresolved','limit_unresolved','platform_exposure']) {
       financialReason=reason;
       await journalView.locator(`[data-journal-request="${requestID}"]`).click();
@@ -261,18 +273,19 @@ test('hosted onboarding creates tenant access without provider credentials at de
     }
     for(const invalid of ['numeric amount','failed read']) {
       invalidCharge=invalid==='numeric amount';failedCharges=invalid==='failed read';
-      await journalView.getByRole('button',{name:'Refresh charges',exact:true}).click();
+      await page.clock.fastForward(30_001);
       await expect(journalView.getByRole('alert')).toBeVisible();
       await expect(charges.locator('[data-charge-id]')).toHaveCount(0);
       await expect(journalView).not.toContainText('private charge diagnostic');
     }
     invalidCharge=false;failedCharges=false;
-    await journalView.getByRole('button',{name:'Refresh charges',exact:true}).click();
+    await page.clock.fastForward(30_001);
     await expect(charges).toContainText('Net charge: $0.012');
 
     const fundsRoot=`${base}/billing-accounts/${billing.billing_accounts[0].id}`;
-    let fundsFailure=false, invalidFunds=false;
+    let fundsFailure=false, invalidFunds=false, balanceReads=0;
     await page.route(fundsRoot+'/balance',async route=>{
+      balanceReads++;
       if(fundsFailure)return route.fulfill({status:500,json:{error:{code:'billing_account_store_failed',detail:'private financial diagnostic'}}});
       return route.fulfill({json:{currency:'USD',state:'active',posted_cents:'9007199254740993',available_cents:invalidFunds?9007199254740493:'9007199254740493',reserved_cents:'500',spent_cents:'123',pending_cents:'200',unsettled_fraction:{numerator:'91',denominator:'25000'}}});
     });
@@ -280,12 +293,13 @@ test('hosted onboarding creates tenant access without provider credentials at de
       const more=new URL(route.request().url()).searchParams.has('cursor');
       return route.fulfill({json:{reservations:[{id:more?secondID:requestID,currency:'USD',maximum_cents:more?'200':'300',state:more?'reconciliation_required':'held',revision:1,created_at:timestamp,updated_at:timestamp}],next_cursor:more?'':requestID}});
     });
+    let ledgerSpendCents='-123';
     await page.route(fundsRoot+'/ledger-entries?*',route=>{
       const more=new URL(route.request().url()).searchParams.has('cursor');
       const entryID=more?'22222222-2222-4222-8222-222222222222':'11111111-1111-4111-8111-111111111111';
-      return route.fulfill({json:{entries:[{id:entryID,currency:'USD',type:more?'spend':'grant',amount_cents:more?'-123':'9007199254740993',reservation_id:null,refund_of_entry_id:null,created_at:timestamp}],next_cursor:more?'':entryID}});
+      return route.fulfill({json:{entries:[{id:entryID,currency:'USD',type:more?'spend':'grant',amount_cents:more?ledgerSpendCents:'9007199254740993',reservation_id:null,refund_of_entry_id:null,created_at:timestamp}],next_cursor:more?'':entryID}});
     });
-    await funds.getByRole('button',{name:'Refresh balance',exact:true}).click();
+    await page.clock.fastForward(30_001);
     await expect(funds.locator('[data-funds-value="available_cents"]')).toHaveText('$90071992547404.93');
     await expect(funds.locator('[data-funds-value="reserved_cents"]')).toHaveText('$5.00');
     await expect(funds.locator('[data-funds-value="pending_cents"]')).toHaveText('$2.00');
@@ -298,6 +312,24 @@ test('hosted onboarding creates tenant access without provider credentials at de
     await expect(funds.locator('[data-funds-entry]')).toHaveCount(2);
     await expect(funds).toContainText('-$1.23');
     await expect(funds).toContainText('Reconciliation required');
+    const limitDraft=funds.getByLabel('Limit in USD');
+    await limitDraft.fill('19.25');
+    const editingReads=balanceReads;
+    await page.clock.fastForward(30_001);
+    await expect(limitDraft).toHaveValue('19.25');
+    expect(balanceReads).toBe(editingReads);
+    ledgerSpendCents='-124';
+    await funds.getByRole('heading',{name:'Prepaid balance',exact:true}).click();
+    await page.clock.fastForward(30_001);
+    await expect.poll(()=>balanceReads).toBeGreaterThan(editingReads);
+    await expect(funds).toContainText('-$1.24');
+    await expect(limitDraft).toHaveValue('19.25');
+    const beforeFocus=balanceReads;
+    await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+    await expect.poll(()=>balanceReads).toBeGreaterThan(beforeFocus);
+    await expect(limitDraft).toHaveValue('19.25');
+    await expect(funds.locator('[data-funds-reservation]')).toHaveCount(2);
+    await expect(funds.locator('[data-funds-entry]')).toHaveCount(2);
     for(const width of [1440,390,320]) {
       await page.setViewportSize({width,height:1000});
       await expect(funds).toBeVisible();
@@ -305,13 +337,18 @@ test('hosted onboarding creates tenant access without provider credentials at de
     }
     for(const failure of ['read','contract']) {
       fundsFailure=failure==='read';invalidFunds=failure==='contract';
-      await funds.getByRole('button',{name:'Refresh balance',exact:true}).click();
+      await page.clock.fastForward(30_001);
       await expect(funds.getByRole('alert')).toBeVisible();
       await expect(funds.locator('[data-funds-value]')).toHaveCount(0);
       await expect(funds).not.toContainText('private financial diagnostic');
     }
     fundsFailure=false;invalidFunds=false;
-    await funds.getByRole('button',{name:'Refresh balance',exact:true}).click();
+    await page.clock.fastForward(30_001);
     await expect(funds.locator('[data-funds-value="available_cents"]')).toHaveText('$90071992547404.93');
+    await expect(dashboard.getByRole('button',{name:/Refresh/i})).toHaveCount(0);
+    await dashboard.evaluate(element=>element.remove());
+    const stoppedReads=balanceReads;
+    await page.clock.fastForward(60_001);
+    expect(balanceReads).toBe(stoppedReads);
   } finally { await operator.close(); }
 });

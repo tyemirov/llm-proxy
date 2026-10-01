@@ -39,6 +39,16 @@ test('account connection dashboard links Social Threader explicitly and preserve
  await expect(page).toHaveURL(`${stack.frontendOrigin}/app/`);
  const dashboard=page.locator('connection-dashboard');
  await expect(dashboard.getByRole('heading',{name:'Tenants → connections → models'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Usage overview',exact:true})).toHaveCount(0);
+ await expect(dashboard.locator('.cw-header .eyebrow')).toHaveCount(0);
+ await expect(page.locator('.public-resource-link')).toHaveCount(0);
+ await expect(page.locator('mpr-footer').getByRole('link',{name:'Resources',exact:true})).toHaveAttribute('href','/resources/');
+ const toolbar=dashboard.locator('.cw-header');
+ const search=toolbar.getByRole('searchbox',{name:'Search dashboard'});
+ await expect(toolbar.locator('.cw-search svg')).toBeVisible();
+ const searchBounds=await search.boundingBox();
+ const copyBounds=await toolbar.getByRole('button',{name:'Copy MCP URL',exact:true}).boundingBox();
+ expect(copyBounds.x).toBeGreaterThan(searchBounds.x+searchBounds.width);
  await expect(page.locator('settings-overlay')).not.toBeVisible();
  await context.grantPermissions(['clipboard-read','clipboard-write'],{origin:stack.frontendOrigin});
  await dashboard.getByRole('button',{name:'Copy MCP URL',exact:true}).click();
@@ -73,6 +83,33 @@ test('account connection dashboard links Social Threader explicitly and preserve
  await page.unroute('**/api/management/connections');
  await expect(dialog).not.toBeVisible();
  await expect(dashboard.locator('[data-connection-node]').filter({hasText:'Production'})).toContainText('Connected');
+ const selectionHeader=dashboard.locator('[data-details] > header');
+ await expect(selectionHeader.getByRole('button',{name:'Tenant details and API access',exact:true})).toBeVisible();
+ await expect(dashboard.locator('.cw-detail-footer')).toHaveCount(0);
+ const editBounds=await selectionHeader.getByRole('button',{name:'Edit connection',exact:true}).boundingBox();
+ const detachBounds=await selectionHeader.getByRole('button',{name:'Detach from Default',exact:true}).boundingBox();
+ expect(detachBounds.x-(editBounds.x+editBounds.width)).toBeLessThanOrEqual(10);
+ await search.fill('Production');
+ await expect(dashboard.locator('[data-connection-node]')).toHaveCount(1);
+ await search.fill('no matching connection');
+ await expect(dashboard.locator('[data-connection-node]')).toHaveCount(0);
+ await search.fill('');
+ await dashboard.locator('[data-model="gpt-4.1"]').click();
+ for (const width of [1440,899,803,390,320]) {
+  await page.setViewportSize({width,height:1050});
+  await expect(dashboard.getByRole('button',{name:'Copy MCP URL',exact:true})).toBeVisible();
+  await expect(dashboard.getByLabel('Provider system prompt for Default')).toBeHidden();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+  for (const control of [search, toolbar.getByRole('button',{name:'Copy MCP URL',exact:true}), selectionHeader.getByRole('button',{name:'Edit connection',exact:true}), selectionHeader.getByRole('button',{name:'Detach from Default',exact:true}), selectionHeader.getByRole('button',{name:'Tenant details and API access',exact:true})]) {
+   const bounds=await control.boundingBox();
+   expect(bounds.x).toBeGreaterThanOrEqual(0);
+   expect(bounds.x+bounds.width).toBeLessThanOrEqual(width);
+  }
+  await page.evaluate(()=>scrollTo(0,0));
+  await page.screenshot({path:`/tmp/llm-proxy-annotations/connections-${width}.png`});
+  await selectionHeader.screenshot({path:`/tmp/llm-proxy-annotations/connection-header-${width}.png`});
+ }
+ await page.setViewportSize({width:1440,height:1050});
  await dashboard.getByRole('button',{name:'Create tenant',exact:true}).click();
  dialog=page.getByRole('dialog');
  await dialog.getByLabel('Tenant name').fill('Social Threader');
@@ -89,6 +126,13 @@ test('account connection dashboard links Social Threader explicitly and preserve
  await expect(dashboard.locator('[data-model="gpt-4.1"] img[data-brand-id="gpt-4"]')).toBeVisible();
  await dashboard.locator('[data-model="gpt-4.1"]').click();
  await expect(dashboard.locator('.cw-wires path.preview')).toHaveCount(1);
+ await expect(dashboard.getByLabel('Tenant system prompt')).toBeHidden();
+ await expect(dashboard.getByLabel('Provider system prompt for Social Threader')).toBeHidden();
+ const tenantDisclosure=dashboard.locator('summary').filter({hasText:'Tenant system prompt'});
+ await tenantDisclosure.focus();
+ await page.keyboard.press('Enter');
+ await expect(dashboard.getByLabel('Tenant system prompt')).toBeVisible();
+ await dashboard.locator('summary').filter({hasText:'Provider system prompt for Social Threader'}).click();
  await dashboard.getByLabel('Tenant system prompt').fill('Keep answers concise.');
  const providerPrompt=dashboard.getByLabel('Provider system prompt for Social Threader');
  await providerPrompt.fill('Keep the provider draft.');
@@ -119,6 +163,29 @@ test('account connection dashboard links Social Threader explicitly and preserve
  await expect(dashboard.locator('.cw-wires path.preview')).toHaveCount(0);
  await expect(dashboard.locator('[data-model="gpt-4.1"]')).not.toHaveClass(/preview/);
  await expect(page.locator('[x-ref="usageTenantSelector"] option:checked')).toHaveText('Social Threader');
+ await dashboard.locator('[data-model="gpt-4o"]').click();
+ await expect(dashboard.getByLabel('Tenant system prompt')).toBeHidden();
+ await expect(providerPrompt).toBeHidden();
+ await dashboard.locator('[data-model="gpt-4.1"]').click();
+ await dashboard.locator('summary').filter({hasText:'Tenant system prompt'}).click();
+ await expect(dashboard.getByLabel('Tenant system prompt')).toHaveValue('Keep answers concise.');
+ await dashboard.locator('summary').filter({hasText:'Provider system prompt for Social Threader'}).click();
+ await expect(providerPrompt).toHaveValue('Keep the provider draft.');
+ await production.getByRole('button',{name:'Production',exact:true}).click();
+ await expect(providerPrompt).toBeHidden();
+ await dashboard.locator('[data-tenant]').filter({hasText:'Default'}).click();
+ await expect(dashboard.getByLabel('Provider system prompt for Default')).toBeHidden();
+ await dashboard.locator('[data-tenant]').filter({hasText:'Social Threader'}).click();
+ await expect(providerPrompt).toBeHidden();
+ await page.reload();
+ await dashboard.locator('[data-tenant]').filter({hasText:'Social Threader'}).click();
+ await dashboard.locator('[data-model="gpt-4.1"]').click();
+ await expect(dashboard.getByLabel('Tenant system prompt')).toBeHidden();
+ await expect(providerPrompt).toBeHidden();
+ await dashboard.locator('summary').filter({hasText:'Tenant system prompt'}).click();
+ await expect(dashboard.getByLabel('Tenant system prompt')).toHaveValue('Keep answers concise.');
+ await dashboard.locator('summary').filter({hasText:'Provider system prompt for Social Threader'}).click();
+ await expect(providerPrompt).toHaveValue('Keep the provider draft.');
 
  await dashboard.getByRole('button',{name:'Tenant details and API access'}).click();
  await dashboard.getByRole('button',{name:'API access',exact:true}).click();

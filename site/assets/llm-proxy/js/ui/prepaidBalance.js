@@ -1,4 +1,5 @@
 // @ts-check
+import {startAutomaticUpdates, updateManagementData, reloadVisibleCollection} from '../core/automaticUpdates.js?v=20260903f037';
 import {FUNDING_CHANGED_EVENT} from '../constants.js?v=20260903f037';
 import * as backend from '../core/backendClient.js?v=20260903f037';
 import {profileFailureMessage} from '../core/managementProfile.js?v=20260903f037';
@@ -37,7 +38,7 @@ class PrepaidBalance extends HTMLElement {
     window.addEventListener(FUNDING_CHANGED_EVENT,event=>{
       if (!(event instanceof CustomEvent) || event.detail.accountID!==this.accountID) return;
       if (this.busy) this.refreshRequested=true;
-      else void this.run(()=>this.loadBalance());
+      else void this.updateLiveData();
     },{signal:this.controller.signal});
     this.addEventListener('input',event=>{
       if (event.target instanceof HTMLInputElement && event.target.name==='tenant-limit') this.limitDraft=event.target.value;
@@ -45,7 +46,6 @@ class PrepaidBalance extends HTMLElement {
     this.addEventListener('click',event=>{
       if (!(event.target instanceof Element) || this.busy) return;
       switch(event.target.closest('button')?.dataset.fundsAction) {
-        case 'refresh':void this.run(()=>this.loadBalance());break;
         case 'history':void this.run(()=>this.loadHistory());break;
         case 'reservations':void this.run(()=>this.moreReservations());break;
         case 'entries':void this.run(()=>this.moreEntries());break;
@@ -53,6 +53,7 @@ class PrepaidBalance extends HTMLElement {
         case 'remove-limit':void this.run(()=>this.saveLimit(true));break;
       }
     },{signal:this.controller.signal});
+    startAutomaticUpdates(this,this.controller.signal,()=>this.updateLiveData());
     void this.run(()=>this.loadBalance());
   }
   disconnectedCallback() { this.controller.abort();this.balance=null;this.clearHistory(); }
@@ -70,9 +71,30 @@ class PrepaidBalance extends HTMLElement {
         this.busy=false;this.render();
         const button=focused?this.querySelector(`[data-funds-action="${CSS.escape(focused)}"]`):null;
         if (button instanceof HTMLButtonElement) button.focus();
-        if (this.refreshRequested) {this.refreshRequested=false;void this.run(()=>this.loadBalance());}
+        if (this.refreshRequested) {this.refreshRequested=false;void this.updateLiveData();}
       }
     }
+  }
+  async updateLiveData() {
+    await updateManagementData(this,async()=>{
+      const [balance,limit]=await Promise.all([
+        backend.fetchFundsBalance(this.accountID,this.controller.signal),
+        this.tenantID?backend.fetchFundsTenantLimit(this.accountID,this.tenantID,this.controller.signal):Promise.resolve(null),
+      ]);
+      if (this.historyLoaded) {
+        const [reservations,entries]=await Promise.all([
+          reloadVisibleCollection(async cursor=>{const page=await backend.fetchFundsReservations(this.accountID,cursor,this.controller.signal);return {items:page.reservations,next_cursor:page.next_cursor};},this.reservations.reservations.length),
+          reloadVisibleCollection(async cursor=>{const page=await backend.fetchFundsEntries(this.accountID,cursor,this.controller.signal);return {items:page.entries,next_cursor:page.next_cursor};},this.entries.entries.length),
+        ]);
+        this.reservations={reservations:reservations.items,next_cursor:reservations.next_cursor};
+        this.entries={entries:entries.items,next_cursor:entries.next_cursor};
+      }
+      const saved=this.tenantLimit?.limit_cents;
+      const savedDraft=saved===null || saved===undefined?'':dollars(saved).slice(1);
+      const dirty=this.limitDraft!==savedDraft || Boolean(this.limitFailure);
+      this.balance=balance;if(limit && !dirty)this.setTenantLimit(limit);this.failure='';
+    },()=>this.render(),error=>{this.balance=null;this.clearHistory();this.failure=error instanceof backend.BackendClientError?backend.managementFailureMessage(error):profileFailureMessage(error);});
+    if(this.refreshRequested && !this.controller.signal.aborted){this.refreshRequested=false;void this.updateLiveData();}
   }
   async loadBalance() {
     this.balance=null;this.tenantLimit=null;this.clearHistory();
@@ -119,7 +141,7 @@ class PrepaidBalance extends HTMLElement {
   render() {
     const balance=this.balance,disabled=this.busy?'disabled':'';
     this.innerHTML=`<section class="prepaid-balance cw-details" aria-label="Prepaid balance" aria-busy="${this.busy}">
-      <header class="cw-row"><h3>Prepaid balance</h3><button data-funds-action="refresh" ${disabled}>Refresh balance</button></header>
+      <header class="cw-row"><h3>Prepaid balance</h3></header>
       <p>Minimum funding: $5.00. You can spend your balance down to $0.00.</p>
       ${this.failure?`<p role="alert">${escapeHTML(this.failure)}</p>`:''}
       ${this.busy?'<p role="status">Loading funds…</p>':''}
@@ -146,7 +168,7 @@ class PrepaidBalance extends HTMLElement {
     return `<p>Account: ${escapeHTML(title(balance.state))}</p>
       <dl class="funds-totals">${fields.map(([field,label])=>`<div><dt>${label}</dt><dd data-funds-value="${field}">${dollars(balance[field])}</dd></div>`).join('')}</dl>
       <p>Pending reconciliation is included in reserved funds.</p>
-      ${balance.state!=='active'?'<p role="alert">Hosted spending is suspended for this account.</p>':BigInt(balance.available_cents)<=0n?'<p>No funds available for hosted requests.</p>':''}
+      ${balance.state!=='active'?'<p role="alert">Prepaid usage is suspended for this account.</p>':BigInt(balance.available_cents)<=0n?'<p>No funds available for prepaid usage.</p>':''}
       ${balance.unsettled_fraction.numerator!=='0'?`<p>Unsettled usage: ${escapeHTML(balance.unsettled_fraction.numerator)}/${escapeHTML(balance.unsettled_fraction.denominator)} USD (less than $0.01), carried to the next settlement.</p>`:''}`;
   }
   renderHistory() {

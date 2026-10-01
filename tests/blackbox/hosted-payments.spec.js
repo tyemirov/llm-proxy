@@ -12,22 +12,27 @@ test.beforeAll(async()=>{
 test.afterAll(async()=>{try{if(stack)await stack.stop();}finally{if(processor)await processor.stop();}});
 
 test('funding history and receipts follow verified payments and refund holds through the normal runtime',async({page,context})=>{
+  await page.route(`${stack.llmProxyOrigin}/api/management/billing-accounts`,async route=>{
+    if(route.request().method()==='POST')await new Promise(resolve=>setTimeout(resolve,100));
+    await route.continue();
+  });
+  await page.clock.install();
   const headers=await prepareManagementPage(page,context,stack);
   await page.goto(stack.frontendOrigin);
   await page.getByRole('button',{name:'Sign in with Google',exact:true}).click();
-  await page.getByRole('button',{name:'Create billing account',exact:true}).click();
-  const billing=await (await context.request.get(`${stack.llmProxyOrigin}/api/management/billing-accounts`,{headers})).json();
-  const root=`${stack.llmProxyOrigin}/api/management/billing-accounts/${billing.billing_accounts[0].id}`;
+  await page.getByRole('button',{name:'Set up prepaid balance',exact:true}).click();
   const payments=page.getByRole('region',{name:'Funding history',exact:true});
   await expect(payments).toBeVisible();
-  await payments.getByRole('button',{name:'Refresh payments',exact:true}).click();
+  const billing=await (await context.request.get(`${stack.llmProxyOrigin}/api/management/billing-accounts`,{headers})).json();
+  const root=`${stack.llmProxyOrigin}/api/management/billing-accounts/${billing.billing_accounts[0].id}`;
+  await page.clock.fastForward(30_001);
   await expect(payments).toContainText('No payments yet.');
   const created=await context.request.post(root+'/funding-orders',{headers:{...headers,'Idempotency-Key':'browser-funding-history'},data:{offer_code:'five'}});
   expect(created.status()).toBe(201);
   const order=await created.json();
   await expect.poll(async()=>processor.transactions.length).toBe(1);
   await expect.poll(async()=>(await (await context.request.get(root+`/funding-orders/${order.id}`,{headers})).json()).state).toBe('pending');
-  await payments.getByRole('button',{name:'Refresh payments',exact:true}).click();
+  await page.clock.fastForward(30_001);
   const row=payments.locator(`[data-payment-order="${order.id}"]`);
   await expect(row).toContainText('Pending');
   await expect(row).toContainText('$5.00');
@@ -39,7 +44,7 @@ test('funding history and receipts follow verified payments and refund holds thr
   await expect(page.locator('[data-funds-value="available_cents"]')).toHaveText('$0.00');
   await processor.event(stack.llmProxyOrigin,'transaction.completed',completed);
   await expect.poll(async()=>(await (await context.request.get(root+`/funding-orders/${order.id}`,{headers})).json()).state).toBe('paid');
-  await payments.getByRole('button',{name:'Refresh payments',exact:true}).click();
+  await page.clock.fastForward(30_001);
   await expect(row).toContainText('Paid');
   await row.getByRole('button',{name:'View receipt',exact:true}).click();
   const receipt=payments.getByRole('region',{name:'Payment receipt',exact:true});
@@ -54,14 +59,14 @@ test('funding history and receipts follow verified payments and refund holds thr
   await row.getByRole('button',{name:'View receipt',exact:true}).click();
   await expect(receipt).toContainText('Pending credit reversal: $2.00');
   const funds=page.getByRole('region',{name:'Prepaid balance',exact:true});
-  await funds.getByRole('button',{name:'Refresh balance',exact:true}).click();
+  await page.clock.fastForward(30_001);
   await funds.getByRole('button',{name:'View financial history',exact:true}).click();
   await expect(funds).toContainText('payment-adjustment:');
   await expect(funds.getByRole('alert')).toHaveCount(0);
   const approved=processor.refund(order.id,'approved',2);
   await processor.event(stack.llmProxyOrigin,'adjustment.updated',approved);
   await expect.poll(async()=>(await (await context.request.get(root+`/funding-orders/${order.id}`,{headers})).json()).state).toBe('partially_refunded');
-  await payments.getByRole('button',{name:'Refresh payments',exact:true}).click();
+  await page.clock.fastForward(30_001);
   await expect(row).toContainText('Partially refunded');
   await row.getByRole('button',{name:'View receipt',exact:true}).click();
   await expect(receipt).toContainText('Current payment: $3.30');
@@ -74,7 +79,7 @@ test('funding history and receipts follow verified payments and refund holds thr
   }
   await context.route('https://customer-portal.paddle.com/browser-fixture?*',route=>route.fulfill({body:'<h1>Controlled Paddle invoice portal</h1>',contentType:'text/html'}));
   const popupPromise=page.waitForEvent('popup');
-  await payments.getByRole('button',{name:'Open Paddle invoices',exact:true}).click();
+  await payments.getByRole('button',{name:'Paddle invoices',exact:true}).click();
   const popup=await popupPromise;
   await expect(popup.getByRole('heading')).toHaveText('Controlled Paddle invoice portal');
   await popup.close();
@@ -97,7 +102,7 @@ test('funding history and receipts follow verified payments and refund holds thr
   await expect(receipt).toContainText('INV-BROWSER-1');
   await page.route(root+'/payment-portal-sessions',route=>route.fulfill({status:503,json:{error:{code:'funding_unavailable',detail:'private processor diagnostic'}}}));
   const failedPopupPromise=page.waitForEvent('popup');
-  await payments.getByRole('button',{name:'Open Paddle invoices',exact:true}).click();
+  await payments.getByRole('button',{name:'Paddle invoices',exact:true}).click();
   const failedPopup=await failedPopupPromise;
   await expect.poll(()=>failedPopup.isClosed()).toBeTruthy();
   await expect(payments.getByRole('alert')).toHaveText('Payments are unavailable. Try again later.');
@@ -108,7 +113,7 @@ test('funding history and receipts follow verified payments and refund holds thr
     const response=await context.request.post(root+'/funding-orders',{headers:{...headers,'Idempotency-Key':`browser-page-${sequence}`},data:{offer_code:'five'}});
     expect(response.status()).toBe(201);
   }
-  await payments.getByRole('button',{name:'Refresh payments',exact:true}).click();
+  await page.clock.fastForward(30_001);
   await expect(payments.locator('[data-payment-order]')).toHaveCount(50);
   await payments.getByRole('button',{name:'Load more payments',exact:true}).click();
   await expect(payments.locator('[data-payment-order]')).toHaveCount(52);
@@ -116,25 +121,26 @@ test('funding history and receipts follow verified payments and refund holds thr
   const ids=await payments.locator('[data-payment-order]').evaluateAll(elements=>elements.map(element=>element.getAttribute('data-payment-order')));
   expect(new Set(ids).size).toBe(52);
   await page.route(root+'/funding-orders?*',route=>route.fulfill({status:503,json:{error:{code:'funding_unavailable',detail:'private database diagnostic'}}}));
-  await payments.getByRole('button',{name:'Refresh payments',exact:true}).click();
+  await page.clock.fastForward(30_001);
   await expect(payments.getByRole('alert')).toHaveText('Payments are unavailable. Try again later.');
   await expect(payments.locator('[data-payment-order]')).toHaveCount(0);
   await expect(payments).not.toContainText('No payments yet.');
   await expect(payments).not.toContainText('private database diagnostic');
   await page.unroute(root+'/funding-orders?*');
-  await payments.getByRole('button',{name:'Refresh payments',exact:true}).click();
+  await page.clock.fastForward(30_001);
   await expect(payments.locator('[data-payment-order]')).toHaveCount(50);
   expect(processor.failures).toEqual([]);
 });
 
 
 test('browser checkout retries one order and waits for verified funding after Paddle completion',async({page,context})=>{
+  await page.clock.install();
   await prepareManagementPage(page,context,stack,localManagementProfile.secondOperatorEmail);
   let blockSDK=false;
   await page.route('https://cdn.paddle.com/paddle/v2/paddle.js',route=>blockSDK?route.abort('failed'):route.fulfill({path:'tests/blackbox/paddleBrowserFixture.js',contentType:'application/javascript'}));
   await page.goto(stack.frontendOrigin);
   await page.getByRole('button',{name:'Sign in with Google',exact:true}).click();
-  await page.getByRole('button',{name:'Create billing account',exact:true}).click();
+  await page.getByRole('button',{name:'Set up prepaid balance',exact:true}).click();
   const funding=page.getByRole('region',{name:'Add funds',exact:true});
   await expect(funding).toBeVisible();
   await funding.getByRole('button',{name:'Choose funding amount',exact:true}).click();
@@ -206,7 +212,7 @@ test('browser checkout retries one order and waits for verified funding after Pa
   await page.evaluate(accountID=>sessionStorage.removeItem('llm-proxy:funding-intent:'+accountID),billing.billing_accounts[0].id);
   await page.reload();
   const history=page.getByRole('region',{name:'Funding history',exact:true});
-  await history.getByRole('button',{name:'Refresh payments',exact:true}).click();
+  await page.clock.fastForward(30_001);
   await history.getByRole('button',{name:'Continue payment',exact:true}).click();
   await expect(page.getByRole('dialog',{name:'Controlled Paddle checkout'})).toBeVisible();
   await page.getByRole('button',{name:'Close controlled checkout',exact:true}).click();

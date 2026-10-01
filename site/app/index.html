@@ -89,9 +89,9 @@
           <app-surface>
             <section class="dashboard-hero">
               <header class="section-header">
-                <div>
-                  <p class="eyebrow" x-text="dashboardEyebrow"></p>
-                  <h1 x-text="dashboardTitle"></h1>
+                <div x-show="dashboardView === dashboardViews.ADMIN">
+                  <p class="eyebrow" x-text="copy.adminDashboardEyebrow"></p>
+                  <h1 x-text="copy.adminDashboardTitle"></h1>
                 </div>
                 <dashboard-actions>
                   <button type="button" x-show="dashboardView === dashboardViews.ADMIN" x-on:click="openUsageDashboard()" x-text="copy.openUsageDashboard"></button>
@@ -488,19 +488,6 @@
           </app-surface>
         </template>
       </llm-proxy-management-application>
-      <section class="public-resource-link" aria-labelledby="public-resource-title">
-        <div>
-          <p class="eyebrow">Resources</p>
-          <h2 id="public-resource-title">LLM Proxy implementation guides</h2>
-          <p>Read repo-grounded pages on client authentication, provider routing, tenant secrets, dictation, usage, runtime config, and the management UI.</p>
-        </div>
-        <div class="public-resource-actions">
-          <a href="/docs/">API reference</a>
-          <a href="/openapi.yaml">OpenAPI schema</a>
-          <a href="/resources/llm-proxy-client-authentication/">Client authentication</a>
-          <a href="/resources/">Browse resources</a>
-        </div>
-      </section>
     </main>
 
     <!-- llm-proxy-public-footer:start -->

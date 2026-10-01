@@ -17,7 +17,9 @@ import (
 func TestHostedFundsPaymentReversalDuringExecutionRetainsDeficit(t *testing.T) {
 	for _, action := range []string{"refund", "chargeback"} {
 		t.Run(action, func(t *testing.T) {
-			database, _, management, prices := newHostedRatingFixture(t)
+			acceptedAt := time.Now().UTC()
+			database, _, management, _ := newHostedRatingFixture(t)
+			prices := hostedRatingFixtureAdmissionAt(t, 2, acceptedAt)
 			service, orders, cookie := paymentOrdersFixture(t, database)
 			processor := newCheckoutProtocolFixture(t)
 			paymentOrderHTTP(t, orders, cookie("owner"), http.MethodPost, paymentOrdersTestPath, "inflight-reversal", `{"offer_code":"five"}`, http.StatusCreated)
@@ -53,7 +55,7 @@ func TestHostedFundsPaymentReversalDuringExecutionRetainsDeficit(t *testing.T) {
 			t.Cleanup(upstream.Close)
 			generation := newHostedIdentityHTTPServer(t, database, upstream.URL, t.TempDir(), func(dependencies *hostedTextRequestDependencies) {
 				fundsDependencies(prices)(dependencies)
-				dependencies.now = time.Now
+				dependencies.now = func() time.Time { return acceptedAt }
 			})
 			listener, err := net.Listen("tcp", "127.0.0.1:0")
 			if err != nil {

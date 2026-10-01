@@ -25,6 +25,11 @@ Give each term one meaning. Use the same term for the same concept in all docume
 
 ## Repository Technical Nouns
 
+- `native disclosure`: An HTML `details` element with a `summary` control.
+- `prompt editor`: A browser text field for a tenant or provider system prompt.
+- `collapsed editor`: A prompt editor inside a native disclosure without the HTML `open` attribute.
+- `expanded editor`: A prompt editor inside a native disclosure with the HTML `open` attribute.
+
 - `emulator`: Software that reproduces a device runtime for application tests.
 - `physical device`: Hardware used to run an application or do a device test.
 - `simulator`: Software that models a device environment for application tests.
@@ -53,6 +58,7 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `protocol variation`: A declared, typed difference within one protocol family.
 - `provider catalog`: The canonical YAML file that defines all supported models, providers, provider offerings, controls, limits, and prices.
 - `provider connection`: An account-owned named resource with credentials and settings for one provider definition.
+- `prepaid provider access`: Customer use of LLM Proxy provider connections against a prepaid balance.
 - `provider definition`: One provider record in the provider catalog.
 - `provider field`: One credential input or setting input in a provider definition.
 - `provider gateway`: The service that authorizes tenant requests and owns shared provider access.
