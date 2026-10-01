@@ -1419,7 +1419,9 @@ case "${command_name}" in
       '^TestHostedRuntime:') selection="runtime" ;;
       '^TestHosted[A-M]:^TestHosted(Funds|Payments|Media|Runtime)') selection="hosted-first" ;;
       '^TestHosted:^TestHosted(Funds|Payments|Media|Runtime|[A-M])') selection="hosted-remaining" ;;
-      ':^TestHosted') selection="remaining" ;;
+      '^Test[A-L]:^TestHosted') selection="remaining-first" ;;
+      '^TestM:') selection="remaining-middle" ;;
+      ':^Test(Hosted|[A-M])') selection="remaining-final" ;;
     esac
     [[ -n "${coverage_profile}" ]]
     if [[ -z "${selection}" || "${all_packages}" != "yes" ]]; then
@@ -1476,8 +1478,10 @@ case "${command_name}" in
         [[ "$(awk '$1 == "runtime.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
         [[ "$(awk '$1 == "hosted-first.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
         [[ "$(awk '$1 == "hosted-remaining.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
-        [[ "$(awk '$1 == "remaining.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
-        [[ "$(awk '$1 == "shared.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "7" ]]
+        [[ "$(awk '$1 == "remaining-first.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
+        [[ "$(awk '$1 == "remaining-middle.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
+        [[ "$(awk '$1 == "remaining-final.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
+        [[ "$(awk '$1 == "shared.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "9" ]]
         builtin printf '%s\n' 'total: (statements) 100.0%'
         ;;
       *)

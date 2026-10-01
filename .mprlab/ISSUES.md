@@ -35,6 +35,28 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B302] (P2) Split remaining coverage before the native test deadline.
+  Evidence: PR 347 passes all six hosted groups, then the remaining group reaches its ten-minute limit.
+  The active oversized-body test runs for less than one second before the group times out.
+  Requirements:
+  - Split the non-hosted tests into three disjoint complete passes.
+  - Include examples and tests outside the two selected name ranges in the final pass.
+  - Merge all profiles with the existing hosted groups and executable probes.
+  - Preserve every package, test, native deadline, job budget, and coverage requirement.
+  - Update the runner contract and current automation documentation.
+  Validation: Run the public coverage contract and all three real non-hosted coverage groups.
+  GitHub log: https://github.com/tyemirov/llm-proxy/actions/runs/36840782335/job/110299130017
+  Files: `scripts/check_coverage.sh`, `tests/operational_contract_test.go`, and `README.md`.
+  New event contracts: None.
+  Resolution: Three disjoint passes replace the remaining pass. The coverage merge includes all three profiles.
+  The final pass includes examples and test names outside the selected ranges.
+  Native test deadlines, the job budget, and the 100 percent coverage gate stay unchanged.
+  Validation: The old runner failed the updated contract. The corrected public runner contract passed.
+  All three real proxy coverage groups passed in 132.811, 68.866, and 82.719 seconds.
+  Every declared test and example belongs to exactly one of the nine groups. Go analysis and format checks passed.
+  Logs: `/tmp/llm-proxy-pr347-remaining-after.log`, `/tmp/llm-proxy-pr347-remaining-first.log`,
+  `/tmp/llm-proxy-pr347-remaining-middle.log`, and `/tmp/llm-proxy-pr347-remaining-final.log`.
+
 - [x] [B301] (P2) Split other hosted coverage before the native test deadline.
   Evidence: PR 347 completes funds, payments, media, and runtime coverage, then the other hosted group times out.
   The active result publication test runs for eight seconds before the group reaches its ten-minute limit.
