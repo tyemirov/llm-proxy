@@ -12,15 +12,19 @@ test.beforeAll(async()=>{
 test.afterAll(async()=>{try{if(stack)await stack.stop();}finally{if(processor)await processor.stop();}});
 
 test('funding history and receipts follow verified payments and refund holds through the normal runtime',async({page,context})=>{
+  await page.route(`${stack.llmProxyOrigin}/api/management/billing-accounts`,async route=>{
+    if(route.request().method()==='POST')await new Promise(resolve=>setTimeout(resolve,100));
+    await route.continue();
+  });
   await page.clock.install();
   const headers=await prepareManagementPage(page,context,stack);
   await page.goto(stack.frontendOrigin);
   await page.getByRole('button',{name:'Sign in with Google',exact:true}).click();
   await page.getByRole('button',{name:'Set up prepaid balance',exact:true}).click();
-  const billing=await (await context.request.get(`${stack.llmProxyOrigin}/api/management/billing-accounts`,{headers})).json();
-  const root=`${stack.llmProxyOrigin}/api/management/billing-accounts/${billing.billing_accounts[0].id}`;
   const payments=page.getByRole('region',{name:'Funding history',exact:true});
   await expect(payments).toBeVisible();
+  const billing=await (await context.request.get(`${stack.llmProxyOrigin}/api/management/billing-accounts`,{headers})).json();
+  const root=`${stack.llmProxyOrigin}/api/management/billing-accounts/${billing.billing_accounts[0].id}`;
   await page.clock.fastForward(30_001);
   await expect(payments).toContainText('No payments yet.');
   const created=await context.request.post(root+'/funding-orders',{headers:{...headers,'Idempotency-Key':'browser-funding-history'},data:{offer_code:'five'}});

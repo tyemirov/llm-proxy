@@ -2004,6 +2004,23 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## Improvements
 
+- [x] [I308] (P2) Complete account creation before the payment history test reads the account.
+  Evidence: PR 347 payment history qualification reads an empty account collection after the setup button click.
+  The test then reports `Cannot read properties of undefined (reading 'id')`.
+  Requirements:
+  - Reproduce delayed account creation through the public HTTP boundary.
+  - Wait for rendered funding history before the direct account read.
+  - Preserve the payment, receipt, refund hold, and pagination assertions.
+  - Keep production code and test deadlines unchanged.
+  Validation: Run repeated payment scenarios and the complete browser acceptance target.
+  GitHub log: https://github.com/tyemirov/llm-proxy/actions/runs/36835857992/job/110282979355
+  Files: `tests/blackbox/hosted-payments.spec.js`.
+  New event contracts: None.
+  Resolution: The existing funding history check now precedes the direct account read.
+  Validation: A controlled 100-millisecond creation delay reproduced the initial failure.
+  Five delayed payment scenarios and all eleven browser acceptance scenarios passed after the correction.
+  Logs: `/tmp/llm-proxy-pr347-payment-before.log`, `/tmp/llm-proxy-pr347-payment-after.log`, and `/tmp/llm-proxy-pr347-blackbox-final.log`.
+
 - [x] [I307] (P2) Allocate the hosted coverage job budget for all six native groups.
   Evidence: PR 347 completes financial coverage in 439.839 seconds and payment coverage in 330.712 seconds.
   The fifteen-minute job limit cancels the third group before complete coverage can merge.
