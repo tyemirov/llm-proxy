@@ -293,10 +293,11 @@ test('hosted onboarding creates tenant access without provider credentials at de
       const more=new URL(route.request().url()).searchParams.has('cursor');
       return route.fulfill({json:{reservations:[{id:more?secondID:requestID,currency:'USD',maximum_cents:more?'200':'300',state:more?'reconciliation_required':'held',revision:1,created_at:timestamp,updated_at:timestamp}],next_cursor:more?'':requestID}});
     });
+    let ledgerSpendCents='-123';
     await page.route(fundsRoot+'/ledger-entries?*',route=>{
       const more=new URL(route.request().url()).searchParams.has('cursor');
       const entryID=more?'22222222-2222-4222-8222-222222222222':'11111111-1111-4111-8111-111111111111';
-      return route.fulfill({json:{entries:[{id:entryID,currency:'USD',type:more?'spend':'grant',amount_cents:more?'-123':'9007199254740993',reservation_id:null,refund_of_entry_id:null,created_at:timestamp}],next_cursor:more?'':entryID}});
+      return route.fulfill({json:{entries:[{id:entryID,currency:'USD',type:more?'spend':'grant',amount_cents:more?ledgerSpendCents:'9007199254740993',reservation_id:null,refund_of_entry_id:null,created_at:timestamp}],next_cursor:more?'':entryID}});
     });
     await page.clock.fastForward(30_001);
     await expect(funds.locator('[data-funds-value="available_cents"]')).toHaveText('$90071992547404.93');
@@ -317,9 +318,11 @@ test('hosted onboarding creates tenant access without provider credentials at de
     await page.clock.fastForward(30_001);
     await expect(limitDraft).toHaveValue('19.25');
     expect(balanceReads).toBe(editingReads);
+    ledgerSpendCents='-124';
     await funds.getByRole('heading',{name:'Prepaid balance',exact:true}).click();
     await page.clock.fastForward(30_001);
     await expect.poll(()=>balanceReads).toBeGreaterThan(editingReads);
+    await expect(funds).toContainText('-$1.24');
     await expect(limitDraft).toHaveValue('19.25');
     const beforeFocus=balanceReads;
     await page.evaluate(()=>window.dispatchEvent(new Event('focus')));

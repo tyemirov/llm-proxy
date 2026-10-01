@@ -2004,6 +2004,21 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## Improvements
 
+- [x] [I305] (P2) Wait for the financial history update before the focus test.
+  Evidence: PR 347 frontend qualification reports no new balance read after the focus event.
+  The test observes request arrival before the previous automatic update completes its history reads.
+  Requirements:
+  - Wait for changed financial history to appear before the focus event.
+  - Preserve the request count, draft, pagination, and financial value checks.
+  - Keep production code and test deadlines unchanged.
+  Validation: Repeat the hosted access scenario through the real browser and local services.
+  GitHub log: https://github.com/tyemirov/llm-proxy/actions/runs/36831563341/job/110269127306
+  Files: `tests/blackbox/hosted-access.spec.js`.
+  New event contracts: None.
+  Resolution: The test waits for the changed ledger amount before it sends the focus event.
+  Validation: Five repeated hosted access browser scenarios passed through the real local services.
+  Log: `/tmp/llm-proxy-pr347-hosted-access.log`.
+
 - [x] [I304] (P2) Cancel the rate-limit test after the request starts its rate wait.
   Evidence: PR 347 fails `backend-checks` because cancellation expires during tenant authentication.
   The test then reports `expected one delayed rate-limit log`.
