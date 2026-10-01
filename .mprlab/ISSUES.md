@@ -35,6 +35,21 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B300] (P2) Install the snapshot dependency before hosted backend coverage.
+  Evidence: PR 347 backend coverage fails with `/bin/bash: line 1: uv: command not found`.
+  The financial backup test runs `make snapshot-managed-database`, which requires `uv`.
+  Requirements:
+  - Install `uv` after Python setup and before backend coverage.
+  - Use the same installation command as the existing backend supporting job.
+  - Preserve all qualification targets and job deadlines.
+  Validation: Run the database snapshot scenario and the hosted workflow contract.
+  GitHub log: https://github.com/tyemirov/llm-proxy/actions/runs/36829903605/job/110263886150
+  Files: `.github/workflows/test.yml`.
+  New event contracts: None.
+  Resolution: The backend job installs `uv` after Python setup and before coverage.
+  Validation: Both snapshot tests, the financial backup test, and the hosted workflow contract passed.
+  Logs: `/tmp/llm-proxy-pr347-snapshot.log` and `/tmp/llm-proxy-pr347-workflow.log`.
+
 - [x] [B299] (P2) Render prepaid request denials in usage status summaries.
   Evidence: An automatic usage update throws `app_integrity_error` after an unfunded request returns HTTP 402.
   The browser status labels omit HTTP 402 and HTTP 403, which prepaid requests currently return.
@@ -1988,6 +2003,22 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   Blocked: The operator must publish the qualified shared UI assets and complete cache convergence under mpr-ui I009.
 
 ## Improvements
+
+- [x] [I304] (P2) Cancel the rate-limit test after the request starts its rate wait.
+  Evidence: PR 347 fails `backend-checks` because cancellation expires during tenant authentication.
+  The test then reports `expected one delayed rate-limit log`.
+  Requirements:
+  - Reproduce request preparation that exceeds the cancellation interval.
+  - Observe the current `rate_wait` admission event before the cancellation timer starts.
+  - Preserve the 40-millisecond interval, HTTP 499, one upstream call, and both rate-limit logs.
+  - Keep production code unchanged.
+  Validation: Run repeated real HTTP scenarios under the race detector and the failing race target.
+  GitHub log: https://github.com/tyemirov/llm-proxy/actions/runs/36829903605/job/110263886229
+  Files: `tests/integration/upstream_rate_limit_test.go`.
+  New event contracts: None.
+  Resolution: The 40-millisecond timer starts after the real request enters its rate wait.
+  Validation: Ten focused scenarios and the full admission race target passed.
+  Logs: `/tmp/llm-proxy-pr347-before.log`, `/tmp/llm-proxy-pr347-focused.log`, and `/tmp/llm-proxy-pr347-race-suite.log`.
 
 - [x] [I303] (P2) Align the reversal test clock with its accepted price interval.
   Evidence: Refund and chargeback scenarios return `financial_admission_unavailable` after the UTC month changes.

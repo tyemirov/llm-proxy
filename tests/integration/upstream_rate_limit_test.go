@@ -553,8 +553,15 @@ func TestIntegrationUpstreamRateLimitCancellationReturnsGatewayTimeoutAndLogs(te
 	}))
 	testingInstance.Cleanup(upstreamServer.Close)
 
+	rateWaitStarted := make(chan struct{})
+	var rateWaitOnce sync.Once
 	observedCore, observedLogs := observer.New(zapcore.DebugLevel)
-	loggerInstance := zap.New(observedCore)
+	loggerInstance := zap.New(observedCore, zap.Hooks(func(entry zapcore.Entry) error {
+		if entry.Message == "upstream HTTP admission" && observedLogs.FilterMessage(entry.Message).FilterField(zap.String("decision", "rate_wait")).Len() > 0 {
+			rateWaitOnce.Do(func() { close(rateWaitStarted) })
+		}
+		return nil
+	}))
 	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
 	configuration := rateLimitIntegrationConfiguration(upstreamServer.URL)
 	configuration.UpstreamRateLimits = []proxy.UpstreamRateLimitConfiguration{{
@@ -571,8 +578,23 @@ func TestIntegrationUpstreamRateLimitCancellationReturnsGatewayTimeoutAndLogs(te
 	}
 
 	cancelingGateway := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
-		requestContext, cancelRequest := context.WithTimeout(httpRequest.Context(), rateLimitCancellationTimeout)
+		requestContext, cancelRequest := context.WithCancel(httpRequest.Context())
 		defer cancelRequest()
+		go func() {
+			select {
+			case <-rateWaitStarted:
+				timer := time.NewTimer(rateLimitCancellationTimeout)
+				defer timer.Stop()
+				select {
+				case <-timer.C:
+					cancelRequest()
+				case <-requestContext.Done():
+				}
+			case <-requestContext.Done():
+			}
+		}()
+		// Request preparation can exceed the cancellation interval under the race detector.
+		time.Sleep(2 * rateLimitCancellationTimeout)
 		router.ServeHTTP(responseWriter, httpRequest.WithContext(requestContext))
 	}))
 	testingInstance.Cleanup(cancelingGateway.Close)
