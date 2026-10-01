@@ -24,6 +24,9 @@ Account-wide usage remains available through the usage scope selector.
 Usage summaries refresh automatically every 30 seconds while the user is authenticated.
 Search filters the visible lists. Each column scrolls when its list exceeds the available space.
 
+Usage status summaries label HTTP 402 as `Payment required` and HTTP 403 as `Forbidden`.
+Failed request details retain these statuses for unfunded or suspended prepaid access.
+
 The workspace header shows `Tenants → connections → models`, search, and `Copy MCP URL` in that order.
 The search field has a search icon on its right side. The copy action stays at the right of the header.
 Connection detail actions stay together. The app footer supplies the Resources link without a duplicate card.
@@ -98,6 +101,7 @@ A connection without required credentials retains its assignments and shows `Cre
 The model list remains empty until its required credentials are configured.
 
 Connection details show masked credentials and assigned tenants.
+The connection header groups Edit connection, Detach, and Tenant details and API access.
 Credential changes apply to each assigned tenant.
 The edit form shows those tenants before the save action.
 Updates use the current connection version to detect concurrent credential or assignment changes.
@@ -111,22 +115,33 @@ Creation receipts remain after connection deletion, so a delayed retry cannot re
 Read the connection resource for its current state.
 The canonical [OpenAPI contract](openapi.yaml) defines each management operation and its request shape.
 
-## Hosted Access
+## Prepaid Provider Access
 
-F065 adds hosted access to the dashboard.
-The Hosted access section shows grants for the selected tenant and the customer's billing account.
+F065 adds prepaid provider access to the dashboard.
+The Prepaid provider access section shows grants for the selected tenant and the customer's billing account.
 Each grant shows its state and permitted models and operations.
 An assigned grant remains visible after suspension or revocation.
 The service does not expose platform credentials in customer responses.
 Hosted execution remains disabled until the shared F070 acceptance requirements pass.
 
-The Hosted access header groups account creation and refresh actions beside its title.
+The section header puts Set up prepaid balance beside its title.
 The account label replaces the creation action when the account exists. Descriptive text remains below the actions.
 
-1. Select `Create billing account` to create the USD account.
-2. Select `Refresh hosted access` after an operator provisions a grant.
-3. Select `Use hosted access` on an active grant.
-4. Select `API access` to create the tenant key.
+1. Select `Set up prepaid balance` to create the USD account.
+2. Select `Use provider access` on an active grant.
+3. Open tenant details. Select `API access` to get the tenant key.
+
+Access, balance, payment history, and request history update every 30 seconds while visible.
+They also update when the application receives focus or becomes visible.
+The application has no Refresh action for these resources.
+Updates stop when the component is removed.
+
+An open dialog or a focused input delays updates until editing stops.
+Updates preserve unsaved spending limits, routing selections, and the loaded history pages.
+
+Charges load when requested and then update with request history.
+A read failure shows an error and clears data that the application cannot verify.
+The next successful update clears the read error.
 
 This flow does not require customer provider credentials.
 The assignment API requires `kind` and `resource_id`.
