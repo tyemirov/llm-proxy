@@ -11,15 +11,21 @@ that input capability.
 
 The public [LLM Proxy landing page](https://llm-proxy.mprlab.com/) explains the
 current provider, model, dictation, web-search, request-limit, and integration
-surface. Its route explorer initially presses the Text task.
-Both weight access types are selected. Visitors can press one or more tasks, and filter by input, output, weight access, and additional capabilities.
-The explorer shows only offerings that support every pressed task on the same offering.
-Input and output filters must match the same task on the same provider offering.
-Model details show each supported task and its input/output direction. It then selects a model family, an exact model,
+surface. Its route explorer initially selects All capabilities and both weight access types.
+Visitors can select Tools, Web search, Reasoning, Images, Audio, or Video.
+The explorer shows offerings that have a capability in the selected group.
+Input and output filters must match one supported task on the same provider offering.
+For a media group, that task must use a capability in the group.
+
+Model details show each supported task and its input/output direction. Visitors then select a model family, an exact model,
 and a provider offering. Its model matrix has one row for each exact model and
-shows all current provider offerings for that model. Both interfaces use the
+shows all current provider offerings for that model.
+
+Both interfaces use the
 validated runtime catalog. A catalog change appears on the landing page without
-a second inventory. The authenticated
+a second inventory.
+
+The authenticated
 management app opens at [`/app/`](https://llm-proxy.mprlab.com/app/) only after
 the public **Log In** action authenticates the user through MPR UI and TAuth.
 The application document title is always `LLM Proxy`.
@@ -1427,8 +1433,8 @@ This repository exposes the standard local targets used by MPR app repos:
 
 Hosted CI runs Go coverage, backend supporting checks, and frontend qualification in three independent jobs.
 The coverage job has a fifteen-minute limit for setup, compilation, and tests.
-Go coverage uses separate passes for `TestHosted` and all remaining tests across every package.
-Each pass retains the existing ten-minute Go test limit. The coverage gate combines both profiles and the executable probes.
+Go coverage uses separate passes for funds, payments, media, runtime, other hosted tests, and all remaining tests across every package.
+Each pass retains the existing ten-minute Go test limit. The coverage gate combines all profiles and the executable probes.
 The other qualification jobs have ten-minute limits.
 Together, the jobs run every gate from local `make ci`.
 Playwright global setup builds the capability binary before browser test workers start.
@@ -1449,7 +1455,7 @@ A failed, cancelled, skipped, or missing job result prevents success.
 | `make check-brand-icons` | Validate local SVG assets and all provider and family mappings. See [Provider and model icons](docs/provider-model-icons.md). |
 | `make test-brand-icons` | Run browser and build checks for management and public catalog icons. |
 | `make ci-backend` | Run the complete Go suite and require 100% statement coverage. |
-| `make test-coverage-contract` | Verify both Go test groups, merged coverage counts, and executable probe inputs. |
+| `make test-coverage-contract` | Verify all Go test groups, merged coverage counts, and executable probe inputs. |
 | `make ci-backend-checks` | Run release checks, Go and Python analysis, protocol acceptance, admission race tests, Python tests, and local provider preflight. |
 | `make ci-frontend` | Run frontend analysis, browser tests, the Pages artifact check, and the management authentication test. |
 | `make up` | Require the ignored private `configs/.env.local`, then build and run the complete local browser orchestration: ghttp static UI and same-origin TAuth routes on `localhost:4179`, plus the API on `localhost:8080`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |
