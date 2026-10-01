@@ -35,6 +35,25 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B301] (P2) Split other hosted coverage before the native test deadline.
+  Evidence: PR 347 completes funds, payments, media, and runtime coverage, then the other hosted group times out.
+  The active result publication test runs for eight seconds before the group reaches its ten-minute limit.
+  Requirements:
+  - Split the other hosted tests into two disjoint complete passes.
+  - Merge both profiles with the existing coverage groups and executable probes.
+  - Preserve every package, test, native deadline, and coverage requirement.
+  - Allocate 60 minutes for the seven passes, setup, compilation, and executable probes.
+  - Update the runner contract and current automation documentation.
+  Validation: Run the public coverage contract and both real hosted coverage groups.
+  GitHub log: https://github.com/tyemirov/llm-proxy/actions/runs/36835857992/job/110282979252
+  Files: `scripts/check_coverage.sh`, `tests/operational_contract_test.go`, `.github/workflows/test.yml`, `tests/hosted_ci_contract_test.go`, and `README.md`.
+  New event contracts: None.
+  Resolution: Two disjoint passes replace the other hosted pass. The coverage merge includes both profiles.
+  The overall job budget is 60 minutes. Native test deadlines and the 100 percent coverage gate stay unchanged.
+  Validation: The old runner failed the updated contract. The corrected runner and hosted workflow contracts passed.
+  Both real hosted groups passed in 216.808 and 123.523 seconds. Go analysis and format checks passed.
+  Logs: `/tmp/llm-proxy-pr347-partition-after.log`, `/tmp/llm-proxy-pr347-hosted-first.log`, and `/tmp/llm-proxy-pr347-hosted-remaining.log`.
+
 - [x] [B300] (P2) Install the snapshot dependency before hosted backend coverage.
   Evidence: PR 347 backend coverage fails with `/bin/bash: line 1: uv: command not found`.
   The financial backup test runs `make snapshot-managed-database`, which requires `uv`.

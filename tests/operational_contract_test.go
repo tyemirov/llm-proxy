@@ -1417,7 +1417,8 @@ case "${command_name}" in
       '^TestHostedPayments:') selection="payments" ;;
       '^TestHostedMedia:') selection="media" ;;
       '^TestHostedRuntime:') selection="runtime" ;;
-      '^TestHosted:^TestHosted(Funds|Payments|Media|Runtime)') selection="hosted" ;;
+      '^TestHosted[A-M]:^TestHosted(Funds|Payments|Media|Runtime)') selection="hosted-first" ;;
+      '^TestHosted:^TestHosted(Funds|Payments|Media|Runtime|[A-M])') selection="hosted-remaining" ;;
       ':^TestHosted') selection="remaining" ;;
     esac
     [[ -n "${coverage_profile}" ]]
@@ -1473,9 +1474,10 @@ case "${command_name}" in
         [[ "$(awk '$1 == "payments.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
         [[ "$(awk '$1 == "media.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
         [[ "$(awk '$1 == "runtime.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
-        [[ "$(awk '$1 == "hosted.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
+        [[ "$(awk '$1 == "hosted-first.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
+        [[ "$(awk '$1 == "hosted-remaining.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
         [[ "$(awk '$1 == "remaining.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
-        [[ "$(awk '$1 == "shared.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "6" ]]
+        [[ "$(awk '$1 == "shared.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "7" ]]
         builtin printf '%s\n' 'total: (statements) 100.0%'
         ;;
       *)

@@ -1432,8 +1432,8 @@ Applications store this value as `LLM_PROXY_DEFAULT_TENANT_KEY`.
 This repository exposes the standard local targets used by MPR app repos:
 
 Hosted CI runs Go coverage, backend supporting checks, and frontend qualification in three independent jobs.
-The coverage job has a 45-minute limit for setup, compilation, and tests.
-Go coverage uses separate passes for funds, payments, media, runtime, other hosted tests, and all remaining tests across every package.
+The coverage job has a 60-minute limit for setup, compilation, and tests.
+Go coverage uses seven passes across every package: funds, payments, media, runtime, two other hosted groups, and all remaining tests.
 Each pass retains the existing ten-minute Go test limit. The coverage gate combines all profiles and the executable probes.
 The other qualification jobs have ten-minute limits.
 Together, the jobs run every gate from local `make ci`.
