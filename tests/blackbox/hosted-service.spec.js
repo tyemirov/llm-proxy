@@ -22,11 +22,12 @@ test.beforeAll(async()=>{
 test.afterAll(async()=>{try{if(stack)await stack.stop();}finally{if(processor)await processor.stop();}});
 
 test('a customer funds hosted access and reads the real settled charge',async({page,context,browser})=>{
+  await page.clock.install();
   const headers=await prepareManagementPage(page,context,stack);
   await page.route('https://cdn.paddle.com/paddle/v2/paddle.js',route=>route.fulfill({path:'tests/blackbox/paddleBrowserFixture.js',contentType:'application/javascript'}));
   await page.goto(stack.frontendOrigin);
   await page.getByRole('button',{name:'Sign in with Google',exact:true}).click();
-  await page.getByRole('button',{name:'Create billing account',exact:true}).click();
+  await page.getByRole('button',{name:'Set up prepaid balance',exact:true}).click();
   const base=stack.llmProxyOrigin+'/api/management';
   const account=await (await context.request.get(base+'/account',{headers})).json();
   const billing=await (await context.request.get(base+'/billing-accounts',{headers})).json();
@@ -42,17 +43,17 @@ test('a customer funds hosted access and reads the real settled charge',async({p
     const platform=await provision('/platform-connections',{name:'Controlled hosted account',provider:'openai',fields:{api_key:'sk-private-hosted-service'}});
     const catalog=await (await context.request.get(stack.llmProxyOrigin+'/api/public/capabilities')).json();
     const grant=await provision('/hosted-access-grants',{billing_account_id:accountID,tenant_id:tenantID,platform_connection_id:platform.id,catalog_revision:catalog.revision,offerings:[{model:'gpt-4.1',operations:['text']}],reason:'Controlled complete service acceptance'});
-    const hosted=page.getByRole('region',{name:'Hosted access',exact:true});
-    await hosted.getByRole('button',{name:'Refresh hosted access',exact:true}).click();
+    const hosted=page.getByRole('region',{name:'Prepaid provider access',exact:true});
+    await page.clock.fastForward(30_001);
     const card=hosted.locator(`[data-hosted-grant="${grant.id}"]`);
-    await card.getByRole('button',{name:'Use hosted access',exact:true}).click();
+    await card.getByRole('button',{name:'Use provider access',exact:true}).click();
     await expect(card).toContainText('Assigned');
-    await expect(card.getByLabel('Hosted text model',{exact:true})).toBeVisible();
-    await card.getByLabel('Hosted text model', {exact:true}).selectOption('gpt-4.1');
-    await card.getByRole('button',{name:'Save hosted text default',exact:true}).click();
+    await expect(card.getByLabel('Prepaid text model',{exact:true})).toBeVisible();
+    await card.getByLabel('Prepaid text model', {exact:true}).selectOption('gpt-4.1');
+    await card.getByRole('button',{name:'Save prepaid text default',exact:true}).click();
     await expect(card).toContainText('Saved text default: gpt-4.1');
     await page.reload();
-    await expect(card.getByLabel('Hosted text model',{exact:true})).toHaveValue('gpt-4.1');
+    await expect(card.getByLabel('Prepaid text model',{exact:true})).toHaveValue('gpt-4.1');
     await expect(card).toContainText('Saved text default: gpt-4.1');
     await page.getByRole('button',{name:'API access',exact:true}).click();
     await page.getByRole('dialog').getByRole('button',{name:'Create API key',exact:true}).click();
@@ -64,6 +65,16 @@ test('a customer funds hosted access and reads the real settled charge',async({p
     const denied=await request();
     expect(denied.status(),await denied.text()).toBe(402);
     expect(stack.providerRequests).toHaveLength(callsBefore);
+    const assertUsageStatus=async(status,label)=>{
+      await page.clock.fastForward(30_001);
+      await expect(page.locator('usage-failure-status').filter({hasText:String(status)})).toContainText(label);
+      await page.getByRole('button',{name:/failed requests?/}).click();
+      const failures=page.getByRole('dialog',{name:'Failed request details',exact:true});
+      await expect(failures.locator('usage-failure-row').filter({hasText:`${status} ${label}`})).toBeVisible();
+      await expect(failures.getByRole('alert')).not.toBeVisible();
+      await failures.getByRole('button',{name:'Close failed request details',exact:true}).click();
+    };
+    await assertUsageStatus(402,'Payment required');
     const funding=page.getByRole('region',{name:'Add funds',exact:true});
     await funding.getByRole('button',{name:'Choose funding amount',exact:true}).click();
     await funding.getByRole('button',{name:'Add $5.00',exact:true}).click();
@@ -84,10 +95,10 @@ test('a customer funds hosted access and reads the real settled charge',async({p
     await expect.poll(async()=>(await (await context.request.get(root+'/balance',{headers})).json()).posted_cents).toBe('499');
     const balance=await (await context.request.get(root+'/balance',{headers})).json();
     expect(balance).toMatchObject({posted_cents:'499',available_cents:'499',reserved_cents:'0',unsettled_fraction:{numerator:'3',denominator:'1000'}});
-    await page.getByRole('region',{name:'Prepaid balance',exact:true}).getByRole('button',{name:'Refresh balance',exact:true}).click();
+    await page.clock.fastForward(30_001);
     await expect(page.locator('[data-funds-value="available_cents"]')).toHaveText('$4.99');
     const journal=page.getByRole('region',{name:'Usage journal',exact:true});
-    await journal.getByRole('button',{name:'Load usage journal',exact:true}).click();
+    await page.clock.fastForward(30_001);
     await expect(journal.locator('[data-journal-request]')).toHaveCount(1);
     await journal.getByRole('button',{name:'View request',exact:true}).click();
     const summary=journal.getByRole('region',{name:'Request charges',exact:true});
@@ -113,13 +124,13 @@ test('a customer funds hosted access and reads the real settled charge',async({p
       await expect(summary).toContainText('Provider cost: $0.01');
       await expect(summary).toContainText('Customer charge: $0.013');
     }
-    await journal.getByRole('button',{name:'Refresh charges',exact:true}).click();
+    await page.clock.fastForward(30_001);
     await expect(charges).toContainText('Customer charge: $0.013');
-    await page.getByRole('region',{name:'Prepaid balance',exact:true}).getByRole('button',{name:'Refresh balance',exact:true}).click();
+    await page.clock.fastForward(30_001);
     await expect(page.locator('[data-funds-value="available_cents"]')).toHaveText('$5.00');
     expect(stack.providerRequests).toHaveLength(callsBefore+1);
     const history=page.getByRole('region',{name:'Funding history',exact:true});
-    await history.getByRole('button',{name:'Refresh payments',exact:true}).click();
+    await page.clock.fastForward(30_001);
     await history.getByRole('button',{name:'View receipt',exact:true}).click();
     await expect(history).toContainText('Account credit: $5.00');
     const chargeID=await charges.locator('[data-charge-id]').getAttribute('data-charge-id');
@@ -133,6 +144,7 @@ test('a customer funds hosted access and reads the real settled charge',async({p
     const suspendedRequest=await request('suspended-browser-request');
     expect(suspendedRequest.status(),await suspendedRequest.text()).toBe(403);
     expect(stack.providerRequests).toHaveLength(callsBefore+1);
+    await assertUsageStatus(403,'Forbidden');
     for(const width of [1440,390,320]) {
       await page.setViewportSize({width,height:1000});
       await expect(summary).toBeVisible();await expect(charges).toBeVisible();

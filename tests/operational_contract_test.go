@@ -1415,7 +1415,9 @@ case "${command_name}" in
     case "${test_run}:${test_skip}" in
       '^TestHostedFunds:') selection="funds" ;;
       '^TestHostedPayments:') selection="payments" ;;
-      '^TestHosted:^TestHosted(Funds|Payments)') selection="hosted" ;;
+      '^TestHostedMedia:') selection="media" ;;
+      '^TestHostedRuntime:') selection="runtime" ;;
+      '^TestHosted:^TestHosted(Funds|Payments|Media|Runtime)') selection="hosted" ;;
       ':^TestHosted') selection="remaining" ;;
     esac
     [[ -n "${coverage_profile}" ]]
@@ -1469,9 +1471,11 @@ case "${command_name}" in
         coverage_profile="${1#-func=}"
         [[ "$(awk '$1 == "funds.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
         [[ "$(awk '$1 == "payments.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
+        [[ "$(awk '$1 == "media.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
+        [[ "$(awk '$1 == "runtime.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
         [[ "$(awk '$1 == "hosted.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
         [[ "$(awk '$1 == "remaining.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "1" ]]
-        [[ "$(awk '$1 == "shared.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "4" ]]
+        [[ "$(awk '$1 == "shared.go:1.1,1.2" {print $3}' "${coverage_profile}")" == "6" ]]
         builtin printf '%s\n' 'total: (statements) 100.0%'
         ;;
       *)

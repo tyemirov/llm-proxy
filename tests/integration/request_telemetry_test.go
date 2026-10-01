@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tyemirov/llm-proxy/internal/constants"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 	"go.uber.org/zap"
@@ -28,7 +29,7 @@ const (
 	telemetryProviderDelay        = 25 * time.Millisecond
 	telemetryQueueHold            = 100 * time.Millisecond
 	telemetryRateLimitInterval    = 140 * time.Millisecond
-	telemetryRateLimitTolerance   = 100 * time.Millisecond
+	telemetryDurationPrecision    = time.Millisecond
 	telemetrySafeOutput           = "telemetry-output-sentinel"
 	telemetryUnsafePrompt         = "telemetry-prompt-sentinel"
 	telemetryUnsafeUpstreamID     = "telemetry-upstream-id-sentinel"
@@ -387,9 +388,11 @@ func TestIntegrationRequestTelemetryClassifiesCanceledOpenAIPoll(testingInstance
 func TestIntegrationRequestTelemetrySeparatesAdmissionAndRateLimitWait(testingInstance *testing.T) {
 	testingInstance.Run("queue wait", func(subTest *testing.T) {
 		firstUpstreamStarted := make(chan struct{})
+		queuedRequestObserved := make(chan struct{})
 		releaseFirstUpstream := make(chan struct{})
 		var callCount atomic.Int64
 		var releaseOnce sync.Once
+		var queuedOnce sync.Once
 		observedCore, observedLogs := observer.New(zapcore.InfoLevel)
 		router := timeoutContractRouter(
 			subTest,
@@ -401,7 +404,12 @@ func TestIntegrationRequestTelemetrySeparatesAdmissionAndRateLimitWait(testingIn
 				return completedTimeoutContractResponse(`{"id":"queue","status":"completed","output_text":"ok"}`), nil
 			}),
 			timeoutContractConfiguration(2, 3),
-			zap.New(observedCore).Sugar(),
+			zap.New(observedCore, zap.Hooks(func(entry zapcore.Entry) error {
+				if entry.Message == "upstream HTTP admission" && observedLogs.FilterMessage(entry.Message).FilterField(zap.String("decision", "capacity_wait")).Len() > 0 {
+					queuedOnce.Do(func() { close(queuedRequestObserved) })
+				}
+				return nil
+			})).Sugar(),
 		)
 		subTest.Cleanup(func() { releaseOnce.Do(func() { close(releaseFirstUpstream) }) })
 		firstResult := make(chan *httptest.ResponseRecorder, 1)
@@ -421,6 +429,11 @@ func TestIntegrationRequestTelemetrySeparatesAdmissionAndRateLimitWait(testingIn
 			router.ServeHTTP(secondResponse, httptest.NewRequest(http.MethodGet, "/?key="+serviceSecretValue+"&prompt=second", nil))
 			secondResult <- secondResponse
 		}()
+		select {
+		case <-queuedRequestObserved:
+		case <-time.After(time.Second):
+			subTest.Fatal("second upstream request did not enter the admission queue")
+		}
 		time.Sleep(telemetryQueueHold)
 		releaseOnce.Do(func() { close(releaseFirstUpstream) })
 		firstResponse := <-firstResult
@@ -436,6 +449,7 @@ func TestIntegrationRequestTelemetrySeparatesAdmissionAndRateLimitWait(testingIn
 
 	testingInstance.Run("rate-limit wait", func(subTest *testing.T) {
 		observedCore, observedLogs := observer.New(zapcore.InfoLevel)
+		var upstreamCalls atomic.Int64
 		configuration := timeoutContractConfiguration(2, 3)
 		configuration.Endpoints = integrationProviderEndpoints("https://telemetry-rate.invalid/v1", proxy.ProviderNameOpenAI)
 		configuration.UpstreamRateLimits = []proxy.UpstreamRateLimitConfiguration{{
@@ -446,6 +460,9 @@ func TestIntegrationRequestTelemetrySeparatesAdmissionAndRateLimitWait(testingIn
 		router := timeoutContractRouter(
 			subTest,
 			requestTimeoutHTTPDoer(func(*http.Request) (*http.Response, error) {
+				if upstreamCalls.Add(1) == 1 {
+					time.Sleep(2 * telemetryProviderDelay)
+				}
 				return completedTimeoutContractResponse(`{"id":"rate","status":"completed","output_text":"ok"}`), nil
 			}),
 			configuration,
@@ -459,7 +476,16 @@ func TestIntegrationRequestTelemetrySeparatesAdmissionAndRateLimitWait(testingIn
 			subTest.Fatalf("statuses=%d,%d", firstResponse.Code, secondResponse.Code)
 		}
 		secondSummary := telemetrySummaryForRequest(subTest, observedLogs, secondResponse.Header().Get(llmproxycontract.HeaderRequestID))
-		if telemetryNumericField(secondSummary, "upstream_rate_limit_wait_ms") < telemetryRateLimitTolerance.Milliseconds() || telemetryNumericField(secondSummary, "upstream_admission_ms") >= telemetryNumericField(secondSummary, "upstream_rate_limit_wait_ms") {
+		firstSummary := telemetrySummaryForRequest(subTest, observedLogs, firstResponse.Header().Get(llmproxycontract.HeaderRequestID))
+		assertTelemetrySummaryPhases(subTest, firstSummary)
+		assertTelemetrySummaryPhases(subTest, secondSummary)
+		delayLogs := observedLogs.FilterMessage(constants.LogEventUpstreamRateLimitDelayed).FilterField(zap.String("request_id", secondResponse.Header().Get(llmproxycontract.HeaderRequestID))).All()
+		if len(delayLogs) != 1 {
+			subTest.Fatalf("rate-limit delay logs=%d want=1", len(delayLogs))
+		}
+		measuredWait := telemetryNumericField(delayLogs[0].ContextMap(), constants.LogFieldRateLimitTotalWaitMilliseconds)
+		reportedWait := telemetryNumericField(secondSummary, "upstream_rate_limit_wait_ms")
+		if telemetryNumericField(firstSummary, "upstream_rate_limit_wait_ms") != 0 || measuredWait <= 0 || reportedWait < measuredWait-telemetryDurationPrecision.Milliseconds() || reportedWait > measuredWait+telemetryDurationPrecision.Milliseconds() || telemetryNumericField(secondSummary, "upstream_admission_ms") >= reportedWait {
 			subTest.Fatalf("rate-limit summary=%v", secondSummary)
 		}
 	})

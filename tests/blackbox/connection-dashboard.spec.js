@@ -84,6 +84,8 @@ test('account connection dashboard links Social Threader explicitly and preserve
  await expect(dialog).not.toBeVisible();
  await expect(dashboard.locator('[data-connection-node]').filter({hasText:'Production'})).toContainText('Connected');
  const selectionHeader=dashboard.locator('[data-details] > header');
+ await expect(selectionHeader.getByRole('button',{name:'Tenant details and API access',exact:true})).toBeVisible();
+ await expect(dashboard.locator('.cw-detail-footer')).toHaveCount(0);
  const editBounds=await selectionHeader.getByRole('button',{name:'Edit connection',exact:true}).boundingBox();
  const detachBounds=await selectionHeader.getByRole('button',{name:'Detach from Default',exact:true}).boundingBox();
  expect(detachBounds.x-(editBounds.x+editBounds.width)).toBeLessThanOrEqual(10);
@@ -93,18 +95,19 @@ test('account connection dashboard links Social Threader explicitly and preserve
  await expect(dashboard.locator('[data-connection-node]')).toHaveCount(0);
  await search.fill('');
  await dashboard.locator('[data-model="gpt-4.1"]').click();
- for (const width of [1440,899,390,320]) {
+ for (const width of [1440,899,803,390,320]) {
   await page.setViewportSize({width,height:1050});
   await expect(dashboard.getByRole('button',{name:'Copy MCP URL',exact:true})).toBeVisible();
   await expect(dashboard.getByLabel('Provider system prompt for Default')).toBeHidden();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
-  for (const control of [search, toolbar.getByRole('button',{name:'Copy MCP URL',exact:true}), selectionHeader.getByRole('button',{name:'Edit connection',exact:true}), selectionHeader.getByRole('button',{name:'Detach from Default',exact:true})]) {
+  for (const control of [search, toolbar.getByRole('button',{name:'Copy MCP URL',exact:true}), selectionHeader.getByRole('button',{name:'Edit connection',exact:true}), selectionHeader.getByRole('button',{name:'Detach from Default',exact:true}), selectionHeader.getByRole('button',{name:'Tenant details and API access',exact:true})]) {
    const bounds=await control.boundingBox();
    expect(bounds.x).toBeGreaterThanOrEqual(0);
    expect(bounds.x+bounds.width).toBeLessThanOrEqual(width);
   }
   await page.evaluate(()=>scrollTo(0,0));
   await page.screenshot({path:`/tmp/llm-proxy-annotations/connections-${width}.png`});
+  await selectionHeader.screenshot({path:`/tmp/llm-proxy-annotations/connection-header-${width}.png`});
  }
  await page.setViewportSize({width:1440,height:1050});
  await dashboard.getByRole('button',{name:'Create tenant',exact:true}).click();
