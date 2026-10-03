@@ -35,6 +35,25 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B304] (P1) Wait for the usage commit before request identity restoration.
+  Evidence:
+  PR 348 backend coverage failed in `TestHostedFundsRecoveryRejectsEmptyStoredRequestIdentity`.
+  Fixture restoration returned `database is locked (517)` after the rejected HTTP request.
+  The response completes before the asynchronous usage writer commits its record.
+  GitHub log: https://github.com/tyemirov/llm-proxy/actions/runs/37086501991/job/111097813542
+  Requirements:
+  - Wait for the usage commit before restoration of the request identity.
+  - Use the existing test callback and preserve the financial assertions.
+  Validation:
+  The affected HTTP test passed 100 consecutive runs with coverage after the fix.
+  Complete CI passed all 14 gates in 1153 seconds with 100.0 percent Go statement coverage.
+  Resolution:
+  The test uses the existing usage commit callback before it restores the request identity.
+  The provider, financial, and recovery assertions remain unchanged.
+  Evidence files: `/tmp/llm-proxy-pr348-identity-after.log` and `/tmp/llm-proxy-pr348-ci.log`.
+  Files: `internal/proxy/hosted_funds_request_identity_internal_test.go`.
+  New event contracts: None.
+
 - [x] [B303] (P1) Wait for usage record commits before funds fixture setup.
   Evidence:
   Faster reference construction exposes concurrent usage writes and fixture funding in the integration tests.

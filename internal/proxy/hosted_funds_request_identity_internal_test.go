@@ -49,6 +49,7 @@ func TestHostedFundsRecoveryRejectsEmptyStoredRequestIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	replaceIdentity(fixture.request.ID, "")
+	waitUsage := fundsFixtureUsageCommitBarrier(t, fixture.database, 1)
 	hostedIdentityHTTP(t, fixture.generation, textExecutionRecoveryKey, "funded prompt", http.StatusServiceUnavailable)
 	if fixture.calls.Load() != 0 {
 		t.Fatal("empty stored request identity dispatched provider work")
@@ -57,6 +58,7 @@ func TestHostedFundsRecoveryRejectsEmptyStoredRequestIdentity(t *testing.T) {
 	if !reflect.DeepEqual(before["ledger-entries"], history) {
 		t.Fatal("empty stored request identity changed the original Ledger hold")
 	}
+	waitUsage()
 	replaceIdentity("", fixture.request.ID)
 	if err := fixture.database.database.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&managedJournalRequestRecord{}).Where("id = ?", fixture.request.ID).Select("*").Omit(clause.Associations).UpdateColumns(&fixture.request).Error; err != nil {
