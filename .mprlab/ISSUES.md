@@ -35,6 +35,26 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B303] (P1) Wait for usage record commits before funds fixture setup.
+  Evidence:
+  Faster reference construction exposes concurrent usage writes and fixture funding in the integration tests.
+  `TestHostedFundsDictationUsesOneHoldAcrossProtocols` failed at funds setup with `SQLITE_BUSY` in the complete CI gate.
+  Three catalog dictation scenarios failed at the same boundary during the initial measurement.
+  HTTP response completion does not establish completion of the asynchronous usage writer.
+  Requirements:
+  - Wait for committed usage records before funds setup in the affected HTTP and MCP scenarios.
+  - Keep real usage writes, database isolation, provider assertions, and financial assertions.
+  - Keep production retry policy and timeout values unchanged.
+  Resolution:
+  Four unfunded scenarios use a shared callback after the database commit or rollback.
+  Each scenario waits for its exact number of usage records and reports write errors on the test thread.
+  All four scenarios passed three consecutive runs. Complete CI passed with all 14 gates and 100.0 percent Go coverage.
+  Evidence files: `/tmp/llm-proxy-I309-ci.log`, `/tmp/llm-proxy-I309-ci-final.log`, and `/tmp/llm-proxy-I309-funding-barriers.log`.
+  Files: `internal/proxy/hosted_funds_admission_internal_test.go`, `internal/proxy/hosted_funds_protocols_internal_test.go`,
+  and `internal/proxy/hosted_funds_dictation_catalog_internal_test.go`.
+  New event contracts: None.
+
+
 - [x] [B302] (P2) Split remaining coverage before the native test deadline.
   Evidence: PR 347 passes all six hosted groups, then the remaining group reaches its ten-minute limit.
   The active oversized-body test runs for less than one second before the group times out.
@@ -2044,6 +2064,54 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   Blocked: The operator must publish the qualified shared UI assets and complete cache convergence under mpr-ui I009.
 
 ## Improvements
+
+- [x] [I309] (P1) Decrease repeated reference construction in integration tests.
+  Evidence:
+  The retained Linux backend gate took 30 minutes 38 seconds. Its nine separate proxy test groups took 29 minutes 44 seconds.
+  A local hosted funds run passed 121 tests in 217.694 seconds, with 521 results that include subtests.
+  Its CPU profile attributed 17.37 percent to provider catalog construction and 7.90 percent to OpenAPI document loads.
+  These values describe one test group, not the complete suite.
+  Without coverage instrumentation, `TestHostedFundsResolutionReadFailuresPreserveCompleteFinancialState` passed in 11.88 seconds.
+  Its memory profile estimated 12.46 GiB of total allocations. This quantity is not the peak memory use.
+  Provider catalog construction accounted for 70.69 percent of allocations, including 64.61 percent from YAML copies.
+  OpenAPI document loads accounted for another 24.60 percent.
+  Requirements:
+  - Keep all assertions, test scenarios, coverage requirements, and database isolation.
+  - Remove repeated parsing of unchanged reference documents from test fixtures.
+  - Replace YAML copies with detached copies that preserve nested maps, slices, and pointers.
+  - Keep independent copies for tests that change catalog data.
+  - Keep parser acceptance tests and startup acceptance tests on their real public entry points.
+  - Keep test deadlines and the issue runner contract unchanged.
+  Validation:
+  Compare elapsed time and memory allocations before and after the change through the same public Make targets.
+  Run the complete coverage gate after the final change.
+  Evidence files: `/tmp/llm-proxy-test-duration-ybfbgawf/timing-summary.json`, `/tmp/llm-proxy-test-duration-ybfbgawf/cpu-all.txt`,
+  `/tmp/llm-proxy-test-duration-ybfbgawf/memory-top.txt`, and `/tmp/llm-proxy-pr347-success-backend.log`.
+  Implementation:
+  Typed catalog copies replace YAML copies. Test fixtures reuse parsed reference documents.
+  Internal catalog fixtures return separate copies of all three catalog projections.
+  The dictation financial test waits for usage records to commit before it adds funds.
+  All existing assertions and test deadlines remain unchanged.
+  Validation results:
+  Public catalog snapshot tests passed before the refactor. The catalog acceptance target passed after the refactor.
+  The same profiled funds target passed 121 tests in 45.268 seconds, with all 521 test and subtest results.
+  The prior time was 217.694 seconds. The decrease is 79.2 percent.
+  The same test without coverage passed in 2.03 seconds. Its estimated total allocations were 590.45 MiB.
+  The prior values were 11.88 seconds and 12757.93 MiB. These allocation values are not peak memory use.
+  The dictation financial scenarios passed three consecutive runs after synchronization on usage record commits.
+  Complete CI passed with all 14 gates and 100.0 percent Go coverage in 1013 seconds.
+  The Go integration gate took 716 seconds. These values describe the local macOS run.
+  Evidence files: `/tmp/llm-proxy-test-duration-ybfbgawf/funds-final.jsonl`, `/tmp/llm-proxy-test-duration-ybfbgawf/focused-final.jsonl`,
+  `/tmp/llm-proxy-test-duration-ybfbgawf/memory-final-top.txt`, and `/tmp/llm-proxy-I309-ci-final.log`.
+  Environment: Local macOS arm64. The earlier complete backend gate used GitHub Linux.
+  Files: `internal/proxy/provider_catalog_schema.go`, `internal/proxy/model_catalog_internal_test.go`,
+  `internal/testfixtures/provider_models.go`, `internal/proxy/openapi_contract_internal_test.go`,
+  `internal/proxy/provider_catalog_end_to_end_test.go`, `internal/proxy/hosted_account_creation_recovery_internal_test.go`,
+  `internal/proxy/hosted_alignment_isolation_internal_test.go`, `internal/proxy/hosted_financial_reads_internal_test.go`,
+  `internal/proxy/hosted_funds_hold_recovery_internal_test.go`, `internal/proxy/hosted_funds_resolution_internal_test.go`,
+  `internal/proxy/hosted_payments_inbox_internal_test.go`, `internal/proxy/hosted_payments_orders_internal_test.go`,
+  `internal/proxy/hosted_rating_acceptance_internal_test.go`, and `internal/proxy/hosted_text_identity_internal_test.go`.
+  New event contracts: None.
 
 - [x] [I308] (P2) Complete account creation before the payment history test reads the account.
   Evidence: PR 347 payment history qualification reads an empty account collection after the setup button click.
