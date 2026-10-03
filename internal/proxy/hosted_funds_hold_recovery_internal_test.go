@@ -6,13 +6,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"reflect"
 	"strconv"
 	"sync/atomic"
 	"testing"
 
-	"github.com/tyemirov/llm-proxy/internal/openapitest"
 	"gorm.io/gorm"
 )
 
@@ -47,7 +45,7 @@ func (fixture fundsHoldRecoveryFixture) resources(t *testing.T) map[string]any {
 	state := fixture.state(t)
 	path := "/billing-accounts/billing-journal/requests/" + fixture.request.ID
 	state["journal"] = accountConnectionHTTPExchange(t, fixture.management, http.MethodGet, path, "", http.StatusOK)
-	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	contract, err := internalCanonicalOpenAPIContract()
 	if err != nil {
 		t.Fatal(err)
 	}

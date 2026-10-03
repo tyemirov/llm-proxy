@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -38,7 +37,7 @@ func newFinancialReadFixture(t *testing.T) financialReadFixture {
 		t.Fatal(err)
 	}
 	server, cookie := newFundsManagementHTTPFixture(t, startup.database)
-	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	contract, err := internalCanonicalOpenAPIContract()
 	if err != nil {
 		t.Fatal(err)
 	}

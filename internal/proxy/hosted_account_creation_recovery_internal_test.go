@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -32,7 +31,7 @@ func newAccountCreationFixture(t *testing.T) accountCreationFixture {
 	service := newInternalManagementService(t, newFakeManagedTenantDatabase(), internalManagementProviderRegistry())
 	service.store.database = database
 	server, cookie := fundsManagementServiceHTTPFixture(t, service)
-	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	contract, err := internalCanonicalOpenAPIContract()
 	if err != nil {
 		t.Fatal(err)
 	}

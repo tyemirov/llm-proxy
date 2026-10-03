@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/tyemirov/llm-proxy/internal/proxy"
@@ -158,22 +159,22 @@ func ProviderCatalogWithProtocolFixtures(testingInstance testing.TB) (*proxy.Pro
 	return catalog, fixtures
 }
 
+var canonicalProviderCatalog = sync.OnceValues(func() (*proxy.ProviderCatalog, error) {
+	_, currentFile, _, _ := runtime.Caller(0)
+	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
+	document, err := os.ReadFile(filepath.Join(repositoryRoot, "configs", "providers.yml"))
+	if err != nil {
+		return nil, fmt.Errorf("read provider catalog: %w", err)
+	}
+	return proxy.ParseProviderCatalog(document)
+})
+
 // ProviderCatalog loads the repository provider catalog for tests.
 func ProviderCatalog(testingInstance testing.TB) *proxy.ProviderCatalog {
 	testingInstance.Helper()
-	_, currentFile, _, callerOK := runtime.Caller(0)
-	if !callerOK {
-		testingInstance.Fatal("locate test fixture file")
-	}
-	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
-	catalogPath := filepath.Join(repositoryRoot, "configs", "providers.yml")
-	document, readError := os.ReadFile(catalogPath)
-	if readError != nil {
-		testingInstance.Fatalf("read provider catalog: %v", readError)
-	}
-	catalog, parseError := proxy.ParseProviderCatalog(document)
-	if parseError != nil {
-		testingInstance.Fatalf("parse provider catalog: %v", parseError)
+	catalog, err := canonicalProviderCatalog()
+	if err != nil {
+		testingInstance.Fatalf("load provider catalog: %v", err)
 	}
 	return catalog
 }

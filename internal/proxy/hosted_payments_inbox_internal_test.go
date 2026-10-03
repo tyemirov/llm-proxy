@@ -10,14 +10,12 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tyemirov/llm-proxy/internal/openapitest"
 	"github.com/tyemirov/utils/billing"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -78,7 +76,7 @@ func paymentInboxHTTP(t *testing.T, server *httptest.Server, body, signature str
 	if response.Header.Get("Cache-Control") != "no-store" {
 		t.Fatal("payment event response permits caching")
 	}
-	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	contract, err := internalCanonicalOpenAPIContract()
 	if err != nil {
 		t.Fatal(err)
 	}

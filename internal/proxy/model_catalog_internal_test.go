@@ -6,9 +6,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"sync"
 )
 
-func internalCanonicalProviderCatalog() *ProviderCatalog {
+var internalCanonicalProviderCatalogSnapshot = sync.OnceValue(func() *ProviderCatalog {
 	_, sourceFile, _, _ := runtime.Caller(0)
 	document, readError := os.ReadFile(filepath.Join(filepath.Dir(sourceFile), "..", "..", "configs", "providers.yml"))
 	if readError != nil {
@@ -19,6 +20,15 @@ func internalCanonicalProviderCatalog() *ProviderCatalog {
 		panic(catalogError)
 	}
 	return catalog
+})
+
+func internalCanonicalProviderCatalog() *ProviderCatalog {
+	catalog := internalCanonicalProviderCatalogSnapshot()
+	return &ProviderCatalog{
+		schema:        cloneProviderCatalogSchema(catalog.schema),
+		runtimeSchema: cloneProviderCatalogSchema(catalog.runtimeSchema),
+		modelCatalog:  cloneModelCatalog(catalog.modelCatalog),
+	}
 }
 
 func internalTestModelCatalog(offerings ...ProviderOffering) ModelCatalog {

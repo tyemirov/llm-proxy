@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -516,6 +517,59 @@ func TestProviderCatalogSnapshotsAreImmutable(testingInstance *testing.T) {
 		currentModelCatalog.Offerings[0].ProviderModel != originalModelCatalog.Offerings[0].ProviderModel ||
 		currentModelCatalog.Prices[0].Source != originalModelCatalog.Prices[0].Source {
 		testingInstance.Fatalf("runtime snapshot mutated catalog state")
+	}
+}
+
+func TestProviderCatalogNestedSnapshotsAreImmutable(t *testing.T) {
+	input := testfixtures.ProviderCatalog(t).Schema()
+	catalog, err := proxy.NewProviderCatalog(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := catalog.Schema()
+	runtimeBefore := catalog.ModelCatalog()
+	mutateCatalogSnapshot(reflect.ValueOf(&input).Elem())
+	if !reflect.DeepEqual(before, catalog.Schema()) || !reflect.DeepEqual(runtimeBefore, catalog.ModelCatalog()) {
+		t.Fatal("constructor input changed the catalog")
+	}
+	snapshot := catalog.Schema()
+	mutateCatalogSnapshot(reflect.ValueOf(&snapshot).Elem())
+	if !reflect.DeepEqual(before, catalog.Schema()) || !reflect.DeepEqual(runtimeBefore, catalog.ModelCatalog()) {
+		t.Fatal("nested schema snapshot changed the catalog")
+	}
+	runtimeSnapshot := catalog.ModelCatalog()
+	mutateCatalogSnapshot(reflect.ValueOf(&runtimeSnapshot).Elem())
+	if !reflect.DeepEqual(runtimeBefore, catalog.ModelCatalog()) {
+		t.Fatal("nested runtime snapshot changed the catalog")
+	}
+}
+
+func mutateCatalogSnapshot(value reflect.Value) {
+	switch value.Kind() {
+	case reflect.Pointer:
+		if !value.IsNil() {
+			mutateCatalogSnapshot(value.Elem())
+		}
+	case reflect.Struct:
+		for index := 0; index < value.NumField(); index++ {
+			if value.Field(index).CanSet() {
+				mutateCatalogSnapshot(value.Field(index))
+			}
+		}
+	case reflect.Slice:
+		for index := 0; index < value.Len(); index++ {
+			mutateCatalogSnapshot(value.Index(index))
+		}
+	case reflect.String:
+		value.SetString("mutated")
+	case reflect.Bool:
+		value.SetBool(!value.Bool())
+	case reflect.Int, reflect.Int64:
+		value.SetInt(value.Int() + 1)
+	case reflect.Uint8, reflect.Uint64:
+		value.SetUint(value.Uint() + 1)
+	case reflect.Float64:
+		value.SetFloat(value.Float() + 1)
 	}
 }
 

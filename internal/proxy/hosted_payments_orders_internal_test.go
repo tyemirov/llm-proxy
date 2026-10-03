@@ -6,9 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 
-	"github.com/tyemirov/llm-proxy/internal/openapitest"
 	"reflect"
 	"strings"
 	"sync"
@@ -83,7 +81,7 @@ func paymentOrderHTTP(t *testing.T, server *httptest.Server, cookie *http.Cookie
 			template += "/receipt"
 		}
 	}
-	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	contract, err := internalCanonicalOpenAPIContract()
 	if err != nil {
 		t.Fatal(err)
 	}

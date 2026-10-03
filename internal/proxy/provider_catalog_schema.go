@@ -944,10 +944,62 @@ func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string)
 }
 
 func cloneProviderCatalogSchema(schema ProviderCatalogSchema) ProviderCatalogSchema {
-	document, _ := yaml.Marshal(schema)
-	decoder := yaml.NewDecoder(bytes.NewReader(document))
-	decoder.KnownFields(true)
-	var cloned ProviderCatalogSchema
-	_ = decoder.Decode(&cloned)
+	cloned := schema
+	cloned.ModelMigrations = slices.Clone(schema.ModelMigrations)
+	cloned.Operations = slices.Clone(schema.Operations)
+	for index := range cloned.Operations {
+		cloned.Operations[index].InputArtifacts = slices.Clone(schema.Operations[index].InputArtifacts)
+		cloned.Operations[index].OutputArtifacts = slices.Clone(schema.Operations[index].OutputArtifacts)
+	}
+	cloned.Publishers = slices.Clone(schema.Publishers)
+	cloned.Families = slices.Clone(schema.Families)
+	cloned.Models = slices.Clone(schema.Models)
+	for index := range cloned.Models {
+		cloned.Models[index].Operations = slices.Clone(schema.Models[index].Operations)
+		cloned.Models[index].MediaInputs = slices.Clone(schema.Models[index].MediaInputs)
+	}
+	cloned.Providers = slices.Clone(schema.Providers)
+	for index, provider := range schema.Providers {
+		copy := &cloned.Providers[index]
+		copy.Services = cloneProviderServices(provider.Services)
+		copy.Aliases = slices.Clone(provider.Aliases)
+		copy.Resources = slices.Clone(provider.Resources)
+		copy.Fields = slices.Clone(provider.Fields)
+		for fieldIndex, field := range provider.Fields {
+			value := *field.Default
+			copy.Fields[fieldIndex].Default = &value
+			copy.Fields[fieldIndex].Validation.AllowedSchemes = slices.Clone(field.Validation.AllowedSchemes)
+		}
+		copy.Transports = slices.Clone(provider.Transports)
+		for transportIndex, transport := range provider.Transports {
+			copy.Transports[transportIndex].ArtifactOrigins = slices.Clone(transport.ArtifactOrigins)
+			copy.Transports[transportIndex].Headers = slices.Clone(transport.Headers)
+			copy.Transports[transportIndex].Components.Execution.ResourceVisibility.RetryStatusCodes = slices.Clone(transport.Components.Execution.ResourceVisibility.RetryStatusCodes)
+		}
+		copy.Offerings = slices.Clone(provider.Offerings)
+		for offeringIndex, offering := range provider.Offerings {
+			projection := cloneProviderOffering(ProviderOffering{
+				Operations: offering.Operations, DefaultOperations: offering.DefaultOperations,
+				ReasoningEffort: offering.ReasoningEffort, MediaInputs: offering.MediaInputs,
+				ImageMIMETypes: offering.ImageMIMETypes, MediaLimits: offering.MediaLimits,
+				Controls: offering.Controls, Limits: offering.Limits,
+			})
+			route := &copy.Offerings[offeringIndex]
+			route.Operations = projection.Operations
+			route.DefaultOperations = projection.DefaultOperations
+			route.ReasoningEffort = projection.ReasoningEffort
+			route.MediaInputs = projection.MediaInputs
+			route.ImageMIMETypes = projection.ImageMIMETypes
+			route.MediaLimits = projection.MediaLimits
+			route.Controls = projection.Controls
+			route.Limits = projection.Limits
+			route.Prices = slices.Clone(offering.Prices)
+			for priceIndex, price := range offering.Prices {
+				projection := cloneCatalogPriceDescriptor(servicePriceDescriptor(price))
+				route.Prices[priceIndex].Rates = projection.Rates
+				route.Prices[priceIndex].MinimumCharge = projection.MinimumCharge
+			}
+		}
+	}
 	return cloned
 }
