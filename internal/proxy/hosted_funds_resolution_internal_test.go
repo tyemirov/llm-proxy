@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -16,7 +15,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/tyemirov/llm-proxy/internal/openapitest"
 	"github.com/tyemirov/tauth/pkg/sessionvalidator"
 )
 
@@ -168,7 +166,7 @@ func fundsResolutionHTTP(t *testing.T, server *httptest.Server, cookie *http.Coo
 	if response.Header.Get("Cache-Control") != "no-store" {
 		t.Fatal("resolution response permits caching")
 	}
-	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	contract, err := internalCanonicalOpenAPIContract()
 	if err != nil {
 		t.Fatal(err)
 	}

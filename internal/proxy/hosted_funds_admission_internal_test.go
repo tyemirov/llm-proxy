@@ -16,6 +16,7 @@ import (
 	"github.com/MarkoPoloResearchLab/ledger/pkg/ledger"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxyclient"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
+	"gorm.io/gorm"
 )
 
 func TestHostedFundsAdmissionOfficialClientsKeepFundingErrors(t *testing.T) {
@@ -75,6 +76,7 @@ func TestHostedFundsAdmissionRejectsBeforeDispatchAndReservesOnce(t *testing.T) 
 	var calls atomic.Int64
 	upstream := fundsUpstream(t, &calls)
 	server := newHostedIdentityHTTPServer(t, database, upstream.URL, t.TempDir(), fundsDependencies(priceAdmission))
+	waitUsage := fundsFixtureUsageCommitBarrier(t, database, 1)
 	body := hostedIdentityHTTP(t, server, "no-funds", "funded prompt", http.StatusPaymentRequired)
 	if !strings.Contains(body, `"code":"insufficient_funds"`) || calls.Load() != 0 {
 		t.Fatalf("unfunded request dispatched: calls=%d body=%s", calls.Load(), body)
@@ -85,6 +87,7 @@ func TestHostedFundsAdmissionRejectsBeforeDispatchAndReservesOnce(t *testing.T) 
 			t.Fatalf("failed admission retained %s: count=%d error=%v", table, count, err)
 		}
 	}
+	waitUsage()
 	// A five-cent fixture balance represents funds left after earlier usage.
 	seedHostedFunds(t, database, 5)
 	for range 2 {
@@ -218,5 +221,41 @@ func assertHostedFundsBalance(t *testing.T, database *gormManagedTenantDatabase,
 	if err != nil || balance.TotalCents.Int64() != total || balance.AvailableCents.Int64() != available {
 		encoded, _ := json.Marshal(balance)
 		t.Fatalf("balance=%s want total=%d available=%d error=%v", encoded, total, available, err)
+	}
+}
+
+func fundsFixtureUsageCommitBarrier(t *testing.T, database *gormManagedTenantDatabase, count int) func() {
+	t.Helper()
+	committed := make(chan error, count)
+	const callbackName = "unfunded_usage_committed"
+	if err := database.database.Callback().Create().After("gorm:commit_or_rollback_transaction").Register(callbackName, func(result *gorm.DB) {
+		if result.Statement.Table == managedUsageEventTable {
+			committed <- result.Error
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var removeOnce sync.Once
+	remove := func() {
+		removeOnce.Do(func() {
+			if err := database.database.Callback().Create().Remove(callbackName); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	t.Cleanup(remove)
+	return func() {
+		t.Helper()
+		defer remove()
+		for range count {
+			select {
+			case err := <-committed:
+				if err != nil {
+					t.Fatalf("persist unfunded usage: %v", err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("unfunded usage did not finish")
+			}
+		}
 	}
 }

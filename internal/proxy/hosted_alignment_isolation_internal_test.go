@@ -5,12 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/tyemirov/llm-proxy/internal/openapitest"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxyclient"
 	"gorm.io/gorm/clause"
 )
@@ -80,7 +78,7 @@ func assertHostedAlignmentAccountIsolation(t *testing.T, database *gormManagedTe
 
 	server, cookie := newFundsManagementHTTPFixture(t, database)
 	defer server.Close()
-	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	contract, err := internalCanonicalOpenAPIContract()
 	if err != nil {
 		t.Fatal(err)
 	}

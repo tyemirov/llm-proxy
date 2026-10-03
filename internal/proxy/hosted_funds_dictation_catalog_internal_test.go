@@ -113,6 +113,7 @@ func TestHostedFundsDictationCatalogFinancialAcceptance(t *testing.T) {
 				audio := []byte("RIFF\x00\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80\x3e\x00\x00\x00\x7d\x00\x00\x02\x00\x10\x00data\x02\x00\x00\x00\x00\x00")
 				binary.LittleEndian.PutUint32(audio[4:], uint32(len(audio)-8))
 				paths := []string{dictatePath, transcriptionsPath}
+				waitUsage := fundsFixtureUsageCommitBarrier(t, database, len(paths))
 				status := http.StatusPaymentRequired
 				if offering.WireContract == CatalogProtocolMetaTranscription {
 					status = http.StatusServiceUnavailable
@@ -123,6 +124,7 @@ func TestHostedFundsDictationCatalogFinancialAcceptance(t *testing.T) {
 				if calls.Load() != 0 {
 					t.Fatal("unfunded dictation dispatched")
 				}
+				waitUsage()
 				seedHostedFunds(t, database, 500)
 				beforeEmpty := (fundsStartupFixture{database: database, management: management}).state(t)
 				for index, path := range paths {

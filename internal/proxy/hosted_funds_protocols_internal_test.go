@@ -16,9 +16,11 @@ func TestHostedFundsMCPRejectsUnfundedWorkAndReusesSettlement(t *testing.T) {
 	server, clientFor := newHostedMCPIdentityServer(t, database, upstream.URL, t.TempDir(), fundsDependencies(prices))
 	client := clientFor("owner")
 	input := map[string]any{"tenant_id": "managed-first", "idempotency_key": "funds-mcp", "provider": "openai", "model": "gpt-4.1", "messages": []map[string]string{{"role": "user", "content": "funded prompt"}}}
+	waitUsage := fundsFixtureUsageCommitBarrier(t, database, 1)
 	if denied := hostedMCPCall(t, client, input, true); denied["code"] != errInsufficientFunds.Error() || calls.Load() != 0 {
 		t.Fatalf("unfunded MCP=%v calls=%d", denied, calls.Load())
 	}
+	waitUsage()
 	seedHostedFunds(t, database, 5)
 	if result := hostedMCPCall(t, client, input, false); result["text"] != "funded result" {
 		t.Fatalf("funded MCP=%v", result)
@@ -59,6 +61,7 @@ func TestHostedFundsDictationUsesOneHoldAcrossProtocols(t *testing.T) {
 	}))
 	t.Cleanup(upstream.Close)
 	server := newHostedDictationServer(t, database, upstream.URL, t.TempDir(), fundsDependencies(reserve))
+	waitUsage := fundsFixtureUsageCommitBarrier(t, database, 2)
 	for _, path := range []string{dictatePath, transcriptionsPath} {
 		body := hostedDictationHTTP(t, server, path, "funds-dictation", "private audio", http.StatusPaymentRequired)
 		if !strings.Contains(body, errInsufficientFunds.Error()) {
@@ -68,6 +71,7 @@ func TestHostedFundsDictationUsesOneHoldAcrossProtocols(t *testing.T) {
 	if calls.Load() != 0 {
 		t.Fatalf("unfunded dictation dispatched %d times", calls.Load())
 	}
+	waitUsage()
 	seedHostedFunds(t, database, 5)
 	for _, path := range []string{dictatePath, transcriptionsPath} {
 		hostedDictationHTTP(t, server, path, "funds-dictation", "private audio", http.StatusOK)

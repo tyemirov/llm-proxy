@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -15,7 +14,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tyemirov/llm-proxy/internal/openapitest"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -385,7 +383,7 @@ func hostedIdentityHTTP(t *testing.T, server *httptest.Server, key, prompt strin
 
 func validateHostedIdentityResponse(t *testing.T, request *http.Request, response *http.Response, body []byte) {
 	t.Helper()
-	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	contract, err := internalCanonicalOpenAPIContract()
 	if err != nil {
 		t.Fatal(err)
 	}
