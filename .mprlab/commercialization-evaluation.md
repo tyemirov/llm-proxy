@@ -60,7 +60,7 @@ The [S1 benchmark record](commercialization-benchmark-LP-C01-S1.md) contains the
 | MCP ownership | OAuth identity selects owned tenants. Generation shares the text execution lifecycle and logical usage status. |
 | Management visibility | Authenticated account and tenant APIs provide usage summaries, failures, and rejections. Detail queries have bounded pages and scoped cursors. |
 | BYOK telemetry | `management_usage_writer.go` uses a bounded process-local queue. Queue saturation, failed inserts, and process termination can lose events. |
-| Token evidence | Generation can return `usage: null`. Persisted BYOK integer fields have no measurement-presence field. Unknown and measured-zero quantities cannot be distinguished. |
+| Token evidence | B305 retains per-quantity measurement presence in new events and exposes scoped coverage. Historical null evidence remains unverified. Queue loss remains a separate limitation. |
 | Route evidence | Unresolved routes have empty provider/model dimensions. Do not assign a provider to an unresolved request. |
 | Hosted billing | `docs/hosted-billing.md` records separate durable financial evidence and controlled development acceptance. Activation and live qualification remain separate. |
 
@@ -175,12 +175,15 @@ Record repeated-operator effects and existing product familiarity as effort-meas
 
 ## Smallest conditional engineering candidate
 
-The smallest current candidate preserves token-measurement presence in new BYOK events and exposes measured/unknown request counts in existing summaries.
-Its acceptance must distinguish absent usage from genuine measured zero through public HTTP reads.
-Historical rows must remain unknown where presence cannot be established. Queue loss remains a separate limitation.
-This candidate needs an approved requirement and a separate implementation issue.
-It does not establish durable metering or invoice accuracy.
-The S1 results show that the measurement gap does not prevent extraction. It limits retrospective token coverage.
+B305 completed measurement presence in new BYOK events and coverage in existing summaries.
+Public integration tests distinguish absent usage from measured zero before and after a database reopen.
+New media usage rows record unknown evidence. Historical rows remain unverified.
+Queue loss remains a separate limitation. This change does not establish durable metering or invoice accuracy.
+The combined source passes acceptance CI and native release CI.
+P018 blocks release preparation before artifact assembly. Publication and deployment did not start.
+The [combined execution record](combined-release-2026-10-06.md) identifies the source, tests, and release blocker.
+
+Complete the LP-C01 comparison before selection of another engineering candidate.
 An MCP usage tool remains conditional on a demonstrated MCP workflow need after existing management access is evaluated.
 
 ## Sources and execution record
