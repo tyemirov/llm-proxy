@@ -140,3 +140,21 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `upstream origin`: The normalized scheme, hostname, and optional port of an upstream HTTP endpoint.
 - `work class`: The interactive, media submission, status, or transfer category of an upstream HTTP request.
 - `admission telemetry`: Safe events that record admission decisions, capacity counts, and request or operation identifiers.
+
+## Commercial Evaluation Technical Nouns
+
+- `evaluation charter`: The document that defines an evaluation scope, evidence, and decision rules.
+- `execution record`: A dated document of commands, results, source identities, and unresolved work.
+- `BYOK`: Customer access through customer-owned provider credentials.
+- `operational telemetry`: Request measurements for service diagnosis that do not establish financial history.
+- `benchmark`: A repeatable measurement procedure with fixed inputs and declared conditions.
+- `fixture`: A controlled local input or protocol implementation used for repeatable tests.
+- `pilot`: A separately authorized customer evaluation with a defined scope and owner.
+- `measurement presence`: The explicit state that distinguishes a reported quantity from an absent quantity.
+- `source fingerprint`: A set of source hashes that identifies the evaluated working state.
+- `p50`: The nearest-rank 50th percentile of a declared sample.
+- `p95`: The nearest-rank 95th percentile of a declared sample.
+- `comparison rubric`: The dimensions, measurements, and rules used to compare alternatives.
+
+- `token coverage`: Counts of retained execution events for each token measurement state.
+- `token subtotal`: A sum of retained token quantities whose measurement coverage can be incomplete.

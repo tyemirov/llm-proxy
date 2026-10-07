@@ -765,13 +765,13 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		if responseRecorder.Code != http.StatusOK || responseRecorder.Body.String() != "synthesized" {
 			subTest.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
 		}
-		if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "6" {
+		if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "" {
 			subTest.Fatalf("request tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens))
 		}
-		if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "1" {
+		if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "" {
 			subTest.Fatalf("response tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens))
 		}
-		if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "7" {
+		if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "" {
 			subTest.Fatalf("total tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens))
 		}
 		if synthesisPayload["max_output_tokens"] != float64(222) {
@@ -929,13 +929,13 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		if responseRecorder.Code != http.StatusOK || responseRecorder.Body.String() != "initial usage" {
 			subTest.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
 		}
-		if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "5" {
+		if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "" {
 			subTest.Fatalf("request tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens))
 		}
-		if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "2" {
+		if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "" {
 			subTest.Fatalf("response tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens))
 		}
-		if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "7" {
+		if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "" {
 			subTest.Fatalf("total tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens))
 		}
 	})
@@ -967,13 +967,13 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		if responseRecorder.Code != http.StatusOK || responseRecorder.Body.String() != "intermediate usage" {
 			subTest.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
 		}
-		if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "8" {
+		if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "" {
 			subTest.Fatalf("request tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens))
 		}
-		if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "3" {
+		if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "" {
 			subTest.Fatalf("response tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens))
 		}
-		if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "11" {
+		if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "" {
 			subTest.Fatalf("total tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens))
 		}
 	})

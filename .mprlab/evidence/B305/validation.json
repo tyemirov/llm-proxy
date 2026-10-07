@@ -1,0 +1,168 @@
+{
+  "issue": "B305",
+  "recorded_utc": "2026-10-06T23:16:24.575141+00:00",
+  "base_commit": "91ba581ba5763ce99c38a31f42a1148a06e8966f",
+  "ci_result": "passed",
+  "ci_receipt": "CI PASSED: all 14 gates completed; Go statement coverage 100.0%.",
+  "ci_seconds": 684,
+  "ci_application_input_sha256": {
+    "docs/openapi.yaml": "b483c816ab6205532b2799cc5e2aeb0450c745c4cbd40962f451fc203d4ede67",
+    "internal/proxy/client_openai_response.go": "6da22d4622a08168393c003fd072d6e67996c15b690f46b595bf07369c3880a3",
+    "internal/proxy/client_protocols.go": "14c82dd6a1c9e0ba940375aa035216259b0dad8dadbff3754668e9c9ddbb9e68",
+    "internal/proxy/coverage_edges_test.go": "545d9849111154c0c85c746690dddbac42adaab10a19743f54ed0aa36908f168",
+    "internal/proxy/formats.go": "1492d751b971906d389fe0db8b39833c4bda41e345222ab6580ef1c1882d2391",
+    "internal/proxy/gemini.go": "66f615b7c64bbbaeae81055a4d95a7e943f3fca15bb22193e662548c09968ccf",
+    "internal/proxy/hosted_text_requests.go": "3359589178d4c2cce5381fca4419bcbb20d419f034806c9c46dfc388af2f23f8",
+    "internal/proxy/hosted_text_status.go": "9ac360fd003666e43c4f95d20ed055f54717b114bd523dc71aacb6d1646df898",
+    "internal/proxy/management_api.go": "0bfc2b0b323dc986ed1e3901f525137832ce7a0f2c22b51f8e0735ca3038d957",
+    "internal/proxy/management_store.go": "a21b649e4d326dfea38047088694898e1f0970475bb542ba16a49d9d3dc357a8",
+    "internal/proxy/management_usage.go": "51f25367beb945c73319cf0159cd4f387221c2c7471174efcf8c6255663894af",
+    "internal/proxy/mcp_generation.go": "2979aa471244f6dd9415069c8355c5065cb45b464d97d3ffb0e754e91c39dc12",
+    "internal/proxy/openai.go": "174dc847ddc477ae7b335d67bdae601d905d62bb2a94bdf7335217bee4d7d91e",
+    "internal/proxy/provider_router.go": "6315ba42e34b3d7f68caaad17029c25ba2746c88d1ecb1652a615b22f1fe1579",
+    "internal/proxy/token_usage.go": "a8dac30df5400104f5a6c1ea915e87104c04c2f23c88aab7a850faa9b3084d9e",
+    "internal/proxy/vertex.go": "924abe75eaf12c9fa30d6dec6dd11cb5febdb0ec374615336841dd6b574ae195",
+    "internal/proxy/token_presence_test.go": "0cd64b530f45d897a1745e798689d8f9cdabf7ba00ab7af90c1d704d83cc78a7",
+    "internal/proxy/token_presence_internal_test.go": "2d2d0bd3af0369ef75a69847eea23546dfdb7d3f8f30a3a5bc897dee860ddd30",
+    "site/app/index.html": "84fc2e747741b5fdd92c34cdd54f801ffb7f4e60e93a1db1ea4a0c1bbd4a9122",
+    "site/assets/llm-proxy/js/constants.js": "f0a7938f74d5733b8ac0f0a0d605b6e87d42296732c17ee788372ecd3a73bd6e",
+    "site/assets/llm-proxy/js/core/backendClient.js": "6143d4b0b26186769557b3fb33bd8d5a9ac23a5f738eacef5760b684cf616b99",
+    "site/assets/llm-proxy/js/types.d.js": "4bf26f6ce1e569062efb31c85b575b653ec183acb4aec154b06f6fac5355f0e5",
+    "site/assets/llm-proxy/js/ui/adminDashboard.js": "1651345bfa6570ad4f5d721b3041241a4b6332b4cf501ed7c802d7b264a99a3b",
+    "site/assets/llm-proxy/js/ui/usageDashboard.js": "deb2947954c078efaec68769f5f004f182e7415690fc2937517cba44b65a7d03",
+    "site/assets/llm-proxy/js/ui/usagePresentation.js": "7bdb4fa2b90eb3286c99b89ee61056104c4d2078708fec017dfeb28b029e07d2",
+    "site/docs/index.html": "46c9c51c157fabb62c30a5a51138f41edba0b522192c7a3341bc45f3d9ee8d73",
+    "tests/e2e/management-ui.spec.js": "770e64c127a14a77f4915a0e866f78598f8f59aa1ad59849e9ab11509ea6b390",
+    "internal/proxy/provider_routing_test.go": "78bc727e4189778d053416922d5b2fca5c4fd20bafcbbee7582a49ac436611b5"
+  },
+  "focused_backend_seconds": 18.915,
+  "focused_browser_cases": 6,
+  "focused_browser_seconds": 9.0,
+  "meta_route_cases": 6,
+  "meta_route_seconds": 3.49,
+  "benchmark_observations": 24,
+  "accepted_extractions": 12,
+  "invalid_outputs_rejected": 4,
+  "benchmark_seconds": 10.497,
+  "benchmark_scope": "local deterministic doubles; not complete LP-C01",
+  "external_model_calls": 0,
+  "hosted_billing_activated": false,
+  "independent_review": "no unresolved findings; final Meta expectation correction accepted",
+  "governor_exit_code": 1,
+  "governor_drift_is_preexisting": true,
+  "new_commit": null,
+  "pull_request": null,
+  "release": null,
+  "deployment": null,
+  "live_api_revision_verified": false,
+  "prior_ci_attempts": [
+    {
+      "attempt": 1,
+      "full_log": "/Users/tyemirov/Documents/Codex/2026-10-06/task-2/token-fix/full-ci.log",
+      "sha256": "b481f4108f2dd675b80853c9d2b8fc56f12505e95b4531ddb6c6b9e37ecf0f96",
+      "failure_excerpt": "ci-attempt-1.txt"
+    },
+    {
+      "attempt": 2,
+      "full_log": "/Users/tyemirov/Documents/Codex/2026-10-06/task-2/token-fix/final-ci.log",
+      "sha256": "119f0fa28847f32f571f26ca2192971b132dd5124dfca903569749257a1dce8c",
+      "failure_excerpt": "ci-attempt-2.txt"
+    }
+  ],
+  "artifact_sha256": {
+    "initial-regression.txt": "bc0d06b8c10795de8d5543c43e7b5b6fb90c364c594f63fc401b129d6700526d",
+    "benchmark-results.json": "fd281791a27925866f4ee95ef4d6a6f515601bb8896621a97820872a0c4d73d8",
+    "backend-focused.txt": "ae8ca5e4e96935a7c2521ecfd366eb51e2bdc3d3f35e97a42b0096b73e7544d3",
+    "ci-attempt-1.txt": "0ed0533b6511a9bdbb0f8b9e88c5881e1b2612cc89b65a6b5d41ffd3e9b388ee",
+    "ci-attempt-2.txt": "c5313e712bc055ae1d6386e9994ca2108cbb2c35b4409c18de3cc78139cc0642",
+    "ste.json": "322a36c9689dae16fc60d87e68951bace32b581e3eb58cf84a0ff53856bdbd6b",
+    "release-plan.txt": "538ec6399d3b1f8b7bc5007fac9f697f664d9c21f661cc50b6bd4f8eba3b58a1",
+    "frontend-lint.txt": "79d3f0943b43e3cae5c36184e4f99eaa761e002518db1021e31c2019632e6528",
+    "observed-site-release.json": "1aaa3771cbd493fb857159b11565a040e766b09138bc6afd3d15ade0ad1638a1",
+    "meta-continuation.txt": "c99a3da43d321e57da1124b66f194b0fa18a1844f00cc7b588eff1673cce8f1b",
+    "benchmark-before-format.txt": "6aa19806b9feb053aee2057036eb9fcba19647f3924a75af1ea7d2546c6b386f",
+    "portable-harness-check.txt": "63991bfee71be0e07ce92ba60b2c96d5def18eb4aad768bc5c2e1bc0b662a115",
+    "governor.json": "6f9b21a8df422c850ae205a99c1575738bbc2723389fa28941e9d8b0a4365d87",
+    "ci-acceptance.txt": "951f8e0b583ff20e720883eb0b088d948d9891f4b997f1a25914552b81bd92da",
+    "browser-focused.txt": "c44d6323de4e517572f9431dc6021b2bf26b4ea67e3338e93210c4c3a5f1bec4",
+    "benchmark.txt": "5cdb4daf0200f948a8df2b0d6bd5922084625624b359725e8c622093b11dd681",
+    "harness/go.mod": "4e69500f43702f1cab8a60399226b243c96d6cedd293c34a884474cf6f19c17f",
+    "harness/extraction_test.go": "d7216ca004fdc1b40c34cb13471c2b0d040bbfcbbd8eb73051d96af152043739",
+    "harness/Makefile": "c68897a3f89aae0851c545cfced831ce2d5d6a81d72ec5d0162fb64eff040b79",
+    "harness/go.sum": "1706831ff63985375526a3d8ac3b469dd1f88622f53f8793b600c405d9a311d3",
+    "release-plan-after-ci.txt": "2e958fb2378adaf8b67d02381fd03a371a4e8c2b7831ed51b80e44d7b4239ed8",
+    "release-plan-after-policy.txt": "e7db0f3b0e105fca332f0d7993ba4f8130276daec559a649665bd19f8b530d57",
+    "release-plan-after-observation.txt": "f37306a0b200db06182516d310596091bacf1c3cba308886cdae0bd31145483f",
+    "governor-recovery.json": "6f9b21a8df422c850ae205a99c1575738bbc2723389fa28941e9d8b0a4365d87",
+    "lifecycle-recovery.txt": "f7edad2e69b21fe5d19aaa78604ffe4f4ec9a75d65441ed02cfad5ef57c721ec",
+    "remote-master.txt": "546a6761f31f19b9891aa9e619728d32696195a249c07306a1316f1cbda2d000",
+    "ste-recovery.json": "c689f1da0be4e2b0a77e99c9b72be79d389b52965d09d8a425e23efc2cd5d2fd",
+    "ste-issue-recovery.json": "4b6dcc4002527bb970eb85ad2b0a74c9c4e035436135d8daa91fea81f4d03e29",
+    "ste-reference-recovery.json": "89db74f9bf6c3619140dbb7424c884be2ba3349224629917e762e10bb262a3cc"
+  },
+  "git_diff_check": "passed",
+  "temporary_plan_removed": true,
+  "portable_harness_compile": "passed; no tests run; module downloads disabled",
+  "new_mechanical_prose_findings": 0,
+  "prose_source_review": "Changed-prose producer review completed; no full STE certification claimed.",
+  "issue_headers_active": 202,
+  "issue_headers_archive": 368,
+  "duplicate_issue_headers": [],
+  "release_recovery": {
+    "recorded_utc": "2026-10-06T23:35:18.299267+00:00",
+    "gateway_version": "5.0.10",
+    "gateway_source": "1d186901e4c5c4481cb1a40015a74a0a6d831522",
+    "resource_maps": "accepted after canonical normalization",
+    "manifest_correction": "make ci; five positive lifecycle timeouts; finite repository and phase observation limits",
+    "native_plan_result": "capture application source: repository requires a clean master synchronized with origin/master",
+    "remote_master": "91ba581ba5763ce99c38a31f42a1148a06e8966f",
+    "clean_patch_check": "passed; Git index unchanged",
+    "clean_release_ci": "pending; previous 14-gate CI predates manifest correction and contains F027 work",
+    "unaffected_existing_files_verified": 917,
+    "unexpected_existing_changes": [],
+    "active_concurrent_owner": "not identified; F027 issue association only",
+    "local_lifecycle_tests": {
+      "installed_gateway": "passed; 0.917 seconds",
+      "release_policy": "passed; 0.543 seconds",
+      "after_final_manifest": true
+    },
+    "previous_application_hashes_unchanged": 28,
+    "new_mechanical_prose_findings": 0
+  },
+  "earlier_release_blockers_superseded": [
+    "Primary checkout contains preserved F027 work; clean synchronized master is required.",
+    "Repository forbids independent checkout and routine manual Git finalization without an explicit user exception.",
+    "Clean release candidate requires final full CI, artifact publication, retained-data qualification, and live revision checks.",
+    "Governor retains six preexisting managed-file differences."
+  ],
+  "release_blockers": [],
+  "current_combined_acceptance": "../../combined-release-2026-10-06.md",
+  "earlier_ci_scope": "before final media evidence and lifecycle contract corrections; current evidence is in combined record",
+  "retained_log_format": "UTF-8, LF, no trailing whitespace; raw output remains in task workspace",
+  "raw_log_normalization": {
+    ".mprlab/evidence/B305/backend-focused.txt": {
+      "raw_sha256": "b1f3a322632cb4f72f32e30a3a7281a7a656125b1256cae1b73748d22adfd11c",
+      "retained_sha256": "ae8ca5e4e96935a7c2521ecfd366eb51e2bdc3d3f35e97a42b0096b73e7544d3"
+    },
+    ".mprlab/evidence/B305/benchmark-before-format.txt": {
+      "raw_sha256": "5191774cc729dc40b504e47667fa96eb20135e529d87de73e1083d531ad5eedd",
+      "retained_sha256": "6aa19806b9feb053aee2057036eb9fcba19647f3924a75af1ea7d2546c6b386f"
+    },
+    ".mprlab/evidence/B305/benchmark.txt": {
+      "raw_sha256": "d8ffad6559e98211630370e5a26b9741106117e0ca239db97e3623bb796420c5",
+      "retained_sha256": "5cdb4daf0200f948a8df2b0d6bd5922084625624b359725e8c622093b11dd681"
+    },
+    ".mprlab/evidence/B305/ci-acceptance.txt": {
+      "raw_sha256": "5d1b9d4f29f958478f3df0ce9dd962a0bab3fc3801e5e0a475c49e1fc8e40b1d",
+      "retained_sha256": "951f8e0b583ff20e720883eb0b088d948d9891f4b997f1a25914552b81bd92da"
+    },
+    ".mprlab/evidence/B305/initial-regression.txt": {
+      "raw_sha256": "ba418dbe973c9f028d50df073a9fd2a1c27281f9a6e45c9a4e4413ecf5e1c66e",
+      "retained_sha256": "bc0d06b8c10795de8d5543c43e7b5b6fb90c364c594f63fc401b129d6700526d"
+    },
+    ".mprlab/evidence/B305/meta-continuation.txt": {
+      "raw_sha256": "0a5399fb093f3b11575d9a40a9e707888410135b5509b647e4991f2b93fe4ca0",
+      "retained_sha256": "c99a3da43d321e57da1124b66f194b0fa18a1844f00cc7b588eff1673cce8f1b"
+    }
+  }
+}

@@ -1,0 +1,125 @@
+go test ./internal/proxy -run '^TestManagementTokenMeasurementPresence' -count=1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:2976 [35;1mrecord not found
+[0m[33m[0.076ms] [34;1m[rows:0][0m SELECT * FROM `managed_user_records` WHERE `managed_user_records`.`user_id` = "presence-owner" ORDER BY `managed_user_records`.`user_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:49 [35;1mrecord not found
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "presence-owner" AND key_digest = "c0791b46427e534046fbcab3edbd297807151ed3c7650b4d109fcbeca2e95a71" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:59 [35;1mrecord not found
+[0m[33m[0.018ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "presence-owner" AND key_digest = "c0791b46427e534046fbcab3edbd297807151ed3c7650b4d109fcbeca2e95a71" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connections_store.go:194 [35;1mrecord not found
+[0m[33m[0.008ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_connection_records` WHERE tenant_id = "managed-da01e40237f613a181a99353452d9222" AND provider_id = "openai" ORDER BY `managed_tenant_connection_records`.`tenant_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:3049 [35;1mrecord not found
+[0m[33m[0.022ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_records` WHERE secret_digest = "42b02ac348a27f4aff09dae58d5b77d7aa98c2b18d546c3ebe7c58972442893d" ORDER BY `managed_tenant_records`.`tenant_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:2976 [35;1mrecord not found
+[0m[33m[0.023ms] [34;1m[rows:0][0m SELECT * FROM `managed_user_records` WHERE `managed_user_records`.`user_id` = "presence-owner" ORDER BY `managed_user_records`.`user_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:49 [35;1mrecord not found
+[0m[33m[0.023ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "presence-owner" AND key_digest = "99ba7fc894c9a1385e8e562151077e466484b3be62d0653f3e122e9de156f1ec" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:59 [35;1mrecord not found
+[0m[33m[0.015ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "presence-owner" AND key_digest = "99ba7fc894c9a1385e8e562151077e466484b3be62d0653f3e122e9de156f1ec" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connections_store.go:194 [35;1mrecord not found
+[0m[33m[0.013ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_connection_records` WHERE tenant_id = "managed-920ded7d35adcb79c73833b37129d5c3" AND provider_id = "openai" ORDER BY `managed_tenant_connection_records`.`tenant_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:3049 [35;1mrecord not found
+[0m[33m[0.025ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_records` WHERE secret_digest = "62003e566dd503987a2f4febf98bbcc8e8536a87580503478c092a904dcce5ff" ORDER BY `managed_tenant_records`.`tenant_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:2976 [35;1mrecord not found
+[0m[33m[0.020ms] [34;1m[rows:0][0m SELECT * FROM `managed_user_records` WHERE `managed_user_records`.`user_id` = "presence-owner" ORDER BY `managed_user_records`.`user_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:49 [35;1mrecord not found
+[0m[33m[0.274ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "presence-owner" AND key_digest = "573a6df5cb45fc2cd0f343b5e14c783601deaf89969fe379cdab93fbf0b863ac" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:59 [35;1mrecord not found
+[0m[33m[0.056ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "presence-owner" AND key_digest = "573a6df5cb45fc2cd0f343b5e14c783601deaf89969fe379cdab93fbf0b863ac" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connections_store.go:194 [35;1mrecord not found
+[0m[33m[0.014ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_connection_records` WHERE tenant_id = "managed-9b080c73588bc6ec759e20b4f9f889da" AND provider_id = "openai" ORDER BY `managed_tenant_connection_records`.`tenant_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:3049 [35;1mrecord not found
+[0m[33m[0.020ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_records` WHERE secret_digest = "c61083d34146b855039d5e5c5dbb65ce6837f3385636b11263b4f2bdd362f976" ORDER BY `managed_tenant_records`.`tenant_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:2976 [35;1mrecord not found
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `managed_user_records` WHERE `managed_user_records`.`user_id` = "presence-owner" ORDER BY `managed_user_records`.`user_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:49 [35;1mrecord not found
+[0m[33m[0.045ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "presence-owner" AND key_digest = "c12460916ca705f199a789d9a93995d93d48a959c6f6219ac0e1bae7689ef723" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:59 [35;1mrecord not found
+[0m[33m[0.024ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "presence-owner" AND key_digest = "c12460916ca705f199a789d9a93995d93d48a959c6f6219ac0e1bae7689ef723" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connections_store.go:194 [35;1mrecord not found
+[0m[33m[0.012ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_connection_records` WHERE tenant_id = "managed-11243f936445fa465b59419276516555" AND provider_id = "openai" ORDER BY `managed_tenant_connection_records`.`tenant_id` LIMIT 1
+
+2026/10/06 15:19:58 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:3049 [35;1mrecord not found
+[0m[33m[0.022ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_records` WHERE secret_digest = "2ee72840730368c41a0961d170959c490a3039ab55781b323de0cdbc65fddef3" ORDER BY `managed_tenant_records`.`tenant_id` LIMIT 1
+
+2026/10/06 15:19:59 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:2976 [35;1mrecord not found
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `managed_user_records` WHERE `managed_user_records`.`user_id` = "presence-owner" ORDER BY `managed_user_records`.`user_id` LIMIT 1
+
+2026/10/06 15:19:59 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:49 [35;1mrecord not found
+[0m[33m[0.028ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "presence-owner" AND key_digest = "7d22b06fc141fad6f84acdcd3d364b686f11d996f1caabba630eda03d8895194" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 15:19:59 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:59 [35;1mrecord not found
+[0m[33m[0.021ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "presence-owner" AND key_digest = "7d22b06fc141fad6f84acdcd3d364b686f11d996f1caabba630eda03d8895194" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 15:19:59 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connections_store.go:194 [35;1mrecord not found
+[0m[33m[0.010ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_connection_records` WHERE tenant_id = "managed-c87007069056ab0b82ed6ebf9136e39f" AND provider_id = "openai" ORDER BY `managed_tenant_connection_records`.`tenant_id` LIMIT 1
+
+2026/10/06 15:19:59 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:3049 [35;1mrecord not found
+[0m[33m[0.018ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_records` WHERE secret_digest = "5a4a65e2f38f23a3ed88b435ca9b0916c5dd70a70925bc8f85f2d38b5fc2d798" ORDER BY `managed_tenant_records`.`tenant_id` LIMIT 1
+
+2026/10/06 15:19:59 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:2976 [35;1mrecord not found
+[0m[33m[0.023ms] [34;1m[rows:0][0m SELECT * FROM `managed_user_records` WHERE `managed_user_records`.`user_id` = "presence-owner" ORDER BY `managed_user_records`.`user_id` LIMIT 1
+
+2026/10/06 15:19:59 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:49 [35;1mrecord not found
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "presence-owner" AND key_digest = "4b574cc5c95d1f04d73cd63c0cf04d2a45803f9ab9b0bd77dcf9b882530ffd51" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 15:19:59 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:59 [35;1mrecord not found
+[0m[33m[0.023ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "presence-owner" AND key_digest = "4b574cc5c95d1f04d73cd63c0cf04d2a45803f9ab9b0bd77dcf9b882530ffd51" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 15:19:59 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connections_store.go:194 [35;1mrecord not found
+[0m[33m[0.029ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_connection_records` WHERE tenant_id = "managed-efbfba4d4c9c56009eac56ae6c5252fa" AND provider_id = "openai" ORDER BY `managed_tenant_connection_records`.`tenant_id` LIMIT 1
+
+2026/10/06 15:19:59 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:3049 [35;1mrecord not found
+[0m[33m[0.026ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_records` WHERE secret_digest = "667f3efea958e15e1f73f6b64cb3fa946e2bc6aefafbcf9ebff5b212c59709ff" ORDER BY `managed_tenant_records`.`tenant_id` LIMIT 1
+
+2026/10/06 15:19:59 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:2976 [35;1mrecord not found
+[0m[33m[0.029ms] [34;1m[rows:0][0m SELECT * FROM `managed_user_records` WHERE `managed_user_records`.`user_id` = "presence-owner" ORDER BY `managed_user_records`.`user_id` LIMIT 1
+
+2026/10/06 15:19:59 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:49 [35;1mrecord not found
+[0m[33m[0.025ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "presence-owner" AND key_digest = "45207eda96d606fdd8a8fbe0cf62bd35b675b3f0a18cdbb79bfb582067c32037" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 15:19:59 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:59 [35;1mrecord not found
+[0m[33m[0.024ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "presence-owner" AND key_digest = "45207eda96d606fdd8a8fbe0cf62bd35b675b3f0a18cdbb79bfb582067c32037" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 15:19:59 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connections_store.go:194 [35;1mrecord not found
+[0m[33m[0.010ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_connection_records` WHERE tenant_id = "managed-c4b027cb57c4705655e39eb1ae142aef" AND provider_id = "openai" ORDER BY `managed_tenant_connection_records`.`tenant_id` LIMIT 1
+
+2026/10/06 15:19:59 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:3049 [35;1mrecord not found
+[0m[33m[0.078ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_records` WHERE secret_digest = "37a9329a132165c305ca1db1d129fe54465879ea9fda4022a50b812ac4a74cd2" ORDER BY `managed_tenant_records`.`tenant_id` LIMIT 1
+--- FAIL: TestManagementTokenMeasurementPresence (0.36s)
+    --- FAIL: TestManagementTokenMeasurementPresence/absent (0.06s)
+        token_presence_test.go:59: missing measurement coverage: map[average_latency_ms:0 dictation_requests:0 failed_requests:0 request_tokens:0 requests:1 response_tokens:0 successful_requests:1 text_requests:1 total_tokens:0]
+    --- FAIL: TestManagementTokenMeasurementPresence/empty (0.05s)
+        token_presence_test.go:59: missing measurement coverage: map[average_latency_ms:0 dictation_requests:0 failed_requests:0 request_tokens:0 requests:1 response_tokens:0 successful_requests:1 text_requests:1 total_tokens:0]
+    --- FAIL: TestManagementTokenMeasurementPresence/zero (0.05s)
+        token_presence_test.go:59: missing measurement coverage: map[average_latency_ms:0 dictation_requests:0 failed_requests:0 request_tokens:0 requests:1 response_tokens:0 successful_requests:1 text_requests:1 total_tokens:0]
+    --- FAIL: TestManagementTokenMeasurementPresence/measured (0.05s)
+        token_presence_test.go:59: missing measurement coverage: map[average_latency_ms:0 dictation_requests:0 failed_requests:0 request_tokens:10 requests:1 response_tokens:3 successful_requests:1 text_requests:1 total_tokens:13]
+    --- FAIL: TestManagementTokenMeasurementPresence/input_only (0.06s)
+        token_presence_test.go:44: incomplete completion usage must remain unknown: map[input_tokens:10 output_tokens:0 total_tokens:10]
+    --- FAIL: TestManagementTokenMeasurementPresence/total_only_zero (0.05s)
+        token_presence_test.go:44: incomplete completion usage must remain unknown: map[input_tokens:0 output_tokens:0 total_tokens:0]
+    --- FAIL: TestManagementTokenMeasurementPresence/derived_total (0.05s)
+        token_presence_test.go:59: missing measurement coverage: map[average_latency_ms:0 dictation_requests:0 failed_requests:0 request_tokens:10 requests:1 response_tokens:3 successful_requests:1 text_requests:1 total_tokens:13]
+FAIL
+FAIL	github.com/tyemirov/llm-proxy/internal/proxy	0.907s
+FAIL
+make: *** [test-hosted-access] Error 1

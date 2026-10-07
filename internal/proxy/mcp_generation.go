@@ -37,12 +37,12 @@ type mcpGenerateInput struct {
 }
 
 type mcpGenerateOutput struct {
-	Text                  string      `json:"text"`
-	RequestID             string      `json:"request_id"`
-	Provider              string      `json:"provider"`
-	Model                 string      `json:"model"`
-	Usage                 *tokenUsage `json:"usage"`
-	RequestTimeoutSeconds int         `json:"request_timeout_seconds"`
+	Text                  string                `json:"text"`
+	RequestID             string                `json:"request_id"`
+	Provider              string                `json:"provider"`
+	Model                 string                `json:"model"`
+	Usage                 *completionTokenUsage `json:"usage"`
+	RequestTimeoutSeconds int                   `json:"request_timeout_seconds"`
 }
 
 type mcpGeneratePendingOutput struct {
@@ -140,7 +140,7 @@ func registerMCPGeneration(server *mcp.Server, configuration Configuration, serv
 			}
 			return mcpToolFailure(string(outcome)), nil, nil
 		}
-		output := mcpGenerateOutput{Text: generation.content.text(), RequestID: identity.requestID, Provider: request.provider.identifier.string(), Model: request.model.identifier.string(), Usage: generation.usage, RequestTimeoutSeconds: budget.seconds}
+		output := mcpGenerateOutput{Text: generation.content.text(), RequestID: identity.requestID, Provider: request.provider.identifier.string(), Model: request.model.identifier.string(), Usage: publicTokenUsage(generation.usage), RequestTimeoutSeconds: budget.seconds}
 		if generation.receipt != nil {
 			output.RequestID = generation.receipt.executionID
 		}

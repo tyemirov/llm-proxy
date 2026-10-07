@@ -868,7 +868,8 @@ class ClientMediaCapabilityService:
     limits: tuple[dict[str, Any], ...]
 
 
-PROVIDER_RESOURCE_KINDS = frozenset({"voices", "voice_library", "history", "pronunciation_dictionaries", "metadata", "quotas", "elements"})
+PROVIDER_RESOURCE_KINDS = frozenset({"voices", "voice_library", "history", "pronunciation_dictionaries", "metadata", "quotas", "elements", "account"})
+MODEL_FREE_CAPABILITIES = frozenset({"audio.align", "audio.dictionary.create", "video.lipsync", "video.translate", "avatar.create", "avatar.video.generate"})
 
 
 @dataclass(frozen=True)
@@ -1522,7 +1523,7 @@ def _decode_media_capability_service(value: Any) -> ClientMediaCapabilityService
     if (
         not isinstance(value, dict)
         or set(value) != {"capability", "provider", "controls", "limits"}
-        or value["capability"] not in ("audio.align", "audio.dictionary.create")
+        or value["capability"] not in MODEL_FREE_CAPABILITIES
         or not isinstance(value["provider"], str)
         or not value["provider"]
         or any(not isinstance(value[field], list) or not all(isinstance(item, dict) for item in value[field]) for field in ("controls", "limits"))

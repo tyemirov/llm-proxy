@@ -1,0 +1,20 @@
+{
+  "git_diff_check": "passed",
+  "governor_exit_code": 1,
+  "governor_preexisting_drift": [
+    ".gitignore",
+    ".mprlab/AGENTS.DOCKER.md",
+    ".mprlab/AGENTS.FRONTEND.md",
+    ".mprlab/AGENTS.GO.md",
+    ".mprlab/PLANNING.md",
+    ".mprlab/POLICY.md"
+  ],
+  "new_mechanical_prose_findings": 0,
+  "unchanged_tracker_mechanical_findings": 72,
+  "unique_issue_identifiers": 578,
+  "source_fingerprints_unchanged": 669,
+  "preexisting_tracker_and_terms_preserved": true,
+  "temporary_plan_removed": true,
+  "independent_review": "no blocking defects; refinements applied",
+  "evaluation_status": "open; P015 P016 P017 are Planning issues"
+}

@@ -15,7 +15,7 @@ func validateProviderCatalogVerification(provider ProviderCatalogProvider, trans
 		return fmt.Errorf("%w: field=%s.transport transport=%s reason=dangling_reference", ErrInvalidModelCatalog, field, verification.Transport)
 	}
 	codec := transport.Components.RequestCodec.ID
-	if codec == CatalogProtocolJSONResource || codec == CatalogProtocolElevenLabsSubscription || codec == CatalogProtocolDictatorSpeechV1 {
+	if codec == CatalogProtocolHeyGenAccount || codec == CatalogProtocolJSONResource || codec == CatalogProtocolElevenLabsSubscription || codec == CatalogProtocolDictatorSpeechV1 {
 		if verification.Model != "" {
 			return fmt.Errorf("%w: field=%s.model reason=resource_verification_has_no_model", ErrInvalidModelCatalog, field)
 		}

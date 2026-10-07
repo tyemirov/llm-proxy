@@ -11,7 +11,7 @@ import (
 )
 
 func openAIUsage(usage *tokenUsage, protocol clientTextProtocol) any {
-	if usage == nil {
+	if completeTokenUsage(usage) == nil {
 		return nil
 	}
 	if protocol == clientChatProtocol {

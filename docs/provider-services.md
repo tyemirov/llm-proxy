@@ -2,6 +2,7 @@
 
 `configs/providers.yml` is the source for model offerings, account resources, and provider services.
 A service is an operation that does not select a model.
+The [HeyGen v3 services](heygen-v3.md) use this boundary for translation, lip sync, and avatars.
 Each `providers[].services[]` entry declares an operation, transport, controls, limits, and price observation.
 The transport uses the same provider fields and account connection as its model offerings.
 The parser rejects an unsupported service and transport combination.

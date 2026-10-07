@@ -71,6 +71,11 @@ function emptyUsageAggregate() {
     response_tokens: 0,
     total_tokens: 0,
     average_latency_ms: 0,
+    token_coverage: {
+      request_tokens: emptyTokenMeasurementCoverage(),
+      response_tokens: emptyTokenMeasurementCoverage(),
+      total_tokens: emptyTokenMeasurementCoverage(),
+    },
   };
 }
 
@@ -165,7 +170,10 @@ export function usageTimeSeriesChart(usage, metric) {
       y,
       start: bucket.start,
       value,
-      accessibleLabel: `${bucket.start}: ${formatExactInteger(value)} ${metric === USAGE_METRICS.TOTAL_TOKENS ? COPY.usageChartTokensValue : COPY.usageBreakdownRequests}`,
+      measurementKnown: metric !== USAGE_METRICS.TOTAL_TOKENS || hasTokenSubtotal(bucket.data),
+      accessibleLabel: metric === USAGE_METRICS.TOTAL_TOKENS
+        ? `${bucket.start}: ${tokenTotalLabel(bucket.data)} ${COPY.usageChartTokensValue}`
+        : `${bucket.start}: ${formatExactInteger(value)} ${COPY.usageBreakdownRequests}`,
     };
   });
   const xTicks = selectedXTickIndexes(usage.buckets.length).map((bucketIndex) => ({
@@ -182,7 +190,7 @@ export function usageTimeSeriesChart(usage, metric) {
   const yAxisTitle = usageYAxisTitle(metric, usage.bucket_unit);
   return {
     viewBox: `0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`,
-    polyline: points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" "),
+    polyline: points.every((point) => point.measurementKnown) ? points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ") : "",
     xAxisY,
     yAxisX: CHART_LEFT,
     xTicks,
@@ -218,6 +226,7 @@ export function renderUsageChartPlot(target, chart) {
     fragment.append(group);
   }
   for (const point of chart.points) {
+    if (!point.measurementKnown) continue;
     const circle = svgElement("circle", "usage-chart-point");
     setSVGAttributes(circle, { cx: point.x, cy: point.y, r: 2.5 });
     fragment.append(circle);
@@ -367,4 +376,29 @@ export function successRateLabel(aggregate) {
 /** @param {import("../types.d.js").UsageAggregate} aggregate @param {string} metric @returns {number} */
 function usageMetric(aggregate, metric) {
   return metric === USAGE_METRICS.TOTAL_TOKENS ? aggregate.total_tokens : aggregate.requests;
+}
+
+/** @returns {import("../types.d.js").TokenMeasurementCoverage} */
+function emptyTokenMeasurementCoverage() {
+  return { measured_requests: 0, partial_requests: 0, unknown_requests: 0, historical_requests: 0 };
+}
+
+/** @param {import("../types.d.js").UsageAggregate} aggregate @returns {boolean} */
+export function hasTokenSubtotal(aggregate) {
+  const coverage = aggregate.token_coverage.total_tokens;
+  return aggregate.requests === 0 || coverage.measured_requests + coverage.partial_requests + coverage.historical_requests > 0;
+}
+
+/** @param {import("../types.d.js").UsageAggregate} aggregate @returns {string} */
+export function tokenTotalLabel(aggregate) {
+  const coverage = aggregate.token_coverage.total_tokens;
+  const quantity = formatExactInteger(aggregate.total_tokens);
+  if (aggregate.requests === 0 || coverage.measured_requests === aggregate.requests) return quantity;
+  if (!hasTokenSubtotal(aggregate)) return COPY.usageTokensUnknown;
+  if (coverage.measured_requests + coverage.partial_requests === 0) {
+    return `${quantity} ${COPY.usageTokensHistorical}`;
+  }
+  const incomplete = coverage.partial_requests + coverage.unknown_requests + coverage.historical_requests;
+  const noun = incomplete === 1 ? COPY.usageTokenIncompleteRequest : COPY.usageTokenIncompleteRequests;
+  return `${quantity} ${COPY.usageTokenSubtotal} (${formatExactInteger(incomplete)} ${noun})`;
 }

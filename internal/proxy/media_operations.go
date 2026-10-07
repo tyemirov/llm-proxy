@@ -163,6 +163,7 @@ type MediaOperationPartialOutput struct {
 
 // MediaOperationExecutionResult is the adapter's terminal or recoverable observation.
 type MediaOperationExecutionResult struct {
+	avatar         *mediaAvatarRecord
 	dictionary     *mediaDictionaryRecord
 	State          string
 	ProviderHandle string
@@ -344,6 +345,7 @@ func newMediaOperationStore(managedTenants *managedTenantStore) (*mediaOperation
 		&mediaOperationTombstoneRecord{},
 		&mediaVoiceRecord{},
 		&mediaDictionaryRecord{},
+		&mediaAvatarRecord{},
 	); migrationError != nil {
 		return nil, fmt.Errorf("%w: migrate", errMediaOperationStore)
 	}
@@ -442,6 +444,10 @@ func newMediaOperationService(configuration Configuration, managedTenants *manag
 		for _, route := range provider.services {
 			key := mediaOperationAdapterKey(mediaCapabilityForCatalogOperation(route.Operation), provider.identifier.string(), "")
 			switch provider.transports[route.Transport].requestCodec {
+			case CatalogProtocolHeyGenAvatarV3, CatalogProtocolHeyGenAvatarVideoV3:
+				service.adapters[key] = newProviderHeyGenAvatarAdapter(route, provider, managedTenants, store, assets)
+			case CatalogProtocolHeyGenLipSync, CatalogProtocolHeyGenTranslation:
+				service.adapters[key] = newHeyGenAdapter(route, provider, managedTenants, store, assets)
 			case CatalogProtocolElevenLabsDictionary:
 				service.adapters[key] = newProviderDictionaryAdapter(route, provider, managedTenants, store)
 			case CatalogProtocolElevenLabsAlignment:
@@ -1343,6 +1349,13 @@ func (service *mediaOperationService) finish(operationID string, generation uint
 		if publicState == MediaOperationStateSucceeded {
 			requestTenant := tenant{identifier: tenantID(record.TenantID)}
 			outputs := append([]MediaOperationOutput(nil), result.Outputs...)
+			if result.avatar != nil {
+				if err := service.reportPersistenceFailure(operationID, "persist_avatar", transaction.Create(result.avatar).Error); err != nil {
+					publicState = MediaOperationStateUncertain
+					providerState = MediaProviderExecutionSucceeded
+					publicError = "provider_result_invalid"
+				}
+			}
 			if result.dictionary != nil {
 				if err := service.reportPersistenceFailure(operationID, "persist_dictionary", transaction.Create(result.dictionary).Error); err != nil {
 					publicState = MediaOperationStateUncertain
@@ -1511,8 +1524,10 @@ func deliverMediaOperationUsage(transaction *gorm.DB, record mediaOperationRecor
 		statusCode = statusClientClosedRequest
 		outcomeCode = managedUsageOutcomeRequestTimeout
 	}
+	unknownEvidence := measurementEvidence(nil)
 	usageEvent := managedUsageEventRecord{
-		TenantID: record.TenantID, Endpoint: usageEndpointMedia, ProviderID: record.Provider, ModelID: record.Model,
+		MeasurementEvidence: &unknownEvidence,
+		TenantID:            record.TenantID, Endpoint: usageEndpointMedia, ProviderID: record.Provider, ModelID: record.Model,
 		StatusCode: statusCode, Disposition: disposition, OutcomeCode: outcomeCode,
 		LatencyMilliseconds: now.Sub(record.AcceptedAt).Milliseconds(), CreatedAt: now,
 	}
@@ -1550,6 +1565,14 @@ func (service *mediaOperationService) executionRequestFromRecord(record mediaOpe
 
 func catalogOperationForMediaCapability(capability string) string {
 	switch capability {
+	case llmproxycontract.MediaCapabilityAvatarCreate:
+		return ModelOperationAvatarCreation
+	case llmproxycontract.MediaCapabilityAvatarVideoGenerate:
+		return ModelOperationAvatarVideoGeneration
+	case llmproxycontract.MediaCapabilityVideoLipSync:
+		return ModelOperationVideoLipSync
+	case llmproxycontract.MediaCapabilityVideoTranslate:
+		return ModelOperationVideoTranslation
 	case llmproxycontract.MediaCapabilityImageGenerate:
 		return ModelOperationImageGeneration
 	case llmproxycontract.MediaCapabilityImageEdit:
@@ -1579,6 +1602,14 @@ func catalogOperationForMediaCapability(capability string) string {
 
 func mediaCapabilityForCatalogOperation(operation string) string {
 	switch operation {
+	case ModelOperationAvatarCreation:
+		return llmproxycontract.MediaCapabilityAvatarCreate
+	case ModelOperationAvatarVideoGeneration:
+		return llmproxycontract.MediaCapabilityAvatarVideoGenerate
+	case ModelOperationVideoLipSync:
+		return llmproxycontract.MediaCapabilityVideoLipSync
+	case ModelOperationVideoTranslation:
+		return llmproxycontract.MediaCapabilityVideoTranslate
 	case ModelOperationImageGeneration:
 		return llmproxycontract.MediaCapabilityImageGenerate
 	case ModelOperationImageEditing:

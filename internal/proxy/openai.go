@@ -352,17 +352,17 @@ func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context,
 		visibilityPolicy: client.resourceVisibility,
 		recordObservation: func(responseSnapshot openAIResponseSnapshot, fetchError error, retryDecision pollableResourceRetryDecision) {
 			recordOpenAIProgressWithRetryDecision(parentContext, structuredLogger, telemetryProgressKindOpenAIPoll, responseSnapshot, fetchError, retryDecision)
-			if responseSnapshot.usage != nil {
-				latestUsage = responseSnapshot.usage
+			if fetchError == nil {
+				latestUsage = observeTokenUsage(latestUsage, responseSnapshot.usage)
 			}
 		},
 	}
 	responseSnapshot, fetchError := lifecycle.observeUntilTerminal(parentContext)
 	if fetchError != nil {
 		if parentContext.Err() != nil {
-			return textGenerationResult{usage: latestUsage}, parentContext.Err()
+			return textGenerationResult{usage: observeTokenUsage(latestUsage, nil)}, parentContext.Err()
 		}
-		return textGenerationResult{usage: latestUsage}, fetchError
+		return textGenerationResult{usage: observeTokenUsage(latestUsage, nil)}, fetchError
 	}
 	responseSnapshot.usage = latestUsage
 	return client.resolveTerminalOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)

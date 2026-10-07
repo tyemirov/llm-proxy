@@ -216,12 +216,23 @@ func validMediaCapabilityServices(services []MediaCapabilityService) bool {
 	seen := map[string]bool{}
 	for _, route := range services {
 		key := route.Provider + "|" + route.Capability
-		if route.Provider == "" || (route.Capability != llmproxycontract.MediaCapabilityAudioAlign && route.Capability != llmproxycontract.MediaCapabilityAudioDictionaryCreate) || route.Controls == nil || route.Limits == nil || seen[key] {
+		if route.Provider == "" || !validModelFreeCapability(route.Capability) || route.Controls == nil || route.Limits == nil || seen[key] {
 			return false
 		}
 		seen[key] = true
 	}
 	return true
+}
+
+func validModelFreeCapability(capability string) bool {
+	switch capability {
+	case llmproxycontract.MediaCapabilityAudioAlign, llmproxycontract.MediaCapabilityAudioDictionaryCreate,
+		llmproxycontract.MediaCapabilityVideoLipSync, llmproxycontract.MediaCapabilityVideoTranslate,
+		llmproxycontract.MediaCapabilityAvatarCreate, llmproxycontract.MediaCapabilityAvatarVideoGenerate:
+		return true
+	default:
+		return false
+	}
 }
 
 func validProviderResources(resources []llmproxycontract.ProviderResource) bool {

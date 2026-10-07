@@ -500,3 +500,22 @@ for (const amount of [1.25, '01', '1.0', '1e3', '-1', '', '9'.repeat(129)]) {
     });
   });
 }
+
+test("public site shows HeyGen v3 services and account resources", async ({page}) => {
+  const capabilities = normalizedCapabilityFixture();
+  const operations = ["video_lipsync", "video_translation", "avatar_creation", "avatar_video_generation"];
+  capabilities.counts.providers = 2;
+  capabilities.providers.push({identifier:"heygen",label:"HeyGen",credential_kinds:["api_key"],resources:["account"],services:operations.map(operation=>({operation,controls:[],limits:[],price:{operation,available:false,rates:[],minimum_charge:null,source:"https://app.heygen.com/developers/api?modal=pricing",last_verified:"2026-10-06",unavailable_reason:"Exact price is unavailable."}}))});
+  await withCapabilityServer(200,capabilities,async capabilitiesURL=>{
+    const fixture=await siteFixture();
+    try {
+      await renderFixture(fixture,capabilitiesURL);
+      await page.setContent(await readFile(path.join(fixture.output,"index.html"),"utf8"));
+      await expect(page.locator("[data-provider-services]")).toContainText("HeyGen");
+      for (const label of ["Video lip sync","Video translation","Avatar creation","Avatar video generation"]) {
+        await expect(page.locator("[data-provider-services]")).toContainText(label);
+      }
+      await expect(page.locator("[data-route-model]")).toHaveCount(1);
+    } finally {await rm(fixture.root,{recursive:true,force:true});}
+  });
+});

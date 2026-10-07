@@ -12,6 +12,14 @@ import (
 const (
 	// ModelOperationText identifies text generation through the proxy messages contract.
 	ModelOperationText = "text"
+	// ModelOperationVideoLipSync identifies model-free video lip synchronization.
+	ModelOperationVideoLipSync = "video_lipsync"
+	// ModelOperationAvatarCreation identifies reusable photo avatars.
+	ModelOperationAvatarCreation = "avatar_creation"
+	// ModelOperationAvatarVideoGeneration identifies avatar video rendering.
+	ModelOperationAvatarVideoGeneration = "avatar_video_generation"
+	// ModelOperationVideoTranslation identifies model-free video translation.
+	ModelOperationVideoTranslation = "video_translation"
 	// ModelOperationDictation identifies audio transcription through the proxy dictation contract.
 	ModelOperationDictation = "dictation"
 	// ModelOperationVideoGeneration identifies provider-backed video generation.
@@ -614,7 +622,7 @@ func validatedOperationSet(rawOperations []string, field string) (map[string]str
 
 func supportedModelOperation(operation string) bool {
 	switch operation {
-	case ModelOperationText,
+	case ModelOperationAvatarCreation, ModelOperationAvatarVideoGeneration, ModelOperationVideoLipSync, ModelOperationVideoTranslation, ModelOperationText,
 		ModelOperationDictation,
 		ModelOperationVideoGeneration,
 		ModelOperationImageGeneration,

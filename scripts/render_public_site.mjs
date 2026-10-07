@@ -1,5 +1,6 @@
-import {MODALITY_LABELS, tasksForOffering, renderTaskIcon, renderTaskDetails} from '../site/assets/llm-proxy/js/modelTasks.js';
 // @ts-check
+
+import {MODALITY_LABELS, tasksForOffering, renderTaskIcon, renderTaskDetails} from '../site/assets/llm-proxy/js/modelTasks.js';
 
 import { cp, lstat, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -16,6 +17,11 @@ const legacyRuntimeConfigFile = "llm-proxy-config.json";
 const binaryBytesPerMiB = 1024 * 1024;
 
 const capabilityDefinitions = Object.freeze([
+  { identifier: "video_lipsync", label: "Video lip sync", routeLabel: "Video lip sync", className: "capability-badge--info" },
+  { identifier: "video_translation", label: "Video translation", routeLabel: "Video translation", className: "capability-badge--info" },
+  { identifier: "avatar_creation", label: "Avatar creation", routeLabel: "Avatar creation", className: "capability-badge--info" },
+  { identifier: "avatar_video_generation", label: "Avatar video generation", routeLabel: "Avatar video generation", className: "capability-badge--info" },
+
   { identifier: "text", label: "Text generation", routeLabel: "Text", className: "capability-badge--primary" },
   { identifier: "image_generation", label: "Image generation", routeLabel: "Generate images", className: "capability-badge--info" },
   { identifier: "image_editing", label: "Image editing", routeLabel: "Edit images", className: "capability-badge--info" },
@@ -39,6 +45,7 @@ const capabilityDefinitionsByIdentifier = new Map(
   capabilityDefinitions.map((definition) => [definition.identifier, definition]),
 );
 const modelOperationIdentifiers = new Set([
+  "video_lipsync", "video_translation", "avatar_creation", "avatar_video_generation",
   "text", "dictation", "image_generation", "image_editing", "video_generation", "audio_transcription", "audio_diarization",
   "pronunciation_dictionary_creation", "audio_alignment", "subtitle_creation", "speech_generation", "speech_conversion", "voice_extraction",
 ]);

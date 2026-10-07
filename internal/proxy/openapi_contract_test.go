@@ -512,8 +512,8 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	if decodeError := json.Unmarshal(capabilitiesResponse.Body.Bytes(), &capabilityCatalog); decodeError != nil {
 		t.Fatalf("decode public capability catalog: %v", decodeError)
 	}
-	if len(capabilityCatalog.Providers) != 16 {
-		t.Fatalf("public capability providers=%d want=16", len(capabilityCatalog.Providers))
+	if len(capabilityCatalog.Providers) != 17 {
+		t.Fatalf("public capability providers=%d want=17", len(capabilityCatalog.Providers))
 	}
 
 	configRequest := httptest.NewRequest(http.MethodGet, proxy.ManagementConfigUIPath, nil)
@@ -794,5 +794,43 @@ func TestProviderServicesOpenAPI(t *testing.T) {
 		if (err == nil) != (model == "") {
 			t.Fatalf("model=%q error=%v", model, err)
 		}
+	}
+}
+
+func TestOpenAPIContractEnforcesHeyGenOwnedReferences(t *testing.T) {
+	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	asset := "ast_0123456789abcdef0123456789abcdef"
+	avatar := "ava_0123456789abcdef0123456789abcdef"
+	for _, scenario := range []struct {
+		name, body string
+		valid      bool
+	}{
+		{"lipsync", `{"capability":"video.lipsync","provider":"heygen","input":{"video_asset_id":"` + asset + `","audio_asset_id":"` + asset + `"},"controls":{"mode":"speed"}}`, true},
+		{"translation", `{"capability":"video.translate","provider":"heygen","input":{"video_asset_id":"` + asset + `"},"controls":{"mode":"precision","output_languages":["French","German"],"speaker_num":0}}`, true},
+		{"avatar", `{"capability":"avatar.create","provider":"heygen","input":{"name":"Narrator","image_asset_id":"` + asset + `"},"controls":{}}`, true},
+		{"render", `{"capability":"avatar.video.generate","provider":"heygen","input":{"avatar_id":"` + avatar + `","audio_asset_id":"` + asset + `"},"controls":{"engine":"avatar_iv","aspect_ratio":"16:9","resolution":"720p"}}`, true},
+		{"native avatar", `{"capability":"avatar.video.generate","provider":"heygen","input":{"avatar_id":"native-look","audio_asset_id":"` + asset + `"},"controls":{"engine":"avatar_iv","aspect_ratio":"16:9","resolution":"720p"}}`, false},
+		{"empty languages", `{"capability":"video.translate","provider":"heygen","input":{"video_asset_id":"` + asset + `"},"controls":{"mode":"precision","output_languages":[]}}`, false},
+		{"unknown field", `{"capability":"video.lipsync","provider":"heygen","input":{"video_asset_id":"` + asset + `","audio_asset_id":"` + asset + `"},"controls":{"mode":"speed","legacy":true}}`, false},
+		{"speaker maximum", `{"capability":"video.translate","provider":"heygen","input":{"video_asset_id":"` + asset + `"},"controls":{"mode":"precision","output_languages":["French"],"speaker_num":101}}`, false},
+		{"fps requires audio", `{"capability":"video.translate","provider":"heygen","input":{"video_asset_id":"` + asset + `"},"controls":{"mode":"precision","output_languages":["French"],"fps_mode":"cfr"}}`, false},
+		{"unicode title", `{"capability":"video.lipsync","provider":"heygen","input":{"video_asset_id":"` + asset + `","audio_asset_id":"` + asset + `"},"controls":{"mode":"speed","title":"` + strings.Repeat("🎬", 300) + `"}}`, true},
+		{"unicode language", `{"capability":"video.translate","provider":"heygen","input":{"video_asset_id":"` + asset + `"},"controls":{"mode":"precision","output_languages":["French"],"input_language":"` + strings.Repeat("日", 40) + `"}}`, true},
+		{"too many unicode characters", `{"capability":"video.translate","provider":"heygen","input":{"video_asset_id":"` + asset + `"},"controls":{"mode":"precision","output_languages":["French"],"input_language":"` + strings.Repeat("日", 101) + `"}}`, false},
+		{"missing mode", `{"capability":"video.lipsync","provider":"heygen","input":{"video_asset_id":"` + asset + `","audio_asset_id":"` + asset + `"},"controls":{}}`, false},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			body := []byte(scenario.body)
+			request := httptest.NewRequest(http.MethodPost, llmproxycontract.MediaOperationsPath, bytes.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Idempotency-Key", "openapi-heygen")
+			err := contract.ValidateRequest(llmproxycontract.MediaOperationsPath, request.Method, request, body)
+			if (err == nil) != scenario.valid {
+				t.Fatalf("valid=%v error=%v", scenario.valid, err)
+			}
+		})
 	}
 }

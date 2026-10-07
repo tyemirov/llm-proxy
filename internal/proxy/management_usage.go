@@ -182,6 +182,7 @@ type managedUsageAggregate struct {
 	totalTokens          int
 	latencyMilliseconds  int64
 	averageLatencyMillis int64
+	tokenCoverage        managedTokenCoverage
 }
 
 type managedUsageBucket struct {
@@ -444,7 +445,9 @@ func (store *managedTenantStore) newManagedUsageRecord(requestTenant tenant, eve
 			StatusCode: event.statusCode,
 		}, fmt.Errorf("%w: tenant_id=%s: %w", errManagedTenantStorePersist, requestTenant.identifier.string(), dispositionError)
 	}
+	unknownEvidence := tokenMeasurementEvidence(0)
 	usageRecord := managedUsageEventRecord{
+		MeasurementEvidence: &unknownEvidence,
 		TenantID:            requestTenant.identifier.string(),
 		Endpoint:            event.endpoint,
 		ProviderID:          providerIdentifier,
@@ -459,6 +462,7 @@ func (store *managedTenantStore) newManagedUsageRecord(requestTenant tenant, eve
 		usageRecord.RequestTokens = event.usage.RequestTokens
 		usageRecord.ResponseTokens = event.usage.ResponseTokens
 		usageRecord.TotalTokens = event.usage.TotalTokens
+		usageRecord.MeasurementEvidence = event.usage.MeasurementEvidence
 	}
 	return usageRecord, nil
 }
@@ -878,6 +882,9 @@ func applyUsageRecord(aggregate *managedUsageAggregate, record managedUsageEvent
 	} else {
 		aggregate.textRequests++
 	}
+	aggregate.tokenCoverage.requestTokens.apply(record.MeasurementEvidence, tokenRequestShift)
+	aggregate.tokenCoverage.responseTokens.apply(record.MeasurementEvidence, tokenResponseShift)
+	aggregate.tokenCoverage.totalTokens.apply(record.MeasurementEvidence, tokenTotalShift)
 	aggregate.requestTokens += record.RequestTokens
 	aggregate.responseTokens += record.ResponseTokens
 	aggregate.totalTokens += record.TotalTokens
@@ -933,4 +940,32 @@ func usageStatusBucketList(statusBuckets map[int]int) []managedUsageStatusBucket
 		return statusCodes[firstIndex].statusCode < statusCodes[secondIndex].statusCode
 	})
 	return statusCodes
+}
+
+type managedTokenMeasurementCoverage struct {
+	MeasuredRequests   int `json:"measured_requests"`
+	PartialRequests    int `json:"partial_requests"`
+	UnknownRequests    int `json:"unknown_requests"`
+	HistoricalRequests int `json:"historical_requests"`
+}
+
+type managedTokenCoverage struct {
+	requestTokens  managedTokenMeasurementCoverage
+	responseTokens managedTokenMeasurementCoverage
+	totalTokens    managedTokenMeasurementCoverage
+}
+
+func (coverage *managedTokenMeasurementCoverage) apply(evidence *tokenMeasurementEvidence, shift uint) {
+	if evidence == nil {
+		coverage.HistoricalRequests++
+		return
+	}
+	switch evidence.state(shift) {
+	case tokenMeasurementComplete:
+		coverage.MeasuredRequests++
+	case tokenMeasurementPartial:
+		coverage.PartialRequests++
+	case tokenMeasurementUnknown:
+		coverage.UnknownRequests++
+	}
 }

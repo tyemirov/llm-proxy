@@ -57,10 +57,10 @@ type vertexResponse struct {
 		FinishReason string        `json:"finishReason"`
 	} `json:"candidates"`
 	Usage *struct {
-		Input    int `json:"promptTokenCount"`
-		Output   int `json:"candidatesTokenCount"`
-		Thoughts int `json:"thoughtsTokenCount"`
-		Total    int `json:"totalTokenCount"`
+		Input    *int `json:"promptTokenCount"`
+		Output   *int `json:"candidatesTokenCount"`
+		Thoughts *int `json:"thoughtsTokenCount"`
+		Total    *int `json:"totalTokenCount"`
 	} `json:"usageMetadata"`
 }
 
@@ -161,12 +161,30 @@ func parseVertexResponse(body []byte) (textGenerationResult, error) {
 	}
 	result := textGenerationResult{}
 	if response.Usage != nil {
-		if response.Usage.Thoughts < 0 || response.Usage.Output < 0 {
+		output := response.Usage.Output
+		if output != nil && *output < 0 {
 			return result, fmt.Errorf("%w: invalid Vertex usage", ErrProviderAPI)
 		}
-		usage, err := newTokenUsage(response.Usage.Input, response.Usage.Output+response.Usage.Thoughts, response.Usage.Total)
+		if response.Usage.Thoughts != nil {
+			if *response.Usage.Thoughts < 0 {
+				return result, fmt.Errorf("%w: invalid Vertex usage", ErrProviderAPI)
+			}
+			if output != nil {
+				combined := *output + *response.Usage.Thoughts
+				output = &combined
+			}
+		}
+		usage, err := normalizeTokenUsage(response.Usage.Input, output, response.Usage.Total)
 		if err != nil {
 			return result, err
+		}
+		if response.Usage.Output == nil && response.Usage.Thoughts != nil {
+			if usage == nil {
+				usage = &tokenUsage{}
+			}
+			usage.ResponseTokens = *response.Usage.Thoughts
+			evidence := measurementEvidence(usage) | tokenMeasurementEvidence(tokenMeasurementPartial)<<tokenResponseShift
+			usage.MeasurementEvidence = &evidence
 		}
 		result.usage = usage
 	}

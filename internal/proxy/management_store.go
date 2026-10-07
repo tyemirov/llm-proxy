@@ -412,6 +412,7 @@ type managedUsageEventRecord struct {
 	RequestTokens       int
 	ResponseTokens      int
 	TotalTokens         int
+	MeasurementEvidence *tokenMeasurementEvidence
 	CreatedAt           time.Time `gorm:"index:idx_managed_usage_tenant_created,priority:2;index:idx_managed_usage_created_at;index:idx_managed_usage_disposition_page,priority:3,sort:desc"`
 }
 
@@ -697,6 +698,9 @@ func migrateCurrentManagedSchema(database *gorm.DB) error {
 func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) error {
 	return database.Transaction(func(transaction *gorm.DB) error {
 		if err := initializeManagedConnectionSchema(transaction.Session(&gorm.Session{DisableNestedTransaction: true}), providerKeyCipher, providers); err != nil {
+			return err
+		}
+		if err := migrateManagedTokenMeasurementEvidence(transaction); err != nil {
 			return err
 		}
 		if err := initializeHostedSchema(transaction); err != nil {
@@ -3934,4 +3938,24 @@ func maskedAPIKey(rawAPIKey string) string {
 		return "saved"
 	}
 	return apiKey[:maskedSecretPrefixLength] + "..." + apiKey[len(apiKey)-maskedSecretSuffixLength:]
+}
+
+// migrateManagedTokenMeasurementEvidence adds the canonical evidence column once.
+// Predecessor rows keep NULL: integer values cannot establish measurement presence.
+func migrateManagedTokenMeasurementEvidence(database *gorm.DB) error {
+	if !database.Migrator().HasColumn(&managedUsageEventRecord{}, "MeasurementEvidence") {
+		if err := database.Migrator().AddColumn(&managedUsageEventRecord{}, "MeasurementEvidence"); err != nil {
+			return fmt.Errorf("%w: add token measurement evidence: %w", errManagedTenantSchemaMigration, err)
+		}
+	}
+	var evidenceRows []struct{ MeasurementEvidence tokenMeasurementEvidence }
+	if err := database.Model(&managedUsageEventRecord{}).Select("DISTINCT measurement_evidence").Where("measurement_evidence IS NOT NULL").Find(&evidenceRows).Error; err != nil {
+		return fmt.Errorf("%w: read token measurement evidence: %w", errManagedTenantSchemaMigration, err)
+	}
+	for _, row := range evidenceRows {
+		if err := row.MeasurementEvidence.validate(); err != nil {
+			return fmt.Errorf("%w: validate token measurement evidence: %w", errManagedTenantSchemaMigration, err)
+		}
+	}
+	return nil
 }

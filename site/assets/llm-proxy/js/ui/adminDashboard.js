@@ -7,7 +7,7 @@ import {
 } from "../constants.js?v=20260903f037";
 import { fetchAdminUsers } from "../core/backendClient.js?v=20260903f037";
 import { formatNumber } from "./usageFailurePresentation.js?v=20260903f037";
-import { successRateLabel } from "./usagePresentation.js?v=20260903f037";
+import { successRateLabel, tokenTotalLabel } from "./usagePresentation.js?v=20260903f037";
 
 /** @typedef {ReturnType<typeof import("./managementApplicationState.js").createManagementApplicationState>} ManagementApplicationState */
 /** @typedef {ManagementApplicationState & {
@@ -85,7 +85,7 @@ export function createAdminDashboardResponsibility() {
      * @returns {string}
      */
     adminTenantTokens(adminTenant) {
-      return formatNumber(adminTenant.usage.totals.total_tokens);
+      return tokenTotalLabel(adminTenant.usage.totals);
     },
 
     /**

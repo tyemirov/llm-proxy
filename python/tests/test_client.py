@@ -322,6 +322,7 @@ def test_client_uses_typed_durable_media_and_voice_resources() -> None:
 @pytest.mark.parametrize("resources,valid", [
     ([], True),
     ([{"provider": "speech", "kind": "voices"}], True),
+    ([{"provider": "heygen", "kind": "account"}], True),
     (None, False),
     ([{"provider": "speech", "kind": "unknown"}], False),
     ([{"provider": "", "kind": "voices"}], False),
@@ -1373,7 +1374,7 @@ def test_elevenlabs_account_resources_use_typed_http_contract() -> None:
         worker.join()
 
 
-@pytest.mark.parametrize("capability", ["audio.align", "audio.dictionary.create"])
+@pytest.mark.parametrize("capability", ["audio.align", "audio.dictionary.create", "video.lipsync", "video.translate", "avatar.create", "avatar.video.generate"])
 def test_client_model_free_alignment_uses_exact_service_contract(capability: str) -> None:
     """One provider service omits the model in requests and responses."""
 

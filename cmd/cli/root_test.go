@@ -471,8 +471,8 @@ management:
 	if capturedConfiguration.Port != 9191 || capturedConfiguration.LogLevel != proxy.LogLevelDebug {
 		t.Fatalf("public API server=%+v", capturedConfiguration)
 	}
-	if len(capturedConfiguration.Catalog.Providers) != 16 {
-		t.Fatalf("provider count=%d want=15", len(capturedConfiguration.Catalog.Providers))
+	if len(capturedConfiguration.Catalog.Providers) != 17 {
+		t.Fatalf("provider count=%d want=17", len(capturedConfiguration.Catalog.Providers))
 	}
 	if capturedConfiguration.Catalog.MaxPromptBytes != 3 || capturedConfiguration.Catalog.MaxInputAudioBytes != 25*1024*1024 {
 		t.Fatalf("public limits=%+v", capturedConfiguration.Catalog)
@@ -553,7 +553,7 @@ func TestRootCommandPrintsCatalogDerivedLiveDiscovery(t *testing.T) {
 	if !metaFound {
 		t.Fatal("Meta live discovery must require MUSE_API_KEY")
 	}
-	if discovery.SchemaVersion != proxy.ProviderCatalogSchemaVersion || len(discovery.Providers) != 16 {
+	if discovery.SchemaVersion != proxy.ProviderCatalogSchemaVersion || len(discovery.Providers) != 17 {
 		t.Fatalf("provider discovery=%+v", discovery)
 	}
 	if !dashScopeFound || !baiduFound {

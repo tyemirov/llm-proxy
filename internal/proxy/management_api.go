@@ -233,16 +233,23 @@ type managementAdminUsageSummaryResponse struct {
 	StatusCodes      []managementUsageStatusResponse   `json:"status_codes"`
 }
 
+type managementTokenCoverageResponse struct {
+	RequestTokens  managedTokenMeasurementCoverage `json:"request_tokens"`
+	ResponseTokens managedTokenMeasurementCoverage `json:"response_tokens"`
+	TotalTokens    managedTokenMeasurementCoverage `json:"total_tokens"`
+}
+
 type managementUsageAggregateResponse struct {
-	Requests                   int   `json:"requests"`
-	SuccessfulRequests         int   `json:"successful_requests"`
-	FailedRequests             int   `json:"failed_requests"`
-	TextRequests               int   `json:"text_requests"`
-	DictationRequests          int   `json:"dictation_requests"`
-	RequestTokens              int   `json:"request_tokens"`
-	ResponseTokens             int   `json:"response_tokens"`
-	TotalTokens                int   `json:"total_tokens"`
-	AverageLatencyMilliseconds int64 `json:"average_latency_ms"`
+	TokenCoverage              managementTokenCoverageResponse `json:"token_coverage"`
+	Requests                   int                             `json:"requests"`
+	SuccessfulRequests         int                             `json:"successful_requests"`
+	FailedRequests             int                             `json:"failed_requests"`
+	TextRequests               int                             `json:"text_requests"`
+	DictationRequests          int                             `json:"dictation_requests"`
+	RequestTokens              int                             `json:"request_tokens"`
+	ResponseTokens             int                             `json:"response_tokens"`
+	TotalTokens                int                             `json:"total_tokens"`
+	AverageLatencyMilliseconds int64                           `json:"average_latency_ms"`
 }
 
 type managementUsageDailyResponse struct {
@@ -1042,6 +1049,7 @@ func managementAdminUsageSummary(summary managedAdminUsageSummary) managementAdm
 
 func managementUsageAggregate(aggregate managedUsageAggregate) managementUsageAggregateResponse {
 	return managementUsageAggregateResponse{
+		TokenCoverage:              managementTokenCoverageResponse{RequestTokens: aggregate.tokenCoverage.requestTokens, ResponseTokens: aggregate.tokenCoverage.responseTokens, TotalTokens: aggregate.tokenCoverage.totalTokens},
 		Requests:                   aggregate.requests,
 		SuccessfulRequests:         aggregate.successfulRequests,
 		FailedRequests:             aggregate.failedRequests,

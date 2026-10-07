@@ -1,0 +1,2 @@
+{"level":"info","ts":1791329359.944504,"caller":"lifecycle/engine.go:76","msg":"MPRLAB_GATEWAY_RUNTIME","version":"v5.0.10","platform":"darwin-arm64","source_commit":"1d186901e4c5c4481cb1a40015a74a0a6d831522","lifecycle_contract":4}
+capture application source: repository requires a clean master synchronized with origin/master

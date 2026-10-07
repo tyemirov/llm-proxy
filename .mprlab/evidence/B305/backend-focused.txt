@@ -1,0 +1,2 @@
+go test ./internal/proxy -run '^Test(ManagementTokenMeasurementPresence|TokenMeasurementEvidenceMigrationRollback|TokenPresence|CoverageOpenAILifecycleBranches)' -count=1
+ok  	github.com/tyemirov/llm-proxy/internal/proxy	18.915s

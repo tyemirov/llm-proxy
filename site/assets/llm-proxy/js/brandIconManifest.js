@@ -116,6 +116,7 @@ export const brandIconManifest = {
     }
   },
   "providers": {
+    "heygen": null,
     "fal": null,
     "elevenlabs": null,
     "openai": "openai",

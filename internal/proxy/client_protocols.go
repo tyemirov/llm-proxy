@@ -114,7 +114,7 @@ func nativeCompletionEncoder(c *gin.Context, request chatRequestParameters, resu
 		return
 	}
 	if len(result.content.toolCalls()) > 0 {
-		c.JSON(http.StatusOK, gin.H{"type": "tool_calls", "tool_calls": result.content.toolCalls(), "text": result.content.text(), "usage": result.usage})
+		c.JSON(http.StatusOK, gin.H{"type": "tool_calls", "tool_calls": result.content.toolCalls(), "text": result.content.text(), "usage": publicTokenUsage(result.usage)})
 		return
 	}
 	body, mime := formatResponse(result.content.text(), preferredMime(c), request, result.usage)

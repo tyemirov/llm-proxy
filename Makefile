@@ -335,7 +335,7 @@ test-provider-resources: frontend-dependencies
 
 .PHONY: test-provider-catalog
 test-provider-catalog: frontend-dependencies
-	$(GO) test ./internal/proxy ./tests ./cmd/cli -run 'Test(ProviderCatalog|PublicCapabilityCatalog|CatalogDefined|ModelActivation|RootCommandPrintsCatalogDerivedLiveDiscovery|RootCommandRejectsInvalidProviderCatalog)' -count=1
+	$(GO) test ./internal/proxy ./tests ./cmd/cli -run 'Test(ProviderCatalog|PublicCapabilityCatalog|CatalogDefined|ModelActivation|RootCommandPrintsCatalogDerivedLiveDiscovery|RootCommandLoadsPackagedConfigWithManagementEnvironment|RootCommandServesSanitizedPublicCapabilityAPI|RootCommandRejectsInvalidProviderCatalog)' -count=1
 
 .PHONY: test-deepseek-retirement
 test-deepseek-retirement: frontend-dependencies
@@ -497,3 +497,7 @@ test-provider-voices: frontend-dependencies
 .PHONY: test-provider-speech
 test-provider-speech: frontend-dependencies
 	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^TestProviderSpeech' -count=1 $(SPEECH_TEST_ARGS)
+
+.PHONY: test-heygen
+test-heygen: frontend-dependencies
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^TestHeyGen' -count=1 $(HEYGEN_TEST_ARGS)

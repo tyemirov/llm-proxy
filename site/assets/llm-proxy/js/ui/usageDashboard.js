@@ -34,6 +34,8 @@ import {
   renderUsageChartPlot,
   renderUsageDonutSegments,
   successRateLabel,
+  tokenTotalLabel,
+  hasTokenSubtotal,
   usageTimeSeriesChart,
   USAGE_BREAKDOWN_VIEWS,
   USAGE_METRICS,
@@ -84,7 +86,12 @@ export function createUsageDashboardResponsibility() {
     },
 
     get usageTotalTokens() {
-      return formatNumber(this.usage.totals.total_tokens);
+      if (this.usageLoadState === "unavailable") return COPY.usageTokensUnknown;
+      return tokenTotalLabel(this.usage.totals);
+    },
+
+    get hasTokenUsage() {
+      return this.hasUsage && hasTokenSubtotal(this.usage.totals);
     },
 
     get usageSuccessRate() {

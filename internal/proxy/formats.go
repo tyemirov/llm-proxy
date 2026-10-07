@@ -37,8 +37,8 @@ func formatResponse(modelText string, preferred string, request chatRequestParam
 			}},
 			jsonFieldMessages: request.messages.responseRequestMessages(),
 		}
-		if usage != nil {
-			envelope[jsonFieldUsage] = usage
+		if completeTokenUsage(usage) != nil {
+			envelope[jsonFieldUsage] = publicTokenUsage(usage)
 		}
 		encodedJSON, _ := json.Marshal(envelope)
 		return string(encodedJSON), mimeApplicationJSON

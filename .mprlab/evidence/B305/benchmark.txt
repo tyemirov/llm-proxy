@@ -1,0 +1,134 @@
+GOCACHE=/tmp/llm-proxy-evaluation-go-cache GOPROXY=off GOSUMDB=off go test -mod=readonly -run '^TestExtractionBenchmark$' -count=1 -v .
+=== RUN   TestExtractionBenchmark
+
+2026/10/06 16:12:46 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:2980 [35;1mrecord not found
+[0m[33m[0.024ms] [34;1m[rows:0][0m SELECT * FROM `managed_user_records` WHERE `managed_user_records`.`user_id` = "managed-router-fixture-user" ORDER BY `managed_user_records`.`user_id` LIMIT 1
+
+2026/10/06 16:12:46 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:49 [35;1mrecord not found
+[0m[33m[0.033ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "managed-router-fixture-user" AND key_digest = "56aad971047ba8bf08efcf6fd2c8030e51744d406735240ada28e5096bf7539b" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 16:12:46 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:59 [35;1mrecord not found
+[0m[33m[0.022ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "managed-router-fixture-user" AND key_digest = "56aad971047ba8bf08efcf6fd2c8030e51744d406735240ada28e5096bf7539b" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 16:12:46 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connections_store.go:194 [35;1mrecord not found
+[0m[33m[0.010ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_connection_records` WHERE tenant_id = "managed-c8bb95de4c3d926f915e0a95fb8c6ffc" AND provider_id = "openai" ORDER BY `managed_tenant_connection_records`.`tenant_id` LIMIT 1
+
+2026/10/06 16:12:46 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:49 [35;1mrecord not found
+[0m[33m[0.016ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "managed-router-fixture-user" AND key_digest = "7433a5889f3d503adeea1afca6755792960d1e66da1f086683c78af27c9e521d" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 16:12:46 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:59 [35;1mrecord not found
+[0m[33m[0.013ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "managed-router-fixture-user" AND key_digest = "7433a5889f3d503adeea1afca6755792960d1e66da1f086683c78af27c9e521d" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 16:12:46 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connections_store.go:194 [35;1mrecord not found
+[0m[33m[0.008ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_connection_records` WHERE tenant_id = "managed-c8bb95de4c3d926f915e0a95fb8c6ffc" AND provider_id = "anthropic" ORDER BY `managed_tenant_connection_records`.`tenant_id` LIMIT 1
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.039ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_billing_account_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.011ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_hosted_grant_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.009ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_hosted_tenant_assignment_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.012ms] [34;1m[rows:4][0m SELECT * FROM PRAGMA_index_list("managed_journal_request_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_journal_attempt_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_journal_observation_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_journal_case_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.011ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_price_snapshot_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.013ms] [34;1m[rows:6][0m SELECT * FROM PRAGMA_index_list("managed_charge_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.009ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_charge_adjustment_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.010ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("ledger_accounts")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.010ms] [34;1m[rows:5][0m SELECT * FROM PRAGMA_index_list("ledger_entries")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_funds_reservation_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_funds_settlement_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.009ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_funds_credit_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_funds_tenant_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.007ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_funds_resolution_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.007ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_funds_exposure_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_funds_correction_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_funding_order_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.007ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_payment_delivery_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_payment_customer_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.037ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_payment_checkout_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.022ms] [34;1m[rows:5][0m SELECT * FROM PRAGMA_index_list("managed_payment_inbox_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.014ms] [34;1m[rows:4][0m SELECT * FROM PRAGMA_index_list("managed_payment_receipt_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.009ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_payment_adjustment_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.009ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_payment_state_observation_records")
+
+2026/10/06 16:12:46 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.014ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_provider_reconciliation_run_records")
+    extraction_test.go:354: direct openai/gpt-4.1 known_usage status=200 attempts=1 extraction=true usage=true
+    extraction_test.go:354: proxy openai/gpt-4.1 known_usage status=200 attempts=1 extraction=true usage=true
+    extraction_test.go:354: direct openai/gpt-4.1 missing_usage status=200 attempts=1 extraction=true usage=false
+    extraction_test.go:354: proxy openai/gpt-4.1 missing_usage status=200 attempts=1 extraction=true usage=false
+    extraction_test.go:354: direct openai/gpt-4.1 zero_usage status=200 attempts=1 extraction=true usage=true
+    extraction_test.go:354: proxy openai/gpt-4.1 zero_usage status=200 attempts=1 extraction=true usage=true
+    extraction_test.go:354: direct openai/gpt-4.1 rate_limit status=429 attempts=1 extraction=false usage=false
+    extraction_test.go:354: proxy openai/gpt-4.1 rate_limit status=0 attempts=5 extraction=false usage=false
+    extraction_test.go:354: direct openai/gpt-4.1 provider_failure status=503 attempts=1 extraction=false usage=false
+    extraction_test.go:354: proxy openai/gpt-4.1 provider_failure status=0 attempts=5 extraction=false usage=false
+    extraction_test.go:354: direct openai/gpt-4.1 invalid_output status=200 attempts=1 extraction=false usage=true
+    extraction_test.go:354: proxy openai/gpt-4.1 invalid_output status=502 attempts=1 extraction=false usage=false
+    extraction_test.go:354: direct anthropic/claude-sonnet-5 known_usage status=200 attempts=1 extraction=true usage=true
+    extraction_test.go:354: proxy anthropic/claude-sonnet-5 known_usage status=200 attempts=1 extraction=true usage=true
+    extraction_test.go:354: direct anthropic/claude-sonnet-5 missing_usage status=200 attempts=1 extraction=true usage=false
+    extraction_test.go:354: proxy anthropic/claude-sonnet-5 missing_usage status=200 attempts=1 extraction=true usage=false
+    extraction_test.go:354: direct anthropic/claude-sonnet-5 zero_usage status=200 attempts=1 extraction=true usage=true
+    extraction_test.go:354: proxy anthropic/claude-sonnet-5 zero_usage status=200 attempts=1 extraction=true usage=true
+    extraction_test.go:354: direct anthropic/claude-sonnet-5 rate_limit status=429 attempts=1 extraction=false usage=false
+    extraction_test.go:354: proxy anthropic/claude-sonnet-5 rate_limit status=429 attempts=1 extraction=false usage=false
+    extraction_test.go:354: direct anthropic/claude-sonnet-5 provider_failure status=503 attempts=1 extraction=false usage=false
+    extraction_test.go:354: proxy anthropic/claude-sonnet-5 provider_failure status=502 attempts=1 extraction=false usage=false
+    extraction_test.go:354: direct anthropic/claude-sonnet-5 invalid_output status=200 attempts=1 extraction=false usage=true
+    extraction_test.go:354: proxy anthropic/claude-sonnet-5 invalid_output status=502 attempts=1 extraction=false usage=false
+--- PASS: TestExtractionBenchmark (10.15s)
+PASS
+ok  	github.com/tyemirov/llm-proxy/evaluation	10.497s

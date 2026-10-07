@@ -888,19 +888,19 @@ func TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints(t *testin
 			if responseRecorder.Code != http.StatusOK {
 				subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
 			}
-			if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "11" {
+			if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "" {
 				subTest.Fatalf("request tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens))
 			}
-			if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "7" {
+			if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "" {
 				subTest.Fatalf("response tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens))
 			}
-			if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "18" {
+			if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "" {
 				subTest.Fatalf("total tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens))
 			}
 			var response struct {
 				Model    string `json:"model"`
 				Response string `json:"response"`
-				Usage    struct {
+				Usage    *struct {
 					RequestTokens  int `json:"request_tokens"`
 					ResponseTokens int `json:"response_tokens"`
 					TotalTokens    int `json:"total_tokens"`
@@ -912,7 +912,7 @@ func TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints(t *testin
 			if response.Model != testCase.expectedModel || response.Response != "meta partial meta ok" {
 				subTest.Fatalf("response=%+v", response)
 			}
-			if response.Usage.RequestTokens != 11 || response.Usage.ResponseTokens != 7 || response.Usage.TotalTokens != 18 {
+			if response.Usage != nil {
 				subTest.Fatalf("usage=%+v", response.Usage)
 			}
 		})

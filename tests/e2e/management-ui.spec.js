@@ -553,7 +553,7 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).not.toContain("data-route-publisher");
   expect(html).not.toContain("llm-proxy-routing-tree");
   expect(html).toContain('<table class="catalog-table">');
-  expect(html).toContain('<strong>16</strong><span>Providers</span>');
+  expect(html).toContain('<strong>17</strong><span>Providers</span>');
   expect(html).toContain('<strong>15</strong><span>Publishers</span>');
   expect(html).toContain('<strong>33</strong><span>Families</span>');
   expect(html).toContain('<strong>86</strong><span>Exact models</span>');
@@ -5559,6 +5559,12 @@ function usageAggregate(overrides = {}) {
     response_tokens: 0,
     total_tokens: 0,
     average_latency_ms: 0,
+    token_coverage: Object.fromEntries(["request_tokens", "response_tokens", "total_tokens"].map((metric) => [metric, {
+      measured_requests: overrides.requests || 0,
+      partial_requests: 0,
+      unknown_requests: 0,
+      historical_requests: 0,
+    }])) ,
     ...overrides,
   };
 }
@@ -6076,3 +6082,54 @@ test("F085 shows all connection models until task filters are selected", async (
   await text.click();
   await expect(dashboard.locator('[data-model="gpt-image-2"]')).toBeVisible();
 });
+
+for (const fixture of [
+  { name: "unknown", measured: 0, partial: 0, unknown: 1, historical: 0, tokens: 0, label: "Unknown" },
+  { name: "zero", measured: 1, partial: 0, unknown: 0, historical: 0, tokens: 0, label: "0" },
+  { name: "partial", measured: 0, partial: 1, unknown: 0, historical: 0, tokens: 13, label: "13 subtotal (1 incomplete request)" },
+  { name: "historical", measured: 0, partial: 0, unknown: 0, historical: 1, tokens: 13, label: "13 historical subtotal (measurement unknown)" },
+  { name: "predecessor API", measured: 0, partial: 0, unknown: 0, historical: 1, tokens: 13, label: "13 historical subtotal (measurement unknown)" },
+  { name: "mixed", measured: 1, partial: 0, unknown: 1, historical: 0, tokens: 13, label: "13 subtotal (1 incomplete request)" },
+]) {
+  test(`Token measurement evidence handles ${fixture.name} without invented zero`, async ({ page }) => {
+    await installAssetRoutes(page);
+    await installManagementRoutes(page, { admin: true });
+    const requests = fixture.measured + fixture.partial + fixture.unknown + fixture.historical;
+    const summary = managementUsage("30d", { requests, successful_requests: requests, failed_requests: 0, text_requests: requests, dictation_requests: 0, request_tokens: 0, response_tokens: 0, total_tokens: fixture.tokens });
+    const evidence = { measured_requests: fixture.measured, partial_requests: fixture.partial, unknown_requests: fixture.unknown, historical_requests: fixture.historical };
+    const coverage = { request_tokens: { ...evidence }, response_tokens: { ...evidence }, total_tokens: { ...evidence } };
+    // Explicit current API fixtures qualify the same retained event scope in all buckets.
+    summary.totals.token_coverage = coverage;
+    for (const bucket of summary.buckets) bucket.data = usageAggregate();
+    summary.buckets.at(-1).data = { ...summary.totals };
+    summary.providers = [{ provider: "openai", data: { ...summary.totals } }];
+    summary.models = [{ provider: "openai", model: "gpt-4.1", data: { ...summary.totals } }];
+    summary.status_codes = [{ status_code: 200, requests }];
+    if (fixture.name === "predecessor API") {
+      for (const data of [summary.totals, ...summary.buckets.map(bucket => bucket.data), ...summary.providers.map(row => row.data), ...summary.models.map(row => row.data)]) delete data.token_coverage;
+    }
+    await page.route(`${baseURL}/api/management/admin/users`, async (route) => {
+      const users = managementAdminUsers();
+      users.users[0].tenants[0].usage.totals = { ...summary.totals };
+      await route.fulfill({ json: users });
+    });
+    await installUsageResponse(page, httpOK, summary);
+    await page.goto(`${baseURL}${applicationPath}`);
+    if (fixture.name === "predecessor API") {
+      await expect(page.getByText("Request failed", { exact: true })).toBeVisible();
+      await expect(page.locator("usage-card").nth(1).locator("strong")).toHaveText("Unknown");
+      await page.getByTestId("avatar-menu").click();
+      await page.getByTestId("avatar-menu-item").nth(0).click();
+      await expect(page.locator("admin-user-card")).toHaveCount(0);
+      return;
+    }
+    await expect(page.locator("usage-card").first().locator("strong")).toHaveText(String(requests));
+    await expect(page.getByText("Request failed", { exact: true })).not.toBeVisible();
+    await expect(page.locator("usage-card").nth(1).locator("strong")).toHaveText(fixture.label);
+    await expect(page.locator("usage-chart-panel").nth(1)).toContainText(fixture.label);
+    await page.getByTestId("avatar-menu").click();
+    await page.getByTestId("avatar-menu-item").nth(0).click();
+    const card = page.locator("admin-user-card").filter({ hasText: "owner@example.com" }).locator("admin-tenant-card").first();
+    await expect(card.locator("dd").nth(1)).toHaveText(fixture.label);
+  });
+}

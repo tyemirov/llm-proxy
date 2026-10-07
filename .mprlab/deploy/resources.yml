@@ -4,6 +4,47 @@ mprlab_resources:
   release:
     scheme: semver
     fixed_major: 1
+  ci:
+    enabled: true
+    command:
+      "0": make
+      "1": ci
+  defaults:
+    timeouts:
+      startup: 30s
+      completion: 30m
+      readiness: 30s
+      request: 15s
+      shutdown: 5s
+  operations:
+    app_lifecycle.repository_read:
+      polling:
+        initial: 1s
+        maximum: 5s
+        increment: 0s
+        multiplier: 2
+        attempt_limit: 360
+    app-release:
+      polling:
+        initial: 1s
+        maximum: 5s
+        increment: 0s
+        multiplier: 2
+        attempt_limit: 360
+    app-publish:
+      polling:
+        initial: 1s
+        maximum: 5s
+        increment: 0s
+        multiplier: 2
+        attempt_limit: 360
+    app-deploy:
+      polling:
+        initial: 1s
+        maximum: 5s
+        increment: 0s
+        multiplier: 2
+        attempt_limit: 360
   resources:
     private:
       kind: private_values

@@ -379,6 +379,11 @@ an insert failure or process termination can lose an uncommitted event. Managed
 usage is operational telemetry, not a billing, accounting, or provider-job
 ledger; summaries may briefly lag completed proxy responses.
 
+Each summary aggregate includes per-quantity `token_coverage` for measured, partial, unknown, and historical execution events.
+Numeric quantities remain retained subtotals. Coverage does not establish invoice completeness.
+The dashboard distinguishes measured zero from unknown usage and labels incomplete subtotals.
+See the [operational token evidence contract](docs/token-measurement-evidence.md) for persistence, completion, and recovery rules.
+
 `server.upstream_capacity` bounds upstream HTTP requests by origin, tenant, and provider account.
 An active request retains its permit until the caller closes the response body.
 The scheduler releases active capacity between remote-job polls.

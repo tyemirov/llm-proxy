@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -49,8 +50,40 @@ func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.
 		resourceKeys = append(resourceKeys, key)
 	}
 	slices.Sort(resourceKeys)
-	if !slices.Equal(resourceKeys, []string{"owner", "release", "resources"}) {
-		testingInstance.Fatalf("lifecycle manifest must contain only owner, release, and resources: %#v", resourcesDocument)
+	if !slices.Equal(resourceKeys, []string{"ci", "defaults", "operations", "owner", "release", "resources"}) {
+		testingInstance.Fatalf("unexpected lifecycle manifest fields: %#v", resourceKeys)
+	}
+	ci, ciAvailable := resourcesDocument["ci"].(map[string]any)
+	if !ciAvailable || len(ci) != 2 || ci["enabled"] != true || !reflect.DeepEqual(ci["command"], map[string]any{"0": "make", "1": "ci"}) {
+		testingInstance.Fatalf("lifecycle must enable the complete repository CI command: %#v", ci)
+	}
+	defaults := resourcesDocument["defaults"].(map[string]any)
+	timeouts := defaults["timeouts"].(map[string]any)
+	if len(defaults) != 1 || len(timeouts) != 5 {
+		testingInstance.Fatalf("unexpected lifecycle timeout fields: %#v", defaults)
+	}
+	for _, name := range []string{"startup", "completion", "readiness", "request", "shutdown"} {
+		value, err := time.ParseDuration(lifecycleStringField(testingInstance, timeouts, name))
+		if err != nil || value <= 0 {
+			testingInstance.Fatalf("lifecycle %s requires a positive finite duration: %#v", name, timeouts[name])
+		}
+	}
+	operations := resourcesDocument["operations"].(map[string]any)
+	if len(operations) != 4 {
+		testingInstance.Fatalf("unexpected lifecycle observation operations: %#v", operations)
+	}
+	for _, name := range []string{"app_lifecycle.repository_read", "app-release", "app-publish", "app-deploy"} {
+		operation := operations[name].(map[string]any)
+		polling := operation["polling"].(map[string]any)
+		if len(operation) != 1 || len(polling) != 5 {
+			testingInstance.Fatalf("unexpected %s observation fields: %#v", name, operation)
+		}
+		initial, initialError := time.ParseDuration(lifecycleStringField(testingInstance, polling, "initial"))
+		maximum, maximumError := time.ParseDuration(lifecycleStringField(testingInstance, polling, "maximum"))
+		increment, incrementError := time.ParseDuration(lifecycleStringField(testingInstance, polling, "increment"))
+		if initialError != nil || maximumError != nil || incrementError != nil || initial <= 0 || maximum < initial || increment < 0 || polling["multiplier"].(int) < 1 || polling["attempt_limit"].(int) < 1 {
+			testingInstance.Fatalf("%s observation requires finite positive limits: %#v", name, polling)
+		}
 	}
 
 	resources, resourcesAvailable := resourcesDocument["resources"].(map[string]any)

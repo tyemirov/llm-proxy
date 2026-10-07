@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Preserved unknown, partial, complete, and historical token evidence through operational usage reports.
+  Kept measured zero separate from absent usage in account and administrator summaries.
+  Retained evidence through saved completions, media usage, and database restart.
+
+- Added HeyGen v3 services for lip sync, translation, avatar creation, and avatar video generation.
+  Kept native identifiers private and retained tenant avatar ownership after creation jobs expired.
+  Added ordered translation assets, persisted job recovery, and separate account balance observations.
+  Added typed Go client methods, Python discovery support, and OpenAPI schemas.
+  Publication, activation, and the MediaOps consumer migration remain separate work.
+
 - Limited the MediaOps migration to model and provider access.
   Kept all MediaOps applications, browser workflows, local processing, and application data in MediaOps.
   Removed the proposed destination Frame Picker implementation before publication or activation.

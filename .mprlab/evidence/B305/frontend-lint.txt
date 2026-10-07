@@ -1,0 +1,12 @@
+node scripts/validate_brand_icons.mjs
+Brand icons verified: 17 providers, 36 families, 18 SVGs.
+npm run frontend:lint
+
+> frontend:lint
+> node scripts/check_frontend_types.mjs && node scripts/check_frontend_syntax.mjs && node scripts/generate_public_site_shell.mjs --check && node scripts/generate_legal_pages.mjs --check && node scripts/generate_openapi_docs.mjs --check
+
+verified shared public shell in site/index.html
+verified shared public shell in site/app/index.html
+verified site/privacy/index.html
+verified site/terms/index.html
+verified site/docs/index.html from docs/openapi.yaml

@@ -1,0 +1,516 @@
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:2980 [35;1mrecord not found
+[0m[33m[0.021ms] [34;1m[rows:0][0m SELECT * FROM `managed_user_records` WHERE `managed_user_records`.`user_id` = "heygen-owner" ORDER BY `managed_user_records`.`user_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:3053 [35;1mrecord not found
+[0m[33m[0.018ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_records` WHERE secret_digest = "cb255e99d96a27126130335a39564032fe57039e381d18f74105bd05567552ad" ORDER BY `managed_tenant_records`.`tenant_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:49 [35;1mrecord not found
+[0m[33m[0.017ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "heygen-owner" AND key_digest = "23fceb6ee1c72631accb370c568defe0de03806134dbf628c7420b66474c4ab1" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:59 [35;1mrecord not found
+[0m[33m[0.034ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "heygen-owner" AND key_digest = "23fceb6ee1c72631accb370c568defe0de03806134dbf628c7420b66474c4ab1" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connections_store.go:194 [35;1mrecord not found
+[0m[33m[0.009ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_connection_records` WHERE tenant_id = "managed-ee6342800db1820805e416a4b51d6efe" AND provider_id = "heygen" ORDER BY `managed_tenant_connection_records`.`tenant_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operations.go:634 [35;1mrecord not found
+[0m[33m[0.030ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_records` WHERE tenant_id = "managed-ee6342800db1820805e416a4b51d6efe" AND idempotency_key_digest = "cd96580b74e299da8cf9afdb4bfa68a51873fe24f7930886380ff6be38b04df2" ORDER BY `media_operation_records`.`operation_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operations.go:645 [35;1mrecord not found
+[0m[33m[0.017ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_tombstone_records` WHERE tenant_id = "managed-ee6342800db1820805e416a4b51d6efe" AND idempotency_key_digest = "cd96580b74e299da8cf9afdb4bfa68a51873fe24f7930886380ff6be38b04df2" ORDER BY `media_operation_tombstone_records`.`tenant_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operations.go:718 [35;1mrecord not found
+[0m[33m[0.024ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_records` WHERE tenant_id = "managed-ee6342800db1820805e416a4b51d6efe" AND idempotency_key_digest = "cd96580b74e299da8cf9afdb4bfa68a51873fe24f7930886380ff6be38b04df2" ORDER BY `media_operation_records`.`operation_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operations.go:1255 [35;1mrecord not found
+[0m[33m[0.009ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_claim_records` WHERE operation_id = "mop_afd9dcaf57b5ee8c669fbcb4d4ba637c" ORDER BY `media_operation_claim_records`.`operation_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.032ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_afd9dcaf57b5ee8c669fbcb4d4ba637c" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.045ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_afd9dcaf57b5ee8c669fbcb4d4ba637c" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.020ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_afd9dcaf57b5ee8c669fbcb4d4ba637c" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.023ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_afd9dcaf57b5ee8c669fbcb4d4ba637c" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.029ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_afd9dcaf57b5ee8c669fbcb4d4ba637c" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operations.go:634 [35;1mrecord not found
+[0m[33m[0.029ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_records` WHERE tenant_id = "managed-ee6342800db1820805e416a4b51d6efe" AND idempotency_key_digest = "967c12aef8013f50a3cb9af36d21207403ee49c62f5636be0b0d160db53de03f" ORDER BY `media_operation_records`.`operation_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operations.go:645 [35;1mrecord not found
+[0m[33m[0.016ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_tombstone_records` WHERE tenant_id = "managed-ee6342800db1820805e416a4b51d6efe" AND idempotency_key_digest = "967c12aef8013f50a3cb9af36d21207403ee49c62f5636be0b0d160db53de03f" ORDER BY `media_operation_tombstone_records`.`tenant_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operations.go:718 [35;1mrecord not found
+[0m[33m[0.021ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_records` WHERE tenant_id = "managed-ee6342800db1820805e416a4b51d6efe" AND idempotency_key_digest = "967c12aef8013f50a3cb9af36d21207403ee49c62f5636be0b0d160db53de03f" ORDER BY `media_operation_records`.`operation_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operations.go:1255 [35;1mrecord not found
+[0m[33m[0.007ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_claim_records` WHERE operation_id = "mop_10f22a1369d8f847b1286ea5ed271215" ORDER BY `media_operation_claim_records`.`operation_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.019ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_10f22a1369d8f847b1286ea5ed271215" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_10f22a1369d8f847b1286ea5ed271215" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.017ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_10f22a1369d8f847b1286ea5ed271215" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.019ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_10f22a1369d8f847b1286ea5ed271215" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operation_partials.go:65 [35;1mrecord not found
+[0m[33m[0.010ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_partial_reference_records` WHERE operation_id = "mop_10f22a1369d8f847b1286ea5ed271215" AND output_ordinal = 0 AND partial_ordinal = 0 ORDER BY `media_operation_partial_reference_records`.`operation_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operation_partials.go:65 [35;1mrecord not found
+[0m[33m[0.013ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_partial_reference_records` WHERE operation_id = "mop_10f22a1369d8f847b1286ea5ed271215" AND output_ordinal = 1 AND partial_ordinal = 0 ORDER BY `media_operation_partial_reference_records`.`operation_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_10f22a1369d8f847b1286ea5ed271215" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.043ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_billing_account_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.016ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_hosted_grant_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.010ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_hosted_tenant_assignment_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.012ms] [34;1m[rows:4][0m SELECT * FROM PRAGMA_index_list("managed_journal_request_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_journal_attempt_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.011ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_journal_observation_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_journal_case_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.009ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_price_snapshot_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.012ms] [34;1m[rows:6][0m SELECT * FROM PRAGMA_index_list("managed_charge_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.009ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_charge_adjustment_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("ledger_accounts")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.010ms] [34;1m[rows:5][0m SELECT * FROM PRAGMA_index_list("ledger_entries")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_funds_reservation_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_funds_settlement_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.009ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_funds_credit_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.007ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_funds_tenant_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_funds_resolution_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.007ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_funds_exposure_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.020ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_funds_correction_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.011ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_funding_order_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_payment_delivery_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.009ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_payment_customer_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.009ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_payment_checkout_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.011ms] [34;1m[rows:5][0m SELECT * FROM PRAGMA_index_list("managed_payment_inbox_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.010ms] [34;1m[rows:4][0m SELECT * FROM PRAGMA_index_list("managed_payment_receipt_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_payment_adjustment_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.009ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_payment_state_observation_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_provider_reconciliation_run_records")
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:2980 [35;1mrecord not found
+[0m[33m[0.022ms] [34;1m[rows:0][0m SELECT * FROM `managed_user_records` WHERE `managed_user_records`.`user_id` = "heygen-owner" ORDER BY `managed_user_records`.`user_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/management_store.go:3053 [35;1mrecord not found
+[0m[33m[0.019ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_records` WHERE secret_digest = "0fbae109506ba44a194576a31762e58f8ea2beba6fca69d918230834e52f2bec" ORDER BY `managed_tenant_records`.`tenant_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:49 [35;1mrecord not found
+[0m[33m[0.018ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "heygen-owner" AND key_digest = "e1b8d74a9cef25db0e5e0e7a434baa78ec77133beb89073c7501c762b29ba910" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connection_creation.go:59 [35;1mrecord not found
+[0m[33m[0.019ms] [34;1m[rows:0][0m SELECT * FROM `managed_connection_creation_records` WHERE owner_user_id = "heygen-owner" AND key_digest = "e1b8d74a9cef25db0e5e0e7a434baa78ec77133beb89073c7501c762b29ba910" ORDER BY `managed_connection_creation_records`.`owner_user_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/account_connections_store.go:194 [35;1mrecord not found
+[0m[33m[0.009ms] [34;1m[rows:0][0m SELECT * FROM `managed_tenant_connection_records` WHERE tenant_id = "managed-848f203873519713636a97e4efdf8e13" AND provider_id = "heygen-fixture" ORDER BY `managed_tenant_connection_records`.`tenant_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operations.go:634 [35;1mrecord not found
+[0m[33m[0.032ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_records` WHERE tenant_id = "managed-848f203873519713636a97e4efdf8e13" AND idempotency_key_digest = "cd96580b74e299da8cf9afdb4bfa68a51873fe24f7930886380ff6be38b04df2" ORDER BY `media_operation_records`.`operation_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operations.go:645 [35;1mrecord not found
+[0m[33m[0.019ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_tombstone_records` WHERE tenant_id = "managed-848f203873519713636a97e4efdf8e13" AND idempotency_key_digest = "cd96580b74e299da8cf9afdb4bfa68a51873fe24f7930886380ff6be38b04df2" ORDER BY `media_operation_tombstone_records`.`tenant_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operations.go:718 [35;1mrecord not found
+[0m[33m[0.022ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_records` WHERE tenant_id = "managed-848f203873519713636a97e4efdf8e13" AND idempotency_key_digest = "cd96580b74e299da8cf9afdb4bfa68a51873fe24f7930886380ff6be38b04df2" ORDER BY `media_operation_records`.`operation_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operations.go:1255 [35;1mrecord not found
+[0m[33m[0.009ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_claim_records` WHERE operation_id = "mop_9376834a2dca0a6b7fe9896d4f23d4d2" ORDER BY `media_operation_claim_records`.`operation_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_9376834a2dca0a6b7fe9896d4f23d4d2" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.032ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_9376834a2dca0a6b7fe9896d4f23d4d2" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.018ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_9376834a2dca0a6b7fe9896d4f23d4d2" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_9376834a2dca0a6b7fe9896d4f23d4d2" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.030ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_9376834a2dca0a6b7fe9896d4f23d4d2" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operations.go:634 [35;1mrecord not found
+[0m[33m[0.022ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_records` WHERE tenant_id = "managed-848f203873519713636a97e4efdf8e13" AND idempotency_key_digest = "967c12aef8013f50a3cb9af36d21207403ee49c62f5636be0b0d160db53de03f" ORDER BY `media_operation_records`.`operation_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operations.go:645 [35;1mrecord not found
+[0m[33m[0.016ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_tombstone_records` WHERE tenant_id = "managed-848f203873519713636a97e4efdf8e13" AND idempotency_key_digest = "967c12aef8013f50a3cb9af36d21207403ee49c62f5636be0b0d160db53de03f" ORDER BY `media_operation_tombstone_records`.`tenant_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operations.go:718 [35;1mrecord not found
+[0m[33m[0.021ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_records` WHERE tenant_id = "managed-848f203873519713636a97e4efdf8e13" AND idempotency_key_digest = "967c12aef8013f50a3cb9af36d21207403ee49c62f5636be0b0d160db53de03f" ORDER BY `media_operation_records`.`operation_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operations.go:1255 [35;1mrecord not found
+[0m[33m[0.008ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_claim_records` WHERE operation_id = "mop_14ec1e0515b326a75026505b39ae3366" ORDER BY `media_operation_claim_records`.`operation_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.042ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_14ec1e0515b326a75026505b39ae3366" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_14ec1e0515b326a75026505b39ae3366" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.016ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_14ec1e0515b326a75026505b39ae3366" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.018ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_14ec1e0515b326a75026505b39ae3366" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operation_partials.go:65 [35;1mrecord not found
+[0m[33m[0.012ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_partial_reference_records` WHERE operation_id = "mop_14ec1e0515b326a75026505b39ae3366" AND output_ordinal = 0 AND partial_ordinal = 0 ORDER BY `media_operation_partial_reference_records`.`operation_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/media_operation_partials.go:65 [35;1mrecord not found
+[0m[33m[0.011ms] [34;1m[rows:0][0m SELECT * FROM `media_operation_partial_reference_records` WHERE operation_id = "mop_14ec1e0515b326a75026505b39ae3366" AND output_ordinal = 1 AND partial_ordinal = 0 ORDER BY `media_operation_partial_reference_records`.`operation_id` LIMIT 1
+
+2026/10/06 16:44:24 [31;1m/Users/tyemirov/Development/llm-proxy/internal/proxy/hosted_media_worker.go:23 [35;1mrecord not found
+[0m[33m[0.028ms] [34;1m[rows:0][0m SELECT * FROM `managed_journal_request_records` WHERE execution_kind = "media_operation" AND execution_id = "mop_14ec1e0515b326a75026505b39ae3366" ORDER BY `managed_journal_request_records`.`id` LIMIT 1
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.047ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_billing_account_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.012ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_hosted_grant_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.009ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_hosted_tenant_assignment_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.012ms] [34;1m[rows:4][0m SELECT * FROM PRAGMA_index_list("managed_journal_request_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_journal_attempt_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_journal_observation_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_journal_case_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.009ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_price_snapshot_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.011ms] [34;1m[rows:6][0m SELECT * FROM PRAGMA_index_list("managed_charge_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.009ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_charge_adjustment_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.008ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("ledger_accounts")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.012ms] [34;1m[rows:5][0m SELECT * FROM PRAGMA_index_list("ledger_entries")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.010ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_funds_reservation_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.010ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_funds_settlement_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.011ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_funds_credit_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.009ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_funds_tenant_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.012ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_funds_resolution_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.009ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_funds_exposure_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.033ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_funds_correction_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.020ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_funding_order_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.011ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_payment_delivery_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.011ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_payment_customer_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.010ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_payment_checkout_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.016ms] [34;1m[rows:5][0m SELECT * FROM PRAGMA_index_list("managed_payment_inbox_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.012ms] [34;1m[rows:4][0m SELECT * FROM PRAGMA_index_list("managed_payment_receipt_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.011ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_payment_adjustment_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.011ms] [34;1m[rows:3][0m SELECT * FROM PRAGMA_index_list("managed_payment_state_observation_records")
+
+2026/10/06 16:44:24 [32m/Users/tyemirov/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:342
+[0m[33m[0.017ms] [34;1m[rows:2][0m SELECT * FROM PRAGMA_index_list("managed_provider_reconciliation_run_records")
+--- FAIL: TestHeyGenV3ServicesMaterializeOrderedResults (0.20s)
+    --- FAIL: TestHeyGenV3ServicesMaterializeOrderedResults/heygen (0.11s)
+        heygen_e2e_test.go:286: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: total_tokens.historical_requests=2 want 0
+    --- FAIL: TestHeyGenV3ServicesMaterializeOrderedResults/heygen-fixture (0.10s)
+        heygen_e2e_test.go:286: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:286: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:286: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: total_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: request_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: request_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: response_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: response_tokens.historical_requests=2 want 0
+        heygen_e2e_test.go:291: total_tokens.unknown_requests=0 want 2
+        heygen_e2e_test.go:291: total_tokens.historical_requests=2 want 0
+FAIL
+FAIL	github.com/tyemirov/llm-proxy/internal/proxy	0.679s
+FAIL

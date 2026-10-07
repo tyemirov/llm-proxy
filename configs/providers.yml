@@ -86,6 +86,18 @@ model_migrations:
       target_model: gpt-transcribe
       preserve_source_usage: true
 operations:
+    - id: avatar_creation
+      input_artifacts: [image]
+      output_artifacts: [text]
+    - id: avatar_video_generation
+      input_artifacts: [image, audio]
+      output_artifacts: [video]
+    - id: video_lipsync
+      input_artifacts: [video, audio]
+      output_artifacts: [video]
+    - id: video_translation
+      input_artifacts: [video, audio]
+      output_artifacts: [video, audio]
     - id: speech_conversion
       input_artifacts: [audio]
       output_artifacts: [audio, text]
@@ -6946,3 +6958,161 @@ providers:
               source: https://elevenlabs.io/docs/api-reference/speech-to-speech/convert
               last_verified: "2026-09-20"
               unavailable_reason: Exact voice conversion pricing has not been imported.
+
+    - id: heygen
+      label: HeyGen
+      api_service_label: HeyGen API v3
+      connection_ownership: tenant
+      key_acquisition_url: https://app.heygen.com/settings
+      fields:
+        - id: api_key
+          label: HeyGen API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation: {minimum_length: 1}
+          environment: HEYGEN_API_KEY
+      verification: {transport: account}
+      resources: [{kind: account, transport: account}]
+      offerings: []
+      services:
+        - operation: avatar_creation
+          transport: avatar
+          controls: []
+          limits:
+            - {id: input_image_bytes, value: 33554432, unit: bytes}
+            - {id: output_bytes, value: 268435456, unit: bytes}
+          price:
+            operation: avatar_creation
+            available: false
+            source: https://app.heygen.com/developers/api?modal=pricing
+            last_verified: "2026-10-06"
+            unavailable_reason: Exact per-operation pricing depends on account and media duration.
+        - operation: avatar_video_generation
+          transport: avatar_video
+          controls:
+            - {id: engine, kind: enum, values: [avatar_iv]}
+            - {id: aspect_ratio, kind: enum, values: ['16:9', '9:16', '1:1']}
+            - {id: resolution, kind: enum, values: [720p, 1080p]}
+            - {id: expressiveness, kind: enum, values: [low, medium, high]}
+          limits:
+            - {id: input_audio_bytes, value: 33554432, unit: bytes}
+            - {id: output_bytes, value: 268435456, unit: bytes}
+          price:
+            operation: avatar_video_generation
+            available: false
+            source: https://app.heygen.com/developers/api?modal=pricing
+            last_verified: "2026-10-06"
+            unavailable_reason: Exact per-operation pricing depends on account and media duration.
+        - operation: video_lipsync
+          transport: lipsync
+          controls:
+            - {id: mode, kind: enum, values: [speed, precision]}
+            - {id: disable_music_track, kind: boolean}
+            - {id: enable_dynamic_duration, kind: boolean}
+            - {id: enable_speech_enhancement, kind: boolean}
+            - {id: enable_watermark, kind: boolean}
+            - {id: start_time, kind: number, minimum: 0, maximum: 36000}
+            - {id: end_time, kind: number, minimum: 0, maximum: 36000}
+            - {id: keep_the_same_format, kind: boolean}
+            - {id: fps_mode, kind: enum, values: [vfr, cfr, passthrough]}
+          limits:
+            - {id: input_video_bytes, value: 33554432, unit: bytes}
+            - {id: input_audio_bytes, value: 33554432, unit: bytes}
+            - {id: output_bytes, value: 268435456, unit: bytes}
+          price:
+            operation: video_lipsync
+            available: false
+            source: https://app.heygen.com/developers/api?modal=pricing
+            last_verified: "2026-10-06"
+            unavailable_reason: Exact per-operation pricing depends on account and media duration.
+        - operation: video_translation
+          transport: translation
+          controls:
+            - {id: mode, kind: enum, values: [speed, precision]}
+            - {id: disable_music_track, kind: boolean}
+            - {id: enable_dynamic_duration, kind: boolean}
+            - {id: enable_speech_enhancement, kind: boolean}
+            - {id: enable_watermark, kind: boolean}
+            - {id: start_time, kind: number, minimum: 0, maximum: 36000}
+            - {id: end_time, kind: number, minimum: 0, maximum: 36000}
+            - {id: keep_the_same_format, kind: boolean}
+            - {id: fps_mode, kind: enum, values: [vfr, cfr, passthrough]}
+            - {id: translate_audio_only, kind: boolean}
+            - {id: speaker_num, kind: integer, minimum: 0, maximum: 100}
+          limits:
+            - {id: input_video_bytes, value: 33554432, unit: bytes}
+            - {id: input_audio_bytes, value: 33554432, unit: bytes}
+            - {id: output_bytes, value: 268435456, unit: bytes}
+          price:
+            operation: video_translation
+            available: false
+            source: https://app.heygen.com/developers/api?modal=pricing
+            last_verified: "2026-10-06"
+            unavailable_reason: Exact per-operation pricing depends on account and media duration.
+      transports:
+        - id: account
+          endpoint:
+            protocol: http
+            default_base_url: https://api.heygen.com
+            path: /v3/users/me
+            method: GET
+          headers: []
+          components:
+            request_codec: {id: heygen_v3_account}
+            response_codec: {id: heygen_v3_account}
+            authentication: {kind: header, field: api_key, header: X-Api-Key, prefix: ""}
+            execution: {id: read_only}
+        - id: lipsync
+          endpoint:
+            protocol: http
+            default_base_url: https://api.heygen.com
+            path: /v3/lipsyncs
+            method: POST
+          headers: []
+          artifact_origins: [https://resource.heygen.ai, https://files.heygen.ai]
+          components:
+            request_codec: {id: heygen_v3_lipsync}
+            response_codec: {id: heygen_v3_lipsync}
+            authentication: {kind: header, field: api_key, header: X-Api-Key, prefix: ""}
+            execution: {id: asynchronous_job}
+        - id: translation
+          endpoint:
+            protocol: http
+            default_base_url: https://api.heygen.com
+            path: /v3/video-translations
+            method: POST
+          headers: []
+          artifact_origins: [https://resource.heygen.ai, https://files.heygen.ai]
+          components:
+            request_codec: {id: heygen_v3_translation}
+            response_codec: {id: heygen_v3_translation}
+            authentication: {kind: header, field: api_key, header: X-Api-Key, prefix: ""}
+            execution: {id: asynchronous_job}
+        - id: avatar
+          endpoint:
+            protocol: http
+            default_base_url: https://api.heygen.com
+            path: /v3/avatars
+            method: POST
+          headers: []
+          components:
+            request_codec: {id: heygen_avatar_v3}
+            response_codec: {id: heygen_avatar_v3}
+            authentication: {kind: header, field: api_key, header: X-Api-Key, prefix: ""}
+            execution: {id: asynchronous_job}
+        - id: avatar_video
+          endpoint:
+            protocol: http
+            default_base_url: https://api.heygen.com
+            path: /v3/videos
+            method: POST
+          headers: []
+          artifact_origins: [https://resource.heygen.ai, https://files.heygen.ai]
+          components:
+            request_codec: {id: heygen_avatar_video_v3}
+            response_codec: {id: heygen_avatar_video_v3}
+            authentication: {kind: header, field: api_key, header: X-Api-Key, prefix: ""}
+            execution: {id: asynchronous_job}

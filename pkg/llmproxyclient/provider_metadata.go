@@ -14,6 +14,20 @@ import (
 
 var providerOverageAmountPattern = regexp.MustCompile(`^[0-9]+(?:\.[0-9]+)?$`)
 
+// GetProviderAccount reads current billing balances independently of operation prices.
+func (client Client) GetProviderAccount(ctx context.Context, provider string) (llmproxycontract.ProviderAccount, error) {
+	var result llmproxycontract.ProviderAccount
+	body, err := client.providerResource(ctx, provider, llmproxycontract.ProviderResourceAccount)
+	if err != nil {
+		return result, err
+	}
+	fields := exactProviderResourceObject(body, 5, "wallet", "subscription", "usage_based")
+	if fields == nil || decodeExactJSON(body, &result) != nil || result.Provider != provider || llmproxycontract.ValidateProviderAccount(result) != nil {
+		return llmproxycontract.ProviderAccount{}, fmt.Errorf("%w: invalid provider account", ErrClientHTTPFailure)
+	}
+	return result, nil
+}
+
 // GetProviderMetadata reads upstream model observations without adding catalog routes.
 func (client Client) GetProviderMetadata(ctx context.Context, provider string) (llmproxycontract.ProviderMetadata, error) {
 	var result llmproxycontract.ProviderMetadata

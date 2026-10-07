@@ -1,0 +1,2 @@
+go test ./internal/proxy -run '^TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints' -count=1
+ok  	github.com/tyemirov/llm-proxy/internal/proxy	3.490s

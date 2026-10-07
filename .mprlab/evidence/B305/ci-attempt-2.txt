@@ -1,0 +1,19 @@
+Failure excerpt from /Users/tyemirov/Documents/Codex/2026-10-06/task-2/token-fix/final-ci.log
+Full log SHA-256: 119f0fa28847f32f571f26ca2192971b132dd5124dfca903569749257a1dce8c
+
+--- FAIL: TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints (3.02s)
+    --- FAIL: TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints/default_get (0.50s)
+        provider_routing_test.go:892: request tokens header=""
+    --- FAIL: TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints/default_compatibility_post (0.50s)
+        provider_routing_test.go:892: request tokens header=""
+    --- FAIL: TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints/default_v2_post (0.50s)
+        provider_routing_test.go:892: request tokens header=""
+    --- FAIL: TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints/Muse_Spark_1.2_get (0.50s)
+        provider_routing_test.go:892: request tokens header=""
+    --- FAIL: TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints/Muse_Spark_1.2_compatibility_post (0.50s)
+        provider_routing_test.go:892: request tokens header=""
+    --- FAIL: TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints/Muse_Spark_1.2_v2_post (0.50s)
+        provider_routing_test.go:892: request tokens header=""
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+CI FAILED: stopped during Go integration tests (exit 2).

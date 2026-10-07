@@ -208,7 +208,12 @@
  *   request_tokens: number,
  *   response_tokens: number,
  *   total_tokens: number,
- *   average_latency_ms: number
+ *   average_latency_ms: number,
+ *   token_coverage: {
+ *     request_tokens: TokenMeasurementCoverage,
+ *     response_tokens: TokenMeasurementCoverage,
+ *     total_tokens: TokenMeasurementCoverage
+ *   }
  * }} UsageAggregate
  */
 
@@ -270,6 +275,7 @@
  *   y: number,
  *   start: string,
  *   value: number,
+ *   measurementKnown: boolean,
  *   accessibleLabel: string
  * }} UsageChartPoint
  */
@@ -503,3 +509,12 @@ export {};
 /** @typedef {{provider:'paddle',environment:PaymentEnvironment,client_token:string,offers:FundingOffer[]}} FundingOffers */
 /** @typedef {{provider:'paddle',environment:PaymentEnvironment,transaction_id:string}} PaymentCheckout */
 /** @typedef {{key:string,offer_code:string,order_id:string|null}} FundingIntent */
+
+/**
+ * @typedef {{
+ *   measured_requests: number,
+ *   partial_requests: number,
+ *   unknown_requests: number,
+ *   historical_requests: number
+ * }} TokenMeasurementCoverage
+ */

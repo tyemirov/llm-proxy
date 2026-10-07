@@ -1,0 +1,48 @@
+{
+  "entries": [
+    {
+      "action": "update",
+      "detail": "managed content differs",
+      "path": "/Users/tyemirov/Development/llm-proxy/.gitignore"
+    },
+    {
+      "action": "update",
+      "detail": "managed content differs",
+      "path": "/Users/tyemirov/Development/llm-proxy/.mprlab/AGENTS.DOCKER.md"
+    },
+    {
+      "action": "update",
+      "detail": "managed content differs",
+      "path": "/Users/tyemirov/Development/llm-proxy/.mprlab/AGENTS.FRONTEND.md"
+    },
+    {
+      "action": "update",
+      "detail": "managed content differs",
+      "path": "/Users/tyemirov/Development/llm-proxy/.mprlab/AGENTS.GO.md"
+    },
+    {
+      "action": "update",
+      "detail": "managed content differs",
+      "path": "/Users/tyemirov/Development/llm-proxy/.mprlab/PLANNING.md"
+    },
+    {
+      "action": "update",
+      "detail": "managed content differs",
+      "path": "/Users/tyemirov/Development/llm-proxy/.mprlab/POLICY.md"
+    }
+  ],
+  "issue_format": {
+    "sha256": "adc2ef25b029445f719358cbfda8e6425dd60869a831efb50d6c7142e492c2a2",
+    "url": "https://issues-api.mprlab.com/api/contracts/issue-format"
+  },
+  "issue_tracker": ".mprlab/ISSUES.md",
+  "profiles": [
+    "api",
+    "go",
+    "python",
+    "frontend",
+    "docker"
+  ],
+  "repo": "/Users/tyemirov/Development/llm-proxy",
+  "warnings": []
+}

@@ -1,0 +1,2489 @@
+{
+  "benchmark": "LP-C01-S1",
+  "database_path_is_temporary": true,
+  "expected_output": {
+    "amount": 42.5,
+    "currency": "USD",
+    "vendor": "ACME"
+  },
+  "failure_rows": {
+    "failures": [
+      {
+        "endpoint": "v2",
+        "latency_ms": 0,
+        "model": "claude-sonnet-5",
+        "occurred_at": "2026-10-06T21:59:42.742767Z",
+        "outcome_code": "upstream_error",
+        "provider": "anthropic",
+        "status_code": 502
+      },
+      {
+        "endpoint": "v2",
+        "latency_ms": 0,
+        "model": "claude-sonnet-5",
+        "occurred_at": "2026-10-06T21:59:42.737594Z",
+        "outcome_code": "upstream_error",
+        "provider": "anthropic",
+        "status_code": 502
+      },
+      {
+        "endpoint": "v2",
+        "latency_ms": 0,
+        "model": "claude-sonnet-5",
+        "occurred_at": "2026-10-06T21:59:42.733259Z",
+        "outcome_code": "rate_limited",
+        "provider": "anthropic",
+        "status_code": 429
+      },
+      {
+        "endpoint": "v2",
+        "latency_ms": 0,
+        "model": "gpt-4.1",
+        "occurred_at": "2026-10-06T21:59:42.714867Z",
+        "outcome_code": "upstream_error",
+        "provider": "openai",
+        "status_code": 502
+      },
+      {
+        "endpoint": "v2",
+        "latency_ms": 5000,
+        "model": "gpt-4.1",
+        "occurred_at": "2026-10-06T21:59:42.709691Z",
+        "outcome_code": "request_timeout",
+        "provider": "openai",
+        "status_code": 504
+      },
+      {
+        "endpoint": "v2",
+        "latency_ms": 5000,
+        "model": "gpt-4.1",
+        "occurred_at": "2026-10-06T21:59:37.691906Z",
+        "outcome_code": "request_timeout",
+        "provider": "openai",
+        "status_code": 504
+      }
+    ],
+    "interval": "all"
+  },
+  "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+  "litellm_execution": "not run; documented comparison only",
+  "no_latency_or_model_quality_measurements": true,
+  "observations": [
+    {
+      "alternative": "direct",
+      "route": "openai/gpt-4.1",
+      "scenario": "known_usage",
+      "http_status": 200,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": true,
+      "wire_usage_present": true,
+      "wire_usage": {
+        "input_tokens": 10,
+        "output_tokens": 3,
+        "total_tokens": 13
+      },
+      "error": null,
+      "retry_after": "",
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "alternative": "proxy",
+      "route": "openai/gpt-4.1",
+      "scenario": "known_usage",
+      "http_status": 200,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": true,
+      "wire_usage_present": true,
+      "wire_usage": {
+        "input_tokens": 10,
+        "output_tokens": 3,
+        "total_tokens": 13
+      },
+      "error": null,
+      "retry_after": "",
+      "persisted_summary_delta": {
+        "dictation_requests": 0,
+        "failed_requests": 0,
+        "request_tokens": 10,
+        "requests": 1,
+        "response_tokens": 3,
+        "successful_requests": 1,
+        "text_requests": 1,
+        "total_tokens": 13
+      },
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "openai/gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "background": true,
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "store": true,
+        "temperature": 0.7,
+        "text": {
+          "format": {
+            "name": "llm_proxy_structured_output",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "alternative": "direct",
+      "route": "openai/gpt-4.1",
+      "scenario": "missing_usage",
+      "http_status": 200,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": true,
+      "wire_usage_present": false,
+      "wire_usage": null,
+      "error": null,
+      "retry_after": "",
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "alternative": "proxy",
+      "route": "openai/gpt-4.1",
+      "scenario": "missing_usage",
+      "http_status": 200,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": true,
+      "wire_usage_present": false,
+      "wire_usage": null,
+      "error": null,
+      "retry_after": "",
+      "persisted_summary_delta": {
+        "dictation_requests": 0,
+        "failed_requests": 0,
+        "request_tokens": 0,
+        "requests": 1,
+        "response_tokens": 0,
+        "successful_requests": 1,
+        "text_requests": 1,
+        "total_tokens": 0
+      },
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "openai/gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "background": true,
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "store": true,
+        "temperature": 0.7,
+        "text": {
+          "format": {
+            "name": "llm_proxy_structured_output",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "alternative": "direct",
+      "route": "openai/gpt-4.1",
+      "scenario": "zero_usage",
+      "http_status": 200,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": true,
+      "wire_usage_present": true,
+      "wire_usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0
+      },
+      "error": null,
+      "retry_after": "",
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "alternative": "proxy",
+      "route": "openai/gpt-4.1",
+      "scenario": "zero_usage",
+      "http_status": 200,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": true,
+      "wire_usage_present": true,
+      "wire_usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0
+      },
+      "error": null,
+      "retry_after": "",
+      "persisted_summary_delta": {
+        "dictation_requests": 0,
+        "failed_requests": 0,
+        "request_tokens": 0,
+        "requests": 1,
+        "response_tokens": 0,
+        "successful_requests": 1,
+        "text_requests": 1,
+        "total_tokens": 0
+      },
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "openai/gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "background": true,
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "store": true,
+        "temperature": 0.7,
+        "text": {
+          "format": {
+            "name": "llm_proxy_structured_output",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "alternative": "direct",
+      "route": "openai/gpt-4.1",
+      "scenario": "rate_limit",
+      "http_status": 429,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": false,
+      "wire_usage_present": false,
+      "wire_usage": null,
+      "error": {
+        "message": "fixture-private-body",
+        "type": "rate_limit_error"
+      },
+      "retry_after": "1",
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "alternative": "proxy",
+      "route": "openai/gpt-4.1",
+      "scenario": "rate_limit",
+      "http_status": 0,
+      "upstream_attempts": 5,
+      "caller_accepted_extraction": false,
+      "wire_usage_present": false,
+      "wire_usage": null,
+      "error": {
+        "class": "caller_transport_error",
+        "timeout": true
+      },
+      "retry_after": "",
+      "persisted_summary_delta": {
+        "dictation_requests": 0,
+        "failed_requests": 1,
+        "request_tokens": 0,
+        "requests": 1,
+        "response_tokens": 0,
+        "successful_requests": 0,
+        "text_requests": 1,
+        "total_tokens": 0
+      },
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "openai/gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "background": true,
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "store": true,
+        "temperature": 0.7,
+        "text": {
+          "format": {
+            "name": "llm_proxy_structured_output",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "alternative": "direct",
+      "route": "openai/gpt-4.1",
+      "scenario": "provider_failure",
+      "http_status": 503,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": false,
+      "wire_usage_present": false,
+      "wire_usage": null,
+      "error": {
+        "message": "fixture-private-body",
+        "type": "overloaded_error"
+      },
+      "retry_after": "1",
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "alternative": "proxy",
+      "route": "openai/gpt-4.1",
+      "scenario": "provider_failure",
+      "http_status": 0,
+      "upstream_attempts": 5,
+      "caller_accepted_extraction": false,
+      "wire_usage_present": false,
+      "wire_usage": null,
+      "error": {
+        "class": "caller_transport_error",
+        "timeout": true
+      },
+      "retry_after": "",
+      "persisted_summary_delta": {
+        "dictation_requests": 0,
+        "failed_requests": 1,
+        "request_tokens": 0,
+        "requests": 1,
+        "response_tokens": 0,
+        "successful_requests": 0,
+        "text_requests": 1,
+        "total_tokens": 0
+      },
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "openai/gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "background": true,
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "store": true,
+        "temperature": 0.7,
+        "text": {
+          "format": {
+            "name": "llm_proxy_structured_output",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "alternative": "direct",
+      "route": "openai/gpt-4.1",
+      "scenario": "invalid_output",
+      "http_status": 200,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": false,
+      "wire_usage_present": true,
+      "wire_usage": {
+        "input_tokens": 10,
+        "output_tokens": 3,
+        "total_tokens": 13
+      },
+      "error": null,
+      "retry_after": "",
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "alternative": "proxy",
+      "route": "openai/gpt-4.1",
+      "scenario": "invalid_output",
+      "http_status": 502,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": false,
+      "wire_usage_present": false,
+      "wire_usage": null,
+      "error": {
+        "code": "provider_error",
+        "message": "The provider request failed.",
+        "param": null,
+        "request_id": "PQISX7DBBANV3BBLTGHKODRQZO",
+        "type": "server_error"
+      },
+      "retry_after": "",
+      "persisted_summary_delta": {
+        "dictation_requests": 0,
+        "failed_requests": 1,
+        "request_tokens": 10,
+        "requests": 1,
+        "response_tokens": 3,
+        "successful_requests": 0,
+        "text_requests": 1,
+        "total_tokens": 13
+      },
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "openai/gpt-4.1",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "background": true,
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "gpt-4.1",
+        "store": true,
+        "temperature": 0.7,
+        "text": {
+          "format": {
+            "name": "llm_proxy_structured_output",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "alternative": "direct",
+      "route": "anthropic/claude-sonnet-5",
+      "scenario": "known_usage",
+      "http_status": 200,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": true,
+      "wire_usage_present": true,
+      "wire_usage": {
+        "input_tokens": 10,
+        "output_tokens": 3
+      },
+      "error": null,
+      "retry_after": "",
+      "public_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        },
+        "stream": false
+      },
+      "upstream_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        },
+        "stream": false
+      }
+    },
+    {
+      "alternative": "proxy",
+      "route": "anthropic/claude-sonnet-5",
+      "scenario": "known_usage",
+      "http_status": 200,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": true,
+      "wire_usage_present": true,
+      "wire_usage": {
+        "input_tokens": 10,
+        "output_tokens": 3,
+        "total_tokens": 13
+      },
+      "error": null,
+      "retry_after": "",
+      "persisted_summary_delta": {
+        "dictation_requests": 0,
+        "failed_requests": 0,
+        "request_tokens": 10,
+        "requests": 1,
+        "response_tokens": 3,
+        "successful_requests": 1,
+        "text_requests": 1,
+        "total_tokens": 13
+      },
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "anthropic/claude-sonnet-5",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "alternative": "direct",
+      "route": "anthropic/claude-sonnet-5",
+      "scenario": "missing_usage",
+      "http_status": 200,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": true,
+      "wire_usage_present": false,
+      "wire_usage": null,
+      "error": null,
+      "retry_after": "",
+      "public_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        },
+        "stream": false
+      },
+      "upstream_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        },
+        "stream": false
+      }
+    },
+    {
+      "alternative": "proxy",
+      "route": "anthropic/claude-sonnet-5",
+      "scenario": "missing_usage",
+      "http_status": 200,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": true,
+      "wire_usage_present": false,
+      "wire_usage": null,
+      "error": null,
+      "retry_after": "",
+      "persisted_summary_delta": {
+        "dictation_requests": 0,
+        "failed_requests": 0,
+        "request_tokens": 0,
+        "requests": 1,
+        "response_tokens": 0,
+        "successful_requests": 1,
+        "text_requests": 1,
+        "total_tokens": 0
+      },
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "anthropic/claude-sonnet-5",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "alternative": "direct",
+      "route": "anthropic/claude-sonnet-5",
+      "scenario": "zero_usage",
+      "http_status": 200,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": true,
+      "wire_usage_present": true,
+      "wire_usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      },
+      "error": null,
+      "retry_after": "",
+      "public_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        },
+        "stream": false
+      },
+      "upstream_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        },
+        "stream": false
+      }
+    },
+    {
+      "alternative": "proxy",
+      "route": "anthropic/claude-sonnet-5",
+      "scenario": "zero_usage",
+      "http_status": 200,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": true,
+      "wire_usage_present": true,
+      "wire_usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0
+      },
+      "error": null,
+      "retry_after": "",
+      "persisted_summary_delta": {
+        "dictation_requests": 0,
+        "failed_requests": 0,
+        "request_tokens": 0,
+        "requests": 1,
+        "response_tokens": 0,
+        "successful_requests": 1,
+        "text_requests": 1,
+        "total_tokens": 0
+      },
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "anthropic/claude-sonnet-5",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "alternative": "direct",
+      "route": "anthropic/claude-sonnet-5",
+      "scenario": "rate_limit",
+      "http_status": 429,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": false,
+      "wire_usage_present": false,
+      "wire_usage": null,
+      "error": {
+        "message": "fixture-private-body",
+        "type": "rate_limit_error"
+      },
+      "retry_after": "1",
+      "public_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        },
+        "stream": false
+      },
+      "upstream_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        },
+        "stream": false
+      }
+    },
+    {
+      "alternative": "proxy",
+      "route": "anthropic/claude-sonnet-5",
+      "scenario": "rate_limit",
+      "http_status": 429,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": false,
+      "wire_usage_present": false,
+      "wire_usage": null,
+      "error": {
+        "code": "provider_rate_limited",
+        "message": "The provider request failed.",
+        "param": null,
+        "request_id": "YMMIDYPFWGH2SA55Y246QJGPRC",
+        "type": "rate_limit_error"
+      },
+      "retry_after": "1",
+      "persisted_summary_delta": {
+        "dictation_requests": 0,
+        "failed_requests": 1,
+        "request_tokens": 0,
+        "requests": 1,
+        "response_tokens": 0,
+        "successful_requests": 0,
+        "text_requests": 1,
+        "total_tokens": 0
+      },
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "anthropic/claude-sonnet-5",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "alternative": "direct",
+      "route": "anthropic/claude-sonnet-5",
+      "scenario": "provider_failure",
+      "http_status": 503,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": false,
+      "wire_usage_present": false,
+      "wire_usage": null,
+      "error": {
+        "message": "fixture-private-body",
+        "type": "overloaded_error"
+      },
+      "retry_after": "1",
+      "public_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        },
+        "stream": false
+      },
+      "upstream_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        },
+        "stream": false
+      }
+    },
+    {
+      "alternative": "proxy",
+      "route": "anthropic/claude-sonnet-5",
+      "scenario": "provider_failure",
+      "http_status": 502,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": false,
+      "wire_usage_present": false,
+      "wire_usage": null,
+      "error": {
+        "code": "provider_error",
+        "message": "The provider request failed.",
+        "param": null,
+        "request_id": "CTGVBL3HUV5BOOXR2EODUKP3V2",
+        "type": "server_error"
+      },
+      "retry_after": "1",
+      "persisted_summary_delta": {
+        "dictation_requests": 0,
+        "failed_requests": 1,
+        "request_tokens": 0,
+        "requests": 1,
+        "response_tokens": 0,
+        "successful_requests": 0,
+        "text_requests": 1,
+        "total_tokens": 0
+      },
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "anthropic/claude-sonnet-5",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "alternative": "direct",
+      "route": "anthropic/claude-sonnet-5",
+      "scenario": "invalid_output",
+      "http_status": 200,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": false,
+      "wire_usage_present": true,
+      "wire_usage": {
+        "input_tokens": 10,
+        "output_tokens": 3
+      },
+      "error": null,
+      "retry_after": "",
+      "public_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        },
+        "stream": false
+      },
+      "upstream_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        },
+        "stream": false
+      }
+    },
+    {
+      "alternative": "proxy",
+      "route": "anthropic/claude-sonnet-5",
+      "scenario": "invalid_output",
+      "http_status": 502,
+      "upstream_attempts": 1,
+      "caller_accepted_extraction": false,
+      "wire_usage_present": false,
+      "wire_usage": null,
+      "error": {
+        "code": "provider_error",
+        "message": "The provider request failed.",
+        "param": null,
+        "request_id": "KHIXRDHKSL5GPKT3SKBTYADSMD",
+        "type": "server_error"
+      },
+      "retry_after": "",
+      "persisted_summary_delta": {
+        "dictation_requests": 0,
+        "failed_requests": 1,
+        "request_tokens": 10,
+        "requests": 1,
+        "response_tokens": 3,
+        "successful_requests": 0,
+        "text_requests": 1,
+        "total_tokens": 13
+      },
+      "public_payload": {
+        "input": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+        "max_output_tokens": 64,
+        "model": "anthropic/claude-sonnet-5",
+        "stream": false,
+        "text": {
+          "format": {
+            "name": "invoice",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "strict": true,
+            "type": "json_schema"
+          }
+        }
+      },
+      "upstream_payload": {
+        "max_tokens": 64,
+        "messages": [
+          {
+            "content": "Extract vendor, amount, and currency from this text: Invoice from ACME for USD 42.50.",
+            "role": "user"
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "output_config": {
+          "format": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "currency": {
+                  "enum": [
+                    "USD"
+                  ],
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "vendor",
+                "amount",
+                "currency"
+              ],
+              "type": "object"
+            },
+            "type": "json_schema"
+          }
+        }
+      }
+    }
+  ],
+  "persisted_usage_rows": [
+    {
+      "input_tokens": 10,
+      "model": "gpt-4.1",
+      "output_tokens": 3,
+      "provider": "openai",
+      "status": 200,
+      "total_tokens": 13
+    },
+    {
+      "input_tokens": 0,
+      "model": "gpt-4.1",
+      "output_tokens": 0,
+      "provider": "openai",
+      "status": 200,
+      "total_tokens": 0
+    },
+    {
+      "input_tokens": 0,
+      "model": "gpt-4.1",
+      "output_tokens": 0,
+      "provider": "openai",
+      "status": 200,
+      "total_tokens": 0
+    },
+    {
+      "input_tokens": 0,
+      "model": "gpt-4.1",
+      "output_tokens": 0,
+      "provider": "openai",
+      "status": 504,
+      "total_tokens": 0
+    },
+    {
+      "input_tokens": 0,
+      "model": "gpt-4.1",
+      "output_tokens": 0,
+      "provider": "openai",
+      "status": 504,
+      "total_tokens": 0
+    },
+    {
+      "input_tokens": 10,
+      "model": "gpt-4.1",
+      "output_tokens": 3,
+      "provider": "openai",
+      "status": 502,
+      "total_tokens": 13
+    },
+    {
+      "input_tokens": 10,
+      "model": "claude-sonnet-5",
+      "output_tokens": 3,
+      "provider": "anthropic",
+      "status": 200,
+      "total_tokens": 13
+    },
+    {
+      "input_tokens": 0,
+      "model": "claude-sonnet-5",
+      "output_tokens": 0,
+      "provider": "anthropic",
+      "status": 200,
+      "total_tokens": 0
+    },
+    {
+      "input_tokens": 0,
+      "model": "claude-sonnet-5",
+      "output_tokens": 0,
+      "provider": "anthropic",
+      "status": 200,
+      "total_tokens": 0
+    },
+    {
+      "input_tokens": 0,
+      "model": "claude-sonnet-5",
+      "output_tokens": 0,
+      "provider": "anthropic",
+      "status": 429,
+      "total_tokens": 0
+    },
+    {
+      "input_tokens": 0,
+      "model": "claude-sonnet-5",
+      "output_tokens": 0,
+      "provider": "anthropic",
+      "status": 502,
+      "total_tokens": 0
+    },
+    {
+      "input_tokens": 10,
+      "model": "claude-sonnet-5",
+      "output_tokens": 3,
+      "provider": "anthropic",
+      "status": 502,
+      "total_tokens": 13
+    }
+  ],
+  "schema": {
+    "additionalProperties": false,
+    "properties": {
+      "amount": {
+        "type": "number"
+      },
+      "currency": {
+        "enum": [
+          "USD"
+        ],
+        "type": "string"
+      },
+      "vendor": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "vendor",
+      "amount",
+      "currency"
+    ],
+    "type": "object"
+  },
+  "usage_columns": [
+    "id",
+    "tenant_id",
+    "endpoint",
+    "provider_id",
+    "model_id",
+    "status_code",
+    "disposition",
+    "outcome_code",
+    "latency_milliseconds",
+    "request_tokens",
+    "response_tokens",
+    "total_tokens",
+    "created_at"
+  ],
+  "wire_alternatives_executed": [
+    "direct",
+    "proxy"
+  ],
+  "workflow": "synthetic plain-text structured extraction"
+}

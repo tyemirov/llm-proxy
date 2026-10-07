@@ -1,0 +1,34 @@
+{
+  "benchmark": "LP-C01-S1",
+  "test_package": "passed; 10.484 seconds",
+  "observations_recorded": 24,
+  "accepted_extraction_observations": 12,
+  "invalid_output_rejections": 4,
+  "expected_error_status_retry_and_persistence_assertions": false,
+  "new_mechanical_prose_findings": 0,
+  "git_diff_check": "passed",
+  "existing_source_hashes_unchanged": 669,
+  "unique_issue_identifiers": 578,
+  "preexisting_tracker_and_terms_preserved": true,
+  "governor_exit_code": 1,
+  "governor_drift_identical_to_baseline": true,
+  "governor_drift": [
+    ".gitignore",
+    ".mprlab/AGENTS.DOCKER.md",
+    ".mprlab/AGENTS.FRONTEND.md",
+    ".mprlab/AGENTS.GO.md",
+    ".mprlab/PLANNING.md",
+    ".mprlab/POLICY.md"
+  ],
+  "independent_review": "Two evidence qualifications applied; no other blocking findings.",
+  "native_endpoint_and_authentication_qualification": "open; direct OpenAI uses permissive fixture root",
+  "temporary_plan_removed": true,
+  "external_model_calls": 0,
+  "product_changes": 0,
+  "decision": "retain direct integration as baseline; require a concrete shared-routing or tenant-operation need before product engineering",
+  "open_planning_issues": [
+    "P015",
+    "P016",
+    "P017"
+  ]
+}

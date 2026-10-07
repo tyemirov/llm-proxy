@@ -1,0 +1,36 @@
+{
+  "benchmark": "LP-C01-S1",
+  "started_utc": "2026-10-06T21:55:01.122506+00:00",
+  "ended_utc": "2026-10-06T22:00:07.587223+00:00",
+  "commit": "91ba581ba5763ce99c38a31f42a1148a06e8966f",
+  "source_count": 669,
+  "source_changes": [],
+  "source_sha256": "641432ba9e52fbedd238ab0d5fb4b4d201aa79c6ca732d90e60737773e93d57e",
+  "fixture_sha256": "b6e7a779d9d10febc937062af6c3e82fddbed53ec18ac6e0602e4f62cf7a4e22",
+  "module_sha256": "67e7907a6c769970daae02e6e8d9b1d90c384b64240249d7cb8d89ed2d4ee045",
+  "results_sha256": "581625f930b3f0a942b94160aa005d9f24b440d40d13598bc4d0735d54f54cdc",
+  "external_model_calls": 0,
+  "test_matrix_observations": 24,
+  "fully_executed_LP_C01": false,
+  "retry_policy": "direct caller one attempt; proxy built-in behavior retained and observed",
+  "sample_count": "one per scenario per route per alternative",
+  "numerical_latency_measured": false,
+  "code_surface": {
+    "responsesPayload": {
+      "first_line": 103,
+      "last_line": 108,
+      "nonblank_lines": 6
+    },
+    "directPayload": {
+      "first_line": 111,
+      "last_line": 119,
+      "nonblank_lines": 9
+    },
+    "extractText": {
+      "first_line": 122,
+      "last_line": 147,
+      "nonblank_lines": 26
+    }
+  },
+  "result": "passed"
+}

@@ -1,0 +1,28 @@
+GOCACHE=/tmp/llm-proxy-evaluation-go-cache GOPROXY=off GOSUMDB=off go test -mod=readonly -run '^TestExtractionBenchmark$' -count=1 -v .
+    extraction_test.go:333: direct openai/gpt-4.1 known_usage status=200 attempts=1 extraction=true usage=true
+    extraction_test.go:333: proxy openai/gpt-4.1 known_usage status=200 attempts=1 extraction=true usage=true
+    extraction_test.go:333: direct openai/gpt-4.1 missing_usage status=200 attempts=1 extraction=true usage=false
+    extraction_test.go:333: proxy openai/gpt-4.1 missing_usage status=200 attempts=1 extraction=true usage=false
+    extraction_test.go:333: direct openai/gpt-4.1 zero_usage status=200 attempts=1 extraction=true usage=true
+    extraction_test.go:333: proxy openai/gpt-4.1 zero_usage status=200 attempts=1 extraction=true usage=true
+    extraction_test.go:333: direct openai/gpt-4.1 rate_limit status=429 attempts=1 extraction=false usage=false
+    extraction_test.go:333: proxy openai/gpt-4.1 rate_limit status=0 attempts=5 extraction=false usage=false
+    extraction_test.go:333: direct openai/gpt-4.1 provider_failure status=503 attempts=1 extraction=false usage=false
+    extraction_test.go:333: proxy openai/gpt-4.1 provider_failure status=0 attempts=5 extraction=false usage=false
+    extraction_test.go:333: direct openai/gpt-4.1 invalid_output status=200 attempts=1 extraction=false usage=true
+    extraction_test.go:333: proxy openai/gpt-4.1 invalid_output status=502 attempts=1 extraction=false usage=false
+    extraction_test.go:333: direct anthropic/claude-sonnet-5 known_usage status=200 attempts=1 extraction=true usage=true
+    extraction_test.go:333: proxy anthropic/claude-sonnet-5 known_usage status=200 attempts=1 extraction=true usage=true
+    extraction_test.go:333: direct anthropic/claude-sonnet-5 missing_usage status=200 attempts=1 extraction=true usage=false
+    extraction_test.go:333: proxy anthropic/claude-sonnet-5 missing_usage status=200 attempts=1 extraction=true usage=false
+    extraction_test.go:333: direct anthropic/claude-sonnet-5 zero_usage status=200 attempts=1 extraction=true usage=true
+    extraction_test.go:333: proxy anthropic/claude-sonnet-5 zero_usage status=200 attempts=1 extraction=true usage=true
+    extraction_test.go:333: direct anthropic/claude-sonnet-5 rate_limit status=429 attempts=1 extraction=false usage=false
+    extraction_test.go:333: proxy anthropic/claude-sonnet-5 rate_limit status=429 attempts=1 extraction=false usage=false
+    extraction_test.go:333: direct anthropic/claude-sonnet-5 provider_failure status=503 attempts=1 extraction=false usage=false
+    extraction_test.go:333: proxy anthropic/claude-sonnet-5 provider_failure status=502 attempts=1 extraction=false usage=false
+    extraction_test.go:333: direct anthropic/claude-sonnet-5 invalid_output status=200 attempts=1 extraction=false usage=true
+    extraction_test.go:333: proxy anthropic/claude-sonnet-5 invalid_output status=502 attempts=1 extraction=false usage=false
+--- PASS: TestExtractionBenchmark (10.16s)
+PASS
+ok  	github.com/tyemirov/llm-proxy/evaluation	10.484s

@@ -1,0 +1,9 @@
+go test ./internal/proxy -run '^TestMCP' -count=1
+ok  	github.com/tyemirov/llm-proxy/internal/proxy	12.408s
+go test ./internal/proxy -run '^TestAccountConnection' -count=1
+ok  	github.com/tyemirov/llm-proxy/internal/proxy	3.822s
+go test ./internal/proxy ./pkg/llmproxyclient -run '^TestClientProtocolsCompletionMeasurements|^TestMessagesRequestCompletion' -count=1
+ok  	github.com/tyemirov/llm-proxy/internal/proxy	0.357s
+ok  	github.com/tyemirov/llm-proxy/pkg/llmproxyclient	0.099s
+go test ./internal/proxy -run '^Test(ManagedUsageWriterKeepsPublicResponsesIndependentFromPersistence|ManagementUsageFailuresRejectsInvalidQueriesAndEnforcesTenantOwnership|ManagementAccountUsageRejectionsAggregateOwnedTenantsAndBindCursorsToScope|ManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPagination|ManagementTenantConfigurationSecretAndUsageIsolation)' -count=1
+ok  	github.com/tyemirov/llm-proxy/internal/proxy	1.732s

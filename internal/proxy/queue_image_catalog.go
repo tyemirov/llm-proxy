@@ -18,7 +18,7 @@ var queueImageAspectRatios = []string{"auto", "4:1", "3:1", "21:9", "2:1", "17:9
 
 func validateArtifactOrigins(transport ProviderCatalogTransport, field string) error {
 	queue := transport.Components.RequestCodec.ID == CatalogProtocolFALQueueImages
-	artifacts := queue || transport.Components.RequestCodec.ID == CatalogProtocolElevenLabsVoices
+	artifacts := transport.Components.RequestCodec.ID == CatalogProtocolHeyGenAvatarVideoV3 || transport.Components.RequestCodec.ID == CatalogProtocolHeyGenLipSync || transport.Components.RequestCodec.ID == CatalogProtocolHeyGenTranslation || queue || transport.Components.RequestCodec.ID == CatalogProtocolElevenLabsVoices
 	if artifacts != (len(transport.ArtifactOrigins) > 0) || (queue && transport.Endpoint.Path != "/{model}") {
 		return fmt.Errorf("%w: field=%s.artifact_origins reason=codec_composition", ErrInvalidModelCatalog, field)
 	}

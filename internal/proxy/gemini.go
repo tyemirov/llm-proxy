@@ -254,8 +254,8 @@ func (client *geminiInteractionsClient) generateText(parentContext context.Conte
 			visibilityPolicy: client.resourceVisibility,
 			recordObservation: func(polledSnapshot geminiInteractionSnapshot, pollError error, retryDecision pollableResourceRetryDecision) {
 				recordGeminiProgress(parentContext, structuredLogger, telemetryProgressKindGeminiPoll, polledSnapshot, pollError, retryDecision)
-				if polledSnapshot.usage != nil {
-					latestUsage = polledSnapshot.usage
+				if pollError == nil {
+					latestUsage = observeTokenUsage(latestUsage, polledSnapshot.usage)
 				}
 				if pollError == nil {
 					cleanupMode = polledSnapshot.cleanupMode()
@@ -265,9 +265,9 @@ func (client *geminiInteractionsClient) generateText(parentContext context.Conte
 		polledSnapshot, pollError := lifecycle.observeUntilTerminal(parentContext)
 		if pollError != nil {
 			if parentContext.Err() != nil {
-				return textGenerationResult{usage: latestUsage}, parentContext.Err()
+				return textGenerationResult{usage: observeTokenUsage(latestUsage, nil)}, parentContext.Err()
 			}
-			return textGenerationResult{usage: latestUsage}, pollError
+			return textGenerationResult{usage: observeTokenUsage(latestUsage, nil)}, pollError
 		}
 		snapshot = polledSnapshot
 	}

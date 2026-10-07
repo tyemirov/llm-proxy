@@ -68,7 +68,7 @@ func composeProviderTransport(transport ProviderCatalogTransport, field string) 
 	if transport.Components.RequestCodec.ID != transport.Components.ResponseCodec.ID {
 		return providerTransportComposition{}, unsupportedTransportComponentCombination(transport, field, "codec_pair")
 	}
-	resourceCodec := transport.Components.RequestCodec.ID == CatalogProtocolJSONResource || transport.Components.RequestCodec.ID == CatalogProtocolElevenLabsModels || transport.Components.RequestCodec.ID == CatalogProtocolElevenLabsSubscription || transport.Components.RequestCodec.ID == CatalogProtocolElevenLabsVoices
+	resourceCodec := transport.Components.RequestCodec.ID == CatalogProtocolHeyGenAccount || transport.Components.RequestCodec.ID == CatalogProtocolJSONResource || transport.Components.RequestCodec.ID == CatalogProtocolElevenLabsModels || transport.Components.RequestCodec.ID == CatalogProtocolElevenLabsSubscription || transport.Components.RequestCodec.ID == CatalogProtocolElevenLabsVoices
 	if transport.Endpoint.Protocol == CatalogEndpointProtocolHTTP && (transport.Endpoint.Method == CatalogEndpointMethodGet) != resourceCodec {
 		return providerTransportComposition{}, unsupportedTransportComponentCombination(transport, field, "request_method")
 	}
@@ -122,7 +122,7 @@ func composeProviderTransport(transport ProviderCatalogTransport, field string) 
 func providerRequestCodecDefinitionFor(reference ProviderCatalogCodecReference, field string) (providerRequestCodecDefinition, error) {
 	definition := providerRequestCodecDefinition{}
 	switch reference.ID {
-	case CatalogProtocolElevenLabsVoices, CatalogProtocolJSONResource, CatalogProtocolElevenLabsModels, CatalogProtocolElevenLabsSubscription:
+	case CatalogProtocolHeyGenAccount, CatalogProtocolElevenLabsVoices, CatalogProtocolJSONResource, CatalogProtocolElevenLabsModels, CatalogProtocolElevenLabsSubscription:
 	case CatalogProtocolElevenLabsAlignment, CatalogProtocolElevenLabsDictionary:
 		definition.mediaExecutionLifecycle = textExecutionLifecycleSynchronousCompletion
 	case CatalogProtocolOpenAIResponses:
@@ -191,7 +191,7 @@ func providerRequestCodecDefinitionFor(reference ProviderCatalogCodecReference, 
 	case CatalogProtocolFALQueueImages:
 		definition.modelField = "path.model"
 		definition.mediaExecutionLifecycle = textExecutionLifecycle(CatalogExecutionAsynchronousJob)
-	case CatalogProtocolDictatorSpeechV1:
+	case CatalogProtocolHeyGenAvatarV3, CatalogProtocolHeyGenAvatarVideoV3, CatalogProtocolHeyGenLipSync, CatalogProtocolHeyGenTranslation, CatalogProtocolDictatorSpeechV1:
 		definition.mediaExecutionLifecycle = textExecutionLifecycle(CatalogExecutionAsynchronousJob)
 	default:
 		return providerRequestCodecDefinition{}, unsupportedProviderCodec(reference, field)
@@ -225,7 +225,7 @@ func providerResponseCodecDefinitionFor(reference ProviderCatalogCodecReference,
 		definition.outputFields = []string{"[].model_id", "[].name"}
 		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_2xx"}}
 		definition.errorRules = []string{"malformed_response", "provider_error"}
-	case CatalogProtocolElevenLabsVoices, CatalogProtocolJSONResource, CatalogProtocolElevenLabsSubscription:
+	case CatalogProtocolHeyGenAccount, CatalogProtocolElevenLabsVoices, CatalogProtocolJSONResource, CatalogProtocolElevenLabsSubscription:
 		definition.outputFields = []string{"object"}
 		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_2xx"}}
 		definition.errorRules = []string{"malformed_response", "provider_error"}
@@ -289,6 +289,10 @@ func providerResponseCodecDefinitionFor(reference ProviderCatalogCodecReference,
 		definition.outputFields = []string{"images[].url"}
 		definition.finishRules = providerProtocolFinishRules{Complete: []string{"COMPLETED"}, Continue: []string{"IN_QUEUE", "IN_PROGRESS"}}
 		definition.errorRules = []string{"error", "error_type", "uncertain"}
+	case CatalogProtocolHeyGenAvatarV3, CatalogProtocolHeyGenAvatarVideoV3, CatalogProtocolHeyGenLipSync, CatalogProtocolHeyGenTranslation:
+		definition.outputFields = []string{"data.id", "data.status", "data.video_url", "data.audio_url"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"completed"}, Continue: []string{"pending", "running"}}
+		definition.errorRules = []string{"failed", "uncertain"}
 	case CatalogProtocolDictatorSpeechV1:
 		definition.outputFields = []string{"tenant_assets"}
 		definition.finishRules = providerProtocolFinishRules{Complete: []string{"succeeded"}, Continue: []string{"queued", "running"}}
@@ -309,13 +313,13 @@ func providerResponseCodecDefinitionFor(reference ProviderCatalogCodecReference,
 
 func requestCodecSupportsLifecycle(codec string, lifecycle textExecutionLifecycle) bool {
 	switch codec {
-	case CatalogProtocolElevenLabsVoices, CatalogProtocolJSONResource, CatalogProtocolElevenLabsModels, CatalogProtocolElevenLabsSubscription:
+	case CatalogProtocolHeyGenAccount, CatalogProtocolElevenLabsVoices, CatalogProtocolJSONResource, CatalogProtocolElevenLabsModels, CatalogProtocolElevenLabsSubscription:
 		return lifecycle == textExecutionLifecycle(CatalogExecutionReadOnly)
 	case CatalogProtocolOpenAIResponses, CatalogProtocolXAIVideosGenerations:
 		return lifecycle == textExecutionLifecyclePollableResource
 	case CatalogProtocolGeminiInteractions:
 		return lifecycle == textExecutionLifecyclePollableResource || lifecycle == textExecutionLifecycleSynchronousCompletion
-	case CatalogProtocolDictatorSpeechV1, CatalogProtocolFALQueueImages:
+	case CatalogProtocolHeyGenAvatarV3, CatalogProtocolHeyGenAvatarVideoV3, CatalogProtocolHeyGenLipSync, CatalogProtocolHeyGenTranslation, CatalogProtocolDictatorSpeechV1, CatalogProtocolFALQueueImages:
 		return lifecycle == textExecutionLifecycle(CatalogExecutionAsynchronousJob)
 	case CatalogProtocolDashScopeResponses, CatalogProtocolXAIResponses, CatalogProtocolOpenAIChatCompletions,
 		CatalogProtocolAnthropicMessages, CatalogProtocolVertexGenerateContent,

@@ -1,0 +1,52 @@
+npm run frontend:test -- --grep "Token measurement evidence"
+
+> frontend:test
+> node --test site/assets/llm-proxy/js/modelTasks.test.mjs && playwright test --grep Token measurement evidence
+
+▶ defaultSelectedTasks
+  ✔ prefers Text when Text is available (0.577167ms)
+  ✔ selects the first available task when Text is unavailable (0.06975ms)
+  ✔ selects nothing when no tasks are available (0.042542ms)
+✔ defaultSelectedTasks (1.212959ms)
+▶ reconcileSelectedTasks
+  ✔ preserves available selections and removes unavailable selections (0.075083ms)
+  ✔ keeps no selection when no selected task remains available (0.055292ms)
+✔ reconcileSelectedTasks (0.197833ms)
+▶ toggleSelectedTask
+  ✔ adds an available task to the selection (0.157792ms)
+  ✔ releases a pressed task while other tasks remain pressed (0.056459ms)
+  ✔ releases the final pressed task (0.168167ms)
+  ✔ ignores tasks outside the available inventory (0.078417ms)
+✔ toggleSelectedTask (0.69475ms)
+▶ offeringMatchesTasks
+  ✔ matches one offering that supports every selected task (0.421708ms)
+  ✔ rejects one offering that supports only one selected task (0.100334ms)
+  ✔ matches across providers only on the same offering (0.098375ms)
+  ✔ excludes vision-only offerings from a Text plus Images selection (0.046959ms)
+✔ offeringMatchesTasks (0.808167ms)
+▶ offeringMatchesTasksWithModalities
+  ✔ matches input and output within one selected task (0.146ms)
+  ✔ rejects input and output combined from different tasks (0.03925ms)
+  ✔ applies AND matching before input and output matching (0.030083ms)
+✔ offeringMatchesTasksWithModalities (0.290875ms)
+ℹ tests 16
+ℹ suites 5
+ℹ pass 16
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 49.66475
+
+Running 6 tests using 1 worker
+
+(node:46339) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/e2e/management-ui.spec.js:6094:3 › Token measurement evidence handles unknown without invented zero (694ms)
+  ✓  2 tests/e2e/management-ui.spec.js:6094:3 › Token measurement evidence handles zero without invented zero (480ms)
+  ✓  3 tests/e2e/management-ui.spec.js:6094:3 › Token measurement evidence handles partial without invented zero (503ms)
+  ✓  4 tests/e2e/management-ui.spec.js:6094:3 › Token measurement evidence handles historical without invented zero (430ms)
+  ✓  5 tests/e2e/management-ui.spec.js:6094:3 › Token measurement evidence handles predecessor API without invented zero (460ms)
+  ✓  6 tests/e2e/management-ui.spec.js:6094:3 › Token measurement evidence handles mixed without invented zero (430ms)
+
+  6 passed (9.0s)

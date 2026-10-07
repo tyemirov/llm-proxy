@@ -202,7 +202,7 @@
                         <h2 x-text="copy.usageTokens"></h2>
                       </div>
                     </header>
-                    <svg class="usage-chart-svg" x-show="hasUsage" x-bind:view-box.camel="usageTokenChart.viewBox" x-bind:aria-label="usageTokenChart.accessibleLabel" role="img">
+                    <svg class="usage-chart-svg" x-show="hasTokenUsage" x-bind:view-box.camel="usageTokenChart.viewBox" x-bind:aria-label="usageTokenChart.accessibleLabel" role="img">
                       <line class="usage-axis" x-bind:x1="usageTokenChart.yAxisX" x-bind:y1="usageTokenChart.xAxisY" x-bind:x2="usageTokenChart.yAxisX" y2="14"></line>
                       <line class="usage-axis" x-bind:x1="usageTokenChart.yAxisX" x-bind:y1="usageTokenChart.xAxisY" x2="622" x-bind:y2="usageTokenChart.xAxisY"></line>
                       <g x-effect="renderUsageChartPlot($el, usageTokenChart)"></g>
@@ -210,11 +210,12 @@
                       <text class="usage-axis-title usage-axis-title-y" x="18" y="101" text-anchor="middle" transform="rotate(-90 18 101)" x-text="usageTokenChart.yAxisTitle"></text>
                       <polyline x-bind:points="usageTokenChart.polyline"></polyline>
                     </svg>
-                    <ol class="visually-hidden" x-show="hasUsage" x-bind:aria-label="usageTokenChart.accessibleLabel">
+                    <ol class="visually-hidden" x-show="hasTokenUsage" x-bind:aria-label="usageTokenChart.accessibleLabel">
                       <template x-for="point in usageTokenChart.points" x-bind:key="point.start">
                         <li x-text="point.accessibleLabel"></li>
                       </template>
                     </ol>
+                    <p x-show="hasUsage" x-text="usageTotalTokens"></p>
                     <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
                   </usage-chart-panel>
                 </section>

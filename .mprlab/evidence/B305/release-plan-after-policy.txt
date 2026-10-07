@@ -1,0 +1,1 @@
+validate lifecycle execution policy: observation policy required for app_lifecycle.repository_read: polling execution policy required: operation=app_lifecycle.repository_read

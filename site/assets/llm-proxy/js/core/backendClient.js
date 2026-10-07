@@ -120,11 +120,14 @@ export function deleteTenant(tenantID, signal) {
  * @param {AbortSignal} [signal]
  * @returns {Promise<import("../types.d.js").ManagementUsageSummary>}
  */
-export function fetchUsageSummary(tenantID, interval, signal) {
-  return requestJSON(`${managementTenantPath(tenantID)}/usage?interval=${encodeURIComponent(interval)}`, {
+export async function fetchUsageSummary(tenantID, interval, signal) {
+  /** @type {import("../types.d.js").ManagementUsageSummary} */
+  const summary = await requestJSON(`${managementTenantPath(tenantID)}/usage?interval=${encodeURIComponent(interval)}`, {
     method: "GET",
     signal,
   });
+  assertUsageTokenCoverage([summary.totals, ...summary.buckets.map(bucket => bucket.data), ...summary.providers.map(row => row.data), ...summary.models.map(row => row.data)]);
+  return summary;
 }
 
 /**
@@ -132,11 +135,14 @@ export function fetchUsageSummary(tenantID, interval, signal) {
  * @param {AbortSignal} [signal]
  * @returns {Promise<import("../types.d.js").ManagementUsageSummary>}
  */
-export function fetchAccountUsageSummary(interval, signal) {
-  return requestJSON(`${MANAGEMENT_BASE_PATH}/usage?interval=${encodeURIComponent(interval)}`, {
+export async function fetchAccountUsageSummary(interval, signal) {
+  /** @type {import("../types.d.js").ManagementUsageSummary} */
+  const summary = await requestJSON(`${MANAGEMENT_BASE_PATH}/usage?interval=${encodeURIComponent(interval)}`, {
     method: "GET",
     signal,
   });
+  assertUsageTokenCoverage([summary.totals, ...summary.buckets.map(bucket => bucket.data), ...summary.providers.map(row => row.data), ...summary.models.map(row => row.data)]);
+  return summary;
 }
 
 /**
@@ -218,8 +224,14 @@ export function fetchAccountUsageRejections(interval, limit, cursor, signal) {
 /**
  * @returns {Promise<import("../types.d.js").ManagementAdminUsersResponse>}
  */
-export function fetchAdminUsers() {
-  return requestJSON(`${MANAGEMENT_BASE_PATH}/admin/users`, { method: "GET" });
+export async function fetchAdminUsers() {
+  /** @type {import("../types.d.js").ManagementAdminUsersResponse} */
+  const response = await requestJSON(`${MANAGEMENT_BASE_PATH}/admin/users`, { method: "GET" });
+  for (const user of response.users) for (const tenant of user.tenants) {
+    const usage = tenant.usage;
+    assertUsageTokenCoverage([usage.totals, ...usage.daily.map(row => row.data), ...usage.providers.map(row => row.data), ...usage.models.map(row => row.data)]);
+  }
+  return response;
 }
 
 /**
@@ -908,4 +920,16 @@ export async function fetchRequestChargeSummary(accountID,requestID,signal) {
     else if(amount!==null) throw new Error(APP_INTEGRITY_ERROR);
   }
   return summary;
+}
+
+/** @param {import("../types.d.js").UsageAggregate[]} aggregates @returns {void} */
+function assertUsageTokenCoverage(aggregates) {
+  for (const aggregate of aggregates) {
+    if (!Number.isSafeInteger(aggregate.requests) || aggregate.requests < 0 || !aggregate.token_coverage) throw new Error(APP_INTEGRITY_ERROR);
+    for (const coverage of [aggregate.token_coverage.request_tokens, aggregate.token_coverage.response_tokens, aggregate.token_coverage.total_tokens]) {
+      if (!coverage) throw new Error(APP_INTEGRITY_ERROR);
+      const counts = [coverage.measured_requests, coverage.partial_requests, coverage.unknown_requests, coverage.historical_requests];
+      if (!counts.every(count => Number.isSafeInteger(count) && count >= 0) || counts.reduce((sum, count) => sum + count, 0) !== aggregate.requests) throw new Error(APP_INTEGRITY_ERROR);
+    }
+  }
 }

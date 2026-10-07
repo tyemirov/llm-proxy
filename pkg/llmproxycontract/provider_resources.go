@@ -10,14 +10,16 @@ const (
 	ProviderResourceDictionaries ProviderResourceKind = "pronunciation_dictionaries"
 	ProviderResourceMetadata     ProviderResourceKind = "metadata"
 	ProviderResourceQuotas       ProviderResourceKind = "quotas"
-	ProviderResourceElements     ProviderResourceKind = "elements"
+	// ProviderResourceAccount identifies current billing and balance observations.
+	ProviderResourceAccount  ProviderResourceKind = "account"
+	ProviderResourceElements ProviderResourceKind = "elements"
 )
 
 // ValidProviderResourceKind validates the closed discovery vocabulary.
 func ValidProviderResourceKind(kind ProviderResourceKind) bool {
 	switch kind {
 	case ProviderResourceVoices, ProviderResourceVoiceLibrary, ProviderResourceHistory,
-		ProviderResourceDictionaries, ProviderResourceMetadata, ProviderResourceQuotas, ProviderResourceElements:
+		ProviderResourceDictionaries, ProviderResourceMetadata, ProviderResourceQuotas, ProviderResourceElements, ProviderResourceAccount:
 		return true
 	default:
 		return false

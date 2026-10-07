@@ -133,6 +133,10 @@ export const PROVIDER_KEY_VERIFICATION_ERRORS = Object.freeze({
 });
 
 export const PROVIDER_CAPABILITY_LABELS = Object.freeze({
+  video_lipsync: "Video lip sync",
+  video_translation: "Video translation",
+  avatar_creation: "Avatar creation",
+  avatar_video_generation: "Avatar video generation",
   text: "Text",
   image_generation: "Image generation",
   image_editing: "Image editing",
@@ -159,6 +163,10 @@ export const CAPABILITY_DOMAINS = Object.freeze({
 });
 
 export const OPERATION_CAPABILITY_DOMAINS = Object.freeze({
+  video_lipsync: "video",
+  video_translation: "video",
+  avatar_creation: "image",
+  avatar_video_generation: "video",
   text: "text",
   image_generation: "image",
   image_editing: "image",
@@ -261,6 +269,11 @@ export const COPY = Object.freeze({
   openUsageDashboard: "Connections and usage",
   usageRequests: "Requests",
   usageTokens: "Tokens",
+  usageTokensUnknown: "Unknown",
+  usageTokensHistorical: "historical subtotal (measurement unknown)",
+  usageTokenSubtotal: "subtotal",
+  usageTokenIncompleteRequest: "incomplete request",
+  usageTokenIncompleteRequests: "incomplete requests",
   usageSuccessRate: "Success rate",
   usageProviders: "Providers used",
   usageRequestTrend: "Requests",
@@ -410,6 +423,7 @@ export const COPY = Object.freeze({
 });
 
 export const PROVIDER_RESOURCE_LABELS = Object.freeze({
+  account: "Account",
   voices: 'Voices',
   voice_library: 'Voice library',
   history: 'History',

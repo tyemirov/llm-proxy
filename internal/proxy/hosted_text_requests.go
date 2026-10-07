@@ -100,6 +100,11 @@ func decodeHostedStoredCompletion(encoded []byte) (hostedStoredCompletion, error
 	if input.Text == nil {
 		return hostedStoredCompletion{}, errors.New("stored completion requires a text string")
 	}
+	if input.Usage != nil && input.Usage.MeasurementEvidence != nil {
+		if err := input.Usage.MeasurementEvidence.validate(); err != nil {
+			return hostedStoredCompletion{}, err
+		}
+	}
 	return hostedStoredCompletion{Text: *input.Text, ToolCalls: input.ToolCalls, Usage: input.Usage}, nil
 }
 

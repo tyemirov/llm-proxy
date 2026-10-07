@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="579fb8789edddbd3b1ce9af955fa43d2408ce17152aeff615e7620e4c32cdaf9">
+    <meta name="openapi-source-sha256" content="b483c816ab6205532b2799cc5e2aeb0450c745c4cbd40962f451fc203d4ede67">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="579fb8789edddbd3b1ce9af955fa43d2408ce17152aeff615e7620e4c32cdaf9">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="b483c816ab6205532b2799cc5e2aeb0450c745c4cbd40962f451fc203d4ede67">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>579fb8789edddbd3b1ce9af955fa43d2408ce17152aeff615e7620e4c32cdaf9</code></span>
+          <span>Source SHA-256 <code>b483c816ab6205532b2799cc5e2aeb0450c745c4cbd40962f451fc203d4ede67</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -1479,7 +1479,7 @@ paths:
         - name: kind
           in: path
           required: true
-          schema: {type: string, enum: [metadata, quotas]}
+          schema: {type: string, enum: [metadata, quotas, account]}
       responses:
         &#39;200&#39;:
           description: Current provider account observation.
@@ -1492,6 +1492,7 @@ paths:
                 oneOf:
                   - $ref: &#39;#/components/schemas/ProviderMetadata&#39;
                   - $ref: &#39;#/components/schemas/ProviderQuotas&#39;
+                  - $ref: &#39;#/components/schemas/ProviderAccount&#39;
         &#39;403&#39;:
           $ref: &#39;#/components/responses/ProxyForbidden&#39;
         &#39;404&#39;:
@@ -6369,7 +6370,7 @@ components:
       required: [operation, controls, limits, price]
       properties:
         operation:
-          enum: [audio_alignment, pronunciation_dictionary_creation]
+          enum: [audio_alignment, pronunciation_dictionary_creation, video_lipsync, video_translation, avatar_creation, avatar_video_generation]
         controls:
           type: array
           items:
@@ -6408,6 +6409,10 @@ components:
             - speech_generation
             - speech_conversion
             - voice_extraction
+            - video_lipsync
+            - video_translation
+            - avatar_creation
+            - avatar_video_generation
         available:
           type: boolean
         rates:
@@ -6485,6 +6490,10 @@ components:
             - speech_generation
             - speech_conversion
             - voice_extraction
+            - video_lipsync
+            - video_translation
+            - avatar_creation
+            - avatar_video_generation
         input_artifacts:
           type: array
           minItems: 1
@@ -6602,6 +6611,10 @@ components:
               - speech_generation
               - speech_conversion
               - voice_extraction
+              - video_lipsync
+              - video_translation
+              - avatar_creation
+              - avatar_video_generation
         media_inputs:
           type: array
           uniqueItems: true
@@ -6635,6 +6648,10 @@ components:
               - speech_generation
               - speech_conversion
               - voice_extraction
+              - video_lipsync
+              - video_translation
+              - avatar_creation
+              - avatar_video_generation
         provider_offerings:
           type: array
           minItems: 1
@@ -6718,6 +6735,10 @@ components:
               - speech_generation
               - speech_conversion
               - voice_extraction
+              - video_lipsync
+              - video_translation
+              - avatar_creation
+              - avatar_video_generation
         wire_contract:
           type: string
           minLength: 1
@@ -6978,6 +6999,10 @@ components:
             - speech_generation
             - speech_conversion
             - voice_extraction
+            - video_lipsync
+            - video_translation
+            - avatar_creation
+            - avatar_video_generation
         available:
           type: boolean
         rates:
@@ -7668,7 +7693,7 @@ components:
             value: {type: integer, minimum: 0}
     ProviderResourceKind:
       type: string
-      enum: [voices, voice_library, history, pronunciation_dictionaries, metadata, quotas, elements]
+      enum: [voices, voice_library, history, pronunciation_dictionaries, metadata, quotas, elements, account]
     ProviderResource:
       type: object
       additionalProperties: false
@@ -7685,7 +7710,7 @@ components:
       required: [capability, provider, controls, limits]
       properties:
         capability:
-          enum: [audio.align, audio.dictionary.create]
+          enum: [audio.align, audio.dictionary.create, video.lipsync, video.translate, avatar.create, avatar.video.generate]
         provider:
           type: string
           minLength: 1
@@ -7740,6 +7765,10 @@ components:
                   type: object
     MediaOperationRequest:
       oneOf:
+        - $ref: &#39;#/components/schemas/VideoLipSyncOperationRequest&#39;
+        - $ref: &#39;#/components/schemas/VideoTranslationOperationRequest&#39;
+        - $ref: &#39;#/components/schemas/AvatarCreationOperationRequest&#39;
+        - $ref: &#39;#/components/schemas/AvatarVideoOperationRequest&#39;
         - $ref: &#39;#/components/schemas/ImageGenerationOperationRequest&#39;
         - $ref: &#39;#/components/schemas/ImageEditingOperationRequest&#39;
         - $ref: &#39;#/components/schemas/VideoGenerationOperationRequest&#39;
@@ -7755,6 +7784,292 @@ components:
         - $ref: &#39;#/components/schemas/DictatorVoiceExtractionOperationRequest&#39;
       discriminator:
         propertyName: capability
+    VideoLipSyncOperationRequest:
+      type: &quot;object&quot;
+      additionalProperties: false
+      required: [&quot;capability&quot;, &quot;provider&quot;, &quot;input&quot;, &quot;controls&quot;]
+      properties:
+        capability:
+          const: &quot;video.lipsync&quot;
+        provider:
+          type: &quot;string&quot;
+          pattern: &quot;\\S&quot;
+        input:
+          type: &quot;object&quot;
+          additionalProperties: false
+          required: [&quot;video_asset_id&quot;, &quot;audio_asset_id&quot;]
+          properties:
+            video_asset_id:
+              type: &quot;string&quot;
+              pattern: &quot;^ast_[0-9a-f]{32}$&quot;
+            audio_asset_id:
+              type: &quot;string&quot;
+              pattern: &quot;^ast_[0-9a-f]{32}$&quot;
+        controls:
+          type: &quot;object&quot;
+          additionalProperties: false
+          required: [&quot;mode&quot;]
+          properties:
+            mode:
+              enum: [&quot;speed&quot;, &quot;precision&quot;]
+            title:
+              type: &quot;string&quot;
+              maxLength: 1000
+            fps_mode:
+              enum: [&quot;vfr&quot;, &quot;cfr&quot;, &quot;passthrough&quot;]
+            start_time:
+              type: &quot;number&quot;
+              minimum: 0
+              maximum: 36000
+            end_time:
+              type: &quot;number&quot;
+              minimum: 0
+              maximum: 36000
+            disable_music_track:
+              type: &quot;boolean&quot;
+            enable_dynamic_duration:
+              type: &quot;boolean&quot;
+            enable_speech_enhancement:
+              type: &quot;boolean&quot;
+            enable_watermark:
+              type: &quot;boolean&quot;
+            keep_the_same_format:
+              type: &quot;boolean&quot;
+    VideoTranslationOperationRequest:
+      type: &quot;object&quot;
+      additionalProperties: false
+      required: [&quot;capability&quot;, &quot;provider&quot;, &quot;input&quot;, &quot;controls&quot;]
+      properties:
+        capability:
+          const: &quot;video.translate&quot;
+        provider:
+          type: &quot;string&quot;
+          pattern: &quot;\\S&quot;
+        input:
+          type: &quot;object&quot;
+          additionalProperties: false
+          required: [&quot;video_asset_id&quot;]
+          properties:
+            video_asset_id:
+              type: &quot;string&quot;
+              pattern: &quot;^ast_[0-9a-f]{32}$&quot;
+            audio_asset_id:
+              type: &quot;string&quot;
+              pattern: &quot;^ast_[0-9a-f]{32}$&quot;
+        controls:
+          type: &quot;object&quot;
+          additionalProperties: false
+          required: [&quot;mode&quot;, &quot;output_languages&quot;]
+          properties:
+            mode:
+              enum: [&quot;speed&quot;, &quot;precision&quot;]
+            title:
+              type: &quot;string&quot;
+              maxLength: 1000
+            fps_mode:
+              enum: [&quot;vfr&quot;, &quot;cfr&quot;, &quot;passthrough&quot;]
+            start_time:
+              type: &quot;number&quot;
+              minimum: 0
+              maximum: 36000
+            end_time:
+              type: &quot;number&quot;
+              minimum: 0
+              maximum: 36000
+            disable_music_track:
+              type: &quot;boolean&quot;
+            enable_dynamic_duration:
+              type: &quot;boolean&quot;
+            enable_speech_enhancement:
+              type: &quot;boolean&quot;
+            enable_watermark:
+              type: &quot;boolean&quot;
+            keep_the_same_format:
+              type: &quot;boolean&quot;
+            output_languages:
+              type: &quot;array&quot;
+              minItems: 1
+              maxItems: 20
+              uniqueItems: true
+              items:
+                type: &quot;string&quot;
+                maxLength: 100
+                pattern: &quot;\\S&quot;
+            input_language:
+              type: &quot;string&quot;
+              maxLength: 100
+              pattern: &quot;\\S&quot;
+            speaker_num:
+              type: &quot;integer&quot;
+              minimum: 0
+              maximum: 100
+            translate_audio_only:
+              type: &quot;boolean&quot;
+      allOf:
+        - if:
+            properties:
+              controls:
+                required: [fps_mode]
+          then:
+            properties:
+              input:
+                required: [audio_asset_id]
+    AvatarCreationOperationRequest:
+      type: &quot;object&quot;
+      additionalProperties: false
+      required: [&quot;capability&quot;, &quot;provider&quot;, &quot;input&quot;, &quot;controls&quot;]
+      properties:
+        capability:
+          const: &quot;avatar.create&quot;
+        provider:
+          type: &quot;string&quot;
+          pattern: &quot;\\S&quot;
+        input:
+          type: &quot;object&quot;
+          additionalProperties: false
+          required: [&quot;name&quot;, &quot;image_asset_id&quot;]
+          properties:
+            name:
+              type: &quot;string&quot;
+              pattern: &quot;\\S&quot;
+            image_asset_id:
+              type: &quot;string&quot;
+              pattern: &quot;^ast_[0-9a-f]{32}$&quot;
+        controls:
+          type: &quot;object&quot;
+          additionalProperties: false
+          required: []
+          properties: {}
+    AvatarVideoOperationRequest:
+      type: &quot;object&quot;
+      additionalProperties: false
+      required: [&quot;capability&quot;, &quot;provider&quot;, &quot;input&quot;, &quot;controls&quot;]
+      properties:
+        capability:
+          const: &quot;avatar.video.generate&quot;
+        provider:
+          type: &quot;string&quot;
+          pattern: &quot;\\S&quot;
+        input:
+          type: &quot;object&quot;
+          additionalProperties: false
+          required: [&quot;avatar_id&quot;, &quot;audio_asset_id&quot;]
+          properties:
+            avatar_id:
+              type: &quot;string&quot;
+              pattern: &quot;^ava_[0-9a-f]{32}$&quot;
+            audio_asset_id:
+              type: &quot;string&quot;
+              pattern: &quot;^ast_[0-9a-f]{32}$&quot;
+        controls:
+          type: &quot;object&quot;
+          additionalProperties: false
+          required: [&quot;engine&quot;, &quot;aspect_ratio&quot;, &quot;resolution&quot;]
+          properties:
+            engine:
+              const: &quot;avatar_iv&quot;
+            aspect_ratio:
+              enum: [&quot;16:9&quot;, &quot;9:16&quot;, &quot;1:1&quot;]
+            resolution:
+              enum: [&quot;720p&quot;, &quot;1080p&quot;]
+            title:
+              type: &quot;string&quot;
+            motion_prompt:
+              type: &quot;string&quot;
+            expressiveness:
+              enum: [&quot;high&quot;, &quot;medium&quot;, &quot;low&quot;]
+    MediaAvatar:
+      type: &quot;object&quot;
+      additionalProperties: false
+      required: [&quot;avatar_id&quot;, &quot;provider&quot;, &quot;name&quot;]
+      properties:
+        avatar_id:
+          type: &quot;string&quot;
+          pattern: &quot;^ava_[0-9a-f]{32}$&quot;
+        provider:
+          type: &quot;string&quot;
+          pattern: &quot;\\S&quot;
+        name:
+          type: &quot;string&quot;
+          pattern: &quot;\\S&quot;
+    ProviderAccount:
+      type: &quot;object&quot;
+      additionalProperties: false
+      required: [&quot;provider&quot;, &quot;billing_type&quot;, &quot;wallet&quot;, &quot;subscription&quot;, &quot;usage_based&quot;]
+      properties:
+        provider:
+          type: &quot;string&quot;
+          pattern: &quot;\\S&quot;
+        billing_type:
+          enum: [&quot;wallet&quot;, &quot;subscription&quot;, &quot;usage_based&quot;]
+        wallet:
+          type: [&quot;object&quot;, &quot;null&quot;]
+          additionalProperties: false
+          required: [&quot;currency&quot;]
+          properties:
+            currency:
+              enum: [&quot;usd&quot;, &quot;credits&quot;]
+            remaining_balance:
+              type: [&quot;number&quot;, &quot;null&quot;]
+            auto_reload:
+              type: [&quot;object&quot;, &quot;null&quot;]
+              additionalProperties: false
+              required: [&quot;enabled&quot;]
+              properties:
+                enabled:
+                  type: &quot;boolean&quot;
+                amount_usd:
+                  type: [&quot;number&quot;, &quot;null&quot;]
+                threshold_usd:
+                  type: [&quot;number&quot;, &quot;null&quot;]
+        subscription:
+          type: [&quot;object&quot;, &quot;null&quot;]
+          additionalProperties: false
+          required: [&quot;plan&quot;, &quot;credits&quot;]
+          properties:
+            plan:
+              type: &quot;string&quot;
+              pattern: &quot;\\S&quot;
+            credits:
+              type: &quot;object&quot;
+              additionalProperties: false
+              required: []
+              properties:
+                premium_credits:
+                  type: [&quot;object&quot;, &quot;null&quot;]
+                  additionalProperties: false
+                  required: []
+                  properties:
+                    remaining:
+                      type: [&quot;integer&quot;, &quot;null&quot;]
+                    resets_at:
+                      type: [&quot;string&quot;, &quot;null&quot;]
+                add_on_credits:
+                  type: [&quot;object&quot;, &quot;null&quot;]
+                  additionalProperties: false
+                  required: []
+                  properties:
+                    remaining:
+                      type: [&quot;integer&quot;, &quot;null&quot;]
+                    resets_at:
+                      type: [&quot;string&quot;, &quot;null&quot;]
+        usage_based:
+          type: [&quot;object&quot;, &quot;null&quot;]
+          additionalProperties: false
+          required: []
+          properties:
+            included_credits:
+              type: [&quot;number&quot;, &quot;null&quot;]
+            remaining_credits:
+              type: [&quot;number&quot;, &quot;null&quot;]
+            spending_cap_usd:
+              type: [&quot;number&quot;, &quot;null&quot;]
+            spending_current_usd:
+              type: [&quot;number&quot;, &quot;null&quot;]
+      oneOf:
+        - {&quot;properties&quot;: {&quot;billing_type&quot;: {&quot;const&quot;: &quot;wallet&quot;}, &quot;wallet&quot;: {&quot;type&quot;: &quot;object&quot;}, &quot;subscription&quot;: {&quot;type&quot;: &quot;null&quot;}, &quot;usage_based&quot;: {&quot;type&quot;: &quot;null&quot;}}}
+        - {&quot;properties&quot;: {&quot;billing_type&quot;: {&quot;const&quot;: &quot;subscription&quot;}, &quot;wallet&quot;: {&quot;type&quot;: &quot;null&quot;}, &quot;subscription&quot;: {&quot;type&quot;: &quot;object&quot;}, &quot;usage_based&quot;: {&quot;type&quot;: &quot;null&quot;}}}
+        - {&quot;properties&quot;: {&quot;billing_type&quot;: {&quot;const&quot;: &quot;usage_based&quot;}, &quot;wallet&quot;: {&quot;type&quot;: &quot;null&quot;}, &quot;subscription&quot;: {&quot;type&quot;: &quot;null&quot;}, &quot;usage_based&quot;: {&quot;type&quot;: &quot;object&quot;}}}
     ProviderDictionaryOperationRequest:
       type: object
       additionalProperties: false
@@ -9841,6 +10156,10 @@ components:
               - speech_generation
               - speech_conversion
               - voice_extraction
+              - video_lipsync
+              - video_translation
+              - avatar_creation
+              - avatar_video_generation
         model_families:
           type: array
           items:
@@ -10052,6 +10371,34 @@ components:
           minLength: 1
         profile:
           $ref: &#39;#/components/schemas/TenantProfile&#39;
+    TokenMeasurementCoverage:
+      type: object
+      additionalProperties: false
+      required: [measured_requests, partial_requests, unknown_requests, historical_requests]
+      properties:
+        measured_requests:
+          type: integer
+          minimum: 0
+        partial_requests:
+          type: integer
+          minimum: 0
+        unknown_requests:
+          type: integer
+          minimum: 0
+        historical_requests:
+          type: integer
+          minimum: 0
+    TokenMeasurementCoverageSet:
+      type: object
+      additionalProperties: false
+      required: [request_tokens, response_tokens, total_tokens]
+      properties:
+        request_tokens:
+          $ref: &#39;#/components/schemas/TokenMeasurementCoverage&#39;
+        response_tokens:
+          $ref: &#39;#/components/schemas/TokenMeasurementCoverage&#39;
+        total_tokens:
+          $ref: &#39;#/components/schemas/TokenMeasurementCoverage&#39;
     UsageAggregate:
       type: object
       additionalProperties: false
@@ -10065,7 +10412,10 @@ components:
         - response_tokens
         - total_tokens
         - average_latency_ms
+        - token_coverage
       properties:
+        token_coverage:
+          $ref: &#39;#/components/schemas/TokenMeasurementCoverageSet&#39;
         requests:
           type: integer
           minimum: 0

@@ -26,7 +26,7 @@ func (service *mediaOperationService) providerMetadataHandler() gin.HandlerFunc 
 		kind := llmproxycontract.ProviderResourceKind(c.Param("kind"))
 		definition, found := service.providers.definitions[providerID(identifier)]
 		transportID := ""
-		if found && (kind == llmproxycontract.ProviderResourceMetadata || kind == llmproxycontract.ProviderResourceQuotas) {
+		if found && (kind == llmproxycontract.ProviderResourceMetadata || kind == llmproxycontract.ProviderResourceQuotas || kind == llmproxycontract.ProviderResourceAccount) {
 			for _, resource := range definition.resources {
 				if resource.Kind == kind {
 					transportID = resource.Transport
@@ -61,6 +61,15 @@ func (service *mediaOperationService) providerMetadataHandler() gin.HandlerFunc 
 			writeProviderResourceError(c, http.StatusBadGateway, llmproxycontract.ErrorCodeProviderResourceUnavailable)
 			return
 		}
+		if kind == llmproxycontract.ProviderResourceAccount {
+			account, valid := decodeProviderAccount(identifier, body)
+			if !valid {
+				writeProviderResourceError(c, http.StatusBadGateway, llmproxycontract.ErrorCodeProviderResourceUnavailable)
+				return
+			}
+			c.JSON(http.StatusOK, account)
+			return
+		}
 		if kind == llmproxycontract.ProviderResourceMetadata {
 			models, valid := decodeProviderModelMetadata(body)
 			if !valid {
@@ -77,6 +86,20 @@ func (service *mediaOperationService) providerMetadataHandler() gin.HandlerFunc 
 		}
 		c.JSON(http.StatusOK, llmproxycontract.ProviderQuotas{Provider: identifier, Subscription: subscription})
 	}
+}
+
+func decodeProviderAccount(provider string, body []byte) (llmproxycontract.ProviderAccount, bool) {
+	var envelope struct {
+		Data llmproxycontract.ProviderAccount `json:"data"`
+	}
+	if json.Unmarshal(body, &envelope) != nil {
+		return llmproxycontract.ProviderAccount{}, false
+	}
+	envelope.Data.Provider = provider
+	if llmproxycontract.ValidateProviderAccount(envelope.Data) != nil {
+		return llmproxycontract.ProviderAccount{}, false
+	}
+	return envelope.Data, true
 }
 
 func writeProviderResourceError(c *gin.Context, status int, code string) {

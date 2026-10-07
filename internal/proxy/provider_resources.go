@@ -28,7 +28,7 @@ func validateProviderCatalogResources(resources []ProviderCatalogResource, trans
 			return fmt.Errorf("%w: field=%s.transport reason=dangling_reference", ErrInvalidModelCatalog, resourceField)
 		}
 		codec := transport.Components.RequestCodec.ID
-		supported := resource.Kind == llmproxycontract.ProviderResourceVoices && (codec == CatalogProtocolDictatorSpeechV1 || codec == CatalogProtocolElevenLabsVoices) || resource.Kind == llmproxycontract.ProviderResourceMetadata && codec == CatalogProtocolElevenLabsModels || resource.Kind == llmproxycontract.ProviderResourceQuotas && codec == CatalogProtocolElevenLabsSubscription
+		supported := resource.Kind == llmproxycontract.ProviderResourceVoices && (codec == CatalogProtocolDictatorSpeechV1 || codec == CatalogProtocolElevenLabsVoices) || resource.Kind == llmproxycontract.ProviderResourceMetadata && codec == CatalogProtocolElevenLabsModels || resource.Kind == llmproxycontract.ProviderResourceQuotas && codec == CatalogProtocolElevenLabsSubscription || resource.Kind == llmproxycontract.ProviderResourceAccount && codec == CatalogProtocolHeyGenAccount
 		if !supported {
 			return fmt.Errorf("%w: field=%s reason=unsupported_resource_composition", ErrInvalidModelCatalog, resourceField)
 		}

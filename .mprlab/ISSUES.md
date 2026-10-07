@@ -35,6 +35,34 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B305] (P1) Preserve unknown token measurements through operational usage reports.
+  Evidence:
+  LP-C01-S1 retained identical zero quantities for missing usage and measured zero.
+  Requirements:
+  - Preserve per-count measurement evidence through normalization, continuation, persistence, and restart.
+  - Keep historical quantities unverified. Do not infer measurements from old zeros.
+  - Expose coverage in existing scoped summaries and token displays.
+  - Preserve authorization and the operational telemetry boundary.
+  Validation:
+  - Verify absent, zero, partial, historical, mixed, restart, API, and browser states with local fixtures.
+  - Run full repository CI. Report unrelated failures and preserve concurrent work.
+  Release:
+  The user selects a combined release of the current B305 and HeyGen changes in the primary checkout.
+  Release requires a clean default branch and the exact combined source validation.
+  Progress:
+  The local implementation preserves per-count evidence through persistence and restart.
+  Public summaries and displays distinguish unknown, partial, historical, and measured zero.
+  Focused backend, six browser cases, six Meta route cases, and 24 benchmark observations pass.
+  Full `make ci` passed all 14 gates in 684 seconds. Go statement coverage is 100.0 percent with no uncovered blocks.
+  The independent final review found no unresolved defects.
+  Execution evidence: `.mprlab/B305-VALIDATION.md` and `.mprlab/evidence/B305/`.
+  Resolution:
+  Development completion includes current media usage evidence and its public restart regression.
+  The exact combined source passes all 14 CI gates with 100.0 percent Go coverage and no uncovered blocks.
+  The lifecycle contract test accepts and verifies the required manifest policy.
+  Release, publication, and production acceptance remain separate results in `.mprlab/combined-release-2026-10-06.md`.
+  Governor retains six preexisting managed-file differences.
+
 - [x] [B304] (P1) Wait for the usage commit before request identity restoration.
   Evidence:
   PR 348 backend coverage failed in `TestHostedFundsRecoveryRejectsEmptyStoredRequestIdentity`.
@@ -6557,6 +6585,23 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Use the current repository validation policy instead of older baseline CI instructions.
 
 - [ ] [F027] (P1) Add provider account mutations, avatars, translation, and lip-sync.
+  HeyGen source validation (2026-10-06):
+  - Final `make ci` passed all 14 gates with 100.0% Go statement coverage and no uncovered blocks.
+  - All 166 frontend browser tests and 11 authentication browser tests passed.
+  - Public protocol tests cover uploads, account reads, four services, tenant ownership, and restart recovery.
+  - Tests verify partial translation outputs, retained avatars, and uncertain paid submissions.
+  - Independent review found no remaining source issues.
+  - Public contracts add four services, retained avatar results, and account observations. Event contracts have no changes.
+  - Client publication, gateway activation, and the MediaOps I012 cutover remain open.
+  HeyGen v3 execution (2026-10-06):
+  - Use API v3 before the October 31, 2026 retirement of API v1 and v2.
+  - Add gateway services for translation, lip sync, photo avatars, and avatar videos.
+  - Keep native credentials, uploads, account observations, and recovery in the gateway.
+  - Keep avatar references after operation expiry.
+  - Use motion controls during avatar video generation. Do not retain the obsolete add-motion route.
+  - Record source validation separately from client release, gateway activation, and MediaOps I012 acceptance.
+  - Keep F027 open for the remaining Kling and account resource requirements.
+  - See `docs/heygen-v3.md` for the current source contract and limits.
   Current ownership and handoff:
   - Close this capability issue after destination source validation.
   - Record consumer cutover under its MediaOps issue and final retirement under I244.
@@ -7627,3 +7672,54 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
     integrity before publication.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
+
+- [ ] [P015] (P1) Select the workflow and criteria for the six-week evaluation.
+  Goal:
+  Decide whether a second-provider text offer merits further work.
+  Requirements:
+  - Select one existing non-streaming text workflow and its owner.
+  - Record required fields, exact routes, output criteria, and accepted telemetry limitations.
+  - Approve comparison thresholds before measurement. Record time and budget decisions separately.
+  - Keep implementation outside this Planning issue.
+  Deliverables:
+  - Use `.mprlab/commercialization-evaluation.md` as the evaluation charter.
+  - Use `.mprlab/commercialization-baseline-2026-10-06.md` as the initial execution record.
+  Validation:
+  - Confirm workflow compatibility against the actual request contract.
+  - Preserve unknown demand, price, and willingness to pay as open decisions.
+  Progress: Charter, local baseline, and source evidence are recorded. The user selected synthetic structured extraction for week one.
+  Customer workflow ownership and commercial thresholds remain open. No commercial gate passed.
+
+- [ ] [P016] (P1) {P015} Compare direct integration, LLM Proxy, and LiteLLM.
+  Goal:
+  Measure the candidate offer against both alternatives before product changes.
+  Requirements:
+  - Execute specification LP-C01 after P015 decisions. Pin sources, fixtures, configurations, and the comparator artifact.
+  - Compare setup effort, second-provider effort, local overhead, failure diagnosis, and usage coverage.
+  - Preserve actual workflow fields. Report unsupported behavior and unknown measurements.
+  - Use local fixtures, dummy keys, and isolated data. Keep paid provider calls outside this scope.
+  Deliverables:
+  - Add a comparison record with raw results, source hashes, safe output, and first failed assertions.
+  Validation:
+  - Apply the charter thresholds to all three alternatives.
+  - Reject evidence if relevant source files change during execution.
+  - Keep this issue limited to analysis and acceptance evidence.
+  Progress: LP-C01-S1 recorded 24 observations across direct and proxy alternatives on two routes. Extraction assertions passed.
+  Use `.mprlab/commercialization-benchmark-LP-C01-S1.md` for results and the retained harness.
+  Missing usage and measured zero share retained token values. This limitation does not block the selected extraction workflow.
+  LiteLLM has a documented comparison only. Setup effort, latency, live quality, and the full comparison remain open.
+
+- [ ] [P017] (P1) {P016} Decide whether to continue the text offer.
+  Goal:
+  Record a stop, limited-continuation, or separately authorized pilot decision at week six.
+  Requirements:
+  - Apply the charter gates. Record commercial unknowns and support ownership.
+  - Select at most one demonstrated engineering gap for a separate approval decision.
+  - Assess token-measurement presence before proposing an MCP usage interface.
+  - Reuse F021, P006, P012, and hosted issues for their existing scopes.
+  Deliverables:
+  - Add the decision, evidence, remaining blockers, and any proposed pilot scope to the execution record.
+  Validation:
+  - Confirm material advantage over both alternatives before recommending product investment.
+  - Obtain explicit pilot time, budget, and external-operation authority before execution.
+  - Keep implementation outside this Planning issue.

@@ -1,0 +1,26 @@
+{
+  "date_utc": "2026-10-06T21:45:10.124500+00:00",
+  "commit": "91ba581ba5763ce99c38a31f42a1148a06e8966f",
+  "source_count": 669,
+  "source_sha256": "641432ba9e52fbedd238ab0d5fb4b4d201aa79c6ca732d90e60737773e93d57e",
+  "changed_during_fingerprinted_run": [],
+  "working_tree_clean": false,
+  "external_model_calls": 0,
+  "note": "Fingerprint covers code, tests, catalogs, Makefile, and Go dependencies. It excludes private environment files and documents.",
+  "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "go_version": "go version go1.27.1 darwin/arm64",
+  "fingerprint_started_utc": "2026-10-06T21:44:21.704864+00:00",
+  "fingerprint_ended_utc": "2026-10-06T21:45:10.124481+00:00",
+  "tooling_environment": {
+    "GOCACHE": "/tmp/llm-proxy-evaluation-go-cache",
+    "GOPROXY": "off",
+    "GOSUMDB": "off"
+  },
+  "baseline_targets": [
+    "test-mcp",
+    "test-account-connections",
+    "test-completion-measurements",
+    "test-hosted-access (five selected usage tests)"
+  ],
+  "result": "passed"
+}

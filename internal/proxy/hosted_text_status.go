@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -36,10 +37,16 @@ func (service *hostedTextRequests) writeStatus(ctx *gin.Context, tenant tenant, 
 			writeStructuredRequestError(ctx, http.StatusInternalServerError, llmproxycontract.ErrorCodeStructuredRequestStore, "", "", request.ExecutionID)
 		} else {
 			if record.State == structuredRequestStateSucceeded {
-				if _, err := decodeHostedStoredCompletion(record.Result); err != nil {
+				stored, err := decodeHostedStoredCompletion(record.Result)
+				if err != nil {
 					writeStructuredRequestError(ctx, http.StatusInternalServerError, llmproxycontract.ErrorCodeStructuredRequestStore, "", "", request.ExecutionID)
 					return true
 				}
+				record.Result, _ = json.Marshal(struct {
+					Text      string                `json:"text"`
+					ToolCalls []functionCall        `json:"tool_calls,omitempty"`
+					Usage     *completionTokenUsage `json:"usage,omitempty"`
+				}{stored.Text, stored.ToolCalls, publicTokenUsage(stored.Usage)})
 			}
 			writeStructuredRequestRecord(ctx, record, service.now().UTC())
 		}

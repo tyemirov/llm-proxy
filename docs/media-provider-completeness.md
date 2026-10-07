@@ -107,7 +107,7 @@ F026 and F027 retain the other native service adapters and complete source cover
 | Runway | Text, image, and video inputs, task status and recovery, all seven declared models | F025 | Media adapters remain open. |
 | xAI | Video generation, extension and editing controls, task recovery, private file access and cleanup | F025 | Catalog presence does not establish a complete durable media adapter. |
 | ElevenLabs | Speech generation and conversion, dictionaries, voices, metadata, history, alignment, all seven music operations | F026 | One provider defines account metadata, quotas, voice discovery, forced alignment, and dictionary creation. All six speech and conversion models use the same provider. Voice-library operations, history, and music remain open. |
-| HeyGen | Translation, video lip-sync, avatar creation, motion, avatar video, uploads, quota, task recovery | F027 | Provider definition and adapters are absent. |
+| HeyGen | Translation, video lip-sync, avatar creation, motion, avatar video, uploads, quota, task recovery | F027 | The v3 source slice adds four services, asset uploads, account observations, and durable recovery. Client release and MediaOps acceptance remain separate. See [HeyGen v3](heygen-v3.md). |
 | Kling | Video generation, lip-sync, uploads, element create/list/get/delete, task recovery | F025, F027 | Provider definition and adapters are absent. |
 
 ## Exact Model Coverage

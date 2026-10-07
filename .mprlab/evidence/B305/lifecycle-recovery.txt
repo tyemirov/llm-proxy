@@ -1,0 +1,4 @@
+go test ./tests -run '^TestOperationalInstalledGateway$' -count=1
+ok  	github.com/tyemirov/llm-proxy/tests	0.917s
+go test ./tests -run '^TestOperationalReleaseDecisionUsesGixVersion$' -count=1
+ok  	github.com/tyemirov/llm-proxy/tests	0.543s

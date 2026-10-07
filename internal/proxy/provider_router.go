@@ -69,10 +69,16 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 	originalMessages := request.messages
 	accumulatedText := strings.Builder{}
 	var accumulatedUsage *tokenUsage
+	firstGeneration := true
 	for {
 		generation, generationError := router.generateTextAttempt(requestContext, request, structuredLogger)
 		accumulatedText.WriteString(generation.text)
-		accumulatedUsage = mergeTokenUsage(accumulatedUsage, generation.usage)
+		if firstGeneration {
+			accumulatedUsage = generation.usage
+			firstGeneration = false
+		} else {
+			accumulatedUsage = mergeTokenUsage(accumulatedUsage, generation.usage)
+		}
 		recordContinuationProgress(requestContext, structuredLogger, generation, len([]byte(accumulatedText.String())), generationError)
 		if !errors.Is(generationError, errProviderOutputLimitReached) {
 			if generationError != nil {

@@ -18,9 +18,21 @@ func validateProviderCatalogServices(services []ProviderCatalogService, transpor
 		if !found {
 			return fmt.Errorf("%w: field=%s[%d].transport reason=dangling_reference", ErrInvalidModelCatalog, field, index)
 		}
-		expectedOperation, supported := map[string]string{CatalogProtocolElevenLabsAlignment: ModelOperationAudioAlignment, CatalogProtocolElevenLabsDictionary: ModelOperationPronunciationDictionaryCreation}[transport.Components.RequestCodec.ID]
+		expectedOperation, supported := map[string]string{CatalogProtocolHeyGenAvatarV3: ModelOperationAvatarCreation, CatalogProtocolHeyGenAvatarVideoV3: ModelOperationAvatarVideoGeneration, CatalogProtocolHeyGenLipSync: ModelOperationVideoLipSync, CatalogProtocolHeyGenTranslation: ModelOperationVideoTranslation, CatalogProtocolElevenLabsAlignment: ModelOperationAudioAlignment, CatalogProtocolElevenLabsDictionary: ModelOperationPronunciationDictionaryCreation}[transport.Components.RequestCodec.ID]
 		if !supported || service.Operation != expectedOperation {
 			return fmt.Errorf("%w: field=%s[%d] reason=unsupported_service_composition", ErrInvalidModelCatalog, field, index)
+		}
+		if expectedOperation == ModelOperationAvatarCreation || expectedOperation == ModelOperationAvatarVideoGeneration {
+			if err := validateHeyGenAvatarService(service, transport, field); err != nil {
+				return err
+			}
+			continue
+		}
+		if expectedOperation == ModelOperationVideoLipSync || expectedOperation == ModelOperationVideoTranslation {
+			if err := validateHeyGenService(service, transport, field); err != nil {
+				return err
+			}
+			continue
 		}
 		if expectedOperation == ModelOperationPronunciationDictionaryCreation {
 			if len(service.Controls) != 0 || len(service.Limits) != 0 {
@@ -87,6 +99,11 @@ func cloneProviderServices(services []ProviderCatalogService) []ProviderCatalogS
 		route := cloneProviderOffering(ProviderOffering{Controls: service.Controls, Limits: service.Limits})
 		result[index] = service
 		result[index].Controls = route.Controls
+		for controlIndex := range result[index].Controls {
+			if result[index].Controls[controlIndex].Values == nil {
+				result[index].Controls[controlIndex].Values = []string{}
+			}
+		}
 		result[index].Limits = route.Limits
 		result[index].Price.Rates = append([]CatalogPriceRate{}, service.Price.Rates...)
 		if service.Price.MinimumCharge != nil {

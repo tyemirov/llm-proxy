@@ -1,0 +1,13 @@
+Failure excerpt from /Users/tyemirov/Documents/Codex/2026-10-06/task-2/token-fix/full-ci.log
+Full log SHA-256: b481f4108f2dd675b80853c9d2b8fc56f12505e95b4531ddb6c6b9e37ecf0f96
+
+--- FAIL: TestCoverageOpenAILifecycleBranches (14.83s)
+    --- FAIL: TestCoverageOpenAILifecycleBranches/completed_without_final_message_starts_synthesis_continuation (0.00s)
+        coverage_edges_test.go:769: request tokens header=""
+    --- FAIL: TestCoverageOpenAILifecycleBranches/queued_response_preserves_initial_token_usage_when_final_poll_omits_usage (0.00s)
+        coverage_edges_test.go:933: request tokens header=""
+    --- FAIL: TestCoverageOpenAILifecycleBranches/queued_response_keeps_latest_intermediate_usage_when_terminal_poll_omits_usage (0.51s)
+        coverage_edges_test.go:971: request tokens header=""
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+CI FAILED: stopped during Go integration tests (exit 2).

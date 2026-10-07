@@ -1,0 +1,1 @@
+validate manifest /Users/tyemirov/Development/llm-proxy/.mprlab/deploy/resources.yml: manifest: required field ci
