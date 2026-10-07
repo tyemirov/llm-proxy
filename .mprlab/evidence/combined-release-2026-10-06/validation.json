@@ -1000,11 +1000,21 @@
     "ci.txt": "ae2ddeee649dd84f990ed50bc7f8a49fd757d9b699a39b5a06a0f6dccb517aca",
     "media-after.txt": "079bad70f3aeb0744095f8a110922b43323f2f43d79bc67813f65b0ec7cc4173",
     "media-before.txt": "e5b7890cdc2150badd5fdbbea265be55041957f2bacbde0a425b98ad7f84c2b9",
-    "lifecycle-contract.txt": "2e8a6d0287c60e397f93b488ccfb13e8c0210812e3a7ede5f5c87c37d060bfed"
+    "lifecycle-contract.txt": "2e8a6d0287c60e397f93b488ccfb13e8c0210812e3a7ede5f5c87c37d060bfed",
+    "release-failure.txt": "6e868b0fbe22211333cd222f4a81824c9b4b11f53d5ff37d0d521287bb789e72",
+    "observed-site-release.json": "d8b5e6c37a2f1032280f214449ca6e3040f0e84b9a03b0c08c4591d5d04c60bf",
+    "native-ci.txt": "fc9e7d156949ead6334ec9a2a030751900f30b81e55ece68a6133713bd9648be"
   },
-  "release": "pending canonical lifecycle",
-  "publication": "pending",
-  "deployment": "pending",
+  "release": {
+    "status": "failed",
+    "exit_status": 2,
+    "boundary": "Go-owned lifecycle receipt / bounded state conversion",
+    "error": "publication authority exists without a selected active release",
+    "artifact_assembly_started": false,
+    "artifacts_sealed": false
+  },
+  "publication": "not started",
+  "deployment": "not started",
   "recovery": "forward-only corrective release; preserve SQLite evidence and completion metadata",
   "retained_log_format": "UTF-8, LF, no trailing whitespace; raw output remains in task workspace",
   "raw_log_normalization": {
@@ -1016,5 +1026,40 @@
       "raw_sha256": "36f3cbfa469f87c3b9a1df15f6f519ef0a1c5f1149cda135524007d6f8fd4630",
       "retained_sha256": "e5b7890cdc2150badd5fdbbea265be55041957f2bacbde0a425b98ad7f84c2b9"
     }
+  },
+  "final_recorded_utc": "2026-10-07T00:27:30.874527+00:00",
+  "application_commit": "5976c92ef7f17060cdcd686c070e2c8f29d05388",
+  "application_commit_pushed": true,
+  "native_ci": {
+    "command": "make release / make ci",
+    "result": "passed",
+    "seconds": 676,
+    "gates": 14,
+    "coverage": "100.0%",
+    "uncovered_blocks": 0,
+    "frontend_browser_cases": 172,
+    "authentication_browser_cases": 11
+  },
+  "gateway": {
+    "version": "v5.0.10",
+    "source_commit": "1d186901e4c5c4481cb1a40015a74a0a6d831522",
+    "lifecycle_contract": 4
+  },
+  "release_blocker_issue": "P018",
+  "independent_blocker_review": "Gateway state conversion blocker; no supported recovery path in installed runtime; preserve authority records; separate qualified Gateway repair required",
+  "production_database_snapshot_created": false,
+  "production_database_migrated": false,
+  "public_api_health": {
+    "status": "ok"
+  },
+  "public_site_marker_after_failed_release": {
+    "schema_version": 1,
+    "source_commit": "2fda9020e776da3e82bdd50b28b2a6c87e988842",
+    "version": "v1.12.0"
+  },
+  "live_candidate_revision_verified": false,
+  "native_full_log": {
+    "path": "/Users/tyemirov/Documents/Codex/2026-10-06/task-2/combined-release/native-release.log",
+    "sha256": "2978a75702356cb63f3f5b3afbb0d4215231713c667d54e1a323f146e1387963"
   }
 }

@@ -38,3 +38,30 @@ Hosted billing remains inactive. Paid provider acceptance and MediaOps I012 rema
 P015, P016, and P017 remain open.
 The local benchmark does not establish an advantage over direct integration or LiteLLM.
 Budget and time ceilings for the commercial evaluation remain unapproved.
+
+## Native release result
+
+The combined application source is `5976c92ef7f17060cdcd686c070e2c8f29d05388`.
+The normal push to `master` completed. The primary checkout was clean and synchronized before release.
+The native `make release` CI passed all 14 gates in 676 seconds.
+Go statement coverage is 100.0 percent with no uncovered blocks.
+All 172 frontend browser cases and 11 authentication browser cases passed.
+
+Release preparation then failed at `Execute Go-owned lifecycle receipt operation` with exit status 2.
+The native error is `publication authority exists without a selected active release`.
+Gateway v5.0.10 uses source `1d186901e4c5c4481cb1a40015a74a0a6d831522` and lifecycle contract 4.
+Its bounded conversion requires current, selected, seal, or active staging authority before it can consume publication state.
+The existing local state has the publication selection but none of those release authority records.
+The independent review found no supported recovery command in that runtime.
+
+No candidate artifact was assembled or sealed. Publication and deployment did not start.
+No production database snapshot or migration occurred.
+The public API health read still returned `{"status":"ok"}`.
+The website still reports `v1.12.0` at `2fda9020e776da3e82bdd50b28b2a6c87e988842`.
+That marker identifies the website. It does not establish the backend source revision.
+
+P018 records the required recovery decision.
+Preserve the existing lifecycle records.
+Use a qualified Gateway repair to restore authoritative state through its supported lifecycle.
+Then retry `make release && make publish && make deploy`.
+The selected application command is NOT READY until that repair completes.

@@ -50,10 +50,10 @@
   "independent_review": "no unresolved findings; final Meta expectation correction accepted",
   "governor_exit_code": 1,
   "governor_drift_is_preexisting": true,
-  "new_commit": null,
+  "new_commit": "5976c92ef7f17060cdcd686c070e2c8f29d05388",
   "pull_request": null,
-  "release": null,
-  "deployment": null,
+  "release": "native preparation failed before artifact assembly",
+  "deployment": "not started",
   "live_api_revision_verified": false,
   "prior_ci_attempts": [
     {
@@ -135,7 +135,9 @@
     "Clean release candidate requires final full CI, artifact publication, retained-data qualification, and live revision checks.",
     "Governor retains six preexisting managed-file differences."
   ],
-  "release_blockers": [],
+  "release_blockers": [
+    "P018: installed Gateway cannot convert publication state without active release authority."
+  ],
   "current_combined_acceptance": "../../combined-release-2026-10-06.md",
   "earlier_ci_scope": "before final media evidence and lifecycle contract corrections; current evidence is in combined record",
   "retained_log_format": "UTF-8, LF, no trailing whitespace; raw output remains in task workspace",

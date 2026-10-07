@@ -1,0 +1,19 @@
+CI summary
+#   Gate                                       Result   Evidence
+1   Release version contract                   PASS     2s
+2   Go formatting                              PASS     0s
+3   Go static analysis                         PASS     3s
+4   Python static analysis                     PASS     0s
+5   Frontend static analysis                   PASS     2s
+6   Protocol acceptance                        PASS     13s
+7   Upstream admission race tests              PASS     24s
+8   Go integration tests                       PASS     495s
+9   Python client tests                        PASS     46s
+10  Frontend browser tests                     PASS     89s
+11  OpenAPI Pages artifact                     PASS     2s
+12  TAuth management browser black box         PASS     67s
+13  Live-provider harness preflight            PASS     2s
+14  Go coverage verification                   PASS     100.0%
+    Continuous integration                     PASS     676s
+
+CI PASSED: all 14 gates completed; Go statement coverage 100.0%.

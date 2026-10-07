@@ -7723,3 +7723,21 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Confirm material advantage over both alternatives before recommending product investment.
   - Obtain explicit pilot time, budget, and external-operation authority before execution.
   - Keep implementation outside this Planning issue.
+
+- [!] [P018] (P1) Decide the Gateway repair for missing active release authority.
+  Goal:
+  Establish the safe recovery scope before the combined LLM Proxy rollout.
+  Evidence:
+  Combined source `5976c92e` passes acceptance CI and native release CI with 100.0 percent Go coverage.
+  Native release preparation fails with `publication authority exists without a selected active release`.
+  Gateway v5.0.10 retains publication state without current, selected, seal, or active staging release authority.
+  Its installed commands have no supported recovery path for this state.
+  Requirements:
+  - Preserve the existing lifecycle records and immutable release inputs.
+  - Obtain separate authorization for the Gateway implementation repair.
+  - Qualify the authoritative state conversion before application release retries.
+  - Keep publication, deployment, and live acceptance separate from source acceptance.
+  Blocked:
+  The Gateway state conversion blocks artifact preparation. Publication and deployment did not start.
+  The repair belongs to Gateway. It is outside the current application release scope.
+  Evidence is in `.mprlab/combined-release-2026-10-06.md`.

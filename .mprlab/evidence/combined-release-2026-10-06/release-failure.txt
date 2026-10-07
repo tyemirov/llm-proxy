@@ -1,0 +1,7 @@
+Command: make release
+Application source: 5976c92ef7f17060cdcd686c070e2c8f29d05388
+Gateway: v5.0.10 / 1d186901e4c5c4481cb1a40015a74a0a6d831522
+Failed task: Execute Go-owned lifecycle receipt operation
+Native error: app_lifecycle.receipt_invalid: prepare_release for application owner="llm-proxy" repository="tyemirov/llm-proxy": publication authority exists without a selected active release
+MPRLAB_APP_LIFECYCLE_END entrypoint=transaction operation=release status=2
+No candidate artifact was assembled or sealed. Publication and deployment did not start.
