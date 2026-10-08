@@ -7742,20 +7742,32 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Obtain explicit pilot time, budget, and external-operation authority before execution.
   - Keep implementation outside this Planning issue.
 
-- [!] [P018] (P1) Decide the Gateway repair for missing active release authority.
+- [x] [P018] (P1) Decide the Gateway repair for missing active release authority.
   Goal:
   Establish the safe recovery scope before the combined LLM Proxy rollout.
-  Evidence:
-  Combined source `5976c92e` passes acceptance CI and native release CI with 100.0 percent Go coverage.
-  Native release preparation fails with `publication authority exists without a selected active release`.
-  Gateway v5.0.10 retains publication state without current, selected, seal, or active staging release authority.
-  Its installed commands have no supported recovery path for this state.
+  Initial evidence (2026-10-06):
+  Combined source `5976c92e` passed acceptance CI and native release CI with 100.0 percent Go coverage.
+  Native release preparation failed with `publication authority exists without a selected active release`.
+  Gateway v5.0.10 had publication state without current, selected, seal, or active staging release authority.
+  Its installed commands had no supported recovery path for this state.
   Requirements:
   - Preserve the existing lifecycle records and immutable release inputs.
   - Obtain separate authorization for the Gateway implementation repair.
   - Qualify the authoritative state conversion before application release retries.
   - Keep publication, deployment, and live acceptance separate from source acceptance.
-  Blocked:
-  The Gateway state conversion blocks artifact preparation. Publication and deployment did not start.
-  The repair belongs to Gateway. It is outside the current application release scope.
-  Evidence is in `.mprlab/combined-release-2026-10-06.md`.
+  Decision:
+  The user authorized the Gateway repair and the application rollout.
+  Gateway v5.1.0 corrected the release authority state through the supported lifecycle.
+  B306 changed the application validator to accept only `mprlab.version-decision/v3`.
+  Gateway B643 and B644 corrected Pages health checks and the redirect policy.
+  Resolution (2026-10-08):
+  Gateway v5.1.1 is published and installed.
+  `make release && make publish && make deploy` completed with status 0 under that runtime.
+  The lifecycle used the sealed and published `v1.12.2` release again.
+  Native CI passed all 14 gates with 100.0 percent Go statement coverage.
+  The native command confirmed `v1.12.2` after verification.
+  The website marker and running backend both identify `v1.12.2`.
+  The public API and website health checks passed.
+  All eight selected resource observations have generation 29 and status `verified`.
+  The database copy and live database passed integrity and foreign-key checks.
+  The execution record is `.mprlab/combined-release-2026-10-06.md`.

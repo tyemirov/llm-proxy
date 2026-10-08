@@ -65,3 +65,48 @@ Preserve the existing lifecycle records.
 Use a qualified Gateway repair to restore authoritative state through its supported lifecycle.
 Then retry `make release && make publish && make deploy`.
 The selected application command is NOT READY until that repair completes.
+
+## Recovery and deployment result (2026-10-08)
+
+Gateway v5.1.0 corrected the release authority state through the supported lifecycle.
+B306 changed the application validator to accept only `mprlab.version-decision/v3`.
+The native lifecycle sealed and published `v1.12.2`.
+Its first deployment attempt stopped with `app_deploy.unknown_target` for `website-health/public`.
+The website health check lacked a release header despite its verified Pages marker.
+
+Gateway B643 uses a verified Pages marker for a headerless health check when the origins are the same.
+Gateway B644 uses the declared redirect policy and requires one release identity across the redirect chain.
+The public integration tests failed before these repairs and passed after them.
+The reviewed changes are merged.
+Gateway v5.1.1 is published and installed.
+Its native release CI passed in 1708 seconds.
+
+An earlier Gateway release attempt reached its 35-minute CI deadline with status 124.
+Publication and installation did not start in that attempt.
+The independent review kept the declared deadline unchanged.
+The subsequent native release passed its full gate before publication and installation.
+
+The exact application command `make release && make publish && make deploy` completed with status 0.
+Native CI passed all 14 gates in 864 seconds with 100.0 percent Go statement coverage.
+The upstream admission race gate passed in 30 seconds.
+All 172 frontend browser tests and 11 authentication browser tests passed.
+The lifecycle used the sealed and published `v1.12.2` artifacts again.
+The native command reported `MPRLAB_APP_DEPLOY_CONFIRMED version=v1.12.2`.
+
+The public website marker has schema version 2 and release version `v1.12.2`.
+Both public health endpoints returned `{"status":"ok"}`.
+The backend runs `ghcr.io/tyemirov/llm-proxy:1.12.2` with publication label `v1.12.2`.
+It keeps `mprlab-nginx-gateway_llm-proxy-data`.
+The state document uses schema version 1 and has revision 483 at verification.
+All eight selected entries in `observed` identify generation 29 with status `verified`.
+Each `observed.fence` value is the same as the `fences.token` value for that resource.
+
+The pre-activation database copy is `/volume1/docker/mprlab-runtime/backups/llm-proxy/pre-activation-20261008T225443Z.sqlite`.
+Its SHA-256 is `882acc190ee5754bb1b8ab5fb7371dd7e1264bfdeead0eb7765dba28a0ebb1bb`.
+The copy and live database both passed `PRAGMA integrity_check` with `ok`.
+Both `PRAGMA foreign_key_check` results contain no violations.
+The current release receipt and the database copy are available.
+
+P018 is resolved.
+This result establishes release, publication, and deployment.
+Paid provider acceptance and the commercial evaluation decisions are separate.
