@@ -63,7 +63,7 @@ def test_selected_release_package(
 ) -> None:
     tag = f"v{selected_version}"
     decision = json.dumps({
-        "contract": "mprlab.version-decision/v2",
+        "contract": "mprlab.version-decision/v3",
         "policy": {"scheme": "semver", "fixed_major": 1},
         "next_version": tag,
     })

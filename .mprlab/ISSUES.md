@@ -35,6 +35,24 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B306] (P1) Use the current Gateway release decision contract.
+  Goal:
+  Permit the current Gateway release decision through the application validator.
+  Evidence:
+  Gateway v5.1.0 supplies `mprlab.version-decision/v3`. The application validator requires the retired `/v2` contract.
+  Requirements:
+  - Accept only the current `/v3` decision contract.
+  - Keep the SemVer policy and major version `1` checks.
+  - Reject the retired `/v2` decision contract.
+  Validation:
+  The CLI regression tests fail before the validator change.
+  `make test-release-policy` and all five Python package tests pass after the validator change.
+  Full `make ci` passed all 14 gates in 858 seconds with 100.0 percent Go coverage.
+  All 172 frontend browser cases and 11 authentication browser cases passed.
+  Resolution:
+  The validator and package fixtures use the current `/v3` contract. The CLI tests reject the retired `/v2` contract.
+  The independent architect review found no actionable defects. Publication and deployment remain separate results.
+
 - [x] [B305] (P1) Preserve unknown token measurements through operational usage reports.
   Evidence:
   LP-C01-S1 retained identical zero quantities for missing usage and measured zero.

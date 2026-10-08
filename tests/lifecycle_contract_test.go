@@ -353,46 +353,51 @@ func TestOperationalReleaseDecisionUsesGixVersion(testingInstance *testing.T) {
 	}{
 		{
 			name:       "Gix reuses a release version",
-			output:     `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"` + repositoryTag + `"}`,
+			output:     `{"contract":"mprlab.version-decision/v3","policy":{"scheme":"semver","fixed_major":1},"next_version":"` + repositoryTag + `"}`,
 			wantStatus: true,
 			wantText:   "LLM_PROXY_RELEASE_POLICY_OK version=" + repositoryTag,
 		},
 		{
 			name:       "Gix selects the next version",
 			wantStatus: true,
-			output:     `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"` + nextTag + `"}`,
+			output:     `{"contract":"mprlab.version-decision/v3","policy":{"scheme":"semver","fixed_major":1},"next_version":"` + nextTag + `"}`,
 			wantText:   "LLM_PROXY_RELEASE_POLICY_OK version=" + nextTag,
 		},
 		{
 			name:       "Gix selects a minor release",
-			output:     `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v1.5.0"}`,
+			output:     `{"contract":"mprlab.version-decision/v3","policy":{"scheme":"semver","fixed_major":1},"next_version":"v1.5.0"}`,
 			wantStatus: true,
 			wantText:   "LLM_PROXY_RELEASE_POLICY_OK version=v1.5.0",
 		},
 		{
 			name:     "malformed version",
-			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v1.05.0"}`,
+			output:   `{"contract":"mprlab.version-decision/v3","policy":{"scheme":"semver","fixed_major":1},"next_version":"v1.05.0"}`,
 			wantText: "llm_proxy.release_version_invalid: expected a major version 1 SemVer release",
 		},
 		{
 			name:     "missing version",
-			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1}}`,
+			output:   `{"contract":"mprlab.version-decision/v3","policy":{"scheme":"semver","fixed_major":1}}`,
 			wantText: "llm_proxy.release_version_invalid: expected a major version 1 SemVer release",
 		},
 		{
 			name:     "higher major",
-			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v2.0.0"}`,
+			output:   `{"contract":"mprlab.version-decision/v3","policy":{"scheme":"semver","fixed_major":1},"next_version":"v2.0.0"}`,
 			wantText: "llm_proxy.release_version_invalid: expected a major version 1 SemVer release",
 		},
 		{
 			name:     "missing fixed major",
-			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver"},"next_version":"` + repositoryTag + `"}`,
+			output:   `{"contract":"mprlab.version-decision/v3","policy":{"scheme":"semver"},"next_version":"` + repositoryTag + `"}`,
 			wantText: "llm_proxy.release_policy_invalid: expected SemVer decision with fixed major 1",
 		},
 		{
 			name:     "different fixed major",
-			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":2},"next_version":"` + repositoryTag + `"}`,
+			output:   `{"contract":"mprlab.version-decision/v3","policy":{"scheme":"semver","fixed_major":2},"next_version":"` + repositoryTag + `"}`,
 			wantText: "llm_proxy.release_policy_invalid: expected SemVer decision with fixed major 1",
+		},
+		{
+			name:     "retired decision contract",
+			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"` + repositoryTag + `"}`,
+			wantText: "llm_proxy.release_policy_invalid: expected one release decision document",
 		},
 		{
 			name:     "missing decision",

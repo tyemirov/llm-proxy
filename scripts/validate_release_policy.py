@@ -9,7 +9,7 @@ import sys
 from typing import Any
 
 
-VERSION_DECISION_CONTRACT = "mprlab.version-decision/v2"
+VERSION_DECISION_CONTRACT = "mprlab.version-decision/v3"
 FIXED_MAJOR = 1
 RELEASE_VERSION_PATTERN = re.compile(r"v1\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)")
 

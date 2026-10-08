@@ -2743,6 +2743,7 @@ An exact release retry reuses the stored decision.
 
 The gateway runs the committed `scripts/validate-release-decision` program.
 The validator checks the SemVer policy and major version `1`.
+The validator accepts only `mprlab.version-decision/v3` from the current Gateway runtime.
 Gix selects each `v1.X.X` release version. Python package metadata consumes the resulting release tag.
 The package build does not select or change a release version.
 
