@@ -35,6 +35,11 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B307] (P1) Keep the public footer within its height limit
+  Goal: Keep all four utility links and the theme control within 56 pixels at a 390-pixel viewport.
+  Validation: The browser reported 62.08 pixels before the CSS change. The phone and desktop browser scenario and final `make ci` passed.
+  Result: Public layout styles keep the complete footer within 56 pixels. The dropdown label wraps at narrow widths.
+
 - [x] [B306] (P1) Use the current Gateway release decision contract.
   Goal:
   Permit the current Gateway release decision through the application validator.
@@ -2129,6 +2134,14 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   Blocked: The operator must publish the qualified shared UI assets and complete cache convergence under mpr-ui I009.
 
 ## Improvements
+
+- [x] [I310] (P1) {B307} Use the `theme-control` contract
+  Goal: Use the `mpr-ui` contract on each page.
+  Requirements: Keep each mode, position, label, and initial selection.
+  Validation: Final `make ci` passed all 14 gates with `mpr-ui` v4.3.5.
+  Result: The source generator and all 52 HTML pages use the explicit quadrant.
+  Central browser acceptance verified pointer selection, keyboard selection, and reload for every mode.
+  Repository CI verified the real page with the pinned `v4.3.5` assets.
 
 - [x] [I309] (P1) Decrease repeated reference construction in integration tests.
   Evidence:

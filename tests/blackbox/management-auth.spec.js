@@ -99,7 +99,10 @@ test("public Log In opens the authenticated app and the TAuth session survives u
   );
   await expect(page.locator("mpr-header")).not.toHaveAttribute("sign-in-redirect-url", applicationPath);
   const themeSwitcher = page.locator('[data-mpr-theme-toggle="control"][data-variant="square"]');
-  await expect(page.locator("mpr-footer")).toHaveAttribute("theme-switcher", "square");
+  await expect(page.locator("mpr-footer")).toHaveAttribute("theme-control", JSON.stringify({
+    kind: "quadrant",
+    choices: { topLeft: "default-light", topRight: "sunrise-light", bottomLeft: "default-dark", bottomRight: "forest-dark" },
+  }));
   await expect(themeSwitcher).toBeVisible();
   await expect(page.locator('[data-mpr-footer="theme-toggle"]')).toHaveAttribute(
     "data-mpr-theme-toggle-variant",

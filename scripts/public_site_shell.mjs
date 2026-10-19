@@ -32,6 +32,7 @@ const PUBLIC_FOOTER_LINKS = Object.freeze({
   ]),
 });
 const PUBLIC_THEME_CONFIG = Object.freeze({
+  storageKey: "llm-proxy:theme",
   attribute: PUBLIC_THEME.ATTRIBUTE,
   targets: Object.freeze(["document", "body"]),
   initialMode: "default-dark",
@@ -134,7 +135,7 @@ export function renderPublicFooter() {
       prefix-class="public-site-footer-prefix"
       privacy-link-label="Privacy"
       privacy-link-href="/privacy/"
-      theme-switcher="square"
+      theme-control='{"kind":"quadrant","choices":{"topLeft":"default-light","topRight":"sunrise-light","bottomLeft":"default-dark","bottomRight":"forest-dark"}}'
       theme-config='${JSON.stringify(PUBLIC_THEME_CONFIG)}'
       horizontal-links='${JSON.stringify(PUBLIC_FOOTER_LINKS)}'
       menu='${JSON.stringify(MPR_PROJECT_MENU)}'
