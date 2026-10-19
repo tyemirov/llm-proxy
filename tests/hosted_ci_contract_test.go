@@ -74,8 +74,17 @@ func assertHostedCIWorkflow(testingInstance *testing.T, repositoryRoot string, d
 		testingInstance.Fatal("canonical local CI stage list is absent")
 	}
 	canonicalTargets := make(map[string]bool)
+	installedStages := 0
 	for _, line := range strings.Split(string(stageBlock[1]), "\n") {
-		canonicalTargets[strings.Trim(line, " \t\"")] = true
+		target := strings.Trim(line, " \t\"")
+		if target == "test-installed-gateway" {
+			installedStages++
+			continue
+		}
+		canonicalTargets[target] = true
+	}
+	if installedStages != 1 {
+		testingInstance.Fatal("local and lifecycle CI must require exactly one installed Gateway stage")
 	}
 	hostedTargets := make(map[string]bool)
 	for _, name := range []string{"backend", "backend-checks", "frontend"} {

@@ -64,6 +64,10 @@ test: go-test python-test frontend-test test-openapi-pages-artifact test-managem
 go-test: frontend-dependencies
 	@GO="$(GO)" ./scripts/check_coverage.sh
 
+.PHONY: test-hosted-admission-errors
+test-hosted-admission-errors:
+	$(GO) test ./internal/proxy -run='^TestHostedJournalAdmissionEntropyFailuresPreserveUnreservedFunds$$' -count=100 -race
+
 python-test:
 	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev pytest
 	$(MAKE) python-package-install-test
@@ -322,7 +326,12 @@ generate-api-docs:
 
 .PHONY: test-installed-gateway
 test-installed-gateway:
-	$(GO) test ./tests -run '^TestOperationalInstalledGateway$$' -count=1
+	@if ! command -v "$(MPRLAB_GATEWAY_EXECUTABLE)" >/dev/null 2>&1; then \
+		printf 'Gateway runtime is unavailable: %s. Install a released runtime and add its command directory to PATH.\n' \
+			"$(MPRLAB_GATEWAY_EXECUTABLE)" >&2; \
+		exit 2; \
+	fi
+	MPRLAB_GATEWAY_EXECUTABLE="$(MPRLAB_GATEWAY_EXECUTABLE)" $(GO) test -tags=installed_gateway ./tests -run '^TestOperationalInstalledGateway(PlansCurrentTrackedManifest)?$$' -count=1
 
 .PHONY: test-release-policy
 test-release-policy:

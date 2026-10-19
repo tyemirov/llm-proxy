@@ -78,6 +78,9 @@ for argument in "$@"; do
   target="${argument}"
 done
 builtin printf '%s\n' "${target}" >>"${CI_TARGET_LOG:?}"
+if [[ "${target}" == "test-installed-gateway" && -n "${CI_REAL_MAKE:-}" ]]; then
+  exec "${CI_REAL_MAKE}" --no-print-directory -C "${CI_REPOSITORY_ROOT:?}" test-installed-gateway GO="${CI_REAL_GO:?}"
+fi
 if [[ -n "${CI_OVERLAP_DIRECTORY:-}" && ( "${target}" == "test-upstream-admission-race" || "${target}" == "go-test" || "${target}" == "python-test" ) ]]; then
   builtin printf 'started\n' >"${CI_OVERLAP_DIRECTORY}/${target}"
   for ((attempt = 0; attempt < 200; attempt++)); do
@@ -118,6 +121,7 @@ builtin printf 'total:\t(statements)\t%s\n' "${CI_COVERAGE_TOTAL:-100.0%}"
 `, 0o755)
 
 	expectedTargets := strings.Join([]string{
+		"test-installed-gateway",
 		"test-release-policy",
 		"check-format",
 		"go-lint",
@@ -139,12 +143,43 @@ builtin printf 'total:\t(statements)\t%s\n' "${CI_COVERAGE_TOTAL:-100.0%}"
 		if len(observed) != len(expected) {
 			t.Fatalf("unexpected CI targets:\n%s", output)
 		}
-		slices.Sort(observed[6:9])
-		slices.Sort(expected[6:9])
+		slices.Sort(observed[7:10])
+		slices.Sort(expected[7:10])
 		if !slices.Equal(observed, expected) {
 			t.Fatalf("unexpected CI target order:\n%s", output)
 		}
 	}
+
+	testingInstance.Run("absent-installed-runtime-stops-canonical-ci", func(t *testing.T) {
+		realMake, err := exec.LookPath("make")
+		if err != nil {
+			t.Fatal(err)
+		}
+		realGo, err := exec.LookPath("go")
+		if err != nil {
+			t.Fatal(err)
+		}
+		targetLogPath := filepath.Join(t.TempDir(), "targets")
+		command := exec.Command(realMake, "ci", "MAKE="+fakeMakePath)
+		command.Dir = repositoryRoot
+		command.Env = append(os.Environ(), "CI=1", "GO="+fakeGoPath,
+			"CI_REAL_MAKE="+realMake, "CI_REAL_GO="+realGo, "CI_REPOSITORY_ROOT="+repositoryRoot,
+			"CI_TARGET_LOG="+targetLogPath,
+			"MPRLAB_GATEWAY_EXECUTABLE="+filepath.Join(t.TempDir(), "absent-gateway"))
+		output, err := command.CombinedOutput()
+		if err == nil || !strings.Contains(string(output), "Gateway runtime is unavailable:") ||
+			!strings.Contains(string(output), "CI FAILED: stopped during Installed Gateway qualification") ||
+			strings.Contains(string(output), "CI PASSED") {
+			t.Fatalf("absent runtime did not fail canonical CI at the installed stage: %v\n%s", err, output)
+		}
+		targets, err := os.ReadFile(targetLogPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(targets) != "test-installed-gateway\n" {
+			t.Fatalf("CI started downstream stages after the absent runtime: %s", targets)
+		}
+	})
 
 	testingInstance.Run("independent-go-and-python-checks-overlap", func(t *testing.T) {
 		command := exec.Command(runnerPath)
@@ -155,7 +190,7 @@ builtin printf 'total:\t(statements)\t%s\n' "${CI_COVERAGE_TOTAL:-100.0%}"
 		if err != nil {
 			t.Fatalf("concurrent Go checks failed: %v\n%s", err, output)
 		}
-		if !strings.Contains(string(output), "CI PASSED: all 14 gates completed") {
+		if !strings.Contains(string(output), "CI PASSED: all 15 gates completed") {
 			t.Fatalf("concurrent checks omitted completion evidence:\n%s", output)
 		}
 	})
@@ -201,7 +236,7 @@ builtin printf 'total:\t(statements)\t%s\n' "${CI_COVERAGE_TOTAL:-100.0%}"
 			"CI summary",
 			"Go coverage verification",
 			"100.0%",
-			"CI PASSED: all 14 gates completed; Go statement coverage 100.0%.",
+			"CI PASSED: all 15 gates completed; Go statement coverage 100.0%.",
 		} {
 			if !strings.Contains(outputText, expectedFragment) {
 				testingInstance.Fatalf("complete CI output omitted %q:\n%s", expectedFragment, outputText)

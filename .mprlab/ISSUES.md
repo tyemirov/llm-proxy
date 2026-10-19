@@ -35,6 +35,20 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B309] (P1) Separate installed Gateway qualification from portable hosted checks
+  Evidence: Hosted run 39314080053 failed because the backend runner did not contain `mprlab-gateway`.
+  Requirements: Keep hosted checks portable. Require the real installed planner before other local and lifecycle CI stages.
+  Validation: Runner tests verify execution and failure before later stages when the executable is absent. Focused installed and hosted checks passed.
+  Result: The `installed_gateway` tag selects the real planner. The portable facade test remains in the default suite.
+  Validation: Final local CI passed all 15 gates in 831 seconds with 100 percent Go statement coverage.
+  Hosted run 39321695159 and independent review passed.
+
+- [x] [B308] (P1) Validate HTTP error fields without scanning the request identifier
+  Evidence: Hosted run 39308421779 rejected a valid error response because its random request identifier contained `EOF`.
+  Requirements: Check the closed error fields. Preserve zero dispatch, balance rollback, and successful recovery assertions.
+  Validation: The real HTTP scenario passed 100 repetitions with the race detector. Final CI passed all 14 gates with 100% Go coverage.
+  Result: Strict error field checks preserve the opaque request identifier. Service startup tests report child output after process exit on failure.
+
 - [x] [B307] (P1) Keep the public footer within its height limit
   Goal: Keep all four utility links and the theme control within 56 pixels at a 390-pixel viewport.
   Validation: The browser reported 62.08 pixels before the CSS change. The phone and desktop browser scenario and final `make ci` passed.

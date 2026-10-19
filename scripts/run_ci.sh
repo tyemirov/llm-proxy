@@ -91,6 +91,7 @@ export COVERAGE_FILE="$RUN_DIRECTORY/coverage.out"
 cd "$ROOT_DIR"
 
 STAGE_NAMES=(
+  "Installed Gateway qualification"
   "Release version contract"
   "Go formatting"
   "Go static analysis"
@@ -106,6 +107,7 @@ STAGE_NAMES=(
   "Live-provider harness preflight"
 )
 STAGE_TARGETS=(
+  "test-installed-gateway"
   "test-release-policy"
   "check-format"
   "go-lint"

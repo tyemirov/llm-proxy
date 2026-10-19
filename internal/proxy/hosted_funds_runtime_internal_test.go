@@ -173,10 +173,14 @@ func TestHostedFundsRunningServiceSettlesNewRequests(t *testing.T) {
 		defer deadline.Stop()
 		tick := time.NewTicker(20 * time.Millisecond)
 		defer tick.Stop()
+		var lastStatus int
+		var lastError error
 		for {
 			response, err := http.Get(address + healthPath)
+			lastError = err
 			if err == nil {
 				response.Body.Close()
+				lastStatus = response.StatusCode
 				if response.StatusCode == http.StatusOK {
 					break
 				}
@@ -184,7 +188,7 @@ func TestHostedFundsRunningServiceSettlesNewRequests(t *testing.T) {
 			select {
 			case <-tick.C:
 			case <-deadline.C:
-				t.Fatal("financial runtime did not start")
+				t.Fatalf("financial runtime did not start: last HTTP status=%d error=%v", lastStatus, lastError)
 			}
 		}
 	}

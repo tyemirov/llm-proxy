@@ -133,6 +133,7 @@ func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.
 		"health_check/website-health",
 		"private_values/private",
 		"runtime_capability/http",
+		"runtime_capability/http-private-lan",
 		"tauth_tenant/authentication",
 	}
 	if !slices.Equal(resourceIdentities, expectedResourceIdentities) {
@@ -176,6 +177,23 @@ func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.
 	runtimeService, runtimeServiceAvailable := runtimeServices["llm-proxy"].(map[string]any)
 	if !runtimeServiceAvailable {
 		testingInstance.Fatalf("runtime service is not a mapping: %#v", runtimeServices["llm-proxy"])
+	}
+	expectedPorts := map[string]any{"8080": map[string]any{"host_port": 18083, "scope": "private_lan"}}
+	if !reflect.DeepEqual(runtimeService["ports"], expectedPorts) {
+		testingInstance.Fatalf("unexpected private LAN HTTP publication: %#v", runtimeService["ports"])
+	}
+	expectedLANCapability := map[string]any{
+		"kind": "runtime_capability", "name": "llm-proxy.http.private-lan", "version": 1,
+		"project": "runtime", "service": "llm-proxy",
+		"endpoint": map[string]any{"scope": "private_lan", "scheme": "http", "port": 18083},
+		"health":   map[string]any{"protocol": "http", "path": "/healthz", "expected_status": 200},
+	}
+	if !reflect.DeepEqual(resourcesByIdentity["runtime_capability/http-private-lan"], expectedLANCapability) {
+		testingInstance.Fatalf("unexpected private LAN HTTP capability: %#v", resourcesByIdentity["runtime_capability/http-private-lan"])
+	}
+	expectedOriginalEndpoint := map[string]any{"scope": "same_host", "scheme": "http", "alias": "llm-proxy", "port": 8080}
+	if !reflect.DeepEqual(resourcesByIdentity["runtime_capability/http"]["endpoint"], expectedOriginalEndpoint) {
+		testingInstance.Fatalf("unexpected original HTTP endpoint: %#v", resourcesByIdentity["runtime_capability/http"]["endpoint"])
 	}
 	expectedRuntimeAssets := map[string]any{
 		"/app/config.yml": map[string]any{

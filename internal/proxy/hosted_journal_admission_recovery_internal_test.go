@@ -2,7 +2,9 @@ package proxy
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 	"gorm.io/gorm"
 )
 
@@ -146,7 +149,27 @@ func TestHostedJournalAdmissionEntropyFailuresPreserveUnreservedFunds(t *testing
 			for range 2 {
 				router.hostedText.entropy = bytes.NewReader(bytes.Repeat([]byte{7}, scenario.available))
 				body := hostedIdentityHTTP(t, server, "recover-admission", "funded prompt", http.StatusBadGateway)
-				if strings.Contains(body, "EOF") || fixture.calls.Load() != 0 {
+				var response struct {
+					Error struct {
+						Code           string  `json:"code"`
+						Provider       string  `json:"provider"`
+						UpstreamStatus *int    `json:"upstream_status"`
+						Retryable      bool    `json:"retryable"`
+						RequestID      string  `json:"request_id"`
+						RetryAfter     *string `json:"retry_after"`
+					} `json:"error"`
+				}
+				decoder := json.NewDecoder(strings.NewReader(body))
+				decoder.DisallowUnknownFields()
+				if err := decoder.Decode(&response); err != nil {
+					t.Fatalf("decode admission error response: %v", err)
+				}
+				if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+					t.Fatalf("unexpected data after admission error response: %v", err)
+				}
+				if response.Error.Code != llmproxycontract.ErrorCodeProviderError || response.Error.Provider != ProviderNameOpenAI ||
+					response.Error.UpstreamStatus != nil || response.Error.Retryable || response.Error.RetryAfter != nil ||
+					response.Error.RequestID == "" || fixture.calls.Load() != 0 {
 					t.Fatalf("entropy failure exposed details or dispatched work: body=%s calls=%d", body, fixture.calls.Load())
 				}
 			}
