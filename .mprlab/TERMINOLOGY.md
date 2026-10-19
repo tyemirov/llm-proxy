@@ -158,3 +158,10 @@ Give each term one meaning. Use the same term for the same concept in all docume
 
 - `token coverage`: Counts of retained execution events for each token measurement state.
 - `token subtotal`: A sum of retained token quantities whose measurement coverage can be incomplete.
+
+## Structured Persistence Technical Nouns
+
+- `identity lock`: A process-local lock for one tenant digest and idempotency-key digest pair.
+- `lock registry`: The map that retains each identity lock while a holder or waiter uses it.
+- `lifecycle gate`: A read-write lock that separates online record operations from whole-store recovery.
+- `durable publication`: Atomic replacement of a saved record after its file and directory synchronization complete.

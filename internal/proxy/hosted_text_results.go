@@ -83,8 +83,8 @@ func (service *hostedTextRequests) recoverResult(ctx context.Context, requestID 
 		if err := transaction.Where("id = ?", requestID).First(&request).Error; err != nil {
 			return fmt.Errorf("read unpublished request %s: %w", requestID, err)
 		}
-		service.responses.mu.Lock()
-		defer service.responses.mu.Unlock()
+		unlock := service.responses.lockRecord(sha256Hex(request.TenantID), request.KeyDigest)
+		defer unlock()
 		path, err := service.responses.recordPath(sha256Hex(request.TenantID), request.KeyDigest, false)
 		if err != nil {
 			return err

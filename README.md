@@ -280,6 +280,8 @@ available because automatic removal would erase the no-resubmit decision. A
 structured record does not contain a provider resource id and cannot restart
 uncertain provider work.
 
+See [structured persistence concurrency](docs/structured-persistence-concurrency.md) for identity locks, durability boundaries, and measured limits.
+
 ### Request work budgets
 
 Every authenticated operation that can run long work accepts one optional

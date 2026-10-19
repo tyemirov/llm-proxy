@@ -8,9 +8,9 @@ import (
 // The current journal worker enters this transition under the database lock.
 // Replays use the journal and never reset or recreate dispatched execution.
 func (store *structuredRequestStore) beginAdmitted(requestTenant tenant, key string, admission managedJournalRequestRecord) (structuredRequestRecord, error) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
 	tenantDigest, keyDigest := sha256Hex(requestTenant.identifier.string()), sha256Hex(key)
+	unlock := store.lockRecord(tenantDigest, keyDigest)
+	defer unlock()
 	path, err := store.recordPath(tenantDigest, keyDigest, true)
 	if err != nil {
 		return structuredRequestRecord{}, err
@@ -32,8 +32,8 @@ func (store *structuredRequestStore) beginAdmitted(requestTenant tenant, key str
 }
 
 func (store *structuredRequestStore) lookupHosted(admission managedJournalRequestRecord) (structuredRequestRecord, error) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
+	unlock := store.lockRecord(sha256Hex(admission.TenantID), admission.KeyDigest)
+	defer unlock()
 	path, err := store.recordPath(sha256Hex(admission.TenantID), admission.KeyDigest, false)
 	if err != nil {
 		return structuredRequestRecord{}, err
