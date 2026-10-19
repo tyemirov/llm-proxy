@@ -6,15 +6,15 @@ application transition after shared session recovery.
 ## Candidate
 
 The tests use shared revision
-`768f25936497c5aabd426197d21c2100b6e5d9a1` from mpr-ui B069.
+`d29f43b96991ff409db968f56e6b3fc57b6d20e0` (`v4.3.5`) for I310.
 The production asset URLs retain literal `@latest`.
 The test helper verifies each candidate file before browser use.
 
 | File | SHA-256 |
 | --- | --- |
 | `mpr-ui-config.js` | `3f56fbd212a516d2bd8b0b95f73ae7ad82952c10d8d5f4e6f8b44d3233f01304` |
-| `mpr-ui.js` | `3e725dbe911470ca934cb46456369479b6ac232eee5ccba2582bf8d939259ae8` |
-| `mpr-ui.css` | `351bbf6c15054528a651571d8c8bd85536eea76c3e574f9335e6cd413878923f` |
+| `mpr-ui.js` | `632336dc393d89cbc53f93cfe75a3686971e4ba24acae3e9393a13d9144559d3` |
+| `mpr-ui.css` | `b6ee455076512890aedddfd249ba8d73ec8e67c69cdfe8ad127fc412dc809db7` |
 
 ## Application Contract
 
@@ -34,7 +34,9 @@ The backend authorizes requests before domain work. The client declares
 After recovery, the application sends `llm-proxy:management-ready` to clear
 the transition and preserve access to the user menu.
 
-## Local Evidence
+## Historical I260 Evidence
+
+I260 used B069 revision `768f25936497c5aabd426197d21c2100b6e5d9a1`.
 
 The HTTP regression failed against both flat producers before the changes.
 The changed producers passed `make test-shared-ui-config`.
@@ -61,8 +63,8 @@ The complete log is `/tmp/llm-proxy-i260-ci-final3.log`.
 The [public observations](mpr-ui-public-assets-2026-09-09.json) record seven
 HTTP 200 responses from one network location on September 9, 2026.
 The observations include the website, application, release marker, API config,
-and three published shared assets. Published asset digests differ from the
-candidate digests above.
+and three published shared assets.
+Published asset digests differed from the B069 candidate digests.
 
 The website responses declare a 600-second cache lifetime.
 The shared CDN responses declare `max-age=604800, s-maxage=43200`.
@@ -77,3 +79,16 @@ HTTP success does not establish browser authentication or cache convergence.
 
 Shared publication, deployment, cache convergence, and production acceptance
 remain separate gates.
+
+## Theme Control
+
+The footer uses the `theme-control` contract.
+`mpr-ui` keeps the selected mode under `llm-proxy:theme`.
+The browser tests use `mpr-ui` commit `d29f43b96991ff409db968f56e6b3fc57b6d20e0` (`v4.3.5`).
+Production asset URLs retain `@latest`.
+`scripts/public_site_shell.mjs` defines the complete catalog and quadrant choices.
+Run `make generate-public-pages` after a change to that source.
+Central browser acceptance verified pointer selection, keyboard selection, and reload for each mode.
+Repository CI verifies the real page with the pinned `v4.3.5` assets.
+Its blackbox test measures the actual shared footer at a 390-pixel viewport for B307.
+The footer must stay within 56 pixels without horizontal overflow.
