@@ -35,6 +35,14 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [-] [B309] (P1) Separate installed Gateway qualification from portable hosted checks
+  Evidence: Hosted run 39314080053 failed because the backend runner did not contain `mprlab-gateway`.
+  Requirements: Keep hosted checks portable. Require the real installed planner before other local and lifecycle CI stages.
+  Validation: Runner tests verify execution and failure before later stages when the executable is absent. Focused installed and hosted checks passed.
+  Result: The `installed_gateway` tag selects the real planner. The portable facade test remains in the default suite.
+  Validation: Final local CI passed all 15 gates in 831 seconds with 100 percent Go statement coverage. Independent review passed.
+  Pending: Require the corrected hosted backend result.
+
 - [x] [B308] (P1) Validate HTTP error fields without scanning the request identifier
   Evidence: Hosted run 39308421779 rejected a valid error response because its random request identifier contained `EOF`.
   Requirements: Check the closed error fields. Preserve zero dispatch, balance rollback, and successful recovery assertions.

@@ -1441,7 +1441,12 @@ The coverage job has a 60-minute limit for setup, compilation, and tests.
 Go coverage uses nine passes across every package: funds, payments, media, runtime, two other hosted groups, and three remaining groups.
 Each pass retains the existing ten-minute Go test limit. The coverage gate combines all profiles and the executable probes.
 The other qualification jobs have ten-minute limits.
-Together, the jobs run every gate from local `make ci`.
+These jobs run every portable gate from local `make ci`.
+They do not require a private Gateway release or operator credentials.
+Local and lifecycle CI also require the real installed Gateway qualification.
+`make ci` runs this gate before the other stages.
+The gate fails when the selected executable is absent.
+It uses the current tracked manifest and local Git transport without production operations.
 Playwright global setup builds the capability binary before browser test workers start.
 The build does not use the 30-second test hook limit.
 Global teardown removes the temporary binary after the browser tests.
@@ -1459,13 +1464,14 @@ A failed, cancelled, skipped, or missing job result prevents success.
 | `make frontend-dependencies` | Install the pinned npm graph and Chromium into ignored project-local state. Focused frontend validation, `make lint`, `make test`, and `make ci` invoke this target automatically. |
 | `make check-brand-icons` | Validate local SVG assets and all provider and family mappings. See [Provider and model icons](docs/provider-model-icons.md). |
 | `make test-brand-icons` | Run browser and build checks for management and public catalog icons. |
-| `make ci-backend` | Run the complete Go suite and require 100% statement coverage. |
+| `make ci-backend` | Run the portable Go suite and require 100% statement coverage. |
+| `make test-installed-gateway` | Require an installed Gateway executable and run the real selected-manifest planner plus the portable facade test. |
 | `make test-coverage-contract` | Verify all Go test groups, merged coverage counts, and executable probe inputs. |
 | `make ci-backend-checks` | Run release checks, Go and Python analysis, protocol acceptance, admission race tests, Python tests, and local provider preflight. |
 | `make ci-frontend` | Run frontend analysis, browser tests, the Pages artifact check, and the management authentication test. |
 | `make up` | Require the ignored private `configs/.env.local`, then build and run the complete local browser orchestration: ghttp static UI and same-origin TAuth routes on `localhost:4179`, plus the API on `localhost:8080`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |
 | `make down` | Stop the exact local Compose project started by `make up`, including orphaned services and its project network, while retaining the named local TAuth and management data volumes. |
-| `make ci` | Prepare pinned frontend dependencies, then run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, Playwright browser tests, the app lifecycle contract test, and the non-paid live-harness preflight. A successful run ends with a per-gate table, current-run coverage, and an explicit `CI PASSED` receipt. |
+| `make ci` | Require the installed Gateway qualification and all portable gates. Require 100% Go statement coverage. Report each gate and the final `CI PASSED` receipt. |
 | `make test-dictator` | Run speech protocol acceptance with local providers and the official client. |
 | `make test-dictator-live` | Run all six speech capabilities against the selected live service. See [Dictator live acceptance](docs/dictator-live-acceptance.md). |
 | `make test-live-provider-harness` | Save a temporary managed OpenAI connection and route one request through a loopback provider. |
