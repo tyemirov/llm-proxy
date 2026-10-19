@@ -64,6 +64,10 @@ test: go-test python-test frontend-test test-openapi-pages-artifact test-managem
 go-test: frontend-dependencies
 	@GO="$(GO)" ./scripts/check_coverage.sh
 
+.PHONY: test-hosted-admission-errors
+test-hosted-admission-errors:
+	$(GO) test ./internal/proxy -run='^TestHostedJournalAdmissionEntropyFailuresPreserveUnreservedFunds$$' -count=100 -race
+
 python-test:
 	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev pytest
 	$(MAKE) python-package-install-test

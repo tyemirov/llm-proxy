@@ -114,6 +114,9 @@ func startHostedFundsProcess(t *testing.T, settings hostedFundsProcessSettings) 
 			if err := command.Wait(); !errors.As(err, &exit) {
 				t.Errorf("funds process did not stop: %v output=%s", err, output.String())
 			}
+			if t.Failed() {
+				t.Logf("funds process stage=%q output after exit:\n%s", settings.Stage, output.String())
+			}
 		})
 	}
 	t.Cleanup(stop)
