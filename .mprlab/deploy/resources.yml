@@ -132,7 +132,9 @@ mprlab_resources:
               volume: data
               read_only: false
           ports:
-            '8080': {}
+            '8080':
+              host_port: 18083
+              scope: private_lan
           readiness:
             protocol: http
             port: 8080
@@ -153,6 +155,20 @@ mprlab_resources:
         scheme: http
         alias: llm-proxy
         port: 8080
+      health:
+        protocol: http
+        path: /healthz
+        expected_status: 200
+    http-private-lan:
+      kind: runtime_capability
+      name: llm-proxy.http.private-lan
+      version: 1
+      project: runtime
+      service: llm-proxy
+      endpoint:
+        scope: private_lan
+        scheme: http
+        port: 18083
       health:
         protocol: http
         path: /healthz
