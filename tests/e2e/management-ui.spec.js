@@ -2790,6 +2790,8 @@ test("rejected requests stay visible without entering execution or failure metri
   await installUsageRejectionsResponse(page, managementUsageRejections("30d"));
 
   await page.goto(`${baseURL}${applicationPath}`);
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("tenant_1");
+  await expect(page.locator("connection-dashboard")).toHaveAttribute("aria-busy", "false");
   await page.getByRole("combobox", { name: "Usage tenant" }).selectOption("");
   await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
 

@@ -1,0 +1,65 @@
+{
+  "issue": "I311",
+  "baseline_commit": "a049a40b49b437dfc9e27162444dfdff3f400dbe",
+  "source_sha256": {
+    "internal/proxy/structured_requests.go": "ac5b74553b106ee7262e943f737bd1c68dd7fc8de0751df66043f6d3237bec06",
+    "internal/proxy/structured_requests_hosted.go": "c0987f1ef00fbf50245d6631eb3a6b59315442fa81578022355fe4e8695d8386",
+    "internal/proxy/hosted_text_results.go": "5297b188b82eea8577970fc43b7aff2e41af2da5cc830a9d7bfcdc7aebe556d9",
+    "internal/proxy/structured_identity_locks.go": "ee93c93c9cd066a436c69e79c47a8420bc539c9a9fab4dd3845be2885c30dffb",
+    "internal/proxy/structured_identity_concurrency_internal_test.go": "87a05e6db42726630c39dd142cba67b7a59ac4d03521dad914a3acefd4131db2",
+    "internal/proxy/structured_identity_locks_internal_test.go": "0a2bfbc292e81f4bc232452a0b24876e00440d4b77f3ba0fb25532357796be65"
+  },
+  "focused_native_race": {
+    "command": "go test -race ./tests/integration ./internal/proxy -run '^Test(StructuredIdentity.*|StructuredRequestStore(RuntimeRetention|RecoveryAndSafety|InjectedFailures|Lifecycle)|StructuredRequestConvergesAcrossSubmitReplayAndReconciliation|HostedResultOverlappingStartupPreservesOneSettlement|HostedResultPublicationRecoveryWriteFailuresPreserveFunds|HostedResultReadExpiryDeleteFailureKeepsSettlement)' -count=1 -v",
+    "status": "pass",
+    "elapsed_seconds": 18.036,
+    "log_sha256": "5f73a053a706f5de7f014d0446ad672ba34b2c7ccad73bd9e12683f92a1cf581"
+  },
+  "initial_public_regressions": {
+    "failed_cases": 6,
+    "failure": "independent identity blocked behind another publication",
+    "log_sha256": "bd47d1edd263a6703cf82044d1e666baff28c0e72101169f760ba77502495f6d"
+  },
+  "local_diagnostic": {
+    "preseeded_records": 128,
+    "provider": "instant local HTTP fixture",
+    "race_detector": true,
+    "repetitions_per_cohort": 1,
+    "baseline_mechanism": "exact production source Go overlay; checkout unchanged",
+    "baseline": {
+      "cohort_1_wall_ms": 25.929625,
+      "cohort_32_wall_ms": 818.706209,
+      "cohort_32_median_ms": 680.257187
+    },
+    "current": {
+      "cohort_1_wall_ms": 26.947333,
+      "cohort_32_wall_ms": 474.057917,
+      "cohort_32_median_ms": 398.391125
+    },
+    "baseline_log_sha256": "6a949d836bc60890b5bd8973eba2a731fe4b6b627d32f5c4e0e8d4c60ef4478d",
+    "limitations": [
+      "Local filesystem and an instant fixture do not reproduce deployed storage or provider latency.",
+      "Single samples do not establish a latency distribution or an end-to-end guarantee."
+    ]
+  },
+  "independent_review": "source and focused tests clear; full CI passed",
+  "full_ci": {
+    "command": "CI=1 make ci </dev/null",
+    "status": "pass",
+    "elapsed_seconds": 801,
+    "gates": 15,
+    "go_statement_coverage_percent": 100.0,
+    "frontend_browser_cases": 172,
+    "tauth_blackbox_cases": 11,
+    "log_sha256": "f59d27231d4684c4a130675d542917db4cf2a1e4d29d3339cad919ebcff529d1"
+  },
+  "provider_activation": "not performed",
+  "paid_calls": 0,
+  "pre_ci_document_sha256": {
+    ".gitignore": "5cc3fb6d5303c0b7b24d09b702f27a5cbb396cb3267e59432077ffa5351cd71e",
+    "README.md": "99f211b60373520c8ed883d2ea473e0c7337b0f20fdce04cd2ff655e7d7a13cf",
+    ".mprlab/ISSUES.md": "b0a9faf244fbb40db8d954e9ea480aabeec57f9821b4735198992eea17014c6a",
+    ".mprlab/TERMINOLOGY.md": "a2e60a807b4342c0560cd0cb3286c100aa8488ce905d4713ee0eb389c8bbe22c",
+    "docs/structured-persistence-concurrency.md": "1c5f942188b72d845c5d449f0188a4c486e31997a3f1641d5c7733a423095aa9"
+  }
+}

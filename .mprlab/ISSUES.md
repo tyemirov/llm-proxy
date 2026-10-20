@@ -2149,6 +2149,27 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## Improvements
 
+- [x] [I312] (P1) Align OpenAI admission with the 32-request tenant allocation
+  Goal: Admit 32 concurrent interactive requests for one OpenAI tenant and account.
+  Evidence: The local NameSignal cohort returned 28 successes and four admission failures with four active and 24 queued origin slots.
+  Requirements: Set eight active OpenAI slots and retain 24 queued slots. Increase global admitted capacity from 592 to 596.
+  Keep all other limits, response-body ownership, retries, durable state, and credit settlement unchanged.
+  Validation: Load canonical config through public tests. Verify 32 create and poll flows, bounded active requests, complete drain, and excess rejection.
+  Complete independent review and final repository CI. Keep production activation separate.
+  Result: Independent review is clear. Final `make ci` passed all 15 gates with 100% Go statement coverage.
+  The local live cohort completed all 32 requests in 19.604 seconds. Complete-search latency remains separate.
+
+- [x] [I311] (P1) Permit independent structured request persistence
+  Goal: Remove shared journal delays between distinct request identities.
+  Evidence: A 32-request NameSignal cohort took 58.139 seconds with unchanged provider progress near 11.7 seconds.
+  The shared store mutex holds all 96 durable publications across these requests.
+  Requirements: Preserve atomic publication, synchronization, duplicate protection, restart behavior, tenant isolation, and hosted credit settlement.
+  Validation: Block one identity at each publication state through the public HTTP flow. Verify another identity completes before release.
+  Verify duplicate dispatch, reconciliation, restart, and hosted settlement with the race detector. Complete required repository CI.
+  Result: Independent review is clear. Final `make ci` passed all 15 gates with 100% Go statement coverage.
+  Production acceptance and provider activation remain separate.
+
+
 - [x] [I310] (P1) {B307} Use the `theme-control` contract
   Goal: Use the `mpr-ui` contract on each page.
   Requirements: Keep each mode, position, label, and initial selection.

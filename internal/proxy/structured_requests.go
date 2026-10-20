@@ -70,14 +70,15 @@ type structuredRequestRecord struct {
 }
 
 type structuredRequestStore struct {
-	hosted    *hostedTextRequests
-	journal   *gormManagedTenantDatabase
-	mu        sync.Mutex
-	root      string
-	retention time.Duration
-	now       func() time.Time
-	publish   func(string, structuredRequestRecord) error
-	read      func(string) (structuredRequestRecord, error)
+	hosted     *hostedTextRequests
+	journal    *gormManagedTenantDatabase
+	mu         sync.RWMutex
+	identities structuredIdentityLocks
+	root       string
+	retention  time.Duration
+	now        func() time.Time
+	publish    func(string, structuredRequestRecord) error
+	read       func(string) (structuredRequestRecord, error)
 }
 
 func newStructuredRequestStore(assetStorePath string, retentionSeconds int, journal *gormManagedTenantDatabase) (*structuredRequestStore, error) {
@@ -234,9 +235,9 @@ func canonicalJSON(raw []byte) ([]byte, error) {
 }
 
 func (store *structuredRequestStore) begin(requestTenant tenant, idempotencyKey string, intentSHA256 string, provider string, model string, proxyRequestID string) (structuredRequestRecord, bool, error) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
 	tenantDigest := sha256Hex(requestTenant.identifier.string())
+	unlock := store.lockRecord(tenantDigest, sha256Hex(idempotencyKey))
+	defer unlock()
 	keyDigest := sha256Hex(idempotencyKey)
 	path, pathError := store.recordPath(tenantDigest, keyDigest, true)
 	if pathError != nil {
@@ -289,9 +290,9 @@ func (store *structuredRequestStore) begin(requestTenant tenant, idempotencyKey 
 }
 
 func (store *structuredRequestStore) lookup(requestTenant tenant, idempotencyKey string) (structuredRequestRecord, error) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
 	tenantDigest := sha256Hex(requestTenant.identifier.string())
+	unlock := store.lockRecord(tenantDigest, sha256Hex(idempotencyKey))
+	defer unlock()
 	path, _ := store.recordPath(tenantDigest, sha256Hex(idempotencyKey), false)
 	record, readError := store.read(path)
 	if os.IsNotExist(readError) {
@@ -328,9 +329,9 @@ func (store *structuredRequestStore) expireTerminal(path string, record structur
 }
 
 func (store *structuredRequestStore) transition(requestTenant tenant, idempotencyKey string, intentSHA256 string, update func(*structuredRequestRecord, time.Time)) (structuredRequestRecord, error) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
 	tenantDigest := sha256Hex(requestTenant.identifier.string())
+	unlock := store.lockRecord(tenantDigest, sha256Hex(idempotencyKey))
+	defer unlock()
 	path, _ := store.recordPath(tenantDigest, sha256Hex(idempotencyKey), false)
 	record, readError := store.read(path)
 	if readError != nil {
