@@ -52,6 +52,7 @@ export async function startLocalManagementStack(authRouting = "frontend", {admin
   const tAuthBinaryPath = path.join(temporaryDirectory, "tauth");
   const llmProxyBinaryPath = path.join(temporaryDirectory, "llm-proxy");
   const serviceProcesses = [];
+  const portLeases = [];
   let frontendServer;
 
   try {
@@ -60,8 +61,12 @@ export async function startLocalManagementStack(authRouting = "frontend", {admin
 
     const frontend = await startFrontendServer(responses);
     frontendServer = frontend.server;
-    const tAuthPort = await reserveLocalPort();
-    const llmProxyPort = await reserveLocalPort();
+    const tAuthLease = await reserveLocalPort();
+    portLeases.push(tAuthLease);
+    const llmProxyLease = await reserveLocalPort();
+    portLeases.push(llmProxyLease);
+    const tAuthPort = tAuthLease.port;
+    const llmProxyPort = llmProxyLease.port;
     const frontendOrigin = `http://${localHost}:${frontend.port}`;
     const tAuthOrigin = `http://${localHost}:${tAuthPort}`;
     const llmProxyOrigin = `http://${localHost}:${llmProxyPort}`;
@@ -144,6 +149,7 @@ export async function startLocalManagementStack(authRouting = "frontend", {admin
     await writeFile(llmProxyConfigPath, llmProxyConfig, { mode: 0o600 });
     await writeFile(path.join(temporaryDirectory, "providers.yml"), yaml.dump(speechCatalog), { mode: 0o600 });
 
+    await tAuthLease.release();
     const tAuthProcess = startService("tauth", tAuthBinaryPath, ["--config", tAuthConfigPath]);
     serviceProcesses.push(tAuthProcess);
     await waitForHTTP(`${tAuthOrigin}/auth/session`, {
@@ -152,6 +158,7 @@ export async function startLocalManagementStack(authRouting = "frontend", {admin
       "X-TAuth-Tenant": tenantID,
     }, tAuthProcess);
 
+    await llmProxyLease.release();
     const llmProxyProcess = startService(
       "llm-proxy",
       llmProxyBinaryPath,
@@ -168,11 +175,11 @@ export async function startLocalManagementStack(authRouting = "frontend", {admin
       llmProxyOrigin,
       serviceOutput: () => llmProxyProcess.output.value(),
       async stop() {
-        await stopStack(frontendServer, serviceProcesses, temporaryDirectory);
+        await stopStack(frontendServer, serviceProcesses, temporaryDirectory, portLeases);
       },
     };
   } catch (error) {
-    await stopStack(frontendServer, serviceProcesses, temporaryDirectory);
+    await stopStack(frontendServer, serviceProcesses, temporaryDirectory, portLeases);
     throw error;
   }
 }
@@ -272,11 +279,11 @@ async function reserveLocalPort() {
   });
   const address = server.address();
   if (!address || typeof address === "string") {
+    await closeHTTPServer(server);
     throw new Error("local_port_reservation_failed");
   }
   const { port } = address;
-  await closeHTTPServer(server);
-  return port;
+  return { port, release: () => closeHTTPServer(server) };
 }
 
 async function startFrontendServer(responses) {
@@ -470,7 +477,8 @@ function llmProxyEnvironment(frontendOrigin, tAuthOrigin, llmProxyOrigin, tempor
   };
 }
 
-async function stopStack(frontendServer, serviceProcesses, temporaryDirectory) {
+async function stopStack(frontendServer, serviceProcesses, temporaryDirectory, portLeases) {
+  const leaseResults = await Promise.allSettled(portLeases.map(lease => lease.release()));
   if (frontendServer) {
     await closeHTTPServer(frontendServer);
   }
@@ -478,6 +486,8 @@ async function stopStack(frontendServer, serviceProcesses, temporaryDirectory) {
     await stopService(serviceProcess);
   }
   await rm(temporaryDirectory, { force: true, recursive: true });
+  const failedLease = leaseResults.find(result => result.status === "rejected");
+  if (failedLease) throw failedLease.reason;
 }
 
 async function stopService(serviceProcess) {

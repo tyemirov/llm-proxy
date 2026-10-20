@@ -2,7 +2,7 @@ server:
   port: 8080
   log_level: info
   upstream_capacity:
-    global: {active: 32, admitted: 592}
+    global: {active: 32, admitted: 596}
     tenant: {active: 8, admitted: 32}
     account: {active: 8, admitted: 32}
     media: {active: 24, admitted: 256}
@@ -20,7 +20,7 @@ server:
       - {origin: https://fal.media, active: 4, queued: 24}
       - {origin: https://v3.fal.media, active: 4, queued: 24}
       - {origin: https://v3b.fal.media, active: 4, queued: 24}
-      - {origin: https://api.openai.com, active: 4, queued: 24}
+      - {origin: https://api.openai.com, active: 8, queued: 24}
       - {origin: https://api.deepseek.com, active: 4, queued: 24}
       - {origin: https://api.moonshot.ai, active: 4, queued: 24}
       - {origin: https://api.minimax.io, active: 4, queued: 24}

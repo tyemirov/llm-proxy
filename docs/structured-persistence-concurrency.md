@@ -48,8 +48,12 @@ It includes duplicate requests during blocked publication, conflicting intent, t
 The registry tests verify waiter handoff, concurrent reuse, entry retirement, and recovery exclusion.
 Independent review cleared the frozen source and tests. Repository CI passed all 15 gates in 801 seconds.
 Go statement coverage is 100%. All 172 frontend cases and 11 TAuth browser cases passed.
-Live load qualification and the complete NameSignal search remain pending after source validation.
+At this initial validation, live load qualification and the complete NameSignal search remained pending.
 This source correction does not establish a one-minute search guarantee or provider activation.
+
+The subsequent [capacity qualification](openai-admission-capacity-evidence.json) passed all 32 live local requests in 19.604 seconds.
+Final CI passed all 15 gates in 697 seconds, with 100% Go statement coverage and 13 TAuth browser cases.
+The complete NameSignal search target remains unverified. Production activation remains separate.
 
 ## Local Comparison
 

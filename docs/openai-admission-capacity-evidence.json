@@ -1,0 +1,112 @@
+{
+  "issue": "I312",
+  "changed_files": [
+    "configs/config.yml",
+    "tests/integration/openai_canonical_capacity_test.go"
+  ],
+  "config_changes": {
+    "server.upstream_capacity.global.admitted": {
+      "before": 592,
+      "after": 596
+    },
+    "server.upstream_capacity.origins[https://api.openai.com].active": {
+      "before": 4,
+      "after": 8
+    }
+  },
+  "red": {
+    "command": "CI=1 make test-upstream-admission ADMISSION_TEST_PATTERN=TestIntegrationCanonicalOpenAIUpstreamCapacityStructuredBackground </dev/null",
+    "exit": 2,
+    "log": "_scratch/I311/capacity-red.log",
+    "failure": "canonical OpenAI allocation rejected a 32-request cohort: admitted=28 rejected=2"
+  },
+  "green": {
+    "exit": 0,
+    "log": "_scratch/I311/capacity-green.log"
+  },
+  "final_race": {
+    "command": "CI=1 make test-upstream-admission-race ADMISSION_TEST_PATTERN='TestIntegrationCanonicalOpenAIUpstreamCapacityStructuredBackground|TestIntegrationUpstreamAdmissionIsolatesSaturatedOrigin|TestIntegrationBackgroundPollSleepDoesNotOccupyUpstreamWorker' </dev/null",
+    "exit": 0,
+    "log": "_scratch/I311/capacity-race-final.log",
+    "integration_seconds": 6.532
+  },
+  "scope": "Canonical configuration passed public protocol tests, live local capacity qualification, and final repository CI. Production activation remains separate.",
+  "checks_running": false,
+  "source_sha256": {
+    "configs/config.yml": "2e817459e49c2dedc89a38c28b0e7746df9e285062548d7864a6b9edccc70d89",
+    "tests/integration/openai_canonical_capacity_test.go": "6038c0d12f97cd255868e80fc5af072044e6c2fae26c1e0288c15311428439f0"
+  },
+  "independent_review": "Clear. Live local capacity passed in 19.604 seconds. Final repository CI passed all 15 gates.",
+  "public_contracts_changed": "No request, response, or event schema change. Canonical OpenAI active capacity and global admitted capacity increase.",
+  "capacity_suite": {
+    "command": "CI=1 make test-upstream-admission </dev/null",
+    "exit": 0,
+    "integration_seconds": 5.977,
+    "proxy_seconds": 2.218,
+    "cli_seconds": 0.988,
+    "log": "_scratch/I311/capacity-suite.log"
+  },
+  "final_ci_attempts": [
+    {
+      "started_at": "2026-10-20T00:06:45Z",
+      "command": "CI=1 make ci </dev/null",
+      "exit": 2,
+      "gate": "Installed Gateway qualification",
+      "cause": "Errno 28: No space left on device during Gateway callback and Ansible temporary module writes",
+      "log_sha256": "2e342aa48956d97129c7972670f2e7c107840a79d1c1e6fd042633faff8a3c53",
+      "source_assertion_failure": false
+    },
+    {
+      "started_at": "2026-10-20T00:59:09Z",
+      "command": "CI=1 make ci </dev/null",
+      "exit": 2,
+      "gate": "Go integration tests",
+      "failure": "TestHostedPaymentsCheckoutWriteFailuresRecoverWithoutDuplicateCreation/delivery-completion: HTTP 401 payment_signature_invalid",
+      "log_sha256": "1b1d0d04d2873412195f065cdf2aa5d15afcceb14b152cf20a6525d28e5292a9",
+      "environment_evidence": {
+        "sleep_start_utc": "2026-10-20T01:21:15Z",
+        "wake_utc": "2026-10-20T01:35:40Z",
+        "sleep_seconds": 865,
+        "failure_log_utc": "2026-10-20T01:35:40Z",
+        "host_clock": "macOS pmset sleep/wake record",
+        "interpretation": "Timestamp expiration is plausible, not established by the generic HTTP error. The unchanged fixture signs immediately before dispatch; the real verifier uses a one-minute wall-clock tolerance."
+      }
+    },
+    {
+      "started_at": "2026-10-20T02:18:39Z",
+      "command": "CI=1 /usr/bin/caffeinate -i make ci </dev/null",
+      "exit": 0,
+      "elapsed_seconds": 697,
+      "passed_gates": 15,
+      "go_statement_coverage_percent": 100.0,
+      "log_sha256": "8ac0ba4571ffc49d055a29ab818f57f2b98d3885ea4fa4bad6db81a930f3325f",
+      "process_group": 57855,
+      "process_group_empty_after_exit": true,
+      "paid_provider_calls": 0
+    }
+  ],
+  "live_capacity": {
+    "elapsed_ms": 19604,
+    "requests": 32,
+    "first_pass_valid_responses": 32,
+    "actual_proxy_arrival_span_ms": 3289.836,
+    "actual_proxy_peak_concurrency": 32,
+    "scope": "Diagnostic capacity only. Complete-search latency remains unverified.",
+    "evidence_repository": "NameSignal",
+    "evidence_path": "docs/reviews/2026-10-19-origin8-load-evidence.json"
+  },
+  "focused_disk_recovery": {
+    "command": "CI=1 make test-installed-gateway </dev/null",
+    "exit": 0,
+    "seconds": 27.763
+  },
+  "focused_sleep_recovery": {
+    "command": "CI=1 caffeinate -i make test-hosted-payments </dev/null",
+    "exit": 0,
+    "proxy_seconds": 58.873,
+    "cli_seconds": 0.783,
+    "source_changed": false,
+    "signature_tolerance_changed": false,
+    "scope": "Unchanged payment suite passed with a command-scoped idle-sleep assertion. This does not prove the earlier generic signature-error cause."
+  }
+}

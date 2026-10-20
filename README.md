@@ -432,6 +432,8 @@ Each origin declares its own `active` and `queued` limits.
 The sum of origin allocations must not exceed `global.admitted`.
 Each allocation contains the origin's active and queued limits.
 Thus, one origin cannot consume another origin's admission allocation.
+The canonical OpenAI allocation has eight active slots and 24 queued slots.
+It supports the 32-request tenant and account admission limits. Global admitted capacity is 596.
 Ready origins and tenants receive capacity in turn.
 An exhausted allocation returns `503 request queue full`.
 Accepted media operations retain their separate durable-job limits.
