@@ -269,15 +269,19 @@ func buildDashScopeResponsesProviderKeyVerificationRequest(requestContext contex
 
 func buildXAIResponsesProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
 	payload := struct {
-		Model           string `json:"model"`
-		Input           string `json:"input"`
-		MaxOutputTokens int    `json:"max_output_tokens"`
-		Store           bool   `json:"store"`
+		Model           string            `json:"model"`
+		Input           string            `json:"input"`
+		MaxOutputTokens int               `json:"max_output_tokens"`
+		Store           bool              `json:"store"`
+		Reasoning       map[string]string `json:"reasoning,omitempty"`
 	}{
 		Model:           model.providerString(),
 		Input:           providerKeyVerificationPrompt,
 		MaxOutputTokens: providerKeyVerificationMaxTokens,
 		Store:           false,
+	}
+	if model.reasoningEffort.supports(reasoningEffortNone) {
+		payload.Reasoning = map[string]string{"effort": reasoningEffortNone}
 	}
 	payloadBytes, _ := json.Marshal(payload)
 	return buildAuthorizedJSONRequest(requestContext, http.MethodPost, provider.textEndpointURL, apiKey, bytes.NewReader(payloadBytes))
