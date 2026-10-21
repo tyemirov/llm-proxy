@@ -5451,6 +5451,10 @@ providers:
             - text
           default_operations:
             - text
+          reasoning_effort:
+            adapter: xai_responses
+            efforts:
+                - none
           prices:
             - operation: text
               available: false
@@ -5463,6 +5467,10 @@ providers:
           transport: text_responses
           operations:
             - text
+          reasoning_effort:
+            adapter: xai_responses
+            efforts:
+                - none
           prices:
             - operation: text
               available: false
