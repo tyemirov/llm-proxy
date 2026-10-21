@@ -10,6 +10,11 @@ The codec returns visible assistant `output_text` items and valid function calls
 It rejects error envelopes, refusals, unknown output types, and nonterminal synchronous results.
 Provider reasoning is not a public result.
 
+Grok 4.3 and its `grok-4.3-latest` alias accept explicit reasoning `none`.
+The codec sends that value as `reasoning.effort`. Omitted reasoning remains omitted.
+Provider key verification selects `none` when the selected offering declares that value.
+This verification request retains its 16-token output limit and `store:false`.
+
 An `incomplete` result with reason `max_output_tokens` starts the common continuation loop.
 The next request includes the original messages, visible partial output, and the missing-suffix instruction.
 Each continuation remains stateless. The proxy sums usage across requests.
