@@ -264,7 +264,7 @@ type reasoningEffortCapability struct {
 var reasoningEffortAdapterSupportedValues = map[reasoningEffortAdapter]map[string]struct{}{
 	reasoningEffortAdapterVertexGenerateContent: {"minimal": {}, "low": {}, "medium": {}, "high": {}},
 	reasoningEffortAdapterDashScopeResponses:    {"none": {}, "low": {}, "medium": {}, "xhigh": {}},
-	reasoningEffortAdapterXAIResponses:          {"low": {}, "medium": {}, "high": {}, "xhigh": {}},
+	reasoningEffortAdapterXAIResponses:          {"none": {}, "low": {}, "medium": {}, "high": {}, "xhigh": {}},
 	reasoningEffortAdapterOpenAIResponses: {
 		"none":    {},
 		"minimal": {},
