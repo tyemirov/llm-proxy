@@ -1,6 +1,9 @@
 ---
 mprlab_resources:
   owner: llm-proxy
+  hosts:
+    tutosh:
+      ansible_become_password: DEPLOY_SUDO_PASSWORD_TUTOSH
   release:
     scheme: semver
     fixed_major: 1
@@ -45,6 +48,15 @@ mprlab_resources:
         increment: 0s
         multiplier: 2
         attempt_limit: 360
+  environment_file: .mprlab/deploy/.env
+  inputs:
+    LLM_PROXY_MANAGEMENT_ADMIN_EMAILS: ${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}
+    LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID: ${LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID}
+    LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY: ${LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY}
+    LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY: ${LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY}
+    DEPLOY_SUDO_PASSWORD_TUTOSH: ${DEPLOY_SUDO_PASSWORD_TUTOSH}
+    MPRLAB_TAUTH_MANAGEMENT_URL: ${MPRLAB_TAUTH_MANAGEMENT_URL}
+    MPRLAB_TAUTH_PROVISIONING_CREDENTIALS: ${MPRLAB_TAUTH_PROVISIONING_CREDENTIALS}
   resources:
     private:
       kind: private_values
