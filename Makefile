@@ -81,6 +81,10 @@ frontend-test: frontend-dependencies
 test-frontend-dependency-contract:
 	$(GO) test ./tests -run '^TestOperationalFrontendValidationPreparesPinnedDependencies$$' -count=1
 
+.PHONY: test-lifecycle-contract
+test-lifecycle-contract:
+	$(GO) test ./tests -run '^TestOperationalRepositoryOwnsVersionlessLifecycle$$' -count=1
+
 test-openapi-pages-artifact:
 	@./scripts/test-openapi-pages-artifact.sh
 

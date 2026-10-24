@@ -50,8 +50,26 @@ func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.
 		resourceKeys = append(resourceKeys, key)
 	}
 	slices.Sort(resourceKeys)
-	if !slices.Equal(resourceKeys, []string{"ci", "defaults", "operations", "owner", "release", "resources"}) {
+	if !slices.Equal(resourceKeys, []string{"ci", "defaults", "environment_file", "hosts", "inputs", "operations", "owner", "release", "resources"}) {
 		testingInstance.Fatalf("unexpected lifecycle manifest fields: %#v", resourceKeys)
+	}
+	if resourcesDocument["environment_file"] != ".mprlab/deploy/.env" {
+		testingInstance.Fatalf("unexpected lifecycle environment source: %#v", resourcesDocument["environment_file"])
+	}
+	expectedInputs := map[string]any{}
+	for _, name := range []string{
+		"LLM_PROXY_MANAGEMENT_ADMIN_EMAILS", "LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID",
+		"LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY", "LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY",
+		"DEPLOY_SUDO_PASSWORD_TUTOSH", "MPRLAB_TAUTH_MANAGEMENT_URL", "MPRLAB_TAUTH_PROVISIONING_CREDENTIALS",
+	} {
+		expectedInputs[name] = "${" + name + "}"
+	}
+	if !reflect.DeepEqual(resourcesDocument["inputs"], expectedInputs) {
+		testingInstance.Fatalf("unexpected lifecycle input bindings: %#v", resourcesDocument["inputs"])
+	}
+	expectedHosts := map[string]any{"tutosh": map[string]any{"ansible_become_password": "DEPLOY_SUDO_PASSWORD_TUTOSH"}}
+	if !reflect.DeepEqual(resourcesDocument["hosts"], expectedHosts) {
+		testingInstance.Fatalf("unexpected lifecycle host bindings: %#v", resourcesDocument["hosts"])
 	}
 	ci, ciAvailable := resourcesDocument["ci"].(map[string]any)
 	if !ciAvailable || len(ci) != 2 || ci["enabled"] != true || !reflect.DeepEqual(ci["command"], map[string]any{"0": "make", "1": "ci"}) {
