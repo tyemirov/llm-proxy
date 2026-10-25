@@ -103,23 +103,55 @@ Apply this section to deployment or publication work for a browser frontend.
 - Verify publication through the public website and `/.mprlab-release.json`.
 - Run the Governor check after each selected manifest change and before each release, publish, or deploy operation.
 
+## Manifest Environment Resolution
+
+Use this contract for Gateway lifecycle operations that use a selected manifest.
+Manifest processing is the only boundary that reads environment values for Gateway configuration.
+
+- Let manifest values include environment variable references.
+- Use the optional `environment_file` field for a relative or absolute environment file path specified in the manifest.
+- Use the selected consuming repository as the root for relative paths.
+- When the manifest has no `environment_file` field, use only process values.
+- Reject a selected file that is missing or that you cannot read, even when process values are available.
+- When the two sources have a value for a variable, use its process value.
+- Use only the path specified by `environment_file` for an environment file.
+- Do not use a default path or examine other paths for environment files.
+- Do not make an environment file necessary because of a resource kind or lifecycle phase.
+- Read environment values one time at the manifest boundary.
+- During manifest processing, change environment variable references to their values.
+- Validate the configuration before CI, builds, host contact, or provider effects.
+- For each missing necessary reference value, reject the manifest with its variable name and manifest location.
+- Keep private values out of error messages and public diagnostics.
+- Give the validated configuration to subsequent operations.
+- Do not read environment variables or environment files for configuration after manifest processing.
+- Do not change environment references to values in downstream Go, Python, Ansible, or shell code.
+- Supply deployment, publication, and signing credentials from the validated configuration.
+- Keep private configuration values outside public artifacts, plans, receipts, state documents, and logs.
+- Keep each selected application's validated configuration separate.
+- Validate all selected manifests before application-set effects.
+- Use only the selected resources and their specified dependency tree for readiness checks.
+
+Environment files are optional inputs to manifest processing.
+They are not a separate deployment specification or a necessary credential store.
+Provider-native credential stores are provider inputs under their specified contracts.
+They cannot supply Gateway configuration that the selected manifest does not include.
+
 ## Credential Discovery
 
-Apply this gate when the selected task requires credentials.
+Use this gate when credentials are necessary for the selected task.
 
-- Identify each required environment variable from the active command and repository contract.
-- Inspect the process environment before you request a login.
-- Inspect repository private environment files before you report a credential blocker.
-- Include ignored `.env`, `.env.*`, and `*.env` files in the authorized repository roots.
-- Treat tracked example and sample environment files as documentation only.
-- Search only for exact variable names. Do not print, copy, or record secret values.
-- When a command declares one repository environment file as its input, clear
-  its owned process variables and source only that file.
-- Use the command's standard environment lookup. Do not add a credential parser
-  or another input channel.
-- When available, use a non-mutating authentication command to verify the discovered value.
-- Request new credentials only after each authorized existing input fails verification.
-- Report a credential blocker only after you complete this gate.
+- For Gateway lifecycle operations, find credential references in the selected manifest.
+- During manifest processing, change those references to their values.
+- When a reference has no value, examine only the selected input sources.
+- For other commands, examine only credential sources specified in their documentation.
+- Examine only the specified variable names.
+- Use tracked example and sample environment files as documentation only.
+- Do not show or record secret values during diagnosis.
+- Do not make copies of secret values during diagnosis.
+- Use each provider's non-mutating authentication command when available.
+- Tell the operator to supply new credentials only after verification rejects the selected input.
+- Show a credential blocker only after this gate finds the missing or incorrect input.
+- Keep certificate and key artifact paths specified in the validated configuration.
 
 ## Validation
 
