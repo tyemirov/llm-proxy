@@ -1743,10 +1743,31 @@ The selected app transaction reads no unrelated app repository.
 This repository owns one production declaration:
 `.mprlab/deploy/resources.yml`. It declares the container image and service,
 retained data volume, `llm-proxy.http` capability, Caddy route, public health
-checks, GitHub Pages artifact, TAuth tenant, and private-value bindings. The
-ignored `.mprlab/deploy/.env` file is the canonical private deployment input.
-The gateway reads it only during deployment and generates one mode-`0600`
-service environment. TAuth, Pages, Caddy, and capability resources supply
+checks, GitHub Pages artifact, TAuth tenant, and private-value bindings.
+
+The manifest selects the ignored `.mprlab/deploy/.env` file through `environment_file`.
+This field is optional.
+When the manifest has no `environment_file` field, Gateway uses only process values.
+If the process and selected file supply the same input, Gateway uses the process value.
+If Gateway cannot read the selected file, it rejects the manifest even when process values are available.
+
+Gateway reads the manifest inputs one time at the manifest boundary.
+It validates the configuration before CI, builds, host contact, or provider effects.
+Gateway gives the validated configuration to all subsequent lifecycle operations.
+A missing necessary input stops the lifecycle operation.
+Gateway generates one service environment from the validated configuration.
+
+The manifest has these seven inputs:
+
+- `LLM_PROXY_MANAGEMENT_ADMIN_EMAILS`
+- `LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID`
+- `LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY`
+- `LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY`
+- `DEPLOY_SUDO_PASSWORD_TUTOSH`
+- `MPRLAB_TAUTH_MANAGEMENT_URL`
+- `MPRLAB_TAUTH_PROVISIONING_CREDENTIALS`
+
+TAuth, Pages, Caddy, and capability resources supply
 their owned outputs without duplicate values in the private file or service
 declaration.
 
