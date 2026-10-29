@@ -87,8 +87,8 @@ Give each term one meaning. Use the same term for the same concept in all docume
 
 - `model activation`: An explicit catalog state that controls whether an exact model is available through runtime routing and discovery.
 
-- **DashScope Responses codec**: The Alibaba-specific request and response
-  adapter for synchronous Qwen generation.
+- **DashScope Responses codec**: The DashScope protocol variation of the shared
+  Responses codec for synchronous Qwen generation.
 
 - `dispatch intent`: A durable record that a worker can have started an external provider request.
 - `operation artifact`: An output asset attached to a media operation.

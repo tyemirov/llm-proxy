@@ -35,6 +35,29 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B310] (P2) Wait for the balance refresh before browser fixture changes.
+  Goal:
+  Make the hosted-access browser fixture wait for the previous balance response before it replaces the balance route.
+  Requirements:
+  - Await the `prepaid-balance` component's idle state before the balance mock changes.
+  - Use this state only for fixture synchronization. Keep public assertions on rendered results.
+  - Keep the timer interval, assertion timeout, and product behavior unchanged.
+  - Retain exact amount, error, history, and automatic-update assertions.
+  Deliverables:
+  - A synchronized hosted-access browser fixture.
+  Validation:
+  - Run `make test-management-auth-blackbox BLACKBOX_TEST_ARGS=tests/blackbox/hosted-access.spec.js` and `make ci`.
+  Evidence:
+  I259 CI expected `$90071992547404.93` but received `$0.00` in the first mocked balance assertion.
+  The trace shows the previous balance request pending when the test advances its clock.
+  The automatic-update component skips that timer tick. No request reaches the new balance mock.
+
+  Resolution:
+  - Added a native browser assertion for the component's actual idle state before fixture replacement.
+  - Kept the public result assertions, timer interval, and timeout values.
+  - Focused browser validation passed. Final `make ci` passed all 15 gates.
+  - The final authentication suite passed all 13 browser tests, including this scenario.
+
 - [x] [B309] (P1) Separate installed Gateway qualification from portable hosted checks
   Evidence: Hosted run 39314080053 failed because the backend runner did not contain `mprlab-gateway`.
   Requirements: Keep hosted checks portable. Require the real installed planner before other local and lifecycle CI stages.
@@ -3056,7 +3079,7 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - The migration record contains asset digests, public observations, and activation instructions.
   Blocked: Complete central mpr-ui I009 final-candidate qualification, coordinated publication, cache convergence, and real Google acceptance.
 
-- [ ] [I259] (P2) Use one Responses codec with explicit protocol variations.
+- [x] [I259] (P2) Use one Responses codec with explicit protocol variations.
   Goal:
   Reduce repeated request construction and result parsing across OpenAI, xAI, and DashScope Responses routes.
   This refactor follows the catalog and transport improvements. It is not a prerequisite for F022.
@@ -3081,6 +3104,23 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Exercise each supported variation through the same shared public test suite.
   - Prove that another provider with an existing variation needs only catalog data and connection values.
   - Run focused Responses tests and applicable repository checks. Record live-provider acceptance separately.
+
+  Resolution:
+  - Added one shared Responses codec with closed OpenAI, xAI, and DashScope protocol variations.
+  - Removed the duplicate synchronous clients and router adapters.
+  - Kept OpenAI polling, response synthesis, text extraction, and pending function arguments.
+  - Kept provider-specific fields, error rules, output-limit decisions, and native usage totals.
+  - Extended shared catalog fixtures with storage, private reasoning, usage, and continuation assertions.
+  - Proved xAI rejection and DashScope continuation through second-provider definitions.
+  - Updated the catalog reference, provider guides, terminology, I038, and I041.
+  - Baseline and final protocol, xAI, and DashScope targets passed.
+  - Final `make ci` passed all 15 gates with 100.0 percent Go statement coverage.
+  - All 172 frontend tests and 13 authentication browser tests passed in local Chromium.
+  - B310 corrected a separate browser fixture race found during CI.
+  - Initial CI reported a removed indexed source path and missing shared-cache import artifacts.
+  - Indexed the replacement paths and used an isolated Go cache for final validation.
+  - Independent architecture review approved the source, tests, and documentation.
+  - Public API and event contracts did not change. Live-provider qualification remains separate.
 
 - [ ] [I255] (P1) Distinguish Gemini model-operation failures from rejected credentials.
   Goal:
@@ -3471,9 +3511,8 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
     https://docs.x.ai/developers/advanced-api-usage/deferred-chat-completions
   Requirements:
   - Verify Responses support for every configured Grok model and migrate each
-    eligible model to an xAI-owned Responses codec. Do not reuse OpenAI's
-    request builder or terminal-state parser merely because the endpoint path
-    and typed output resemble OpenAI.
+    eligible model to the shared Responses codec with the xAI protocol variation.
+    Keep the xAI request fields, terminal-state rules, and synchronous lifecycle explicit.
   - Omit `background` and register the lifecycle as synchronous. Parse xAI
     output, reasoning, usage, errors, storage controls, and output limits from
     xAI's schema.
@@ -3488,7 +3527,7 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
     continuation, storage policy, usage, safe errors, and absence of
     `background` polling. Existing xAI speech routing remains independent.
   Progress:
-  - All ten configured text offerings now use the xAI-owned `xai_responses` codec.
+  - I259 uses the shared Responses codec for the catalog-selected `xai_responses` variation.
   - Requests use `store:false`, ordered messages, and the native output limit field.
     They omit background execution and stored response identifiers.
   - The codec preserves visible output, image inputs, and usage across synchronous continuation requests.
@@ -3699,7 +3738,7 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
     synchronous calls are processed. Unlisted OpenAI fields may be ignored.
   Requirements:
   - Verify the Responses support matrix for every configured DashScope model.
-    Migrate supported models to a dedicated DashScope Responses wire adapter.
+    Migrate supported models to the shared Responses codec with the DashScope protocol variation.
     Leave any unsupported model on one explicitly registered current contract
     rather than trying Responses and falling back at runtime.
   - Send only Alibaba-documented fields and omit `background`. Parse typed
@@ -3716,7 +3755,7 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
     extraction, synchronous incomplete continuation, usage, safe errors, and
     rejection of accidental `background` or unsupported OpenAI-only fields.
   Development:
-  - All four Qwen text routes use the dedicated `dashscope_responses` codec.
+  - I259 uses the shared Responses codec for the catalog-selected `dashscope_responses` variation.
     Requests use the saved Singapore workspace URL and explicit `store: false`.
   - Public output limits below 16 are rejected before provider work. Typed
     visible text and native usage feed the existing stateless continuation.
