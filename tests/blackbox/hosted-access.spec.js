@@ -282,6 +282,8 @@ test('hosted onboarding creates tenant access without provider credentials at de
     await page.clock.fastForward(30_001);
     await expect(charges).toContainText('Net charge: $0.012');
 
+    await expect(dashboard.locator("prepaid-balance")).toHaveJSProperty("busy", false);
+
     const fundsRoot=`${base}/billing-accounts/${billing.billing_accounts[0].id}`;
     let fundsFailure=false, invalidFunds=false, balanceReads=0;
     await page.route(fundsRoot+'/balance',async route=>{
