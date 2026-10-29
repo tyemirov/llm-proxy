@@ -412,11 +412,11 @@ func validAnthropicProviderKeyVerificationResponse(responseBytes []byte) bool {
 }
 
 func validXAIProviderKeyVerificationResponse(body []byte) bool {
-	_, err := parseXAIResponse(body)
+	_, err := (responsesCodec{variation: responsesXAI}).parse(body)
 	return err == nil || errors.Is(err, errProviderOutputLimitReached)
 }
 
 func validDashScopeProviderKeyVerificationResponse(body []byte) bool {
-	_, err := parseDashScopeResponse(body)
+	_, err := (responsesCodec{variation: responsesDashScope}).parse(body)
 	return err == nil || errors.Is(err, errProviderOutputLimitReached)
 }

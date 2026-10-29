@@ -83,19 +83,10 @@ func hasFinalMessage(rawPayload []byte) bool {
 
 // openAIRequest sends messages to the OpenAI responses API and returns the resulting text.
 func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, messages chatMessages, webSearchEnabled bool, maxTokens *int, reasoningEffort string, structuredOutput *structuredOutputSchema, tools *callerTools, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
-		return textGenerationResult{}, mediaLimitError
-	}
-	input, inputError := messages.openAIResponsesInput("auto", tools != nil)
+	payloadBytes, inputError := (responsesCodec{variation: responsesOpenAI}).encodeRequest(modelIdentifier, messages, webSearchEnabled, maxTokens, reasoningEffort, structuredOutput, tools)
 	if inputError != nil {
 		return textGenerationResult{}, inputError
 	}
-	payload := buildRequestPayload(modelIdentifier.providerString(), modelIdentifier.requestProfile.string(), input, webSearchEnabled, maxTokens, reasoningEffort, true, true, structuredOutput, tools)
-	payloadBytes, _ := json.Marshal(payload)
-	if mediaLimitError := validateInlineMessageMediaRequestLimit(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {
-		return textGenerationResult{}, mediaLimitError
-	}
-
 	httpRequest, buildError := buildAuthorizedJSONRequest(parentContext, http.MethodPost, client.endpoints.GetResponsesURL(), openAIKey, bytes.NewReader(payloadBytes))
 	if buildError != nil {
 		structuredLogger.Errorw(logEventBuildHTTPRequest, constants.LogFieldError, buildError)
@@ -109,7 +100,7 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 		return textGenerationResult{}, requestError
 	}
 
-	responseSnapshot, snapshotError := newOpenAIResponseSnapshot(responseBytes)
+	responseSnapshot, snapshotError := (responsesCodec{variation: responsesOpenAI}).decodeOpenAI(responseBytes)
 	recordOpenAIProgress(parentContext, structuredLogger, telemetryProgressKindOpenAICreate, responseSnapshot, snapshotError)
 
 	structuredLogger.Infow(
@@ -135,54 +126,6 @@ type openAIResponseSnapshot struct {
 	usage                 *tokenUsage
 	hasFinalMessage       bool
 	hasTopLevelOutputText bool
-}
-
-func newOpenAIResponseSnapshot(responseBytes []byte) (openAIResponseSnapshot, error) {
-	var decodedObject map[string]any
-	decodeError := json.Unmarshal(responseBytes, &decodedObject)
-	incompleteReason := constants.EmptyString
-	if incompleteDetails, ok := decodedObject["incomplete_details"].(map[string]any); ok {
-		incompleteReason = utils.GetString(incompleteDetails, "reason")
-	}
-	usage, usageError := parseResponsesTokenUsage(responseBytes)
-	responseSnapshot := openAIResponseSnapshot{
-		identifier:            utils.GetString(decodedObject, jsonFieldID),
-		status:                utils.GetString(decodedObject, jsonFieldStatus),
-		incompleteReason:      incompleteReason,
-		text:                  extractTextFromAny(responseBytes),
-		usage:                 usage,
-		hasFinalMessage:       hasFinalMessage(responseBytes),
-		hasTopLevelOutputText: !utils.IsBlank(utils.GetString(decodedObject, jsonFieldOutputText)),
-	}
-	if decodeError != nil {
-		return responseSnapshot, decodeError
-	}
-	if usageError != nil {
-		return responseSnapshot, usageError
-	}
-	var toolEnvelope struct {
-		Output []struct {
-			Type      string `json:"type"`
-			CallID    string `json:"call_id"`
-			Name      string `json:"name"`
-			Arguments string `json:"arguments"`
-		} `json:"output"`
-	}
-	if err := json.Unmarshal(responseBytes, &toolEnvelope); err != nil {
-		return responseSnapshot, err
-	}
-	for _, item := range toolEnvelope.Output {
-		if item.Type == "function_call" {
-			responseSnapshot.toolCalls = append(responseSnapshot.toolCalls, functionCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments})
-		}
-	}
-	// Pending snapshots can contain function arguments that are still being generated.
-	if !responseSnapshot.isPending() {
-		if err := validateFunctionCalls(responseSnapshot.toolCalls); err != nil {
-			return responseSnapshot, err
-		}
-	}
-	return responseSnapshot, nil
 }
 
 func (responseSnapshot openAIResponseSnapshot) isTerminal() bool {
@@ -328,7 +271,7 @@ func (client *OpenAIClient) startContinuationResponse(parentContext context.Cont
 		recordOpenAIProgress(parentContext, structuredLogger, telemetryProgressKindOpenAICreate, openAIResponseSnapshot{}, requestError)
 		return constants.EmptyString, requestError
 	}
-	responseSnapshot, snapshotError := newOpenAIResponseSnapshot(responseBytes)
+	responseSnapshot, snapshotError := (responsesCodec{variation: responsesOpenAI}).decodeOpenAI(responseBytes)
 	recordOpenAIProgress(parentContext, structuredLogger, telemetryProgressKindOpenAICreate, responseSnapshot, snapshotError)
 
 	var decodedResponse map[string]any
@@ -382,7 +325,7 @@ func (client *OpenAIClient) fetchResponseByID(parentContext context.Context, ope
 		return openAIResponseSnapshot{}, requestError
 	}
 
-	responseSnapshot, snapshotError := newOpenAIResponseSnapshot(responseBytes)
+	responseSnapshot, snapshotError := (responsesCodec{variation: responsesOpenAI}).decodeOpenAI(responseBytes)
 	if snapshotError != nil {
 		return responseSnapshot, errors.New(errorOpenAIAPI)
 	}

@@ -100,6 +100,28 @@ func TestClientProtocolsSharedAdapterExecution(t *testing.T) {
 				if bytes.Contains(body, []byte(protocolFixtureTenantSecret(fixture))) {
 					t.Error("tenant credential reached provider")
 				}
+				switch fixture.RequestCodec {
+				case proxy.CatalogProtocolOpenAIResponses, proxy.CatalogProtocolXAIResponses, proxy.CatalogProtocolDashScopeResponses:
+					var payload map[string]any
+					if err := json.Unmarshal(body, &payload); err != nil {
+						t.Fatal(err)
+					}
+					if fixture.RequestCodec == proxy.CatalogProtocolOpenAIResponses {
+						if payload["background"] != true || payload["store"] != true {
+							t.Errorf("OpenAI lifecycle payload=%v", payload)
+						}
+					} else {
+						if payload["store"] != false {
+							t.Errorf("synchronous storage=%v", payload)
+						}
+						if _, present := payload["background"]; present {
+							t.Error("synchronous request contains background")
+						}
+						if _, present := payload["previous_response_id"]; present {
+							t.Error("synchronous request contains stored response state")
+						}
+					}
+				}
 				writeProtocolFixtureResponse(t, responseWriter, fixture)
 			}))
 			defer upstream.Close()
@@ -158,6 +180,58 @@ func TestClientProtocolsSharedAdapterExecution(t *testing.T) {
 			}
 			if calls.Load() != expectedCalls {
 				t.Fatalf("provider calls=%d want=%d", calls.Load(), expectedCalls)
+			}
+		})
+	}
+}
+
+func TestClientProtocolsResponsesIncompleteVariations(t *testing.T) {
+	catalog, fixtures := testfixtures.ProviderCatalogWithProtocolFixtures(t)
+	for _, scenario := range []struct {
+		codec string
+		calls int32
+	}{
+		{proxy.CatalogProtocolXAIResponses, 1},
+		{proxy.CatalogProtocolDashScopeResponses, 2},
+	} {
+		t.Run(scenario.codec, func(t *testing.T) {
+			fixture := findProtocolFixture(t, fixtures, scenario.codec, proxy.ModelOperationText)
+			var calls atomic.Int32
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if calls.Add(1) == 1 {
+					_, _ = io.WriteString(w, `{"status":"incomplete","incomplete_details":{"reason":"provider_limit"},"output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"partial "}]}],"usage":{"input_tokens":2,"output_tokens":3,"total_tokens":5}}`)
+					return
+				}
+				writeProtocolFixtureResponse(t, w, fixture)
+			}))
+			defer upstream.Close()
+			server, client := newProtocolFixtureTextClient(t, catalog, fixture, upstream.URL)
+			defer server.Close()
+			request, err := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{
+				Model: fixture.Model, Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "fixture request"}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, completionError := client.PostMessagesCompletion(context.Background(), request)
+			if scenario.calls == 1 {
+				if completionError == nil {
+					t.Fatal("xAI accepted incomplete result without max_output_tokens reason")
+				}
+			} else {
+				if completionError != nil {
+					t.Fatal(completionError)
+				}
+				if result.Text() != "partial fixture result" {
+					t.Fatalf("continued text=%q", result.Text())
+				}
+				if result.Usage() == nil || result.Usage().TotalTokens() != 10 {
+					t.Fatalf("continuation usage=%v", result.Usage())
+				}
+			}
+			if calls.Load() != scenario.calls {
+				t.Fatalf("calls=%d want=%d", calls.Load(), scenario.calls)
 			}
 		})
 	}
@@ -298,7 +372,7 @@ func writeProtocolFixtureResponse(t *testing.T, responseWriter http.ResponseWrit
 	responseWriter.Header().Set("Content-Type", "application/json")
 	switch fixture.RequestCodec {
 	case proxy.CatalogProtocolOpenAIResponses, proxy.CatalogProtocolDashScopeResponses, proxy.CatalogProtocolXAIResponses:
-		_, _ = io.WriteString(responseWriter, `{"id":"private-response","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"fixture result"}]}],"usage":{"input_tokens":2,"output_tokens":3,"total_tokens":5}}`)
+		_, _ = io.WriteString(responseWriter, `{"id":"private-response","status":"completed","output":[{"type":"reasoning","encrypted_content":"private-reasoning"},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"fixture result"}]}],"usage":{"input_tokens":2,"output_tokens":3,"total_tokens":5,"output_tokens_details":{"reasoning_tokens":2}}}`)
 	case proxy.CatalogProtocolOpenAIChatCompletions:
 		_, _ = io.WriteString(responseWriter, `{"id":"private-chat","choices":[{"message":{"content":"fixture result"},"finish_reason":"stop"}],"usage":{"prompt_tokens":2,"completion_tokens":3,"total_tokens":5}}`)
 	case proxy.CatalogProtocolAnthropicMessages:

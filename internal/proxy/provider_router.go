@@ -30,8 +30,7 @@ type textRouteAdapter interface {
 }
 
 type openAIResponsesTextRouteAdapter struct{}
-type dashScopeResponsesTextRouteAdapter struct{}
-type xaiResponsesTextRouteAdapter struct{}
+type synchronousResponsesTextRouteAdapter struct{ variation responsesVariation }
 type openAIChatCompletionsTextRouteAdapter struct{}
 type geminiInteractionsTextRouteAdapter struct{}
 type anthropicMessagesTextRouteAdapter struct{}
@@ -39,8 +38,8 @@ type anthropicMessagesTextRouteAdapter struct{}
 var textRouteAdapters = map[textRouteCapabilities]textRouteAdapter{
 	vertexGenerateContentRouteCapabilities:            vertexTextRouteAdapter{},
 	openAIResponsesPollableRouteCapabilities:          openAIResponsesTextRouteAdapter{},
-	dashScopeResponsesSynchronousRouteCapabilities:    dashScopeResponsesTextRouteAdapter{},
-	xaiResponsesSynchronousRouteCapabilities:          xaiResponsesTextRouteAdapter{},
+	dashScopeResponsesSynchronousRouteCapabilities:    synchronousResponsesTextRouteAdapter{variation: responsesDashScope},
+	xaiResponsesSynchronousRouteCapabilities:          synchronousResponsesTextRouteAdapter{variation: responsesXAI},
 	openAIChatCompletionsSynchronousRouteCapabilities: openAIChatCompletionsTextRouteAdapter{},
 	geminiInteractionsPollableRouteCapabilities:       geminiInteractionsTextRouteAdapter{},
 	geminiInteractionsSynchronousRouteCapabilities:    geminiInteractionsTextRouteAdapter{},
@@ -141,24 +140,9 @@ func (openAIResponsesTextRouteAdapter) generateText(requestContext context.Conte
 	)
 }
 
-func (dashScopeResponsesTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (adapter synchronousResponsesTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	httpClient := newProviderTransportHTTPDoer(router.openAIClient.httpClient, request.provider, request.provider.credentialFor(endpointKindText))
-	client := dashScopeResponsesClient{httpClient: httpClient}
-	return client.generateText(
-		requestContext,
-		"",
-		request.provider.textEndpointURL,
-		request.model,
-		request.messages,
-		request.maxTokens,
-		request.reasoningEffort,
-		structuredLogger,
-	)
-}
-
-func (xaiResponsesTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	httpClient := newProviderTransportHTTPDoer(router.openAIClient.httpClient, request.provider, request.provider.credentialFor(endpointKindText))
-	client := xaiResponsesClient{httpClient: httpClient}
+	client := responsesCodec{httpClient: httpClient, variation: adapter.variation}
 	return client.generateText(
 		requestContext,
 		"",

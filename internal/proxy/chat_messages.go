@@ -315,8 +315,10 @@ func (messages chatMessages) openAIResponsesInput(imageDetail string, preserveRo
 			content = append(content, map[string]any{
 				"type":      "input_image",
 				"image_url": "data:" + attachment.mimeType + ";base64," + base64.StdEncoding.EncodeToString(data),
-				"detail":    imageDetail,
 			})
+			if imageDetail != "" {
+				content[len(content)-1]["detail"] = imageDetail
+			}
 		}
 		content = append(content, map[string]any{"type": "input_text", "text": message.content})
 		providerMessages = append(providerMessages, map[string]any{"role": string(message.role), "content": content})
