@@ -35,6 +35,32 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [ ] [B311] (P1) Correct the intermittent Python build stall.
+  Goal:
+  Make the Python package build complete during release validation.
+  Evidence:
+  The October 29 release stopped at `Building llm-proxy-client` for several minutes.
+  Gateway then stopped Python static analysis with process status 124.
+  Two separate `make python-lint` runs also stopped at the package build.
+  A process sample shows Python inside `os.write` during `get_requires_for_build_editable`.
+  The sample does not identify the file descriptor or the Python call stack.
+  Subsequent builds passed, including 60 builds with Python traceback capture enabled.
+  Five package contract tests passed. Git input tests also passed.
+  A successful build trace identifies writes to Git stdin during `git check-attr` execution.
+  This trace does not prove that Git caused the observed failure.
+  Requirements:
+  - Capture the Python call stack and the write destination during a stalled build.
+  - Capture the related Git process state before process termination.
+  - Confirm the cause before a dependency or build configuration change.
+  - Preserve package versions from Git tags and source distribution metadata.
+  Deliverables:
+  - A correction for the confirmed cause and an integration test for the failure.
+  Validation:
+  - Run the failing integration test before the correction.
+  - Run `make python-lint`, `make python-package-install-test`, and the required final `make ci`.
+  Current state:
+  The cause is not confirmed. No code correction is applied.
+
 - [x] [B310] (P2) Wait for the balance refresh before browser fixture changes.
   Goal:
   Make the hosted-access browser fixture wait for the previous balance response before it replaces the balance route.
