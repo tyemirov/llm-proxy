@@ -1,5 +1,15 @@
 # xAI Responses
 
+## Shared codec
+
+I259 uses the shared Responses codec with the xAI protocol variation.
+The catalog selects this variation through `xai_responses`.
+The shared code owns common message serialization, response items, and usage translation.
+The xAI variation keeps image detail, caller tools, structured output, and output-limit reason checks.
+Its execution remains synchronous. Requests use `store:false` and omit `background`.
+OpenAI polling and response synthesis remain exclusive to the OpenAI variation.
+Local protocol tests establish code behavior. The live acceptance requirements below remain separate.
+
 All configured xAI text offerings use `xai_responses` with `synchronous_completion`.
 The default remains `grok-4.3`. Provider keys and saved model selections retain their existing identities.
 

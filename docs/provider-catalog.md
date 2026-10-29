@@ -265,6 +265,15 @@ The startup composer accepts these codec and lifecycle combinations:
 | `xai_videos_generations` | `pollable_resource` |
 | `dictator_speech_v1` | `asynchronous_job` |
 
+The three Responses identifiers select closed protocol variations in one shared implementation.
+They identify wire behavior, independent of provider identity.
+OpenAI keeps background execution, polling, response synthesis, and its current text extraction rules.
+xAI keeps synchronous completion, image detail, caller tools, and reason-specific output-limit continuation.
+DashScope keeps synchronous completion, images without detail, and continuation after any error-free terminal `incomplete` result.
+Both synchronous variations send `store:false` and omit `background`.
+Another provider with an existing variation uses that catalog identifier and its own connection values.
+The shared protocol tests exercise each variation through a second provider definition.
+
 The shared `pollable_resource` execution component owns post-create
 observation for every compatible codec. Each shared text transport declares a
 bounded `components.execution.resource_visibility` policy. The policy lists the provider statuses that mean

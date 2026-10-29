@@ -1,5 +1,15 @@
 # Alibaba Cloud Responses
 
+## Shared codec
+
+I259 uses the shared Responses codec with the DashScope protocol variation.
+The catalog selects this variation through `dashscope_responses`.
+The shared code owns common message serialization, response items, and usage translation.
+The DashScope variation omits image detail and caller tools.
+An error-free terminal `incomplete` result starts continuation without an output-limit reason check.
+Its execution remains synchronous. Requests use `store:false` and omit `background`.
+Local protocol tests establish code behavior. The live acceptance requirements below remain separate.
+
 All four active Qwen offerings use `dashscope_responses` with
 `synchronous_completion`. The default remains `qwen-plus`.
 
