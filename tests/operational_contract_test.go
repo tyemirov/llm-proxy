@@ -2956,15 +2956,19 @@ func TestOperationalLiveHarnessReapsOwnedProxyChild(testingInstance *testing.T) 
 func TestOperationalLiveHarnessReapsOwnedProxyChildAfterTermination(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixture := newOperationalLiveHarnessFixture(testingInstance)
-	preflightBlockPath := filepath.Join(testingInstance.TempDir(), "preflight-blocked")
-	command := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), "--preflight")
+	verificationRoot := testingInstance.TempDir()
+	verificationReadyPath := filepath.Join(verificationRoot, "verification-ready")
+	verificationReleasePath := filepath.Join(verificationRoot, "verification-release")
+	command := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"))
 	command.Dir = repositoryRoot
 	command.Env = fixture.environment(
 		operationalLoopbackPort(testingInstance),
-		"CURL_PREFLIGHT_BLOCK_PATH="+preflightBlockPath,
-		"CURL_PREFLIGHT_BLOCK_SECONDS=2",
+		"LLM_PROXY_LIVE_PROVIDERS=openai",
+		"OPENAI_API_KEY=test-live-openai-key",
+		"CURL_VERIFICATION_READY_PATH="+verificationReadyPath,
+		"CURL_VERIFICATION_RELEASE_PATH="+verificationReleasePath,
 	)
-	var output bytes.Buffer
+	var output synchronizedOperationalOutput
 	command.Stdout, command.Stderr = &output, &output
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	command.WaitDelay = operationalHelpWaitDelay
@@ -2982,7 +2986,7 @@ func TestOperationalLiveHarnessReapsOwnedProxyChildAfterTermination(testingInsta
 		}
 	}
 	testingInstance.Cleanup(stop)
-	deadline := time.NewTimer(operationalHelpTimeout)
+	deadline := time.NewTimer(operationalOrchestrationTimeout)
 	defer deadline.Stop()
 	tick := time.NewTicker(10 * time.Millisecond)
 	defer tick.Stop()
@@ -2991,12 +2995,12 @@ readiness:
 		select {
 		case waitError := <-completed:
 			finished = true
-			testingInstance.Fatalf("live harness exited before preflight boundary: %v output=%s", waitError, output.String())
+			testingInstance.Fatalf("live harness exited before verification boundary: %v output=%s", waitError, output.String())
 		case <-deadline.C:
 			stop()
-			testingInstance.Fatalf("live harness did not reach preflight boundary: output=%s", output.String())
+			testingInstance.Fatalf("live harness did not reach verification boundary: output=%s", output.String())
 		case <-tick.C:
-			data, readError := os.ReadFile(preflightBlockPath)
+			data, readError := os.ReadFile(verificationReadyPath)
 			if readError == nil && len(data) > 0 {
 				break readiness
 			}
@@ -3006,9 +3010,21 @@ readiness:
 			}
 		}
 	}
+	proxyPIDBytes, readError := os.ReadFile(fixture.proxyPIDPath)
+	if readError != nil {
+		testingInstance.Fatalf("read owned proxy pid before termination: %v", readError)
+	}
+	proxyPID, parseError := strconv.Atoi(strings.TrimSpace(string(proxyPIDBytes)))
+	if parseError != nil {
+		testingInstance.Fatalf("parse owned proxy pid before termination: %v", parseError)
+	}
+	if signalError := syscall.Kill(proxyPID, 0); signalError != nil {
+		testingInstance.Fatalf("owned proxy is not running before termination: %v", signalError)
+	}
 	if signalError := command.Process.Signal(syscall.SIGTERM); signalError != nil {
 		testingInstance.Fatalf("terminate live harness: %v", signalError)
 	}
+	writeOperationalFile(testingInstance, verificationReleasePath, "release\n", 0o600)
 	shutdown := time.NewTimer(operationalHelpTimeout)
 	defer shutdown.Stop()
 	select {
@@ -3156,11 +3172,13 @@ case "${request_url}" in
       builtin printf '%s' 200
       exit 0
     fi
+    if [[ -n "${CURL_VERIFICATION_READY_PATH:-}" ]]; then
+      builtin printf '%s\n' ready >"${CURL_VERIFICATION_READY_PATH}"
+      while [[ ! -f "${CURL_VERIFICATION_RELEASE_PATH:?}" ]]; do
+        sleep 0.01
+      done
+    fi
     if [[ -n "${PREFLIGHT_PROVIDER_URL:-}" ]]; then
-      if [[ -n "${CURL_PREFLIGHT_BLOCK_PATH:-}" ]]; then
-        builtin printf '%s\n' ready >"${CURL_PREFLIGHT_BLOCK_PATH}"
-        sleep "${CURL_PREFLIGHT_BLOCK_SECONDS:-1}"
-      fi
       python3 -c '
 import json
 import os
