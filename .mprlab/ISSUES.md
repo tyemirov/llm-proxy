@@ -35,6 +35,36 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B312] (P1) Synchronize the live harness termination test.
+  Goal:
+  Verify owned proxy cleanup after harness termination without a fixed request delay.
+  Evidence:
+  Release CI stopped before the preflight marker after 5.01 seconds.
+  The test used the help-command deadline for complete preflight startup.
+  Its request fixture also used a fixed two-second delay before completion.
+  The release output does not identify which startup operation consumed the deadline.
+  Requirements:
+  - Use the local credential fixture for the termination scenario.
+  - Wait for an explicit request marker and confirm that the owned proxy is alive.
+  - Send SIGTERM before the fixture request can complete.
+  - Release the request explicitly and require exit status 143.
+  - Verify owned proxy cleanup and retain the five-second shutdown deadline.
+  - Keep the separate normal preflight cleanup scenario.
+  Deliverables:
+  - A request handshake in the fixture and a synchronized termination test.
+  - The existing orchestration deadline for startup, separate from the shutdown deadline.
+  Validation:
+  - The revised test failed before the fixture handshake existed.
+  - The corrected cleanup target passed in 1.221 seconds.
+  - All live operation contract tests passed in 20.685 seconds. The cleanup race check passed in 2.395 seconds.
+  - Final `make ci` passed all 15 gates in 788 seconds with 100.0% Go statement coverage.
+  - All 172 frontend browser tests and 13 TAuth browser tests passed.
+  Resolution:
+  The fixture now holds verification until the test sends SIGTERM and explicitly releases the request.
+  The test confirms that its owned proxy is alive before termination and absent after exit status 143.
+  Startup uses the existing orchestration deadline. Shutdown retains its five-second deadline.
+  The runtime harness and separate preflight cleanup scenario are unchanged.
+
 - [ ] [B311] (P1) Correct the intermittent Python build stall.
   Goal:
   Make the Python package build complete during release validation.
