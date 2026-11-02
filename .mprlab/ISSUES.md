@@ -4099,6 +4099,38 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## Features
 
+- [ ] [F090] (P1) Add Amazon Bedrock Mantle BYOK access with cross-account IAM roles.
+  Goal:
+  Let tenants use Amazon Bedrock Mantle through a provider connection that charges their own AWS account.
+  Requirements:
+  - Add a Bedrock Mantle provider definition and exact model offerings to the provider catalog.
+  - Include Gemma 4 models that AWS documents as available in the selected region.
+  - Give each provider connection a unique external ID for its IAM role.
+  - Show a one-click AWS CloudFormation template that creates the customer IAM role.
+  - Restrict the role trust to the MPR Lab AWS principal and the connection external ID.
+  - Restrict inference access to the customer project, selected models, and region.
+  - Request only the customer role ARN and AWS region during connection setup.
+  - Use AWS STS AssumeRole to get temporary credentials for each provider connection.
+  - Sign requests with AWS Signature Version 4 and use the Bedrock Mantle OpenAI-compatible endpoint.
+  - Keep long-lived customer AWS keys out of the connection setup.
+  - Keep customer AWS charges separate from LLM Proxy prepaid provider access and platform charges.
+  - Show connection status and clear errors for invalid role trust, permissions, region, and model access.
+  - Let tenants remove their connection. Explain how to revoke access in AWS.
+  - Confirm that the provider and model terms permit the proposed BYOK service before public activation.
+  Deliverables:
+  - Add the provider catalog entries, AWS authentication, transport, and connection setup.
+  - Add the CloudFormation template and tenant setup instructions.
+  - Document AWS billing ownership, permission scope, and role revocation.
+  Validation:
+  - Exercise role assumption, signed requests, model selection, and response handling through the public API.
+  - Verify external ID isolation, access denial, expired credentials, tenant separation, and role revocation.
+  - Verify provider failures and streaming responses with a controlled upstream service.
+  - Complete separate live AWS acceptance with customer authorization.
+  - Run the applicable repository tests and document checks.
+  Open Decisions:
+  - Confirm the first model list and AWS regions from official AWS sources.
+  - Decide whether connection tests can send a billable inference request.
+
 - [x] [F088] (P2) Update prepaid provider access and financial data automatically.
   Goal: Give customers current access and financial data without manual Refresh actions.
   Requirements:
