@@ -1,270 +1,259 @@
----
 mprlab_resources:
-  owner: llm-proxy
-  hosts:
-    tutosh:
-      ansible_become_password: DEPLOY_SUDO_PASSWORD_TUTOSH
-  release:
-    scheme: semver
-    fixed_major: 1
-  ci:
-    enabled: true
-    command:
-      "0": make
-      "1": ci
-  defaults:
-    timeouts:
-      startup: 30s
-      completion: 30m
-      readiness: 30s
-      request: 15s
-      shutdown: 5s
-  operations:
-    app_lifecycle.repository_read:
-      polling:
-        initial: 1s
-        maximum: 5s
-        increment: 0s
-        multiplier: 2
-        attempt_limit: 360
-    app-release:
-      polling:
-        initial: 1s
-        maximum: 5s
-        increment: 0s
-        multiplier: 2
-        attempt_limit: 360
-    app-publish:
-      polling:
-        initial: 1s
-        maximum: 5s
-        increment: 0s
-        multiplier: 2
-        attempt_limit: 360
-    app-deploy:
-      polling:
-        initial: 1s
-        maximum: 5s
-        increment: 0s
-        multiplier: 2
-        attempt_limit: 360
-  environment_file: .mprlab/deploy/.env
-  inputs:
-    LLM_PROXY_MANAGEMENT_ADMIN_EMAILS: ${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}
-    LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID: ${LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID}
-    LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY: ${LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY}
-    LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY: ${LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY}
-    DEPLOY_SUDO_PASSWORD_TUTOSH: ${DEPLOY_SUDO_PASSWORD_TUTOSH}
-    MPRLAB_TAUTH_MANAGEMENT_URL: ${MPRLAB_TAUTH_MANAGEMENT_URL}
-    MPRLAB_TAUTH_PROVISIONING_CREDENTIALS: ${MPRLAB_TAUTH_PROVISIONING_CREDENTIALS}
-  resources:
-    private:
-      kind: private_values
-      bindings:
-        admin-emails: LLM_PROXY_MANAGEMENT_ADMIN_EMAILS
-        google-web-client-id: LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID
-        jwt-signing-key: LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY
-        provider-key-encryption-key: LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY
-    runtime:
-      kind: compose_project
-      retired_services:
-        mprlab-nginx-gateway/llm-proxy: {}
-      images:
-        llm-proxy-image:
-          repository: ghcr.io/tyemirov/llm-proxy
-          build:
-            context: .
-            dockerfile: Dockerfile
-            platforms:
-            - linux/amd64
-            - linux/arm64
-      services:
-        llm-proxy:
-          image: llm-proxy-image
-          placement:
-            group: gateway
-            cardinality: one
-          environment:
-            LLM_PROXY_MANAGEMENT_ADMIN_EMAILS:
-              resource: private
-              output: admin-emails
-            LLM_PROXY_MANAGEMENT_API_ORIGIN:
-              resource: public-api
-              output: origin
-            LLM_PROXY_MANAGEMENT_DATABASE_PATH:
-              value: /data/llm-proxy-management.sqlite
-            LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID:
-              resource: authentication
-              output: google-web-client-id
-            LLM_PROXY_MANAGEMENT_JWT_ISSUER:
-              value: tauth
-            LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY:
-              resource: authentication
-              output: jwt-signing-key
-            LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN:
-              value: http://localhost:4179
-            LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN:
-              value: http://127.0.0.1:4179
-            LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY:
-              resource: private
-              output: provider-key-encryption-key
-            LLM_PROXY_MANAGEMENT_PROXY_ORIGIN:
-              resource: public-api
-              output: origin
-            LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN:
-              resource: website
-              output: origin
-            LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME:
-              resource: authentication
-              output: session-cookie-name
-            LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH:
-              value: /auth/google
-            LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH:
-              value: /auth/logout
-            LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH:
-              value: /auth/nonce
-            LLM_PROXY_MANAGEMENT_TAUTH_SESSION_PATH:
-              value: /auth/session
-            LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID:
-              resource: authentication
-              output: tenant-id
-            LLM_PROXY_MANAGEMENT_TAUTH_URL:
-              value: https://tauth-api.mprlab.com
-            LLM_PROXY_MANAGEMENT_UI_DESCRIPTION:
-              value: LLM Proxy
-          assets:
-            /app/config.yml:
-              source: configs/config.yml
-              mode: '0444'
-            /app/providers.yml:
-              source: configs/providers.yml
-              mode: '0444'
-          mounts:
-            /data:
-              volume: data
-              read_only: false
-          ports:
-            '8080':
-              host_port: 18083
-              scope: private_lan
-          readiness:
-            protocol: http
-            port: 8080
-            path: /healthz
-            expected_status: 200
-      volumes:
-        data:
-          name: mprlab-nginx-gateway_llm-proxy-data
-          retention: retain
-    http:
-      kind: runtime_capability
-      name: llm-proxy.http
-      version: 1
-      project: runtime
-      service: llm-proxy
-      endpoint:
-        scope: same_host
-        scheme: http
-        alias: llm-proxy
-        port: 8080
-      health:
-        protocol: http
-        path: /healthz
-        expected_status: 200
-    http-private-lan:
-      kind: runtime_capability
-      name: llm-proxy.http.private-lan
-      version: 1
-      project: runtime
-      service: llm-proxy
-      endpoint:
-        scope: private_lan
-        scheme: http
-        port: 18083
-      health:
-        protocol: http
-        path: /healthz
-        expected_status: 200
-    public-api:
-      kind: caddy_route
-      hostname: llm-proxy-api.mprlab.com
-      listener: https
-      handlers:
-        default:
-          path_prefix: /
-          upstream: llm-proxy.http
-          transport:
-            protocol: http
-            dial_timeout_seconds: 10
-            response_header_timeout_seconds: 3660
-            read_timeout_seconds: 3660
-          access:
-            browser:
-              allowed_origins:
-              - https://llm-proxy.mprlab.com
-              allow_credentials: true
-      tls:
-        mode: automatic
-      access:
-        trusted_networks:
-        - 127.0.0.1/32
-        - 172.19.0.0/16
-        - 192.168.1.158/32
-        rate_limit:
-          events: 120
-          window_seconds: 60
-    api-health:
-      kind: health_check
-      protocol: http
-      url: https://llm-proxy-api.mprlab.com/healthz
-      expected_status: 200
-    website-health:
-      kind: health_check
-      protocol: http
-      url: https://llm-proxy.mprlab.com/healthz
-      expected_status: 200
-    website:
-      kind: github_pages
-      repository: tyemirov/llm-proxy
-      branch: gh-pages
-      domain: llm-proxy.mprlab.com
-      url: https://llm-proxy.mprlab.com/
-      source:
-        kind: container
-        context: .
-        dockerfile: docker/pages/Dockerfile
-        target: pages
-      verification:
-        path: /.mprlab-release.json
-    authentication:
-      kind: tauth_tenant
-      capability: tauth.tenants
-      version: 1
-      tenant:
-        id: llm-proxy
-        display_name: LLM Proxy
-        origins:
-        - https://llm-proxy.mprlab.com
-        google_web_client_id:
-          resource: private
-          output: google-web-client-id
-        jwt_signing_key:
-          resource: private
-          output: jwt-signing-key
-        cookie:
-          domain: .mprlab.com
-          session_name: app_session_llm_proxy
-          refresh_name: app_refresh_llm_proxy
-        oauth:
-          access_token_ttl: 5m
-          refresh_token_ttl: 720h
-          consent_ttl: 720h
-          allow_client_metadata_documents: true
-          resources:
-            https://llm-proxy-api.mprlab.com:
-              display_name: LLM Proxy API
-              scopes:
-                llm-proxy:use:
-                  display_name: Use LLM Proxy
-                  description: Use the LLM Proxy API.
-          clients: {}
+    artifacts:
+        container_images:
+            - build:
+                context: .
+                dockerfile: Dockerfile
+                platforms:
+                    - linux/amd64
+                    - linux/arm64
+              id: llm-proxy-image
+        web_bundles:
+            - format: directory
+              id: website
+              source:
+                context: .
+                dockerfile: docker/pages/Dockerfile
+                kind: container
+                target: pages
+    environment:
+        private_inputs:
+            - id: deploy-sudo-password-tutosh
+              variable: DEPLOY_SUDO_PASSWORD_TUTOSH
+            - id: llm-proxy-management-admin-emails
+              variable: LLM_PROXY_MANAGEMENT_ADMIN_EMAILS
+            - id: llm-proxy-management-google-client-id
+              variable: LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID
+            - id: llm-proxy-management-jwt-signing-key
+              variable: LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY
+            - id: llm-proxy-management-provider-key-encryption-key
+              variable: LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY
+            - id: mprlab-tauth-management-url
+              variable: MPRLAB_TAUTH_MANAGEMENT_URL
+            - id: mprlab-tauth-provisioning-credentials
+              variable: MPRLAB_TAUTH_PROVISIONING_CREDENTIALS
+        source: .mprlab/deploy/.env
+    lifecycle:
+        ci:
+            command:
+                - make
+                - ci
+            enabled: true
+        defaults:
+            timeouts:
+                completion: 30m
+                readiness: 30s
+                request: 15s
+                shutdown: 5s
+                startup: 30s
+        observations:
+            http:
+                - expected_status: 200
+                  id: api-health
+                  protocol: http
+                  url: https://llm-proxy-api.mprlab.com/healthz
+                - expected_status: 200
+                  id: website-health
+                  protocol: http
+                  url: https://llm-proxy.mprlab.com/healthz
+        operations:
+            - name: app-deploy
+              polling:
+                attempt_limit: 360
+                increment: 0s
+                initial: 1s
+                maximum: 5s
+                multiplier: 2
+            - name: app-publish
+              polling:
+                attempt_limit: 360
+                increment: 0s
+                initial: 1s
+                maximum: 5s
+                multiplier: 2
+            - name: app-release
+              polling:
+                attempt_limit: 360
+                increment: 0s
+                initial: 1s
+                maximum: 5s
+                multiplier: 2
+            - name: app_lifecycle.repository_read
+              polling:
+                attempt_limit: 360
+                increment: 0s
+                initial: 1s
+                maximum: 5s
+                multiplier: 2
+        private_inputs:
+            operations: []
+    owner: llm-proxy
+    publications:
+        ghcr:
+            images:
+                - artifact: llm-proxy-image
+                  id: llm-proxy-image
+                  repository: ghcr.io/tyemirov/llm-proxy
+        github_pages:
+            sites:
+                - artifact: website
+                  branch: gh-pages
+                  domain: llm-proxy.mprlab.com
+                  id: website
+                  marker:
+                    path: /.mprlab-release.json
+                  repository: tyemirov/llm-proxy
+    release:
+        fixed_major: 1
+        scheme: semver
+    targets:
+        access:
+            hosts:
+                - elevation_password:
+                    input: deploy-sudo-password-tutosh
+                  host: tutosh
+        docker_compose:
+            projects:
+                - id: runtime
+                  retired_services:
+                    - project: mprlab-nginx-gateway
+                      service: llm-proxy
+                  services:
+                    - assets:
+                        - mode: "0444"
+                          source: configs/config.yml
+                          target: /app/config.yml
+                        - mode: "0444"
+                          source: configs/providers.yml
+                          target: /app/providers.yml
+                      endpoints:
+                        - endpoint:
+                            alias: llm-proxy
+                            port: 8080
+                            scheme: http
+                            scope: same_host
+                          health:
+                            expected_status: 200
+                            path: /healthz
+                            protocol: http
+                          id: http
+                          name: llm-proxy.http
+                          version: 1
+                        - endpoint:
+                            port: 18083
+                            scheme: http
+                            scope: private_lan
+                          health:
+                            expected_status: 200
+                            path: /healthz
+                            protocol: http
+                          id: http-private-lan
+                          name: llm-proxy.http.private-lan
+                          version: 1
+                        - endpoint:
+                            alias: runtime-llm-proxy-readiness
+                            port: 8080
+                            scheme: http
+                            scope: same_host
+                          health:
+                            expected_status: 200
+                            path: /healthz
+                            protocol: http
+                          id: readiness
+                          name: llm-proxy.readiness.runtime.llm-proxy
+                          version: 1
+                      environment:
+                        - input: llm-proxy-management-admin-emails
+                          name: LLM_PROXY_MANAGEMENT_ADMIN_EMAILS
+                        - name: LLM_PROXY_MANAGEMENT_API_ORIGIN
+                          value: https://llm-proxy-api.mprlab.com
+                        - name: LLM_PROXY_MANAGEMENT_DATABASE_PATH
+                          value: /data/llm-proxy-management.sqlite
+                        - input: llm-proxy-management-google-client-id
+                          name: LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID
+                        - name: LLM_PROXY_MANAGEMENT_JWT_ISSUER
+                          value: tauth
+                        - input: llm-proxy-management-jwt-signing-key
+                          name: LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY
+                        - name: LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN
+                          value: http://localhost:4179
+                        - name: LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN
+                          value: http://127.0.0.1:4179
+                        - input: llm-proxy-management-provider-key-encryption-key
+                          name: LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY
+                        - name: LLM_PROXY_MANAGEMENT_PROXY_ORIGIN
+                          value: https://llm-proxy-api.mprlab.com
+                        - name: LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN
+                          output: origin
+                          target: website
+                        - name: LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME
+                          value: app_session_llm_proxy
+                        - name: LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH
+                          value: /auth/google
+                        - name: LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH
+                          value: /auth/logout
+                        - name: LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH
+                          value: /auth/nonce
+                        - name: LLM_PROXY_MANAGEMENT_TAUTH_SESSION_PATH
+                          value: /auth/session
+                        - name: LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID
+                          value: llm-proxy
+                        - name: LLM_PROXY_MANAGEMENT_TAUTH_URL
+                          value: https://tauth-api.mprlab.com
+                        - name: LLM_PROXY_MANAGEMENT_UI_DESCRIPTION
+                          value: LLM Proxy
+                      id: llm-proxy
+                      image:
+                        publication: llm-proxy-image
+                      mounts:
+                        - read_only: false
+                          target: /data
+                          volume: data
+                      placement:
+                        cardinality: one
+                        group: gateway
+                      ports:
+                        - container_port: 8080
+                          host_port: 18083
+                          scope: private_lan
+                      readiness:
+                        endpoint: readiness
+                  volumes:
+                    - id: data
+                      name: mprlab-nginx-gateway_llm-proxy-data
+                      retention: retain
+        github_pages:
+            sites:
+                - id: website
+                  publication: website
+                  url: https://llm-proxy.mprlab.com/
+        ingress:
+            caddy:
+                routes:
+                    - access:
+                        rate_limit:
+                            events: 120
+                            window_seconds: 60
+                        trusted_networks:
+                            - 127.0.0.1/32
+                            - 172.19.0.0/16
+                            - 192.168.1.158/32
+                      handlers:
+                        - access:
+                            browser:
+                                allow_credentials: true
+                                allowed_origins:
+                                    - https://llm-proxy.mprlab.com
+                          id: default
+                          path_prefix: /
+                          transport:
+                            dial_timeout_seconds: 10
+                            protocol: http
+                            read_timeout_seconds: 3660
+                            response_header_timeout_seconds: 3660
+                          upstream: llm-proxy.http
+                      hostname: llm-proxy-api.mprlab.com
+                      id: public-api
+                      listener: https
+                      tls:
+                        mode: automatic

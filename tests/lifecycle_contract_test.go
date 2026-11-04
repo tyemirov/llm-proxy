@@ -18,298 +18,134 @@ const lifecycleManifestRelativePath = ".mprlab/deploy/resources.yml"
 
 func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
-	manifestPath := filepath.Join(repositoryRoot, filepath.FromSlash(lifecycleManifestRelativePath))
-	manifestBytes, readError := os.ReadFile(manifestPath)
-	if readError != nil {
-		testingInstance.Fatalf("read lifecycle manifest: %v", readError)
+	manifestBytes, err := os.ReadFile(filepath.Join(repositoryRoot, filepath.FromSlash(lifecycleManifestRelativePath)))
+	if err != nil {
+		testingInstance.Fatal(err)
 	}
-
-	var document map[string]any
-	if unmarshalError := yaml.Unmarshal(manifestBytes, &document); unmarshalError != nil {
-		testingInstance.Fatalf("decode lifecycle manifest: %v", unmarshalError)
+	manifest := currentManifestContract(testingInstance, manifestBytes)
+	requireCurrentContractYAML(testingInstance, "owner", manifest["owner"], `llm-proxy`)
+	requireCurrentContractYAML(testingInstance, "release", manifest["release"], `{scheme: semver, fixed_major: 1}`)
+	environment := currentContractMap(testingInstance, manifest["environment"])
+	requireCurrentContractYAML(testingInstance, "environment.source", environment["source"], `.mprlab/deploy/.env`)
+	inputs := currentContractIndex(testingInstance, environment["private_inputs"], "variable")
+	expectedInputNames := []string{"LLM_PROXY_MANAGEMENT_ADMIN_EMAILS", "LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID", "LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY", "LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY", "DEPLOY_SUDO_PASSWORD_TUTOSH", "MPRLAB_TAUTH_MANAGEMENT_URL", "MPRLAB_TAUTH_PROVISIONING_CREDENTIALS"}
+	if len(inputs) != len(expectedInputNames) {
+		testingInstance.Fatalf("unexpected private inputs: %#v", inputs)
 	}
-	if len(document) != 1 {
-		testingInstance.Fatalf("lifecycle manifest must have one root: %#v", document)
+	for _, name := range expectedInputNames {
+		if inputs[name] == nil {
+			testingInstance.Fatalf("missing declared input %s", name)
+		}
 	}
-	resourcesDocument, available := document["mprlab_resources"].(map[string]any)
-	if !available {
-		testingInstance.Fatalf("lifecycle manifest has no mprlab_resources mapping: %#v", document)
-	}
-	if owner, ownerAvailable := resourcesDocument["owner"].(string); !ownerAvailable || owner != "llm-proxy" {
-		testingInstance.Fatalf("unexpected lifecycle owner: %#v", resourcesDocument["owner"])
-	}
-	release, releaseAvailable := resourcesDocument["release"].(map[string]any)
-	if !releaseAvailable || len(release) != 2 || release["scheme"] != "semver" || release["fixed_major"] != 1 {
-		testingInstance.Fatalf("unexpected lifecycle release policy: %#v", resourcesDocument["release"])
-	}
-	if _, dependenciesAvailable := resourcesDocument["dependencies"]; dependenciesAvailable {
-		testingInstance.Fatalf("lifecycle manifest must not declare top-level dependencies: %#v", resourcesDocument["dependencies"])
-	}
-	resourceKeys := make([]string, 0, len(resourcesDocument))
-	for key := range resourcesDocument {
-		resourceKeys = append(resourceKeys, key)
-	}
-	slices.Sort(resourceKeys)
-	if !slices.Equal(resourceKeys, []string{"ci", "defaults", "environment_file", "hosts", "inputs", "operations", "owner", "release", "resources"}) {
-		testingInstance.Fatalf("unexpected lifecycle manifest fields: %#v", resourceKeys)
-	}
-	if resourcesDocument["environment_file"] != ".mprlab/deploy/.env" {
-		testingInstance.Fatalf("unexpected lifecycle environment source: %#v", resourcesDocument["environment_file"])
-	}
-	expectedInputs := map[string]any{}
-	for _, name := range []string{
-		"LLM_PROXY_MANAGEMENT_ADMIN_EMAILS", "LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID",
-		"LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY", "LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY",
-		"DEPLOY_SUDO_PASSWORD_TUTOSH", "MPRLAB_TAUTH_MANAGEMENT_URL", "MPRLAB_TAUTH_PROVISIONING_CREDENTIALS",
-	} {
-		expectedInputs[name] = "${" + name + "}"
-	}
-	if !reflect.DeepEqual(resourcesDocument["inputs"], expectedInputs) {
-		testingInstance.Fatalf("unexpected lifecycle input bindings: %#v", resourcesDocument["inputs"])
-	}
-	expectedHosts := map[string]any{"tutosh": map[string]any{"ansible_become_password": "DEPLOY_SUDO_PASSWORD_TUTOSH"}}
-	if !reflect.DeepEqual(resourcesDocument["hosts"], expectedHosts) {
-		testingInstance.Fatalf("unexpected lifecycle host bindings: %#v", resourcesDocument["hosts"])
-	}
-	ci, ciAvailable := resourcesDocument["ci"].(map[string]any)
-	if !ciAvailable || len(ci) != 2 || ci["enabled"] != true || !reflect.DeepEqual(ci["command"], map[string]any{"0": "make", "1": "ci"}) {
-		testingInstance.Fatalf("lifecycle must enable the complete repository CI command: %#v", ci)
-	}
-	defaults := resourcesDocument["defaults"].(map[string]any)
-	timeouts := defaults["timeouts"].(map[string]any)
+	targets := currentContractMap(testingInstance, manifest["targets"])
+	requireCurrentContractYAML(testingInstance, "targets.access", targets["access"], `hosts: [{host: tutosh, elevation_password: {input: deploy-sudo-password-tutosh}}]`)
+	lifecycle := currentContractMap(testingInstance, manifest["lifecycle"])
+	requireCurrentContractYAML(testingInstance, "lifecycle.ci", lifecycle["ci"], `enabled: true
+command: [make, ci]`)
+	defaults := currentContractMap(testingInstance, lifecycle["defaults"])
+	timeouts := currentContractMap(testingInstance, defaults["timeouts"])
 	if len(defaults) != 1 || len(timeouts) != 5 {
-		testingInstance.Fatalf("unexpected lifecycle timeout fields: %#v", defaults)
+		testingInstance.Fatalf("unexpected timeouts: %#v", defaults)
 	}
 	for _, name := range []string{"startup", "completion", "readiness", "request", "shutdown"} {
 		value, err := time.ParseDuration(lifecycleStringField(testingInstance, timeouts, name))
 		if err != nil || value <= 0 {
-			testingInstance.Fatalf("lifecycle %s requires a positive finite duration: %#v", name, timeouts[name])
+			testingInstance.Fatalf("%s requires a positive finite duration", name)
 		}
 	}
-	operations := resourcesDocument["operations"].(map[string]any)
+	operations := currentContractIndex(testingInstance, lifecycle["operations"], "name")
 	if len(operations) != 4 {
-		testingInstance.Fatalf("unexpected lifecycle observation operations: %#v", operations)
+		testingInstance.Fatalf("unexpected operations: %#v", operations)
 	}
 	for _, name := range []string{"app_lifecycle.repository_read", "app-release", "app-publish", "app-deploy"} {
-		operation := operations[name].(map[string]any)
-		polling := operation["polling"].(map[string]any)
-		if len(operation) != 1 || len(polling) != 5 {
-			testingInstance.Fatalf("unexpected %s observation fields: %#v", name, operation)
+		operation := operations[name]
+		polling := currentContractMap(testingInstance, operation["polling"])
+		if len(operation) != 2 || len(polling) != 5 {
+			testingInstance.Fatalf("unexpected %s observation fields", name)
 		}
-		initial, initialError := time.ParseDuration(lifecycleStringField(testingInstance, polling, "initial"))
-		maximum, maximumError := time.ParseDuration(lifecycleStringField(testingInstance, polling, "maximum"))
-		increment, incrementError := time.ParseDuration(lifecycleStringField(testingInstance, polling, "increment"))
-		if initialError != nil || maximumError != nil || incrementError != nil || initial <= 0 || maximum < initial || increment < 0 || polling["multiplier"].(int) < 1 || polling["attempt_limit"].(int) < 1 {
-			testingInstance.Fatalf("%s observation requires finite positive limits: %#v", name, polling)
-		}
-	}
-
-	resources, resourcesAvailable := resourcesDocument["resources"].(map[string]any)
-	if !resourcesAvailable {
-		testingInstance.Fatalf("lifecycle manifest has no resources map: %#v", resourcesDocument["resources"])
-	}
-	resourceIdentities := make([]string, 0, len(resources))
-	resourcesByIdentity := make(map[string]map[string]any, len(resources))
-	composeProjectFound := false
-	for resourceID, resourceValue := range resources {
-		resource, resourceAvailable := resourceValue.(map[string]any)
-		if !resourceAvailable {
-			testingInstance.Fatalf("lifecycle resource is not a mapping: %#v", resourceValue)
-		}
-		resourceKind := lifecycleStringField(testingInstance, resource, "kind")
-		resourceIdentity := resourceKind + "/" + resourceID
-		resourceIdentities = append(resourceIdentities, resourceIdentity)
-		resourcesByIdentity[resourceIdentity] = resource
-		if resourceKind != "compose_project" || resourceID != "runtime" {
-			continue
-		}
-		for _, imageValue := range resource["images"].(map[string]any) {
-			image := imageValue.(map[string]any)
-			if _, visibilityAvailable := image["visibility"]; visibilityAvailable {
-				testingInstance.Fatalf("GHCR visibility must remain provider-owned: %#v", image)
-			}
-		}
-		composeProjectFound = true
-		retiredServices, available := resource["retired_services"].(map[string]any)
-		if !available || len(retiredServices) != 1 {
-			testingInstance.Fatalf("unexpected retired services: %#v", retiredServices)
-		}
-		retiredService, available := retiredServices["mprlab-nginx-gateway/llm-proxy"].(map[string]any)
-		if !available || len(retiredService) != 0 {
-			testingInstance.Fatalf("unexpected retirement identity or body: %#v", retiredServices)
+		initial, initialErr := time.ParseDuration(lifecycleStringField(testingInstance, polling, "initial"))
+		maximum, maximumErr := time.ParseDuration(lifecycleStringField(testingInstance, polling, "maximum"))
+		increment, incrementErr := time.ParseDuration(lifecycleStringField(testingInstance, polling, "increment"))
+		if initialErr != nil || maximumErr != nil || incrementErr != nil || initial <= 0 || maximum < initial || increment < 0 || polling["multiplier"].(int) < 1 || polling["attempt_limit"].(int) < 1 {
+			testingInstance.Fatalf("invalid %s polling", name)
 		}
 	}
-	if !composeProjectFound {
-		testingInstance.Fatal("lifecycle manifest has no runtime compose project")
+	compose := currentContractMap(testingInstance, targets["docker_compose"])
+	projects := currentContractIndex(testingInstance, compose["projects"], "id")
+	if len(projects) != 1 {
+		testingInstance.Fatalf("unexpected runtime projects: %#v", projects)
 	}
-	slices.Sort(resourceIdentities)
-	expectedResourceIdentities := []string{
-		"caddy_route/public-api",
-		"compose_project/runtime",
-		"github_pages/website",
-		"health_check/api-health",
-		"health_check/website-health",
-		"private_values/private",
-		"runtime_capability/http",
-		"runtime_capability/http-private-lan",
-		"tauth_tenant/authentication",
+	project := projects["runtime"]
+	requireCurrentContractYAML(testingInstance, "runtime.retired_services", project["retired_services"], `[{project: mprlab-nginx-gateway, service: llm-proxy}]`)
+	services := currentContractIndex(testingInstance, project["services"], "id")
+	if len(services) != 1 || services["llm-proxy"] == nil {
+		testingInstance.Fatalf("unexpected services: %#v", services)
 	}
-	if !slices.Equal(resourceIdentities, expectedResourceIdentities) {
-		testingInstance.Fatalf("unexpected llm-proxy lifecycle resources: %#v", resourceIdentities)
+	service := services["llm-proxy"]
+	requireCurrentContractYAML(testingInstance, "llm-proxy.ports", service["ports"], `[{container_port: 8080, host_port: 18083, scope: private_lan}]`)
+	endpoints := currentContractIndex(testingInstance, service["endpoints"], "id")
+	if len(endpoints) != 3 || endpoints["http"] == nil || endpoints["http-private-lan"] == nil || endpoints["readiness"] == nil {
+		testingInstance.Fatal("unexpected native endpoints")
 	}
-
-	privateBindings := resourcesByIdentity["private_values/private"]["bindings"]
-	expectedPrivateBindings := map[string]any{
-		"admin-emails":                "LLM_PROXY_MANAGEMENT_ADMIN_EMAILS",
-		"google-web-client-id":        "LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID",
-		"jwt-signing-key":             "LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY",
-		"provider-key-encryption-key": "LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY",
+	requireCurrentContractYAML(testingInstance, "readiness-reference", service["readiness"], `endpoint: readiness`)
+	requireCurrentContractYAML(testingInstance, "http-private-lan", endpoints["http-private-lan"], `{id: http-private-lan, name: llm-proxy.http.private-lan, version: 1, endpoint: {scope: private_lan, scheme: http, port: 18083}, health: {protocol: http, path: /healthz, expected_status: 200}}`)
+	requireCurrentContractYAML(testingInstance, "http.endpoint", endpoints["http"]["endpoint"], `{scope: same_host, scheme: http, alias: llm-proxy, port: 8080}`)
+	requireCurrentContractYAML(testingInstance, "llm-proxy.assets", service["assets"], `[{source: configs/config.yml, target: /app/config.yml}, {source: configs/providers.yml, target: /app/providers.yml}]`)
+	if _, exists := service["environment_files"]; exists {
+		testingInstance.Fatal("runtime retains environment_files")
 	}
-	if !reflect.DeepEqual(privateBindings, expectedPrivateBindings) {
-		testingInstance.Fatalf("unexpected private-value bindings: %#v", privateBindings)
+	runtimeEnvironment := currentContractIndex(testingInstance, service["environment"], "name")
+	expectedEnvironmentNames := []string{"LLM_PROXY_MANAGEMENT_ADMIN_EMAILS", "LLM_PROXY_MANAGEMENT_API_ORIGIN", "LLM_PROXY_MANAGEMENT_DATABASE_PATH", "LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID", "LLM_PROXY_MANAGEMENT_JWT_ISSUER", "LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY", "LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN", "LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN", "LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY", "LLM_PROXY_MANAGEMENT_PROXY_ORIGIN", "LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN", "LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME", "LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH", "LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH", "LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH", "LLM_PROXY_MANAGEMENT_TAUTH_SESSION_PATH", "LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID", "LLM_PROXY_MANAGEMENT_TAUTH_URL", "LLM_PROXY_MANAGEMENT_UI_DESCRIPTION"}
+	if len(runtimeEnvironment) != len(expectedEnvironmentNames) {
+		testingInstance.Fatalf("unexpected runtime environment: %#v", runtimeEnvironment)
 	}
-
-	authenticationTenant := resourcesByIdentity["tauth_tenant/authentication"]["tenant"].(map[string]any)
-	expectedOAuthPolicy := map[string]any{
-		"access_token_ttl":                "5m",
-		"refresh_token_ttl":               "720h",
-		"consent_ttl":                     "720h",
-		"allow_client_metadata_documents": true,
-		"resources": map[string]any{"https://llm-proxy-api.mprlab.com": map[string]any{
-			"display_name": "LLM Proxy API",
-			"scopes": map[string]any{"llm-proxy:use": map[string]any{
-				"display_name": "Use LLM Proxy",
-				"description":  "Use the LLM Proxy API.",
-			}},
-		}},
-		"clients": map[string]any{},
+	for _, name := range expectedEnvironmentNames {
+		if runtimeEnvironment[name] == nil {
+			testingInstance.Fatalf("missing runtime environment %s", name)
+		}
 	}
-	if !reflect.DeepEqual(authenticationTenant["oauth"], expectedOAuthPolicy) {
-		testingInstance.Fatalf("unexpected TAuth tenant OAuth policy: %#v", authenticationTenant["oauth"])
-	}
-
-	runtimeServices, servicesAvailable := resourcesByIdentity["compose_project/runtime"]["services"].(map[string]any)
-	if !servicesAvailable || len(runtimeServices) != 1 {
-		testingInstance.Fatalf("unexpected runtime services: %#v", resourcesByIdentity["compose_project/runtime"]["services"])
-	}
-	runtimeService, runtimeServiceAvailable := runtimeServices["llm-proxy"].(map[string]any)
-	if !runtimeServiceAvailable {
-		testingInstance.Fatalf("runtime service is not a mapping: %#v", runtimeServices["llm-proxy"])
-	}
-	expectedPorts := map[string]any{"8080": map[string]any{"host_port": 18083, "scope": "private_lan"}}
-	if !reflect.DeepEqual(runtimeService["ports"], expectedPorts) {
-		testingInstance.Fatalf("unexpected private LAN HTTP publication: %#v", runtimeService["ports"])
-	}
-	expectedLANCapability := map[string]any{
-		"kind": "runtime_capability", "name": "llm-proxy.http.private-lan", "version": 1,
-		"project": "runtime", "service": "llm-proxy",
-		"endpoint": map[string]any{"scope": "private_lan", "scheme": "http", "port": 18083},
-		"health":   map[string]any{"protocol": "http", "path": "/healthz", "expected_status": 200},
-	}
-	if !reflect.DeepEqual(resourcesByIdentity["runtime_capability/http-private-lan"], expectedLANCapability) {
-		testingInstance.Fatalf("unexpected private LAN HTTP capability: %#v", resourcesByIdentity["runtime_capability/http-private-lan"])
-	}
-	expectedOriginalEndpoint := map[string]any{"scope": "same_host", "scheme": "http", "alias": "llm-proxy", "port": 8080}
-	if !reflect.DeepEqual(resourcesByIdentity["runtime_capability/http"]["endpoint"], expectedOriginalEndpoint) {
-		testingInstance.Fatalf("unexpected original HTTP endpoint: %#v", resourcesByIdentity["runtime_capability/http"]["endpoint"])
-	}
-	expectedRuntimeAssets := map[string]any{
-		"/app/config.yml": map[string]any{
-			"source": "configs/config.yml",
-			"mode":   "0444",
-		},
-		"/app/providers.yml": map[string]any{
-			"source": "configs/providers.yml",
-			"mode":   "0444",
-		},
-	}
-	if !reflect.DeepEqual(runtimeService["assets"], expectedRuntimeAssets) {
-		testingInstance.Fatalf("unexpected runtime assets: %#v", runtimeService["assets"])
-	}
-	if _, environmentFilesAvailable := runtimeService["environment_files"]; environmentFilesAvailable {
-		testingInstance.Fatalf("runtime service retains environment_files: %#v", runtimeService["environment_files"])
-	}
-	runtimeEnvironment, environmentAvailable := runtimeService["environment"].(map[string]any)
-	if !environmentAvailable {
-		testingInstance.Fatalf("runtime service has no typed environment: %#v", runtimeService["environment"])
-	}
-	runtimeEnvironmentNames := make([]string, 0, len(runtimeEnvironment))
-	for environmentName := range runtimeEnvironment {
-		runtimeEnvironmentNames = append(runtimeEnvironmentNames, environmentName)
-	}
-	slices.Sort(runtimeEnvironmentNames)
-	expectedRuntimeEnvironmentNames := []string{
-		"LLM_PROXY_MANAGEMENT_ADMIN_EMAILS",
-		"LLM_PROXY_MANAGEMENT_API_ORIGIN",
-		"LLM_PROXY_MANAGEMENT_DATABASE_PATH",
-		"LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID",
-		"LLM_PROXY_MANAGEMENT_JWT_ISSUER",
-		"LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY",
-		"LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN",
-		"LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN",
-		"LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY",
-		"LLM_PROXY_MANAGEMENT_PROXY_ORIGIN",
-		"LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN",
-		"LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME",
-		"LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH",
-		"LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH",
-		"LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH",
-		"LLM_PROXY_MANAGEMENT_TAUTH_SESSION_PATH",
-		"LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID",
-		"LLM_PROXY_MANAGEMENT_TAUTH_URL",
-		"LLM_PROXY_MANAGEMENT_UI_DESCRIPTION",
-	}
-	if !slices.Equal(runtimeEnvironmentNames, expectedRuntimeEnvironmentNames) {
-		testingInstance.Fatalf("unexpected runtime environment keys: %#v", runtimeEnvironmentNames)
-	}
-	for environmentName, expectedBinding := range map[string]map[string]any{
-		"LLM_PROXY_MANAGEMENT_ADMIN_EMAILS":                {"resource": "private", "output": "admin-emails"},
-		"LLM_PROXY_MANAGEMENT_API_ORIGIN":                  {"resource": "public-api", "output": "origin"},
-		"LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID":            {"resource": "authentication", "output": "google-web-client-id"},
-		"LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY":             {"resource": "authentication", "output": "jwt-signing-key"},
-		"LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY": {"resource": "private", "output": "provider-key-encryption-key"},
-		"LLM_PROXY_MANAGEMENT_PROXY_ORIGIN":                {"resource": "public-api", "output": "origin"},
-		"LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN":               {"resource": "website", "output": "origin"},
-		"LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME":         {"resource": "authentication", "output": "session-cookie-name"},
-		"LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID":             {"resource": "authentication", "output": "tenant-id"},
-		"LLM_PROXY_MANAGEMENT_TAUTH_URL":                   {"value": "https://tauth-api.mprlab.com"},
+	for name, expected := range map[string]string{
+		"LLM_PROXY_MANAGEMENT_ADMIN_EMAILS":                `{name: LLM_PROXY_MANAGEMENT_ADMIN_EMAILS, input: llm-proxy-management-admin-emails}`,
+		"LLM_PROXY_MANAGEMENT_API_ORIGIN":                  `{name: LLM_PROXY_MANAGEMENT_API_ORIGIN, value: https://llm-proxy-api.mprlab.com}`,
+		"LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID":            `{name: LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID, input: llm-proxy-management-google-client-id}`,
+		"LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY":             `{name: LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY, input: llm-proxy-management-jwt-signing-key}`,
+		"LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY": `{name: LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY, input: llm-proxy-management-provider-key-encryption-key}`,
+		"LLM_PROXY_MANAGEMENT_PROXY_ORIGIN":                `{name: LLM_PROXY_MANAGEMENT_PROXY_ORIGIN, value: https://llm-proxy-api.mprlab.com}`,
+		"LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN":               `{name: LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN, target: website, output: origin}`,
+		"LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME":         `{name: LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME, value: app_session_llm_proxy}`,
+		"LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID":             `{name: LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID, value: llm-proxy}`,
+		"LLM_PROXY_MANAGEMENT_TAUTH_URL":                   `{name: LLM_PROXY_MANAGEMENT_TAUTH_URL, value: https://tauth-api.mprlab.com}`,
 	} {
-		if !reflect.DeepEqual(runtimeEnvironment[environmentName], expectedBinding) {
-			testingInstance.Errorf("unexpected %s binding: %#v", environmentName, runtimeEnvironment[environmentName])
+		requireCurrentContractYAML(testingInstance, name, runtimeEnvironment[name], expected)
+	}
+	caddy := currentContractMap(testingInstance, currentContractMap(testingInstance, targets["ingress"])["caddy"])
+	routes := currentContractIndex(testingInstance, caddy["routes"], "id")
+	if len(routes) != 1 || routes["public-api"] == nil {
+		testingInstance.Fatal("unexpected API routes")
+	}
+	pages := currentContractIndex(testingInstance, currentContractMap(testingInstance, targets["github_pages"])["sites"], "id")
+	if len(pages) != 1 || pages["website"] == nil {
+		testingInstance.Fatal("unexpected Pages targets")
+	}
+	observations := currentContractIndex(testingInstance, currentContractMap(testingInstance, lifecycle["observations"])["http"], "id")
+	if len(observations) != 2 || observations["api-health"] == nil || observations["website-health"] == nil {
+		testingInstance.Fatal("unexpected public health observations")
+	}
+	publications := currentContractMap(testingInstance, manifest["publications"])
+	for _, image := range currentContractIndex(testingInstance, currentContractMap(testingInstance, publications["ghcr"])["images"], "id") {
+		if _, exists := image["visibility"]; exists {
+			testingInstance.Fatal("GHCR visibility must remain provider-owned")
 		}
 	}
-
 	manifestText := string(manifestBytes)
-	for _, requiredContract := range []string{
-		"kind: private_values",
-		"name: mprlab-nginx-gateway_llm-proxy-data",
-		"name: llm-proxy.http",
-		"alias: llm-proxy",
-		"hostname: llm-proxy-api.mprlab.com",
-		"url: https://llm-proxy-api.mprlab.com/healthz",
-		"url: https://llm-proxy.mprlab.com/healthz",
-		"dockerfile: docker/pages/Dockerfile",
-		"capability: tauth.tenants",
-	} {
-		if !strings.Contains(manifestText, requiredContract) {
-			testingInstance.Errorf("lifecycle manifest is missing %q", requiredContract)
+	for _, required := range []string{"name: mprlab-nginx-gateway_llm-proxy-data", "name: llm-proxy.http", "alias: llm-proxy", "hostname: llm-proxy-api.mprlab.com", "url: https://llm-proxy-api.mprlab.com/healthz", "url: https://llm-proxy.mprlab.com/healthz", "dockerfile: docker/pages/Dockerfile"} {
+		if !strings.Contains(manifestText, required) {
+			testingInstance.Errorf("manifest lacks %q", required)
 		}
 	}
-	for _, forbiddenContract := range []string{
-		"schema_version:",
-		"environment_files:",
-		"profiles:",
-		"secret:",
-		"make_workflow",
-		"ansible_task_bundle",
-		"container_name:",
-		"compose_template:",
-		"npm_package",
-		"mobile_application",
-		"target: pages-deploy",
-	} {
-		if strings.Contains(manifestText, forbiddenContract) {
-			testingInstance.Errorf("lifecycle manifest retains forbidden contract %q", forbiddenContract)
+	for _, forbidden := range []string{"schema_version:", "environment_files:", "profiles:", "secret:", "make_workflow", "ansible_task_bundle", "container_name:", "compose_template:", "npm_package", "mobile_application", "target: pages-deploy"} {
+		if strings.Contains(manifestText, forbidden) {
+			testingInstance.Errorf("manifest retains %q", forbidden)
 		}
 	}
 }
@@ -514,4 +350,114 @@ func lifecycleStringField(testingInstance *testing.T, document map[string]any, f
 		testingInstance.Fatalf("lifecycle field %s is not a non-empty string: %#v", fieldName, document[fieldName])
 	}
 	return value
+}
+
+func currentContractMap(t *testing.T, value any) map[string]any {
+	t.Helper()
+	result, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("expected native declaration mapping, got %#v", value)
+	}
+	return result
+}
+
+func currentManifestContract(t *testing.T, content []byte) map[string]any {
+	t.Helper()
+	var envelope map[string]any
+	if err := yaml.Unmarshal(content, &envelope); err != nil {
+		t.Fatalf("parse selected manifest: %v", err)
+	}
+	if len(envelope) != 1 {
+		t.Fatalf("unexpected manifest envelope: %#v", envelope)
+	}
+	actual := currentContractMap(t, envelope["mprlab_resources"])
+	keys := make([]string, 0, len(actual))
+	for key := range actual {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	expected := []string{"artifacts", "environment", "lifecycle", "owner", "publications", "release", "targets"}
+	if !reflect.DeepEqual(keys, expected) {
+		t.Fatalf("selected manifest root keys=%v want=%v", keys, expected)
+	}
+	return actual
+}
+
+func currentContractIndex(t *testing.T, value any, identityKey string) map[string]map[string]any {
+	t.Helper()
+	items, ok := value.([]any)
+	if !ok {
+		t.Fatalf("expected native declaration list, got %#v", value)
+	}
+	result := make(map[string]map[string]any, len(items))
+	for _, item := range items {
+		declaration := currentContractMap(t, item)
+		identity, ok := declaration[identityKey].(string)
+		if !ok || identity == "" || result[identity] != nil {
+			t.Fatalf("invalid or duplicate %s in %#v", identityKey, value)
+		}
+		result[identity] = declaration
+	}
+	return result
+}
+
+func requireCurrentContractYAML(t *testing.T, path string, actual any, expectedText string) {
+	t.Helper()
+	var expected any
+	if err := yaml.Unmarshal([]byte(expectedText), &expected); err != nil {
+		t.Fatalf("parse expected %s: %v", path, err)
+	}
+	requireCurrentContractValue(t, path, actual, expected)
+}
+
+func requireCurrentContractValue(t *testing.T, path string, actual, expected any) {
+	t.Helper()
+	switch wanted := expected.(type) {
+	case map[string]any:
+		mapping, ok := actual.(map[string]any)
+		if !ok {
+			t.Fatalf("%s requires a mapping, got %#v", path, actual)
+		}
+		if !strings.HasSuffix(path, ".assets[]") && len(mapping) != len(wanted) {
+			t.Fatalf("%s has unexpected fields: %#v", path, actual)
+		}
+		for key, value := range wanted {
+			observed, exists := mapping[key]
+			if !exists {
+				t.Fatalf("%s lacks %s", path, key)
+			}
+			requireCurrentContractValue(t, path+"."+key, observed, value)
+		}
+	case []any:
+		items, ok := actual.([]any)
+		if !ok || len(items) != len(wanted) {
+			t.Fatalf("%s list=%#v want=%#v", path, actual, wanted)
+		}
+		for index, value := range wanted {
+			observed := items[index]
+			if declaration, isMapping := value.(map[string]any); isMapping {
+				identityKey := "id"
+				if _, exists := declaration[identityKey]; !exists {
+					identityKey = "name"
+				}
+				if identity, exists := declaration[identityKey]; exists {
+					matches := 0
+					for _, candidate := range items {
+						if entry, valid := candidate.(map[string]any); valid && entry[identityKey] == identity {
+							observed = candidate
+							matches++
+						}
+					}
+					if matches != 1 {
+						t.Fatalf("%s requires one %s=%v, got %d", path, identityKey, identity, matches)
+					}
+				}
+			}
+			requireCurrentContractValue(t, path+"[]", observed, value)
+		}
+	default:
+		if !reflect.DeepEqual(actual, expected) {
+			t.Fatalf("%s=%#v want=%#v", path, actual, expected)
+		}
+	}
 }
