@@ -62,7 +62,7 @@ func TestHeyGenAvatarAdapterBoundaryFailures(t *testing.T) {
 		if strings.Contains(request.Header.Get("Content-Type"), "multipart") {
 			data, _ := io.ReadAll(request.Body)
 			if strings.Contains(string(data), "audio/wav") {
-				mime = "audio/wav"
+				mime = "audio/x-wav"
 			}
 		}
 		return avatarBoundaryResponse(`{"data":{"asset_id":"upload","url":"https://example.test/asset","mime_type":"` + mime + `","size_bytes":5}}`), nil

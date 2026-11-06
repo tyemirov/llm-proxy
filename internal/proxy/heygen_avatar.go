@@ -225,7 +225,7 @@ func (adapter *providerHeyGenAvatarAdapter) poll(ctx context.Context, request Me
 			return MediaOperationExecutionResult{State: MediaOperationStateSucceeded, Outputs: []MediaOperationOutput{output}}
 		case "failed":
 			return MediaOperationExecutionResult{State: MediaOperationStateFailed, ErrorCode: "provider_error"}
-		case "processing", "pending", "pending_consent":
+		case "waiting", "processing", "pending", "pending_consent":
 		default:
 			return imageGenerationUncertain()
 		}

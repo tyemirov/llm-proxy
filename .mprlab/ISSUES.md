@@ -35,6 +35,75 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B315] (P1) Permit the qualified HeyGen avatar video origins.
+  Goal:
+  Download completed avatar videos from the current exact provider origins.
+  Evidence:
+  Read-only account observations found 41 completed videos on `https://files2.heygen.ai`.
+  They also found 15 completed videos on `https://resource2.heygen.ai`.
+  The checked-in avatar transport and origin allocation omit both origins.
+  Requirements:
+  - Add both exact HTTPS origins to `avatar_video` only.
+  - Keep the existing origins and all other transport scopes unchanged.
+  - Give each new origin four active requests and 24 queued requests.
+  - Increase the global admitted budget from 596 to 652 for these exact allocations.
+  - Keep all other capacity limits unchanged.
+  Validation:
+  Load the checked-in provider catalog and origin allocation without fixture changes.
+  Use the public gateway HTTP API with only the outbound network transport replaced.
+  Verify both downloads and reject unknown, lookalike, and HTTP origins before transport.
+  Complete focused HeyGen and source config contract tests.
+  Result:
+  The public HTTP regression passed with both checked-in contracts unchanged in the test.
+  Both qualified downloads completed. Unknown, lookalike, and HTTP origins did not reach the network transport.
+  Catalog and startup failures were captured before the exact config corrections.
+  `make test-heygen`, `make test-provider-catalog`, and the focused upstream admission target passed.
+  The primary agent owns complete CI and production activation.
+
+
+- [x] [B314] (P1) Poll the native HeyGen video status `waiting`.
+  Goal:
+  Continue an accepted native video operation until its terminal result.
+  Evidence:
+  The current HeyGen audio-to-video guide specifies status `waiting` after acceptance.
+  The avatar status reader rejects that status as an uncertain result.
+  Requirements:
+  - Treat status `waiting` as nonterminal.
+  - Keep the native provider identifier and the existing polling interval.
+  - Keep one native submission through the status sequence.
+  Validation:
+  Use the public gateway HTTP API with native GET statuses `waiting`, `processing`, and `completed`.
+  Verify the completed output and one native submission.
+  Result:
+  Public HTTP tests passed for both provider identities through all three GET statuses.
+  The video output completed with one native video submission.
+  `make test-heygen` passed. All affected functions have 100 percent statement coverage.
+  The primary agent owns complete CI and production activation.
+
+
+- [x] [B313] (P1) Accept the current HeyGen WAV receipt MIME type.
+  Goal:
+  Complete native WAV uploads without changing the public asset MIME type.
+  Evidence:
+  The qualified upload returned HTTP 200 with the exact input size and a valid native asset identifier.
+  Its receipt MIME type was `audio/x-wav`. The public input MIME type was `audio/wav`.
+  Requirements:
+  - Keep the outbound multipart MIME type `audio/wav`.
+  - Compare WAV receipts with the current native MIME type `audio/x-wav`.
+  - Keep all other MIME comparisons exact.
+  - Keep native identifiers and credentials private.
+  Validation:
+  Use the public gateway HTTP API with a local native protocol server.
+  Verify the public MIME type, exact bytes, and strict receipt comparisons.
+  Complete focused HeyGen tests and affected function coverage.
+  Result:
+  The public HTTP regression passed with the qualified native WAV receipt.
+  The public MIME type and outbound multipart MIME type stayed unchanged.
+  Invalid WAV and non-WAV receipt MIME types were rejected.
+  `make test-heygen` passed. All affected functions have 100 percent statement coverage.
+  The primary agent owns complete CI and production activation.
+
+
 - [x] [B312] (P1) Synchronize the live harness termination test.
   Goal:
   Verify owned proxy cleanup after harness termination without a fixed request delay.
@@ -2227,6 +2296,40 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   Blocked: The operator must publish the qualified shared UI assets and complete cache convergence under mpr-ui I009.
 
 ## Improvements
+
+- [-] [I314] (P1) Recover the verified avatar operation before native submission.
+
+  Goal: Continue the exact retained pilot operation after the WAV receipt correction.
+  Scope: Limit the temporary command to the specified tenant, operation, and usage event 11237.
+  Compile the command and its tests only with `pilot_presubmission_recovery`.
+  Requirements: Prepare and preview through an existing database without writes or provider calls.
+  Bind the original input, avatar, credential reference, accepted intent, current route, and unique usage delivery.
+  Apply one transaction with an immutable audit and a complete snapshot check.
+  Preserve the operation identity, accepted time, original catalog revision, and usage delivery marker.
+  Renew the deadline for at most 900 seconds. Permit one ordinary worker execution.
+  Finalize only a concrete terminal outcome. Correct only the bound existing usage event in the audit transaction.
+  Repeated apply and finalize calls return the recorded receipt without another state change.
+  Validation: Use actual CLI processes, SQLite, concurrent calls, failed audit writes, and local native HTTP.
+  Verify the WAV receipt, waiting state, retained avatar, single submission, and single usage event.
+  The primary agent owns complete CI, production approval, application, and final verification.
+  Remove the temporary source bridge after verified finalization. Retain the audit and operator evidence.
+  Local result: Tagged CLI, SQLite, native HTTP, and race checks passed. Production application remains pending.
+
+
+- [x] [I313] (P1) Classify structured output failures in private operator logs
+
+  Goal: Distinguish invalid JSON, multiple JSON values, and schema violations without private content.
+  Requirements: Use fixed reason codes and bounded standard schema keywords in the existing log metadata.
+  Exclude output, schemas, property names, locations, prompts, media, and values.
+  Keep public errors, failed records, strict validation, and explicit retry behavior unchanged.
+  Validation: Use local providers through the public V2 interface. Verify all three failures, privacy, and retained observations.
+  Complete focused race checks and independent review. The primary agent owns complete CI and deployment.
+
+  Result: Public HTTP, privacy, retained observation, and bounded traversal tests passed with race checks.
+  All changed diagnostic functions have 100% statement coverage.
+
+  Final `CI=1 make ci` passed all 15 gates with 100% Go statement coverage.
+  The run completed in 1,393 seconds. Production activation remains separate.
 
 - [x] [I312] (P1) Align OpenAI admission with the 32-request tenant allocation
   Goal: Admit 32 concurrent interactive requests for one OpenAI tenant and account.

@@ -2,7 +2,7 @@ server:
   port: 8080
   log_level: info
   upstream_capacity:
-    global: {active: 32, admitted: 596}
+    global: {active: 32, admitted: 652}
     tenant: {active: 8, admitted: 32}
     account: {active: 8, admitted: 32}
     media: {active: 24, admitted: 256}
@@ -15,6 +15,8 @@ server:
       - {origin: https://api.heygen.com, active: 4, queued: 24}
       - {origin: https://resource.heygen.ai, active: 4, queued: 24}
       - {origin: https://files.heygen.ai, active: 4, queued: 24}
+      - {origin: https://files2.heygen.ai, active: 4, queued: 24}
+      - {origin: https://resource2.heygen.ai, active: 4, queued: 24}
       - {origin: https://storage.googleapis.com, active: 2, queued: 1}
       - {origin: https://queue.fal.run, active: 4, queued: 24}
       - {origin: https://fal.media, active: 4, queued: 24}

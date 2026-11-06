@@ -109,7 +109,11 @@ func TestHeyGenV3ServicesMaterializeOrderedResults(t *testing.T) {
 					if len(data) == 0 {
 						t.Error("empty upload")
 					}
-					_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"asset_id": fmt.Sprintf("native-asset-%d", uploads.Load()), "url": upstream.URL + "/private", "mime_type": header.Header.Get("Content-Type"), "size_bytes": len(data)}})
+					nativeMIME := header.Header.Get("Content-Type")
+					if nativeMIME == "audio/wav" {
+						nativeMIME = "audio/x-wav"
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"asset_id": fmt.Sprintf("native-asset-%d", uploads.Load()), "url": upstream.URL + "/private", "mime_type": nativeMIME, "size_bytes": len(data)}})
 				case "POST /v3/lipsyncs", "POST /v3/video-translations":
 					submits.Add(1)
 					var body map[string]any
@@ -360,7 +364,7 @@ func heygenLipInput(t *testing.T, client llmproxyclient.Client) llmproxyclient.M
 }
 func heygenTestJSON(value any) json.RawMessage { data, _ := json.Marshal(value); return data }
 
-func heygenFixtureUpload(t *testing.T, w http.ResponseWriter, r *http.Request) {
+func heygenFixtureUpload(t *testing.T, w http.ResponseWriter, r *http.Request, receiptMIME ...string) {
 	t.Helper()
 	if err := r.ParseMultipartForm(2 << 20); err != nil {
 		t.Error(err)
@@ -374,7 +378,14 @@ func heygenFixtureUpload(t *testing.T, w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 	data, _ := io.ReadAll(file)
-	_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"asset_id": "uploaded-asset", "url": "https://api.heygen.com/asset", "mime_type": header.Header.Get("Content-Type"), "size_bytes": len(data)}})
+	nativeMIME := header.Header.Get("Content-Type")
+	if nativeMIME == "audio/wav" {
+		nativeMIME = "audio/x-wav"
+	}
+	if len(receiptMIME) > 0 {
+		nativeMIME = receiptMIME[0]
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"asset_id": "uploaded-asset", "url": "https://api.heygen.com/asset", "mime_type": nativeMIME, "size_bytes": len(data)}})
 }
 
 func TestHeyGenValidationRejectsBeforeProviderDispatch(t *testing.T) {
@@ -658,7 +669,7 @@ func TestHeyGenTranslationKeepsCompletedLanguageOnLaterFailure(t *testing.T) {
 }
 
 func TestHeyGenNativeBoundaryFailures(t *testing.T) {
-	for _, scenario := range []string{"video-upload-lost", "audio-upload-lost", "upload-malformed", "upload-invalid-metadata", "submit-malformed", "submit-empty-handle", "submit-server-error", "poll-lost", "poll-malformed", "artifact-lost", "artifact-truncated", "artifact-empty", "artifact-wrong-mime", "artifact-wrong-kind", "artifact-oversized", "receipt-fenced", "pending-running", "deadline"} {
+	for _, scenario := range []string{"video-upload-lost", "audio-upload-lost", "upload-malformed", "upload-invalid-metadata", "wav-upload-receipt-public-mime", "non-wav-upload-receipt-mismatch", "submit-malformed", "submit-empty-handle", "submit-server-error", "poll-lost", "poll-malformed", "artifact-lost", "artifact-truncated", "artifact-empty", "artifact-wrong-mime", "artifact-wrong-kind", "artifact-oversized", "receipt-fenced", "pending-running", "deadline"} {
 		t.Run(scenario, func(t *testing.T) {
 			var submits, uploads, polls atomic.Int32
 			var upstream *httptest.Server
@@ -672,6 +683,14 @@ func TestHeyGenNativeBoundaryFailures(t *testing.T) {
 					if scenario == "video-upload-lost" || scenario == "audio-upload-lost" && number == 2 {
 						connection, _, _ := w.(http.Hijacker).Hijack()
 						_ = connection.Close()
+						return
+					}
+					if scenario == "wav-upload-receipt-public-mime" && number == 2 {
+						heygenFixtureUpload(t, w, r, "audio/wav")
+						return
+					}
+					if scenario == "non-wav-upload-receipt-mismatch" && number == 1 {
+						heygenFixtureUpload(t, w, r, "audio/x-wav")
 						return
 					}
 					if scenario == "upload-malformed" {

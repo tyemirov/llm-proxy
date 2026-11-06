@@ -432,8 +432,9 @@ Each origin declares its own `active` and `queued` limits.
 The sum of origin allocations must not exceed `global.admitted`.
 Each allocation contains the origin's active and queued limits.
 Thus, one origin cannot consume another origin's admission allocation.
+
 The canonical OpenAI allocation has eight active slots and 24 queued slots.
-It supports the 32-request tenant and account admission limits. Global admitted capacity is 596.
+It supports the 32-request tenant and account admission limits. Global admitted capacity is 652.
 Ready origins and tenants receive capacity in turn.
 An exhausted allocation returns `503 request queue full`.
 Accepted media operations retain their separate durable-job limits.
@@ -2742,6 +2743,16 @@ returns that normalized value in the standard `Retry-After` header.
 failure responses and logs never include the provider's raw response body or
 error message. For a failed Gemini Interaction, structured logs can include
 validated `provider_error_codes`. Public responses do not include these codes.
+
+Local structured output failures add fixed codes to the existing `provider_error_codes` log field.
+The codes are `structured_output.not_json`, `structured_output.multiple_json_values`, and `structured_output.schema_violation`.
+Schema failures can also include up to eight sorted `json_schema.<keyword>` codes.
+The diagnostic processes at most 64 validation nodes with a maximum depth of 16.
+Only standard schema keywords enter this metadata.
+
+Locations, property names, schema definitions, provider output, prompts, media, and values remain excluded.
+These codes do not change public errors, strict validation, retained failure state, or explicit retries.
+
 
 ## Security
 

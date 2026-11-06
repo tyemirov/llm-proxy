@@ -27,6 +27,7 @@ func TestHeyGenAvatarCreationAndRendering(t *testing.T) {
 	for _, provider := range []string{"heygen", "heygen-fixture"} {
 		t.Run(provider, func(t *testing.T) {
 			var submissions atomic.Int32
+			var videoPolls atomic.Int32
 			var upstream *httptest.Server
 			upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/render.mp4" {
@@ -53,7 +54,14 @@ func TestHeyGenAvatarCreationAndRendering(t *testing.T) {
 					}
 					data, _ := io.ReadAll(file)
 					file.Close()
-					_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"asset_id": "native-upload", "mime_type": header.Header.Get("Content-Type"), "size_bytes": len(data), "url": upstream.URL + "/asset"}})
+					nativeMIME := header.Header.Get("Content-Type")
+					if strings.HasPrefix(nativeMIME, "audio/") {
+						if nativeMIME != "audio/wav" {
+							t.Error("native multipart WAV MIME changed")
+						}
+						nativeMIME = "audio/x-wav"
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"asset_id": "native-upload", "mime_type": nativeMIME, "size_bytes": len(data), "url": upstream.URL + "/asset"}})
 				case "POST /v3/avatars":
 					submissions.Add(1)
 					var body map[string]any
@@ -73,7 +81,14 @@ func TestHeyGenAvatarCreationAndRendering(t *testing.T) {
 					}
 					_, _ = io.WriteString(w, `{"data":{"video_id":"native-render","status":"waiting"}}`)
 				case "GET /v3/videos/native-render":
-					_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"id": "native-render", "status": "completed", "video_url": upstream.URL + "/render.mp4"}})
+					status := "completed"
+					switch videoPolls.Add(1) {
+					case 1:
+						status = "waiting"
+					case 2:
+						status = "processing"
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"id": "native-render", "status": status, "video_url": upstream.URL + "/render.mp4"}})
 				default:
 					t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 					w.WriteHeader(404)
@@ -154,6 +169,10 @@ func TestHeyGenAvatarCreationAndRendering(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			publicAudio, err := client.GetAsset(t.Context(), audio.AssetID)
+			if err != nil || publicAudio.MIMEType != "audio/wav" {
+				t.Fatalf("public WAV MIME changed: %v", err)
+			}
 			controls := json.RawMessage(`{"engine":"avatar_iv","aspect_ratio":"16:9","resolution":"720p","motion_prompt":"Wave","expressiveness":"medium"}`)
 			render := llmproxyclient.MediaOperationInput{Capability: "avatar.video.generate", Provider: provider, Input: json.RawMessage(fmt.Sprintf(`{"avatar_id":%q,"audio_asset_id":%q}`, avatar.AvatarID, audio.AssetID)), Controls: controls}
 			accepted, err := client.CreateMediaOperation(t.Context(), "avatar-render", render)
@@ -161,6 +180,9 @@ func TestHeyGenAvatarCreationAndRendering(t *testing.T) {
 				t.Fatal(err)
 			}
 			completed := wait(accepted)
+			if videoPolls.Load() != 3 || submissions.Load() != 2 {
+				t.Fatalf("native poll sequence=%d submissions=%d", videoPolls.Load(), submissions.Load())
+			}
 			metadata, err = client.GetAsset(t.Context(), completed.Outputs[0].AssetID)
 			if err != nil {
 				t.Fatal(err)

@@ -24,6 +24,27 @@ The gateway uploads each selected file through `/v3/assets`.
 The maximum native upload size is 32 MiB.
 The catalog and gateway asset limits also apply.
 
+WAV assets keep public MIME type `audio/wav`.
+The outbound multipart part also uses `audio/wav`.
+The current native WAV receipt uses `audio/x-wav`.
+The adapter compares that receipt with the native MIME type.
+All other receipt MIME types must equal the public asset MIME type.
+
+The avatar video transport permits these exact output origins:
+
+- `https://resource.heygen.ai`
+- `https://files.heygen.ai`
+- `https://files2.heygen.ai`
+- `https://resource2.heygen.ai`
+
+Read-only account observations qualified `https://files2.heygen.ai` and `https://resource2.heygen.ai` for completed avatar videos.
+The existing origins stay permitted. The observations do not establish fresh qualification for `https://resource.heygen.ai`.
+The [native video reference](https://developers.heygen.com/reference/get-video) also specifies `https://files.heygen.ai` in its output example.
+Other HeyGen transport origin scopes stay unchanged.
+
+Each new origin has four active requests and 24 queued requests in the checked-in capacity contract.
+The global admitted budget is 652. The global active limit stays 32.
+
 Select `speed` or `precision` for lip sync and translation.
 Supply translation languages as an ordered `output_languages` array.
 The gateway retains each returned native job identifier before it reads job status.
@@ -56,6 +77,7 @@ Deprecated caption controls are absent.
 The gateway uses `/v3/users/me` for this read-only request.
 The result preserves the native billing type and its selected balance contract.
 Wallet observations retain their USD or credit currency.
+
 Subscription observations retain separate credit pools.
 Metered observations retain the credit balance and USD spending fields.
 An absent balance remains null.
@@ -64,10 +86,15 @@ Account observations do not become operation prices or usage charges.
 ## Recovery And Acceptance
 
 The gateway saves accepted provider receipts before status polling.
+Avatar video status `waiting` is nonterminal.
+The adapter continues status polling through `waiting` and `processing` until a terminal result.
+The [audio-to-video guide](https://developers.heygen.com/audio-to-video) documents this native status.
+
 Recovery reads existing jobs and does not repeat a paid submission.
 Saved outputs and failed translation-child states remain available during recovery.
 An ambiguous submission records an uncertain outcome.
 Queued work supports cancellation.
+
 Native work reports unsupported cancellation after dispatch.
 Completed output bytes become tenant-owned gateway assets.
 Provider artifact downloads exclude account credentials.
