@@ -290,13 +290,13 @@ func (schema *structuredOutputSchema) validateResponse(rawOutput string) error {
 	decoder.UseNumber()
 	var value any
 	if decodeError := decoder.Decode(&value); decodeError != nil {
-		return fmt.Errorf("%w: provider output is not JSON", ErrProviderAPI)
+		return newStructuredOutputResponseFailure(structuredOutputNotJSON, nil)
 	}
 	if decodeError := decoder.Decode(&struct{}{}); decodeError != io.EOF {
-		return fmt.Errorf("%w: provider output contains multiple JSON values", ErrProviderAPI)
+		return newStructuredOutputResponseFailure(structuredOutputMultipleJSON, nil)
 	}
 	if validationError := schema.compiled.Validate(value); validationError != nil {
-		return fmt.Errorf("%w: provider output violates structured schema", ErrProviderAPI)
+		return newStructuredOutputResponseFailure(structuredOutputSchemaViolation, validationError)
 	}
 	return nil
 }

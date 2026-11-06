@@ -81,7 +81,11 @@ func heygenUploadAsset(ctx context.Context, request MediaOperationExecutionReque
 	if err := readQueueJSON(response, &receipt); err != nil {
 		return "", err
 	}
-	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusCreated || !queueRequestID.MatchString(receipt.Data.AssetID) || receipt.Data.MIMEType != metadata.MIMEType || receipt.Data.SizeBytes != metadata.SizeBytes || receipt.Data.URL == "" {
+	expectedReceiptMIME := metadata.MIMEType
+	if expectedReceiptMIME == "audio/wav" {
+		expectedReceiptMIME = "audio/x-wav"
+	}
+	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusCreated || !queueRequestID.MatchString(receipt.Data.AssetID) || receipt.Data.MIMEType != expectedReceiptMIME || receipt.Data.SizeBytes != metadata.SizeBytes || receipt.Data.URL == "" {
 		return "", errMediaOperationInvalid
 	}
 	return receipt.Data.AssetID, nil

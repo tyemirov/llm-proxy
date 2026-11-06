@@ -62,7 +62,7 @@ func TestHeyGenExecutionBoundaryFaults(t *testing.T) {
 				mime := "video/mp4"
 				body, _ := io.ReadAll(request.Body)
 				if strings.Contains(string(body), "audio/wav") {
-					mime = "audio/wav"
+					mime = "audio/x-wav"
 				}
 				return avatarBoundaryResponse(`{"data":{"asset_id":"uploaded","url":"https://fixture.test/asset","mime_type":"` + mime + `","size_bytes":5}}`), nil
 			})

@@ -7118,7 +7118,7 @@ providers:
             path: /v3/videos
             method: POST
           headers: []
-          artifact_origins: [https://resource.heygen.ai, https://files.heygen.ai]
+          artifact_origins: [https://resource.heygen.ai, https://files.heygen.ai, https://files2.heygen.ai, https://resource2.heygen.ai]
           components:
             request_codec: {id: heygen_avatar_video_v3}
             response_codec: {id: heygen_avatar_video_v3}
