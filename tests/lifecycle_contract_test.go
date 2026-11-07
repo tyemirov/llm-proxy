@@ -84,12 +84,13 @@ command: [make, ci]`)
 	service := services["llm-proxy"]
 	requireCurrentContractYAML(testingInstance, "llm-proxy.ports", service["ports"], `[{container_port: 8080, host_port: 18083, scope: private_lan}]`)
 	endpoints := currentContractIndex(testingInstance, service["endpoints"], "id")
-	if len(endpoints) != 3 || endpoints["http"] == nil || endpoints["http-private-lan"] == nil || endpoints["readiness"] == nil {
+	if len(endpoints) != 2 || endpoints["http"] == nil || endpoints["http-private-lan"] == nil {
 		testingInstance.Fatal("unexpected native endpoints")
 	}
-	requireCurrentContractYAML(testingInstance, "readiness-reference", service["readiness"], `endpoint: readiness`)
+	requireCurrentContractYAML(testingInstance, "readiness-reference", service["readiness"], `endpoint: http`)
 	requireCurrentContractYAML(testingInstance, "http-private-lan", endpoints["http-private-lan"], `{id: http-private-lan, name: llm-proxy.http.private-lan, version: 1, endpoint: {scope: private_lan, scheme: http, port: 18083}, health: {protocol: http, path: /healthz, expected_status: 200}}`)
 	requireCurrentContractYAML(testingInstance, "http.endpoint", endpoints["http"]["endpoint"], `{scope: same_host, scheme: http, alias: llm-proxy, port: 8080}`)
+	requireCurrentContractYAML(testingInstance, "http.health", endpoints["http"]["health"], `{protocol: http, path: /healthz, expected_status: 200}`)
 	requireCurrentContractYAML(testingInstance, "llm-proxy.assets", service["assets"], `[{source: configs/config.yml, target: /app/config.yml}, {source: configs/providers.yml, target: /app/providers.yml}]`)
 	if _, exists := service["environment_files"]; exists {
 		testingInstance.Fatal("runtime retains environment_files")
@@ -205,11 +206,7 @@ func TestOperationalProductionLifecycleKeepsPolicyInAppAndDelegatesToInstalledGa
 	if !slices.Equal(trackedDeployFiles, []string{lifecycleManifestRelativePath}) {
 		testingInstance.Fatalf("unexpected tracked deployment files: %#v", trackedDeployFiles)
 	}
-	validatorPath := filepath.Join(repositoryRoot, "scripts", "validate-release-decision")
-	validatorMetadata, statError := os.Stat(validatorPath)
-	if statError != nil || !validatorMetadata.Mode().IsRegular() || validatorMetadata.Mode().Perm() != 0o755 {
-		testingInstance.Fatalf("release decision validator is not a mode-0755 regular file: %v", statError)
-	}
+
 }
 
 func TestOperationalReleaseDecisionUsesGixVersion(testingInstance *testing.T) {

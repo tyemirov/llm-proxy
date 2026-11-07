@@ -81,7 +81,7 @@ func main(){
 	if len(records) != 3 {
 		t.Fatalf("expected three operations: %s", contents)
 	}
-	for index, operation := range []string{"app-release", "app-publish", "app-deploy"} {
+	for index, operation := range []string{"release", "publish", "deploy"} {
 		if !reflect.DeepEqual(records[index].Arguments, []string{operation, "--app-root", application}) || records[index].OperatorRoot != operatorRoot {
 			t.Fatalf("incorrect installed call: %#v", records[index])
 		}
