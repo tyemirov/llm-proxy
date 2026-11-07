@@ -1,0 +1,520 @@
+// @ts-check
+
+/**
+ * @typedef {{
+ *   provider: string,
+ *   model: string,
+ *   transcription_provider: string,
+ *   transcription_model: string,
+ *   speech_provider: string,
+ *   speech_model: string,
+ *   system_prompt: string,
+ *   reasoning_effort: string
+ * }} TenantDefaults
+ */
+
+/**
+ * @typedef {"text" | "transcription" | "speech" | "image" | "video"} CapabilityDomain
+ * @typedef {{provider:string, model:string, capabilities:string[], domains:CapabilityDomain[]}} DashboardOffering
+ */
+
+/**
+ * @typedef {{
+ *   adapter: string,
+ *   efforts: string[]
+ * }} ReasoningEffortCapability
+ */
+
+/**
+ * @typedef {{
+ *   id: string,
+ *   reasoning_effort?: ReasoningEffortCapability
+ * }} TextModelProfile
+ */
+
+/**
+ * @typedef {{
+ *   minimum_length?: number,
+ *   pattern?: string,
+ *   allowed_schemes?: string[]
+ * }} ProviderFieldValidation
+ */
+
+/**
+ * @typedef {{
+ *   id: string,
+ *   label: string,
+ *   kind: "credential" | "setting",
+ *   type: "opaque" | "url" | "grpc_target" | "boolean",
+ *   required: boolean,
+ *   default: string,
+ *   secret: boolean,
+ *   validation: ProviderFieldValidation,
+ *   configured: boolean,
+ *   value?: string,
+ *   masked_value?: string
+ * }} ProviderFieldProfile
+ */
+
+/**
+ * @typedef {{
+ *   id: string,
+ *   label: string
+ * }} CatalogIdentityProfile
+ */
+
+/**
+ * @typedef {{
+ *   id: string,
+ *   label: string,
+ *   api_service_label: string,
+ *   key_acquisition_url: string,
+ *   aliases: string[],
+ *   capabilities: string[],
+ *   resources: string[],
+ *   services: {operation:string,controls:object[],limits:object[],price:object}[],
+ *   model_families: CatalogIdentityProfile[],
+ *   configured: boolean,
+ *   fields: ProviderFieldProfile[],
+ *   text_model: string,
+ *   system_prompt: string,
+ *   text_default_model: string,
+ *   text_models: TextModelProfile[],
+ *   supports_dictation: boolean,
+ *   transcription_default_model?: string,
+ *   transcription_models: string[],
+ *   supports_speech: boolean,
+ *   speech_default_model?: string,
+ *   speech_models: string[]
+ * }} ProviderProfile
+ */
+
+/**
+ * @typedef {{
+ *   providerID: string,
+ *   fieldInputs: Record<string, string>,
+ *   fieldDirty: Record<string, boolean>,
+ *   fieldVisible: Record<string, boolean>,
+ *   textModel: string,
+ *   systemPrompt: string,
+ *   dirty: boolean,
+ *   editVersion: number,
+ *   revealPendingField: string,
+ *   revealVersion: number
+ * }} ProviderEditorSession
+ */
+
+/**
+ * @typedef {{
+ *   $nextTick: (callback: () => void) => void,
+ *   $refs: Record<string, HTMLElement> & {
+ *     providerSelector: HTMLSelectElement,
+ *     settingsTenantSelector: HTMLSelectElement
+ *   }
+ * }} AlpineMagic
+ */
+
+/**
+ * @typedef {{
+ *   field_id: string,
+ *   value: string
+ * }} ProviderFieldReveal
+ */
+
+/**
+ * @typedef {"provider_key_rejected" |
+ *   "provider_key_verification_rate_limited" |
+ *   "provider_key_verification_timed_out" |
+ *   "provider_key_verification_unavailable"
+ * } ProviderKeyVerificationError
+ */
+
+/**
+ * @typedef {{
+ *   id: string,
+ *   name: string,
+ *   has_secret: boolean,
+ *   defaults: TenantDefaults,
+ *   created_at: string,
+ *   updated_at: string
+ * }} TenantProfile
+ */
+
+/**
+ * @typedef {{
+ *   tenant: TenantProfile,
+ *   providers: ProviderProfile[],
+ *   proxy: { text_path: string, v2_path: string, dictation_path: string }
+ * }} ManagementTenantProfile
+ */
+
+/**
+ * @typedef {{
+ *   id: string,
+ *   email?: string,
+ *   display_name?: string,
+ *   avatar_url?: string,
+ *   is_admin: boolean
+ * }} ManagementUser
+ */
+
+/**
+ * @typedef {{
+ *   id: string,
+ *   name: string,
+ *   has_secret: boolean,
+ *   created_at: string,
+ *   updated_at: string
+ * }} ManagementTenantSummary
+ */
+
+/**
+ * @typedef {{
+ *   user: ManagementUser,
+ *   tenants: ManagementTenantSummary[]
+ * }} ManagementAccount
+ */
+
+/**
+ * @typedef {{
+ *   secret: string,
+ *   profile: ManagementTenantProfile
+ * }} SecretResponse
+ */
+
+/**
+ * @typedef {{
+ *   configUrl: string,
+ *   managementApiOrigin: string,
+ *   proxyOrigin: string
+ * }} FrontendRuntimeConfig
+ */
+
+/**
+ * @typedef {{
+ *   id: string,
+ *   title: string,
+ *   command: string
+ * }} RequestExample
+ */
+
+/**
+ * @typedef {{
+ *   requests: number,
+ *   successful_requests: number,
+ *   failed_requests: number,
+ *   text_requests: number,
+ *   dictation_requests: number,
+ *   request_tokens: number,
+ *   response_tokens: number,
+ *   total_tokens: number,
+ *   average_latency_ms: number,
+ *   token_coverage: {
+ *     request_tokens: TokenMeasurementCoverage,
+ *     response_tokens: TokenMeasurementCoverage,
+ *     total_tokens: TokenMeasurementCoverage
+ *   }
+ * }} UsageAggregate
+ */
+
+/**
+ * @typedef {"loading" | "authenticated" | "unauthenticated" | "error"} AuthState
+ */
+
+/**
+ * @typedef {"usage" | "admin"} DashboardView
+ */
+
+/**
+ * @typedef {"all" | "30d" | "7d" | "1d"} UsageInterval
+ */
+
+/**
+ * @typedef {"bar" | "donut"} UsageBreakdownView
+ */
+
+/**
+ * @typedef {{
+ *   label: string,
+ *   requests: number,
+ *   width: string,
+ *   percentage: number,
+ *   percentageLabel: string,
+ *   color: string,
+ *   dashArray: string,
+ *   dashOffset: number
+ * }} UsageDistributionRow
+ */
+
+/**
+ * @typedef {{
+ *   totalRequests: number,
+ *   rows: UsageDistributionRow[]
+ * }} UsageDistribution
+ */
+
+/**
+ * @typedef {{
+ *   x: number,
+ *   label: string,
+ *   exactLabel: string
+ * }} UsageXAxisTick
+ */
+
+/**
+ * @typedef {{
+ *   y: number,
+ *   label: string,
+ *   exactValue: string
+ * }} UsageYAxisTick
+ */
+
+/**
+ * @typedef {{
+ *   x: number,
+ *   y: number,
+ *   start: string,
+ *   value: number,
+ *   measurementKnown: boolean,
+ *   accessibleLabel: string
+ * }} UsageChartPoint
+ */
+
+/**
+ * @typedef {{
+ *   viewBox: string,
+ *   polyline: string,
+ *   xAxisY: number,
+ *   yAxisX: number,
+ *   xTicks: UsageXAxisTick[],
+ *   yTicks: UsageYAxisTick[],
+ *   points: UsageChartPoint[],
+ *   xAxisTitle: string,
+ *   yAxisTitle: string,
+ *   accessibleLabel: string
+ * }} UsageTimeSeriesChart
+ */
+
+/**
+ * @typedef {"rate_limited" |
+ *   "service_unavailable" |
+ *   "request_timeout" |
+ *   "upstream_error" |
+ *   "proxy_error"
+ * } UsageFailureOutcomeCode
+ */
+
+/**
+ * @typedef {"invalid_request" | "payload_too_large" | "provider_not_configured"} UsageRejectionOutcomeCode
+ */
+
+/**
+ * @typedef {"failures" | "rejections"} UsageDetailKind
+ */
+
+/**
+ * @typedef {{
+ *   occurred_at: string,
+ *   endpoint: string,
+ *   provider: string,
+ *   model: string,
+ *   status_code: number,
+ *   outcome_code: UsageFailureOutcomeCode,
+ *   latency_ms: number
+ * }} ManagementUsageFailure
+ */
+
+/**
+ * @typedef {Omit<ManagementUsageFailure, "outcome_code"> & {
+ *   outcome_code: UsageRejectionOutcomeCode
+ * }} ManagementUsageRejection
+ */
+
+/**
+ * @typedef {ManagementUsageFailure & {
+ *   tenant_id: string,
+ *   tenant_name: string
+ * }} ManagementAccountUsageFailure
+ */
+
+/**
+ * @typedef {ManagementUsageRejection & {
+ *   tenant_id: string,
+ *   tenant_name: string
+ * }} ManagementAccountUsageRejection
+ */
+
+/**
+ * @typedef {{
+ *   interval: UsageInterval,
+ *   failures: ManagementUsageFailure[],
+ *   next_cursor?: string
+ * }} ManagementUsageFailurePage
+ */
+
+/**
+ * @typedef {{
+ *   interval: UsageInterval,
+ *   failures: ManagementAccountUsageFailure[],
+ *   next_cursor?: string
+ * }} ManagementAccountUsageFailurePage
+ */
+
+/**
+ * @typedef {{
+ *   interval: UsageInterval,
+ *   rejections: ManagementUsageRejection[],
+ *   next_cursor?: string
+ * }} ManagementUsageRejectionPage
+ */
+
+/**
+ * @typedef {{
+ *   interval: UsageInterval,
+ *   rejections: ManagementAccountUsageRejection[],
+ *   next_cursor?: string
+ * }} ManagementAccountUsageRejectionPage
+ */
+
+/**
+ * @typedef {{
+ *   interval: UsageInterval,
+ *   bucket_unit: "day" | "hour",
+ *   rejected_requests: number,
+ *   totals: UsageAggregate,
+ *   buckets: Array<{ start: string, data: UsageAggregate }>,
+ *   providers: Array<{ provider: string, data: UsageAggregate }>,
+ *   models: Array<{ provider: string, model: string, data: UsageAggregate }>,
+ *   status_codes: Array<{ status_code: number, requests: number }>
+ * }} ManagementUsageSummary
+ */
+
+/**
+ * @typedef {{
+ *   period_days: number,
+ *   rejected_requests: number,
+ *   totals: UsageAggregate,
+ *   daily: Array<{ date: string, data: UsageAggregate }>,
+ *   providers: Array<{ provider: string, data: UsageAggregate }>,
+ *   models: Array<{ provider: string, model: string, data: UsageAggregate }>,
+ *   status_codes: Array<{ status_code: number, requests: number }>
+ * }} ManagementAdminUsageSummary
+ */
+
+/**
+ * @typedef {{
+ *   user: { id: string, email?: string, display_name?: string, avatar_url?: string, is_admin: boolean },
+ *   tenant_count: number,
+ *   tenants: Array<{
+ *     id: string,
+ *     name: string,
+ *     has_secret: boolean,
+ *     created_at: string,
+ *     updated_at: string,
+ *     usage: ManagementAdminUsageSummary
+ *   }>
+ * }} ManagementAdminUser
+ */
+
+/**
+ * @typedef {{
+ *   period_days: number,
+ *   users: ManagementAdminUser[]
+ * }} ManagementAdminUsersResponse
+ */
+
+export {};
+
+/**
+ * @typedef {object} AccountConnection
+ * @property {string} id
+ * @property {string} name
+ * @property {string} provider
+ * @property {number} version
+ * @property {ProviderFieldProfile[]} fields
+ * @property {string[]} tenant_ids
+ * @property {string} created_at
+ * @property {string} updated_at
+ */
+
+/**
+ * @typedef {object} AccountConnections
+ * @property {AccountConnection[]} connections
+ * @property {ProviderProfile[]} providers
+ */
+
+/** @typedef {{id:string, currency:'USD', created_at:string}} BillingAccount */
+/**
+ * @typedef {object} JournalRequest
+ * @property {string} id
+ * @property {string} tenant_id
+ * @property {string} grant_id
+ * @property {number} grant_revision
+ * @property {string} provider
+ * @property {string} [model]
+ * @property {string} operation
+ * @property {string} catalog_revision
+ * @property {'text_request'|'media_operation'|'dictation_request'} execution_kind
+ * @property {string} execution_id
+ * @property {'accepted'|'executing'|'completed'|'failed'|'uncertain'} state
+ * @property {'pending'|'complete'|'unknown'} usage_state
+ * @property {string} [failure_code]
+ * @property {string} created_at
+ * @property {string} updated_at
+ */
+/** @typedef {{requests:JournalRequest[], next_cursor:string}} JournalRequestPage */
+/** @typedef {{numerator:string,denominator:string}} ExactMoney */
+/** @typedef {{dimension:string,component:string,quantity:string,quantity_unit:string,provider_rate:string,customer_rate:ExactMoney,rate_unit:string,conditions:Record<string,unknown>,provider_cost:ExactMoney,customer_charge:ExactMoney}} RatedLine */
+/** @typedef {{state:'resolved'|'unresolved',lines:RatedLine[],provider_cost:ExactMoney|null,customer_charge:ExactMoney|null,minimum_adjustment:ExactMoney|null,unresolved_dimensions:string[]}} ChargeRating */
+/** @typedef {{id:string,credit:ExactMoney,reason:string,created_at:string}} ChargeAdjustment */
+/** @typedef {{id:string,request_id:string,attempt_id:string,observation_id:string,price_snapshot_id:string,state:'rated'|'usage_unresolved'|'policy_unresolved'|'limit_unresolved',rating:ChargeRating,customer_charge:ExactMoney|null,net_customer_charge:ExactMoney|null,customer_adjustments:ChargeAdjustment[],created_at:string}} CustomerCharge */
+/** @typedef {{charges:CustomerCharge[],next_cursor:string}} CustomerChargePage */
+/** @typedef {{request_id:string,state:'pending'|'unresolved'|'rated',attempt_count:number,charge_count:number,provider_cost:ExactMoney|null,customer_charge:ExactMoney|null,customer_credits:ExactMoney|null,net_customer_charge:ExactMoney|null}} RequestChargeSummary */
+/** @typedef {{currency:'USD',state:'active'|'suspended'|'reconciliation_required',posted_cents:string,available_cents:string,reserved_cents:string,spent_cents:string,pending_cents:string,unsettled_fraction:ExactMoney}} FundsBalance */
+/** @typedef {{id:string,currency:'USD',maximum_cents:string,state:'held'|'settled'|'released'|'reconciliation_required',revision:number,created_at:string,updated_at:string}} FundsReservation */
+/** @typedef {{id:string,currency:'USD',type:'grant'|'hold'|'reverse_hold'|'spend'|'refund',amount_cents:string,reservation_id:string|null,refund_of_entry_id:string|null,created_at:string}} FundsEntry */
+/** @typedef {{reservations:FundsReservation[],next_cursor:string}} FundsReservationPage */
+/** @typedef {{entries:FundsEntry[],next_cursor:string}} FundsEntryPage */
+/** @typedef {{tenant_id:string,currency:'USD',limit_cents:string|null,remaining_cents:string|null,reserved_cents:string,spent:ExactMoney,revision:number}} FundsTenantLimit */
+/** @typedef {{id:string,number:number,state:'prepared'|'dispatched'|'observed'|'uncertain',dispatched_at?:string,observed_at?:string,created_at:string,updated_at:string}} JournalAttempt */
+/** @typedef {{dimension:string,unit:string,value?:string,unknown_reason?:'not_reported'|'invalid_quantity'|'unsupported_meter',included_in?:string}} JournalQuantity */
+/** @typedef {{id:string,attempt_id:string,quantities:JournalQuantity[],completeness:'complete'|'unknown',outcome:'continue'|'complete'|'fail',failure_code?:string,observed_at:string,created_at:string}} JournalObservation */
+/** @typedef {{id:string,reason:'usage_unknown'|'dispatch_outcome_unknown'|'execution_outcome_unknown'|'execution_result_unknown'|'usage_unresolved'|'policy_unresolved'|'limit_unresolved'|'platform_exposure',state:'open'|'resolved',resolved_at?:string,created_at:string}} JournalCase */
+/** @typedef {{attempts:JournalAttempt[],next_cursor:string}} JournalAttemptPage */
+/** @typedef {{observations:JournalObservation[],next_cursor:string}} JournalObservationPage */
+/** @typedef {{cases:JournalCase[],next_cursor:string}} JournalCasePage */
+/** @typedef {{request:JournalRequest,attempts:JournalAttemptPage,observations:JournalObservationPage,cases:JournalCasePage,summary:RequestChargeSummary}} JournalEvidence */
+/** @typedef {{provider:string, kind:'account_connection'|'hosted_access_grant', resource_id:string}} ProviderAssignment */
+/**
+ * @typedef {object} HostedAccessGrant
+ * @property {string} id
+ * @property {string} billing_account_id
+ * @property {string} tenant_id
+ * @property {string} provider
+ * @property {string} catalog_revision
+ * @property {{model?:string, operations:string[]}[]} offerings
+ * @property {'active'|'suspended'|'revoked'} state
+ * @property {number} revision
+ * @property {string} created_at
+ * @property {string} updated_at
+ */
+
+/** @typedef {'sandbox'|'production'} PaymentEnvironment */
+/** @typedef {'created'|'pending'|'paid'|'failed'|'partially_refunded'|'refunded'|'disputed'} FundingState */
+/** @typedef {{id:string,offer_code:string,funding_cents:string,currency:'USD',environment:PaymentEnvironment,state:FundingState,created_at:string}} FundingOrder */
+/** @typedef {{orders:FundingOrder[],next_cursor:string}} FundingOrderPage */
+/** @typedef {{funding_order_id:string,environment:PaymentEnvironment,currency:'USD',state:FundingState,credit_cents:string,gross_cents:string,tax_cents:string,adjusted_gross_cents:string,adjusted_tax_cents:string,reversed_cents:string,pending_refund_cents:string,invoice_number:string|null,paid_at:string}} PaymentReceipt */
+/** @typedef {{provider:'paddle',environment:PaymentEnvironment,url:string}} PaymentPortalSession */
+/** @typedef {{code:string,funding_cents:string,currency:'USD'}} FundingOffer */
+/** @typedef {{provider:'paddle',environment:PaymentEnvironment,client_token:string,offers:FundingOffer[]}} FundingOffers */
+/** @typedef {{provider:'paddle',environment:PaymentEnvironment,transaction_id:string}} PaymentCheckout */
+/** @typedef {{key:string,offer_code:string,order_id:string|null}} FundingIntent */
+
+/**
+ * @typedef {{
+ *   measured_requests: number,
+ *   partial_requests: number,
+ *   unknown_requests: number,
+ *   historical_requests: number
+ * }} TokenMeasurementCoverage
+ */
