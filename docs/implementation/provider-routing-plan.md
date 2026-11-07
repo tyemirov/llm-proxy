@@ -673,15 +673,19 @@ credentials, and routing defaults in the database.
 
 The repository owns the permanent versionless production declaration in
 `.mprlab/deploy/resources.yml`. The repository also owns the standard
-`make release`, `make publish`, and `make deploy` entrypoints. These targets use
-the exact `../mprlab-gateway` sibling. The gateway runs the committed release
+`make release`, `make publish`, and `make deploy` entrypoints. These targets call
+the installed Gateway v9 commands `release`, `publish`, and `deploy` with the application root.
+
+The gateway runs the committed release
 decision validator against the exact decision that the transaction prepares or
 reuses. Gix owns the release version decision. The gateway keeps this decision
 for release artifacts, tags, receipts, and exact retries. The application
 validator checks the SemVer policy and major version `1`.
+
 Python builds use `setuptools-scm` to read the resulting `v1.X.X` release tag.
 Wheel and source distribution metadata keep the selected version without the `v` prefix.
 Package metadata does not select or change release versions.
+
 The gateway owns generic schema validation, artifact sealing, publication,
 Ansible inventory, reconciliation, and production verification. The selected
 transaction reads only this application checkout and the references in its
