@@ -1730,25 +1730,30 @@ make deploy
 ```
 
 Each target resolves the application Git root and calls the installed `mprlab-gateway` command with `--app-root`.
+Gateway v9 uses the commands `release`, `publish`, and `deploy` for these targets.
 Use `MPRLAB_GATEWAY_EXECUTABLE` to select an explicit installed command.
 The Gateway package supplies its own assets and dependencies.
 Gateway development source is not an operational input.
-Follow the [Gateway installation guide](https://github.com/MarcoPoloResearchLab/mprlab-gateway/blob/master/docs/runtime-installation.md) for first installation and explicit upgrades.
+
+Use the [Gateway installation guide](https://github.com/MarcoPoloResearchLab/mprlab-gateway/blob/master/docs/runtime-installation.md) for first installation and explicit upgrades.
 Use `mprlab-gateway version --json` to inspect the selected runtime.
 Gateway operator inputs use `MPRLAB_GATEWAY_OPERATOR_ROOT`, with `$HOME/.config/mprlab-gateway` as the default.
+
 The gateway runs the release gate and seals immutable artifacts.
-publish and deploy consume that exact release without rerunning CI or
-rebuilding. Retries reuse exact state and reject conflicting immutable state.
+Publication and deployment consume that exact release without another CI run or build.
+Retries reuse exact state and reject conflicting immutable state.
 The selected app transaction reads no unrelated app repository.
 
 This repository owns one production declaration:
 `.mprlab/deploy/resources.yml`. It declares the container image and service,
-retained data volume, `llm-proxy.http` capability, Caddy route, public health
-checks, GitHub Pages artifact, TAuth tenant, and private-value bindings.
+retained data volume, HTTP endpoints, Caddy route, public health observations,
+GitHub Pages publication, and private inputs.
+Runtime readiness uses the existing `http` endpoint at `llm-proxy:8080/healthz`.
+It requires HTTP 200 through the same alias that public API routing uses.
 
-The manifest selects the ignored `.mprlab/deploy/.env` file through `environment_file`.
+The manifest selects the ignored `.mprlab/deploy/.env` file through `environment.source`.
 This field is optional.
-When the manifest has no `environment_file` field, Gateway uses only process values.
+When the manifest has no `environment.source` field, Gateway uses only process values.
 If the process and selected file supply the same input, Gateway uses the process value.
 If Gateway cannot read the selected file, it rejects the manifest even when process values are available.
 
