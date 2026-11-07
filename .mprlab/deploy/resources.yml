@@ -150,18 +150,6 @@ mprlab_resources:
                           id: http-private-lan
                           name: llm-proxy.http.private-lan
                           version: 1
-                        - endpoint:
-                            alias: runtime-llm-proxy-readiness
-                            port: 8080
-                            scheme: http
-                            scope: same_host
-                          health:
-                            expected_status: 200
-                            path: /healthz
-                            protocol: http
-                          id: readiness
-                          name: llm-proxy.readiness.runtime.llm-proxy
-                          version: 1
                       environment:
                         - input: llm-proxy-management-admin-emails
                           name: LLM_PROXY_MANAGEMENT_ADMIN_EMAILS
@@ -217,7 +205,7 @@ mprlab_resources:
                           host_port: 18083
                           scope: private_lan
                       readiness:
-                        endpoint: readiness
+                        endpoint: http
                   volumes:
                     - id: data
                       name: mprlab-nginx-gateway_llm-proxy-data

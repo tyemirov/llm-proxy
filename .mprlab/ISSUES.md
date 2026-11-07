@@ -35,6 +35,51 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B317] (P1) Use the current Gateway v9 lifecycle commands.
+  Goal:
+  Make the repository lifecycle targets call the installed Gateway command contract.
+  Evidence:
+  The Makefile sends `app-release`, `app-publish`, and `app-deploy`.
+  Installed Gateway v9 exposes `release`, `publish`, and `deploy` instead.
+  Requirements:
+  - Send the current command name and exact application root for each lifecycle target.
+  - Preserve operator selection, executable paths with spaces, and native failure diagnostics.
+  - Document the installed runtime as the lifecycle authority.
+  Validation:
+  - Confirm that the command integration test fails before the Makefile correction.
+  - Installed Gateway integration passed after the correction.
+  - Final `make ci` passed all 15 gates in 856 seconds with 100.0% Go statement coverage.
+  Resolution:
+  The Makefile now sends `release`, `publish`, and `deploy` with the exact application root.
+  Integration checks preserve operator selection, executable paths with spaces, and native command failures.
+  The lifecycle documentation now identifies the installed Gateway v9 commands.
+  The Governor checker still requires retired command prefixes. Its three command errors conflict with the verified installed runtime contract.
+
+- [!] [B316] (P1) Reuse the deployed HTTP endpoint for runtime readiness.
+  Goal:
+  Preserve runtime health observation through the selected manifest transition.
+  Evidence:
+  The deployment planner probes `runtime-llm-proxy-readiness` against the existing v1.12.4 container.
+  That alias does not resolve. The public API returns HTTP 200 from `/healthz`.
+  The existing `http` endpoint declares `llm-proxy:8080` with the same health contract.
+  Requirements:
+  - Reference `http` from the service readiness declaration.
+  - Remove the additional readiness endpoint.
+  - Preserve the private LAN endpoint and HTTP health status contract.
+  - Keep pending-resource protection and retained deployment records intact.
+  Validation:
+  - Confirm that the readiness test fails before the manifest correction.
+  - Validate the edited manifest with the installed Gateway planner and repository CI.
+  - Verify the production pending-resource result after the corrected source reaches its required lifecycle state.
+  Current result:
+  The readiness contract test failed before the manifest correction and passed after the correction.
+  The installed Gateway v9 planner accepted the edited manifest in an isolated integration fixture.
+  Production verification stopped before graph inspection with `repository requires a clean master synchronized with origin/master`.
+  The live planner has not evaluated the corrected manifest against the pending graph.
+  Local validation:
+  Final `make ci` passed all 15 gates in 856 seconds with 100.0% Go statement coverage.
+  Blocked: Production planning requires the corrected source in clean, synchronized `master` and its current release records.
+
 - [x] [B315] (P1) Permit the qualified HeyGen avatar video origins.
   Goal:
   Download completed avatar videos from the current exact provider origins.
