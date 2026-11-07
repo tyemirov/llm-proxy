@@ -271,7 +271,7 @@ release publish deploy:
 			"$(MPRLAB_GATEWAY_EXECUTABLE)" >&2; \
 		exit 2; \
 	fi; \
-	exec "$(MPRLAB_GATEWAY_EXECUTABLE)" "app-$@" --app-root "$${application_root}"
+	exec "$(MPRLAB_GATEWAY_EXECUTABLE)" "$@" --app-root "$${application_root}"
 
 .PHONY: test-client-protocols test-protocol-acceptance test-media-operations
 .PHONY: test-mcp-versions
