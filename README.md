@@ -921,6 +921,8 @@ A client key cannot be deleted independently.
 Deleting a non-final tenant without hosted grant history removes its access key and usage while preserving account connections.
 Hosted grant history prevents tenant deletion, including after revocation.
 
+The [persistence boundary](docs/persistence-boundary.md) owns database-specific connections, constraints, and transaction coordination.
+
 SQLite stores account connections, tenant assignments, provider profiles, default routes, secret digests, and usage.
 Runtime authentication loads the tenant and its assigned connections from one database snapshot.
 Provider secret fields use AES-GCM encryption bound to the connection identity, provider, and field.
