@@ -2342,6 +2342,20 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## Improvements
 
+- [x] [I317] (P1) Serialize the account identity test fixture before metadata reads.
+  Goal: Make the account identity test independent of concurrent usage writes.
+  Evidence: PR 360 failed in `TestHostedFundsStartupRejectsEmptyStoredSettlementAccount` with `SQLITE_BUSY`.
+  Requirements: Take the SQLite writer lock before metadata reads in the fixture transaction.
+  Keep deferred foreign keys, identity changes, and financial assertions. Keep application code unchanged.
+  Validation: Reproduce a competing write through another SQLite connection. Run focused tests, required CI, and independent review.
+
+  Result: The fixture takes the writer lock before metadata reads and preserves the original identity changes.
+  The regression reproduced SQLite error 517 before the repair.
+  All four focused tests passed 10 race-detector repetitions each. Independent review is clear.
+  Final `make ci` passed all 15 gates in 755 seconds with 100% Go statement coverage.
+  Files: `internal/proxy/hosted_funds_account_identity_internal_test.go` and the I317 record.
+  Event contracts: No application event or API contract changed.
+
 - [x] [I316] (P1) Use a controlled clock in the rate-limit telemetry test.
   Goal: Make the telemetry test independent of CI scheduling delays.
   Evidence: PR 360 failed with `rate-limit delay logs=0 want=1` in the rate-limit scenario.

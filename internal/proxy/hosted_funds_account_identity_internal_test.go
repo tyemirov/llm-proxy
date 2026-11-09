@@ -66,6 +66,10 @@ func replaceStoredBillingAccountIdentity(t *testing.T, database *gorm.DB, previo
 		if err := tx.Exec("PRAGMA defer_foreign_keys = ON").Error; err != nil {
 			return err
 		}
+		// Take the writer lock before schema reads to prevent a stale SQLite snapshot.
+		if err := tx.Model(&managedBillingAccountRecord{}).Where("id = ?", previous).UpdateColumn("id", gorm.Expr("id")).Error; err != nil {
+			return err
+		}
 		tables, err := tx.Migrator().GetTables()
 		if err != nil {
 			return err
@@ -94,6 +98,49 @@ func TestHostedFundsStartupRejectsEmptyStoredSettlementAccount(t *testing.T) {
 		assertHostedFundsBalance(t, fixture.database, 5, 2)
 	}
 	fixture.assertSettledOnce(t, before)
+}
+
+func TestHostedFundsFixtureIdentityChangeSerializesConcurrentWriter(t *testing.T) {
+	database, _, _ := newJournalTransactionFixture(t)
+	pool, err := database.database.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	contender, err := pool.Conn(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := contender.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	if _, err := contender.ExecContext(t.Context(), "PRAGMA busy_timeout = 0"); err != nil {
+		t.Fatal(err)
+	}
+	const callbackName = "test:concurrent_account_identity_write"
+	var writeAttempted bool
+	var competingWriteError error
+	updates := database.database.Callback().Update()
+	if err := updates.Before("gorm:update").Register(callbackName, func(tx *gorm.DB) {
+		if writeAttempted || tx.Statement.Table == "managed_billing_account_records" {
+			return
+		}
+		writeAttempted = true
+		_, competingWriteError = contender.ExecContext(t.Context(), "UPDATE managed_user_records SET user_display_name = ? WHERE user_id = ?", "Concurrent fixture writer", "owner")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := updates.Remove(callbackName); err != nil {
+			t.Error(err)
+		}
+	})
+	replaceStoredBillingAccountIdentity(t, database.database, "billing-journal", "")
+	if !writeAttempted || competingWriteError == nil || !strings.Contains(competingWriteError.Error(), "SQLITE_BUSY") {
+		t.Fatalf("fixture did not exclude the competing writer: attempted=%t error=%v", writeAttempted, competingWriteError)
+	}
+	replaceStoredBillingAccountIdentity(t, database.database, "", "billing-journal")
 }
 
 func TestHostedPaymentsAdjustmentRejectsEmptyStoredAccount(t *testing.T) {
