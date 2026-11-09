@@ -24,10 +24,18 @@ Account-wide usage remains available through the usage scope selector.
 Usage summaries refresh automatically every 30 seconds while the user is authenticated.
 Search filters the visible lists. Each column scrolls when its list exceeds the available space.
 
+The authenticated dashboard has a maximum width of 560 px.
+Node labels use 7 px text. Secondary text uses 6 px text.
+Model rows have a minimum height of 18 px. Connection rows have a minimum height of 28 px.
+
+Long names and controls can increase the row height.
+The three columns and their connectors remain visible at a 320 px browser width.
+Dialogs keep their existing field sizes. All configuration, usage, and payment actions remain available.
+
 Usage status summaries label HTTP 402 as `Payment required` and HTTP 403 as `Forbidden`.
 Failed request details retain these statuses for unfunded or suspended prepaid access.
 
-The workspace header shows `Tenants → connections → models`, search, and `Copy MCP URL` in that order.
+The workspace header shows search and `Copy MCP URL` in that order.
 The search field has a search icon on its right side. The copy action stays at the right of the header.
 Connection detail actions stay together. The app footer supplies the Resources link without a duplicate card.
 
