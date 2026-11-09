@@ -126,7 +126,7 @@ func (store *structuredRequestStore) recoverInterrupted() error {
 	return store.journal.database.Transaction(func(transaction *gorm.DB) error {
 		// Response publication takes this writer lock before touching files.
 		// Startup must not remove its temporary file or overwrite its result.
-		if err := transaction.Model(&managedJournalRequestRecord{}).Where("execution_kind = ?", journalExecutionText).UpdateColumn("state", gorm.Expr("state")).Error; err != nil {
+		if err := lockManagedResponseRecovery(transaction).Error; err != nil {
 			return fmt.Errorf("lock hosted response recovery: %w", err)
 		}
 		return store.recoverInterruptedRecords(transaction)

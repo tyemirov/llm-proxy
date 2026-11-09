@@ -744,7 +744,7 @@ func (service *mediaOperationService) create(requestContext context.Context, req
 		}
 		if record.ParentOperationID != "" {
 			var parent mediaOperationRecord
-			if err := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&parent, "operation_id = ? AND tenant_id = ? AND provider = ? AND model = ? AND credential_reference = ? AND public_state = ?", record.ParentOperationID, record.TenantID, record.Provider, record.Model, record.CredentialReference, MediaOperationStateSucceeded).Error; err != nil {
+			if err := readManagedMediaParent(transaction, record, &parent); err != nil {
 				return errMediaOperationInvalid
 			}
 		}
@@ -824,7 +824,7 @@ func (service *mediaOperationService) cancel(requestContext context.Context, req
 	needsProviderCancel := false
 	service.assets.referenceMutex.Lock()
 	transactionError := service.store.database.WithContext(requestContext).Transaction(func(transaction *gorm.DB) error {
-		lock := transaction.Model(&mediaOperationRecord{}).Where("operation_id = ? AND tenant_id = ?", operationID, requestTenant.identifier.string()).UpdateColumn("public_state", gorm.Expr("public_state"))
+		lock := lockManagedTenantMediaOperation(transaction, operationID, requestTenant.identifier.string())
 		if lock.Error != nil {
 			return lock.Error
 		}
@@ -884,7 +884,7 @@ func (service *mediaOperationService) cancel(requestContext context.Context, req
 		if result.State == MediaCancellationConfirmed {
 			service.assets.referenceMutex.Lock()
 			confirmationError := service.store.database.WithContext(requestContext).Transaction(func(transaction *gorm.DB) error {
-				if err := transaction.Model(&mediaOperationRecord{}).Where("operation_id = ? AND tenant_id = ?", operationID, requestTenant.identifier.string()).UpdateColumn("public_state", gorm.Expr("public_state")).Error; err != nil {
+				if err := lockManagedTenantMediaOperation(transaction, operationID, requestTenant.identifier.string()).Error; err != nil {
 					return err
 				}
 				var current mediaOperationRecord
@@ -1241,14 +1241,14 @@ func (service *mediaOperationService) claim(workerID string, operationID string)
 	recoverOperation := false
 	now := service.store.now()
 	transactionError := service.store.database.Transaction(func(transaction *gorm.DB) error {
-		lock := transaction.Model(&mediaOperationRecord{}).Where("operation_id = ? AND public_state IN ?", operationID, []string{MediaOperationStateQueued, MediaOperationStateRunning}).UpdateColumn("public_state", gorm.Expr("public_state"))
+		lock := lockManagedActiveMediaOperation(transaction, operationID)
 		if lock.Error != nil {
 			return lock.Error
 		}
 		if lock.RowsAffected != 1 {
 			return gorm.ErrRecordNotFound
 		}
-		if lookupError := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&record, "operation_id = ?", operationID).Error; lookupError != nil {
+		if lookupError := readManagedMediaOperationForUpdate(transaction, operationID, &record); lookupError != nil {
 			return lookupError
 		}
 		var claim mediaOperationClaimRecord
@@ -1468,7 +1468,7 @@ func (service *mediaOperationService) expireTerminalData() {
 	for _, record := range records {
 		if err := service.store.database.Transaction(func(transaction *gorm.DB) error {
 			var retained mediaOperationRecord
-			lookupError := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&retained, "operation_id = ?", record.OperationID).Error
+			lookupError := readManagedMediaOperationForUpdate(transaction, record.OperationID, &retained)
 			if errors.Is(lookupError, gorm.ErrRecordNotFound) {
 				return nil
 			}

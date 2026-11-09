@@ -9,15 +9,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/glebarez/sqlite"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 const pilotRecoveryTenant = "managed-60634d2470f31557462f52e319f07d07"
@@ -100,16 +97,13 @@ func RunMediaPresubmissionRecovery(ctx context.Context, configuration Configurat
 	if strings.TrimSpace(configuration.Management.DatabasePath) == "" {
 		return nil, errors.New("recovery requires an existing management database")
 	}
-	location := url.URL{Scheme: "file", Path: configuration.Management.DatabasePath}
-	query := url.Values{"mode": []string{"rw"}, "_pragma": []string{"busy_timeout(5000)"}}
+	access := managedRecoveryReadWrite
 	if phase == "prepare" || phase == "preview" {
-		query.Set("mode", "ro")
-		query.Add("_pragma", "query_only(1)")
+		access = managedRecoveryReadOnly
 	}
-	location.RawQuery = query.Encode()
-	database, err := gorm.Open(sqlite.Open(location.String()), &gorm.Config{TranslateError: true, Logger: logger.Default.LogMode(logger.Silent)})
+	database, err := openManagedRecoveryDatabase(configuration.Management.DatabasePath, access)
 	if err != nil {
-		return nil, fmt.Errorf("open recovery database: %w", err)
+		return nil, err
 	}
 	connection, err := database.DB()
 	if err != nil {
@@ -144,11 +138,11 @@ func RunMediaPresubmissionRecovery(ctx context.Context, configuration Configurat
 	}
 	err = database.Transaction(func(tx *gorm.DB) error {
 		if phase == "apply" {
-			if err := tx.Exec(`CREATE TABLE IF NOT EXISTS media_presubmission_recovery_records (operation_id TEXT PRIMARY KEY, plan TEXT NOT NULL, applied_operation TEXT NOT NULL, apply_receipt TEXT NOT NULL, applied_at DATETIME NOT NULL, final_operation TEXT, final_usage TEXT, final_receipt TEXT, finalized_at DATETIME)`).Error; err != nil {
-				return fmt.Errorf("create private recovery audit: %w", err)
+			if err := initializeManagedRecoveryAudit(tx); err != nil {
+				return err
 			}
 		}
-		lock := tx.Model(&mediaOperationRecord{}).Where("operation_id = ? AND tenant_id = ?", pilotRecoveryOperation, pilotRecoveryTenant).UpdateColumn("operation_id", gorm.Expr("operation_id"))
+		lock := lockManagedRecoveryOperation(tx, pilotRecoveryOperation, pilotRecoveryTenant)
 		if lock.Error != nil {
 			return lock.Error
 		}
@@ -215,7 +209,7 @@ func RunMediaPresubmissionRecovery(ctx context.Context, configuration Configurat
 		if err := pilotRecoveryNoWork(tx); err != nil {
 			return err
 		}
-		usageLock := tx.Model(&managedUsageEventRecord{}).Where("id = ? AND tenant_id = ?", pilotRecoveryUsageID, pilotRecoveryTenant).UpdateColumn("id", gorm.Expr("id"))
+		usageLock := lockManagedRecoveryUsage(tx, pilotRecoveryUsageID, pilotRecoveryTenant)
 		if usageLock.Error != nil {
 			return usageLock.Error
 		}

@@ -112,14 +112,14 @@ func (database *gormManagedTenantDatabase) fundsResolution(ctx context.Context, 
 
 func applyFundsResolution(tx *gorm.DB, command fundsResolutionCommand) error {
 	decision := command.record
-	lock := tx.Model(&managedJournalRequestRecord{}).Where("id = ? AND billing_account_id = ?", decision.RequestID, decision.BillingAccountID).UpdateColumn("state", gorm.Expr("state"))
+	lock := lockManagedResolutionRequest(tx, decision)
 	if lock.Error != nil {
 		return lock.Error
 	}
 	if lock.RowsAffected != 1 {
 		return errBillingAccountNotFound
 	}
-	if err := tx.Model(&managedBillingAccountRecord{}).Where("id = ?", decision.BillingAccountID).UpdateColumn("id", gorm.Expr("id")).Error; err != nil {
+	if err := lockManagedBillingAccount(tx, decision.BillingAccountID).Error; err != nil {
 		return err
 	}
 	var existing managedFundsResolutionRecord

@@ -99,6 +99,10 @@ test-management-auth-blackbox: frontend-dependencies prepare-shared-ui
 test-management-persistence: frontend-dependencies
 	$(GO) test ./internal/proxy -run '^TestManagement(ConnectionPersistsUpdatedCredential|DatabasePersistenceAndOpenFailures|StartupRejectsInvalidPersistedRoutingDefaults)$$' -count=1
 
+.PHONY: test-persistence-boundary
+test-persistence-boundary:
+	$(GO) test ./tests -run '^TestPersistenceBoundaryOwnsDatabaseMechanisms$$' -count=1
+
 .PHONY: test-account-connections
 test-account-connections:
 	$(GO) test ./internal/proxy -run '^TestAccountConnection' -count=1

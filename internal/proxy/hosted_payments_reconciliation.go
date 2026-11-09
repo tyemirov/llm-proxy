@@ -136,7 +136,7 @@ func (auditor paymentReconciler) prepare(ctx context.Context, runID string) erro
 			}
 			return nil
 		}
-		result := tx.Exec("INSERT INTO managed_payment_reconciliation_item_records (run_id, order_id, state, result, evidence, evidence_digest) SELECT ?, id, ?, '', '', '' FROM managed_funding_order_records WHERE environment = ? AND processor_account_id = ? AND supplier_id = ?", run.ID, paymentReconciliationPending, run.Environment, run.ProcessorAccountID, run.SupplierID)
+		result := retainManagedPaymentReconciliationItems(tx, run)
 		if result.Error != nil {
 			return fmt.Errorf("retain reconciliation order set: %w", result.Error)
 		}
@@ -187,7 +187,7 @@ func (auditor paymentReconciler) resume(ctx context.Context, runID string) error
 func (auditor paymentReconciler) record(ctx context.Context, item managedPaymentReconciliationItemRecord, order managedFundingOrderRecord, checkout managedPaymentCheckoutRecord, transaction *billing.PaddleTransactionCompletedWebhookData, adjustments []billing.PaddleAdjustment) error {
 	return auditor.database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Both audit workers and payment workers use this account writer boundary.
-		lock := tx.Model(&managedBillingAccountRecord{}).Where("id = ?", order.BillingAccountID).UpdateColumn("id", gorm.Expr("id"))
+		lock := lockManagedBillingAccount(tx, order.BillingAccountID)
 		if lock.Error != nil {
 			return lock.Error
 		}

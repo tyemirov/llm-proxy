@@ -52,19 +52,6 @@ func (store *mediaOperationStore) bindMediaJournalClaim(transaction *gorm.DB, cl
 	return nil
 }
 
-func lockMediaOperationClaim(transaction *gorm.DB, operationID string, generation uint64, now time.Time) error {
-	result := transaction.Model(&mediaOperationClaimRecord{}).
-		Where("operation_id = ? AND generation = ? AND expires_at > ?", operationID, generation, now).
-		UpdateColumn("generation", gorm.Expr("generation"))
-	if result.Error != nil {
-		return fmt.Errorf("lock media claim for operation %s: %w", operationID, result.Error)
-	}
-	if result.RowsAffected != 1 {
-		return errJournalClaimLost
-	}
-	return nil
-}
-
 func (service *mediaOperationService) renewMediaClaim(operationID string, generation uint64) error {
 	now := service.store.now()
 	return service.store.database.Transaction(func(transaction *gorm.DB) error {

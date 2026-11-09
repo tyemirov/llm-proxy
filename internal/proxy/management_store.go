@@ -22,7 +22,6 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/glebarez/sqlite"
 	"github.com/tyemirov/llm-proxy/internal/constants"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -60,7 +59,6 @@ const (
 	managedClaudeRetirementSchemaVersion    = 15
 	managedOpenAITranscriptionSchemaVersion = 16
 	managedTenantSchemaVersion              = managedAccountConnectionsSchemaVersion
-	managedSQLiteRuntimeQuery               = "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)"
 	retiredQwenCloudProviderIdentifier      = "qwencloud"
 	retiredGrokProviderIdentifier           = "grok"
 	retiredZhipuProviderIdentifier          = "zhipu"
@@ -674,13 +672,6 @@ func (database *gormManagedTenantDatabase) close() error {
 		return fmt.Errorf("close managed database: %w", err)
 	}
 	return nil
-}
-
-func managementDatabaseDialector(configuration ManagementConfiguration) gorm.Dialector {
-	if configuration.DatabaseDialector != nil {
-		return configuration.DatabaseDialector
-	}
-	return sqlite.Open(configuration.DatabasePath + managedSQLiteRuntimeQuery)
 }
 
 func migrateCurrentManagedSchema(database *gorm.DB) error {

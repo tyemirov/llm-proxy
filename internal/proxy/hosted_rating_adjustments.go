@@ -47,7 +47,7 @@ func newCustomerChargeAdjustment(accountID, chargeID, eventKey, reason string, c
 func (database *gormManagedTenantDatabase) applyCustomerChargeAdjustment(ctx context.Context, command customerChargeAdjustment, settle chargeAdjustmentSettlement) error {
 	return database.database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		proposed := command.record
-		lock := transaction.Model(&managedBillingAccountRecord{}).Where("id = ?", proposed.BillingAccountID).UpdateColumn("id", gorm.Expr("id"))
+		lock := lockManagedBillingAccount(transaction, proposed.BillingAccountID)
 		if lock.Error != nil {
 			return fmt.Errorf("lock credit account: %w", lock.Error)
 		}

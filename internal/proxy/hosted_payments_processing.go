@@ -264,7 +264,7 @@ func (worker *paddlePaymentProcessor) credit(ctx context.Context, event managedP
 	}
 	privateQuery := worker.database.database.Session(&gorm.Session{Logger: paymentInboxLogger{worker.database.database.Logger}})
 	err := privateQuery.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		lock := tx.Model(&managedBillingAccountRecord{}).Where("id = ?", order.BillingAccountID).UpdateColumn("id", gorm.Expr("id"))
+		lock := lockManagedBillingAccount(tx, order.BillingAccountID)
 		if lock.Error != nil {
 			return fmt.Errorf("lock payment account: %w", lock.Error)
 		}

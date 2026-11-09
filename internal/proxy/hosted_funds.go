@@ -115,7 +115,7 @@ func newHostedFundsAdmission(prices journalReservation) journalReservation {
 func reserveHostedFunds(transaction *gorm.DB, request managedJournalRequestRecord) error {
 	// This writer lock serializes all tenants of the billing account before
 	// reading its financial state or invoking shared Ledger operations.
-	lock := transaction.Model(&managedBillingAccountRecord{}).Where("id = ?", request.BillingAccountID).UpdateColumn("id", gorm.Expr("id"))
+	lock := lockManagedBillingAccount(transaction, request.BillingAccountID)
 	if lock.Error != nil {
 		return fmt.Errorf("lock billing account %s: %w", request.BillingAccountID, lock.Error)
 	}

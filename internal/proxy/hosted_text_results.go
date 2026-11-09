@@ -19,9 +19,7 @@ func (service *hostedTextRequests) publishResponse(ctx context.Context, accepted
 	defer cancel()
 	now := service.now().UTC()
 	return service.database.database.WithContext(persistContext).Transaction(func(transaction *gorm.DB) error {
-		result := transaction.Model(&managedJournalRequestRecord{}).
-			Where("id = ? AND owner_token = ? AND claim_expires_at > ?", accepted.ID, accepted.OwnerToken, now).
-			UpdateColumn("state", gorm.Expr("state"))
+		result := lockManagedPublicationRequest(transaction, accepted, now)
 		if result.Error != nil {
 			return fmt.Errorf("lock result publication for request %s: %w", accepted.ID, result.Error)
 		}
@@ -70,9 +68,7 @@ func (service *hostedTextRequests) recoverResults(ctx context.Context) error {
 
 func (service *hostedTextRequests) recoverResult(ctx context.Context, requestID string, now time.Time) error {
 	return service.database.database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
-		result := transaction.Model(&managedJournalRequestRecord{}).
-			Where("id = ? AND state = ? AND result_published_at IS NULL AND claim_expires_at <= ?", requestID, journalRequestCompleted, now).
-			UpdateColumn("state", gorm.Expr("state"))
+		result := lockManagedUnpublishedRequest(transaction, requestID, now)
 		if result.Error != nil {
 			return fmt.Errorf("lock unpublished request %s: %w", requestID, result.Error)
 		}
