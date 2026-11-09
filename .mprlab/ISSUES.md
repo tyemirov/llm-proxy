@@ -2342,6 +2342,21 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## Improvements
 
+- [x] [I315] (P2) Reduce the signed-in dashboard size.
+  Goal: Apply the approved compact design to the authenticated dashboard.
+  Requirements: Use 7 px node labels and 6 px metadata. Retain connectors, controls, forms, and current functions.
+  Keep all three columns visible at narrow widths. Let long names and controls wrap.
+  Validation: Verify rendered dimensions, connector endpoints, model changes, default saves, prompts, and narrow layouts through browser tests.
+  Complete repository CI and independent review.
+
+  Result: The dashboard uses compact nodes and keeps its actions and connectors.
+  Keyboard focus updates connector positions after task captions expand.
+  Repeated chart headings and the repeated token total were removed.
+  Validation: `make ci` passed all 15 gates in 900 seconds with 100% Go statement coverage.
+  All 174 frontend tests and 13 authenticated browser tests passed. Independent review is clear.
+  Event contracts: No event or API contract changed.
+  Files: `site/assets/llm-proxy/styles.css`, `site/assets/llm-proxy/js/ui/connectionDashboard.js`, `site/assets/llm-proxy/js/constants.js`, `site/app/index.html`, `tests/e2e/management-ui.spec.js`, `docs/tenant-connections.md`, and `docs/provider-model-icons.md`.
+
 - [-] [I314] (P1) Recover the verified avatar operation before native submission.
 
   Goal: Continue the exact retained pilot operation after the WAV receipt correction.
