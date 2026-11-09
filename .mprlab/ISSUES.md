@@ -2342,6 +2342,19 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## Improvements
 
+- [x] [I316] (P1) Use a controlled clock in the rate-limit telemetry test.
+  Goal: Make the telemetry test independent of CI scheduling delays.
+  Evidence: PR 360 failed with `rate-limit delay logs=0 want=1` in the rate-limit scenario.
+  Requirements: Keep the real HTTP handler, admission scheduler, and telemetry assertions.
+  Use the Go test clock for the rate-limit scenario. Keep application code unchanged.
+  Validation: Run the scenario repeatedly with the race detector. Complete required repository checks and independent review.
+
+  Result: The rate-limit scenario uses `testing/synctest` with its existing handler and telemetry assertions.
+  All 30 race-detector repetitions passed. Independent review is clear.
+  Final `make ci` passed all 15 gates in 889 seconds with 100% Go statement coverage.
+  Files: `tests/integration/request_telemetry_test.go` and the I316 record.
+  Event contracts: No application event or API contract changed.
+
 - [x] [I315] (P2) Reduce the signed-in dashboard size.
   Goal: Apply the approved compact design to the authenticated dashboard.
   Requirements: Use 7 px node labels and 6 px metadata. Retain connectors, controls, forms, and current functions.
