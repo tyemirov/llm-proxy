@@ -442,7 +442,7 @@ for (const surface of ["management", "public"]) {
       await expect(icon).toHaveCSS('background-color', 'rgb(23, 25, 31)');
       await expect(icon).toHaveAttribute('alt', '');
       await expect(icon).toHaveAttribute('aria-hidden', 'true');
-      await expect(icon).toHaveCSS('width', surface === 'management' ? '20px' : '16px');
+      await expect(icon).toHaveCSS('width', surface === 'management' ? '8px' : '16px');
     }
   });
 }
@@ -2225,13 +2225,14 @@ test("tenant selection clears unsaved model and prompt previews", async ({ page 
 
 /**
  * @param {import("@playwright/test").Locator} dashboard
+ * @param {string} [nodeSelector]
  * @returns {Promise<number>}
  */
-async function pathEndpointError(dashboard) {
-  return dashboard.evaluate((element) => {
+async function pathEndpointError(dashboard, nodeSelector = '[data-connection-node]') {
+  return dashboard.evaluate((element, selector) => {
     const map = element.querySelector("[data-map]");
     const paths = [...element.querySelectorAll(".cw-wires path")];
-    const nodes = [...element.querySelectorAll("[data-connection-node]")];
+    const nodes = [...element.querySelectorAll(selector)];
     if (!(map instanceof HTMLElement) || paths.length === 0 || nodes.length === 0) {
       throw new Error("dashboard_connector_surface_missing");
     }
@@ -2246,8 +2247,91 @@ async function pathEndpointError(dashboard) {
       return Math.min(...endpoints.map((endpoint) => Math.hypot(endpoint.x - target.x, endpoint.y - target.y)));
     });
     return Math.max(...errors);
-  });
+  }, nodeSelector);
 }
+
+test("compact dashboard redraws connectors when keyboard task captions expand", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, {savedProviderIDs:['openai']});
+  await page.setViewportSize({width:320,height:900});
+  await page.goto(baseURL + applicationPath);
+  const dashboard=page.locator('connection-dashboard');
+  await expect(dashboard.locator('[data-model="gpt-4.1"]')).toBeVisible();
+  await expect.poll(() => pathEndpointError(dashboard,'[data-model]')).toBeLessThanOrEqual(2);
+  await page.keyboard.press('Tab');
+  await dashboard.locator('[data-model="gpt-4.1"]').focus();
+  await expect(dashboard.locator('[data-model="gpt-4.1"] .model-task-caption').first()).toBeVisible();
+  await expect.poll(() => pathEndpointError(dashboard,'[data-model]')).toBeLessThanOrEqual(2);
+});
+
+test("compact dashboard preserves connected routes and editing at every viewport", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { savedProviderIDs: ["openai", "siliconflow"] });
+  await page.goto(baseURL + applicationPath);
+  const dashboard = page.locator("connection-dashboard");
+  const selectedModel = dashboard.locator('[data-model="gpt-4o-mini"]');
+  await expect(selectedModel).toBeVisible();
+  await expect(page.locator('usage-chart-panel .eyebrow')).toHaveCount(0);
+  await expect(page.locator('usage-chart-panel').nth(1).locator(':scope > p').filter({hasText:'12,345'})).toHaveCount(0);
+  for (const width of [1440, 803, 560, 390, 320]) {
+    await page.setViewportSize({width, height:900});
+    const dashboardBounds = await dashboard.boundingBox();
+    expect(dashboardBounds.width).toBeLessThanOrEqual(560);
+    const columns = await dashboard.locator('.cw-column').evaluateAll(elements => elements.map(element => {
+      const bounds = element.getBoundingClientRect();
+      return {left:bounds.left, right:bounds.right};
+    }));
+    expect(columns[0].right).toBeLessThan(columns[1].left);
+    expect(columns[1].right).toBeLessThan(columns[2].left);
+    await expect(dashboard.locator('.cw-wires')).toBeVisible();
+    await expect.poll(() => pathEndpointError(dashboard)).toBeLessThanOrEqual(2);
+    const modelBounds = await selectedModel.boundingBox();
+    expect(modelBounds.height).toBeLessThanOrEqual(30);
+    expect(Number.parseFloat(await selectedModel.locator('code').evaluate(element => getComputedStyle(element).fontSize))).toBe(7);
+    await selectedModel.click();
+    await expect(dashboard.locator('.cw-wires path.preview')).toHaveCount(1);
+    const endpointError = await dashboard.evaluate(element => {
+      const path = element.querySelector('.cw-wires path.preview');
+      const model = element.querySelector('[data-model="gpt-4o-mini"]');
+      const map = element.querySelector('[data-map]');
+      if (!(path instanceof SVGPathElement) || !model || !map) throw new Error('compact_dashboard_preview_missing');
+      const point=path.getPointAtLength(path.getTotalLength());
+      const target=model.getBoundingClientRect(), bounds=map.getBoundingClientRect();
+      return Math.hypot(point.x-(target.left-bounds.left), point.y-(target.top+target.height/2-bounds.top));
+    });
+    expect(endpointError).toBeLessThanOrEqual(2);
+    await expect(dashboard.getByRole('button',{name:'Create tenant',exact:true})).toBeVisible();
+    await expect(dashboard.getByRole('button',{name:'Create connection',exact:true})).toBeVisible();
+    await expect(dashboard.getByRole('button',{name:'Copy MCP URL',exact:true})).toBeVisible();
+    await dashboard.locator('summary').filter({hasText:'Tenant system prompt'}).click();
+    await dashboard.getByLabel('Tenant system prompt',{exact:true}).fill('Compact dashboard prompt.');
+    await expect(dashboard.getByLabel('Tenant system prompt',{exact:true})).toHaveValue('Compact dashboard prompt.');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await dashboard.locator('[data-model="gpt-4.1"]').click();
+    await expect(dashboard.getByLabel('Tenant system prompt',{exact:true})).toBeHidden();
+  }
+  await selectedModel.click();
+  await dashboard.getByRole('button',{name:'Save text default',exact:true}).click();
+  await expect(selectedModel).toContainText('Default model');
+  await expect(dashboard.locator('.cw-wires path.preview')).toHaveCount(0);
+  await page.setViewportSize({width:1440,height:1000});
+  await page.screenshot({path:'/tmp/llm-proxy-i315-desktop.png',fullPage:true});
+  await page.setViewportSize({width:320,height:900});
+  await page.locator('usage-breakdown').first().getByRole('button',{name:'Show donut chart',exact:true}).click();
+  await expect(page.locator('usage-breakdown').first().locator('usage-donut')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({path:'/tmp/llm-proxy-i315-narrow.png',fullPage:true});
+  await dashboard.getByRole('button',{name:'Edit connection',exact:true}).click();
+  const editDialog=page.getByRole('dialog');
+  await editDialog.getByLabel('Connection name').fill('Production connection with a long descriptive name for narrow screens');
+  const dialogBounds=await editDialog.boundingBox();
+  expect(dialogBounds.x).toBeGreaterThanOrEqual(0);
+  expect(dialogBounds.x+dialogBounds.width).toBeLessThanOrEqual(320);
+  expect(await editDialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await page.screenshot({path:'/tmp/llm-proxy-i315-connection-dialog.png',fullPage:true});
+  await page.keyboard.press('Escape');
+  await expect(editDialog).toBeHidden();
+});
 
 test("dashboard connectors follow connection cards after inner list scroll", async ({ page }) => {
   await installAssetRoutes(page);
@@ -2262,7 +2346,7 @@ test("dashboard connectors follow connection cards after inner list scroll", asy
   const connectionsList = dashboard.locator(".cw-column").nth(1).locator(".cw-list");
   await connectionsList.evaluate((list) => {
     if (!(list instanceof HTMLElement)) throw new Error("dashboard_connections_list_missing");
-    list.style.maxHeight = "170px";
+    list.style.maxHeight = "50px";
   });
   const overflow = await connectionsList.evaluate((list) => ({
     clientHeight: list.clientHeight,
