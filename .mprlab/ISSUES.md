@@ -2342,6 +2342,48 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## Improvements
 
+- [x] [I317] (P1) Serialize the account identity test fixture before metadata reads.
+  Goal: Make the account identity test independent of concurrent usage writes.
+  Evidence: PR 360 failed in `TestHostedFundsStartupRejectsEmptyStoredSettlementAccount` with `SQLITE_BUSY`.
+  Requirements: Take the SQLite writer lock before metadata reads in the fixture transaction.
+  Keep deferred foreign keys, identity changes, and financial assertions. Keep application code unchanged.
+  Validation: Reproduce a competing write through another SQLite connection. Run focused tests, required CI, and independent review.
+
+  Result: The fixture takes the writer lock before metadata reads and preserves the original identity changes.
+  The regression reproduced SQLite error 517 before the repair.
+  All four focused tests passed 10 race-detector repetitions each. Independent review is clear.
+  Final `make ci` passed all 15 gates in 755 seconds with 100% Go statement coverage.
+  Files: `internal/proxy/hosted_funds_account_identity_internal_test.go` and the I317 record.
+  Event contracts: No application event or API contract changed.
+
+- [x] [I316] (P1) Use a controlled clock in the rate-limit telemetry test.
+  Goal: Make the telemetry test independent of CI scheduling delays.
+  Evidence: PR 360 failed with `rate-limit delay logs=0 want=1` in the rate-limit scenario.
+  Requirements: Keep the real HTTP handler, admission scheduler, and telemetry assertions.
+  Use the Go test clock for the rate-limit scenario. Keep application code unchanged.
+  Validation: Run the scenario repeatedly with the race detector. Complete required repository checks and independent review.
+
+  Result: The rate-limit scenario uses `testing/synctest` with its existing handler and telemetry assertions.
+  All 30 race-detector repetitions passed. Independent review is clear.
+  Final `make ci` passed all 15 gates in 889 seconds with 100% Go statement coverage.
+  Files: `tests/integration/request_telemetry_test.go` and the I316 record.
+  Event contracts: No application event or API contract changed.
+
+- [x] [I315] (P2) Reduce the signed-in dashboard size.
+  Goal: Apply the approved compact design to the authenticated dashboard.
+  Requirements: Use 7 px node labels and 6 px metadata. Retain connectors, controls, forms, and current functions.
+  Keep all three columns visible at narrow widths. Let long names and controls wrap.
+  Validation: Verify rendered dimensions, connector endpoints, model changes, default saves, prompts, and narrow layouts through browser tests.
+  Complete repository CI and independent review.
+
+  Result: The dashboard uses compact nodes and keeps its actions and connectors.
+  Keyboard focus updates connector positions after task captions expand.
+  Repeated chart headings and the repeated token total were removed.
+  Validation: `make ci` passed all 15 gates in 900 seconds with 100% Go statement coverage.
+  All 174 frontend tests and 13 authenticated browser tests passed. Independent review is clear.
+  Event contracts: No event or API contract changed.
+  Files: `site/assets/llm-proxy/styles.css`, `site/assets/llm-proxy/js/ui/connectionDashboard.js`, `site/assets/llm-proxy/js/constants.js`, `site/app/index.html`, `tests/e2e/management-ui.spec.js`, `docs/tenant-connections.md`, and `docs/provider-model-icons.md`.
+
 - [-] [I314] (P1) Recover the verified avatar operation before native submission.
 
   Goal: Continue the exact retained pilot operation after the WAV receipt correction.

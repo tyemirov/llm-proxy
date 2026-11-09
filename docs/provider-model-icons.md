@@ -11,8 +11,8 @@ The icons keep that separation.
 
 | Surface | Placement | Icon size |
 | --- | --- | --- |
-| Management provider card | Before the API service title on both card faces | 20px |
-| Management model family label | Before the family label | 16px |
+| Management connection node | Before the connection title | 8px |
+| Management model node | Before the exact model label | 8px |
 | Public route explorer | Before the selected family and provider labels | 20px |
 | Public model matrix | Before the exact model label and each provider label | 16px |
 
@@ -141,7 +141,7 @@ The tests cover model and provider identities, text-only families, local image l
 
 ## Acceptance criteria
 
-- Verify the correct logo and visible name on both faces of each management provider card.
+- Verify the correct logo and visible name on each management connection node and model node.
 - Verify family icons in management and the public route explorer.
 - Verify exact model and provider icons in the public matrix.
 - Verify DeepSeek identity through SiliconFlow and Qianfan.
@@ -165,7 +165,7 @@ The Moonshot logo follows the current `Moonshot API` catalog title.
 Its developer URL now redirects to the Kimi platform.
 A change to that service title requires a separate explicit catalog decision.
 
-The icons retain native color and use 20px title dimensions.
+The icons retain native color. The table defines their dimensions.
 Monochrome marks and dark Qwen, Baidu, and DeepSeek artwork use a neutral light background.
 The white Kimi symbol uses a neutral dark background in every theme.
 Browser checks set both theme and palette attributes and verify the actual page colors before icon contrast.

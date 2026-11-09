@@ -69,6 +69,8 @@ export class ConnectionDashboard extends HTMLElement {
   connectedCallback() {
     this.controller = new AbortController();
     this.addEventListener('click', event => this.handleClick(event), {signal:this.controller.signal});
+    this.addEventListener('focusin', () => this.scheduleDraw(), {signal:this.controller.signal});
+    this.addEventListener('focusout', () => this.scheduleDraw(), {signal:this.controller.signal});
     this.addEventListener('input', event => {
       if (event.target instanceof HTMLInputElement && event.target.name === 'dashboard-search') {
         this.search = event.target.value; this.renderMap();
@@ -175,7 +177,7 @@ export class ConnectionDashboard extends HTMLElement {
     if (dialog) { this.updateNotice(); return; }
     const promptDisclosures = this.promptDisclosures();
     this.innerHTML = `<section class="connection-dashboard" aria-label="Tenant connections">
-      <header class="cw-header"><h1>Tenants → connections → models</h1>
+      <header class="cw-header"><h1 class="visually-hidden">Tenants → connections → models</h1>
       <label class="cw-search"><span class="visually-hidden">Search dashboard</span><input name="dashboard-search" type="search" placeholder="Find a tenant, connection, or model" value="${escapeHTML(this.search)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m16 16 4 4"></path></svg></label><button data-action="copy-mcp" ${this.busy?'disabled':''}>Copy MCP URL</button></header>
       <div class="cw-map" data-map></div><footer class="cw-route" data-route></footer>
       <p class="cw-notice" role="status" aria-live="polite" data-notice></p>
@@ -214,12 +216,12 @@ export class ConnectionDashboard extends HTMLElement {
     const svg=this.querySelector('.cw-wires'); const map=this.querySelector('[data-map]');
     if (!(svg instanceof SVGElement) || !map) return;
     svg.replaceChildren(); const bounds=map.getBoundingClientRect();
-    if (bounds.width<700) return;
     const tenant=this.querySelector(`[data-tenant="${CSS.escape(this.tenantID)}"]`);
     const line=(/** @type {Element} */ from,/** @type {Element} */ to,/** @type {boolean} */ preview=false)=>{
       const a=from.getBoundingClientRect(),b=to.getBoundingClientRect();
       const x=a.right-bounds.left,y=a.top+a.height/2-bounds.top,x2=b.left-bounds.left,y2=b.top+b.height/2-bounds.top;
-      const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',`M ${x} ${y} C ${x+25} ${y}, ${x2-25} ${y2}, ${x2} ${y2}`);if(preview)path.classList.add('preview');svg.append(path);
+      const middle=(x+x2)/2;
+      const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',`M ${x} ${y} C ${middle} ${y}, ${middle} ${y2}, ${x2} ${y2}`);if(preview)path.classList.add('preview');svg.append(path);
     };
     if (tenant) for (const connection of this.connections.filter(c=>c.tenant_ids.includes(this.tenantID))) {
       const node=this.querySelector(`[data-connection-node="${CSS.escape(connection.id)}"]`);if(node)line(tenant,node);

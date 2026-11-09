@@ -276,8 +276,6 @@ export const COPY = Object.freeze({
   usageTokenIncompleteRequests: "incomplete requests",
   usageSuccessRate: "Success rate",
   usageProviders: "Providers used",
-  usageRequestTrend: "Requests",
-  usageTokenTrend: "Tokens",
   usageByProvider: "Provider usage",
   usageByModel: "Model usage",
   usageShowBreakdownBar: "Show bar graph",
