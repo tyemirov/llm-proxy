@@ -2342,6 +2342,34 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## Improvements
 
+- [x] [I318] (P1) Keep database-specific transaction mechanisms in the persistence layer.
+  Goal: Let application workflows request transaction coordination without database-specific operations.
+  Requirements:
+  - Move lock expressions, locking clauses, connection settings, and SQLite constraints into persistence files.
+  - Keep transaction ownership, statement order, selectors, and error behavior unchanged.
+  - Preserve the SQLite runtime contract from B071 and the test dialector boundary.
+  - Keep financial effects, worker claims, recovery, and response publication on their current transactions.
+  Validation: Run focused integration tests before the refactor. Add a check for the persistence boundary.
+  Complete repository CI and independent review after the final code change.
+  Resolution: Named persistence operations now own lock expressions, locking clauses, connection settings, constraints, and raw SQL.
+  Application workflows retain their transaction ownership, selectors, affected-row checks, and error behavior.
+  The temporary recovery implementation retains its build tag. The runtime retains its SQLite contract.
+  The boundary checks failed before extraction and passed after extraction.
+
+  Both initial race suites passed before the refactor. The combined race suite passed after the refactor.
+  All eight tagged recovery tests passed. The final recovery and payment reconciliation race suite passed in 55.485 seconds.
+  Final `make ci` passed all 15 gates in 888 seconds with 100% Go statement coverage.
+  All 174 frontend tests and 13 authenticated browser tests passed. Independent review found no unresolved findings.
+  Files:
+  - `internal/proxy/managed_store_connections.go`, `internal/proxy/managed_store_constraints.go`, `internal/proxy/managed_store_recovery.go`, `internal/proxy/managed_store_transactions.go`.
+  - `internal/proxy/management_store.go`, `internal/proxy/hosted_schema.go`, `internal/proxy/hosted_assignments.go`, `internal/proxy/hosted_signals.go`.
+  - `internal/proxy/hosted_funds.go`, `internal/proxy/hosted_funds_corrections.go`, `internal/proxy/hosted_funds_limits.go`, `internal/proxy/hosted_funds_recovery.go`, `internal/proxy/hosted_funds_resolution.go`, `internal/proxy/hosted_funds_settlement.go`, `internal/proxy/hosted_funds_account_identity_internal_test.go`.
+  - `internal/proxy/hosted_journal_dispatch.go`, `internal/proxy/hosted_journal_observations.go`, `internal/proxy/hosted_media_worker.go`, `internal/proxy/hosted_text_results.go`, `internal/proxy/structured_requests.go`.
+  - `internal/proxy/hosted_payments_orders.go`, `internal/proxy/hosted_payments_processing.go`, `internal/proxy/hosted_payments_reconciliation.go`, `internal/proxy/hosted_payments_states.go`, `internal/proxy/hosted_provider_reconciliation.go`, `internal/proxy/hosted_rating_adjustments.go`.
+  - `internal/proxy/media_operations.go`, `internal/proxy/media_presubmission_recovery.go`.
+  - `tests/persistence_boundary_test.go`, `Makefile`, `README.md`, `docs/persistence-boundary.md`, `.mprlab/TERMINOLOGY.md`, and the I318 record.
+  Event contracts: Application events and API contracts are unchanged.
+
 - [x] [I317] (P1) Serialize the account identity test fixture before metadata reads.
   Goal: Make the account identity test independent of concurrent usage writes.
   Evidence: PR 360 failed in `TestHostedFundsStartupRejectsEmptyStoredSettlementAccount` with `SQLITE_BUSY`.

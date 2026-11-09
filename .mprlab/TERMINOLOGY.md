@@ -165,3 +165,10 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `lock registry`: The map that retains each identity lock while a holder or waiter uses it.
 - `lifecycle gate`: A read-write lock that separates online record operations from whole-store recovery.
 - `durable publication`: Atomic replacement of a saved record after its file and directory synchronization complete.
+
+## Persistence Technical Nouns
+
+- `persistence layer`: Code that owns storage connections, queries, constraints, and transaction coordination.
+- `write lock`: Database coordination that excludes a competing writer until the transaction ends.
+- `no-op update`: A database update that assigns the current value to the same column.
+- `claim fence`: A database operation that excludes a worker whose retained authority is obsolete.
