@@ -67,7 +67,7 @@ func replaceStoredBillingAccountIdentity(t *testing.T, database *gorm.DB, previo
 			return err
 		}
 		// Take the writer lock before schema reads to prevent a stale SQLite snapshot.
-		if err := tx.Model(&managedBillingAccountRecord{}).Where("id = ?", previous).UpdateColumn("id", gorm.Expr("id")).Error; err != nil {
+		if err := lockManagedBillingAccount(tx, previous).Error; err != nil {
 			return err
 		}
 		tables, err := tx.Migrator().GetTables()

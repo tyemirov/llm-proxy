@@ -139,7 +139,7 @@ func (database *gormManagedTenantDatabase) createFundingOrder(ctx context.Contex
 	privateQuery := database.database.Session(&gorm.Session{Logger: paymentInboxLogger{database.database.Logger}})
 	err := privateQuery.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Acquire the write lock before inspecting idempotency or current offers.
-		if err := tx.Model(&managedBillingAccountRecord{}).Where("id = ?", accountID).UpdateColumn("id", accountID).Error; err != nil {
+		if err := lockManagedBillingAccount(tx, accountID).Error; err != nil {
 			return err
 		}
 		err := tx.Where("id = ? AND billing_account_id = ?", identifier, accountID).First(&record).Error

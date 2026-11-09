@@ -48,7 +48,7 @@ func settleHostedFunds(transaction *gorm.DB, requestID string, now time.Time) er
 	if err := transaction.Where("id = ?", requestID).First(&request).Error; err != nil {
 		return fmt.Errorf("read settlement request %s: %w", requestID, err)
 	}
-	lock := transaction.Model(&managedBillingAccountRecord{}).Where("id = ?", request.BillingAccountID).UpdateColumn("id", gorm.Expr("id"))
+	lock := lockManagedBillingAccount(transaction, request.BillingAccountID)
 	if lock.Error != nil {
 		return fmt.Errorf("lock settlement account %s: %w", request.BillingAccountID, lock.Error)
 	}

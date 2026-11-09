@@ -60,24 +60,6 @@ func readHostedTenantAssignments(database *gorm.DB, record *managedTenantRecord)
 	return nil
 }
 
-func lockProviderAssignmentTenant(transaction *gorm.DB, owner, tenantID string) (managedTenantRecord, error) {
-	// Acquire the SQLite writer before reading either assignment subtype.
-	// A read-first transaction cannot safely upgrade its snapshot after another writer commits.
-	result := transaction.Model(&managedTenantRecord{}).Where("owner_user_id = ? AND tenant_id = ?", owner, tenantID).
-		UpdateColumn("tenant_id", gorm.Expr("tenant_id"))
-	if result.Error != nil {
-		return managedTenantRecord{}, fmt.Errorf("lock provider assignments for tenant %s: %w", tenantID, result.Error)
-	}
-	if result.RowsAffected != 1 {
-		return managedTenantRecord{}, errManagedTenantNotFound
-	}
-	var record managedTenantRecord
-	if err := transaction.Where("owner_user_id = ? AND tenant_id = ?", owner, tenantID).First(&record).Error; err != nil {
-		return record, managedTenantQueryError(owner, tenantID, err)
-	}
-	return record, nil
-}
-
 func providerAssignments(record managedTenantRecord) []managedProviderAssignment {
 	assignments := make([]managedProviderAssignment, 0, len(record.ConnectionAssignments)+len(record.HostedAssignments))
 	for _, assignment := range record.ConnectionAssignments {
@@ -150,48 +132,4 @@ func (service *managementService) listProviderAssignmentsHandler() gin.HandlerFu
 		}
 		ctx.JSON(http.StatusOK, gin.H{"assignments": providerAssignments(record)})
 	}
-}
-
-type managedAssignmentTrigger struct{ name, sql string }
-
-func managedAssignmentTriggers() []managedAssignmentTrigger {
-	triggers := make([]managedAssignmentTrigger, 0, 4)
-	for _, operation := range []string{"INSERT", "UPDATE"} {
-		for _, kind := range []managedAssignmentKind{assignmentAccountConnection, assignmentHostedGrant} {
-			target, opposite := "managed_tenant_connection_records", "managed_hosted_tenant_assignment_records"
-			if kind == assignmentHostedGrant {
-				target, opposite = opposite, target
-			}
-			name := "guard_" + string(kind) + "_" + strings.ToLower(operation)
-			condition := fmt.Sprintf("EXISTS (SELECT 1 FROM %s WHERE tenant_id = NEW.tenant_id AND provider_id = NEW.provider_id)", opposite)
-			if kind == assignmentHostedGrant {
-				condition += " OR NOT EXISTS (SELECT 1 FROM managed_hosted_grant_records AS grants JOIN managed_billing_account_records AS accounts ON accounts.id = grants.billing_account_id JOIN managed_tenant_records AS tenants ON tenants.tenant_id = grants.tenant_id AND tenants.owner_user_id = accounts.owner_user_id WHERE grants.id = NEW.grant_id AND grants.tenant_id = NEW.tenant_id AND grants.provider = NEW.provider_id)"
-			}
-			sql := fmt.Sprintf("CREATE TRIGGER %s BEFORE %s ON %s WHEN %s BEGIN SELECT RAISE(ABORT, 'managed_connection_conflict'); END", name, operation, target, condition)
-			triggers = append(triggers, managedAssignmentTrigger{name: name, sql: sql})
-		}
-	}
-	return triggers
-}
-
-func createManagedAssignmentConstraints(database *gorm.DB) error {
-	for _, trigger := range managedAssignmentTriggers() {
-		if err := database.Exec(trigger.sql).Error; err != nil {
-			return fmt.Errorf("create assignment constraint %s: %w", trigger.name, err)
-		}
-	}
-	return nil
-}
-
-func validateManagedAssignmentConstraints(database *gorm.DB) error {
-	for _, trigger := range managedAssignmentTriggers() {
-		var definition string
-		if err := database.Raw("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?", trigger.name).Scan(&definition).Error; err != nil {
-			return fmt.Errorf("read assignment constraint %s: %w", trigger.name, err)
-		}
-		if definition != trigger.sql {
-			return fmt.Errorf("assignment constraint %s is missing or changed", trigger.name)
-		}
-	}
-	return nil
 }

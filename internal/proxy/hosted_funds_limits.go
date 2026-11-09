@@ -164,7 +164,7 @@ func (database *gormManagedTenantDatabase) tenantFundsLimit(ctx context.Context,
 	var response managementFundsTenantLimitResponse
 	err := database.database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if change != nil {
-			if err := tx.Model(&managedBillingAccountRecord{}).Where("id = ?", account.ID).UpdateColumn("id", gorm.Expr("id")).Error; err != nil {
+			if err := lockManagedBillingAccount(tx, account.ID).Error; err != nil {
 				return err
 			}
 		}

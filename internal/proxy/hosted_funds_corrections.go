@@ -116,7 +116,7 @@ func decodeRetainedFundsCorrection(record managedFundsCorrectionRecord) (*big.Ra
 
 func applyFundsCorrection(tx *gorm.DB, command fundsCorrectionCommand) error {
 	proposed := command.record
-	lock := tx.Model(&managedBillingAccountRecord{}).Where("id = ?", proposed.BillingAccountID).UpdateColumn("id", gorm.Expr("id"))
+	lock := lockManagedBillingAccount(tx, proposed.BillingAccountID)
 	if lock.Error != nil {
 		return lock.Error
 	}

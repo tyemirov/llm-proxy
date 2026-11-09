@@ -14,7 +14,7 @@ func (database *gormManagedTenantDatabase) observeJournalAttempt(ctx context.Con
 	var observation managedJournalObservationRecord
 	err := database.database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		// Retained observations can be replayed after completion or claim expiry.
-		lock := transaction.Model(&managedJournalRequestRecord{}).Where("id = ? AND owner_token = ?", claim.requestID, claim.owner).UpdateColumn("state", gorm.Expr("state"))
+		lock := lockManagedObservationRequest(transaction, claim)
 		if lock.Error != nil {
 			return fmt.Errorf("lock observation request %s: %w", claim.requestID, lock.Error)
 		}
@@ -89,7 +89,7 @@ func (database *gormManagedTenantDatabase) deliverJournalObservation(ctx context
 	return database.database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		// Delivery and destination effects share the transaction. A failed destination
 		// leaves the delivery pending, including when it wrote before returning an error.
-		lock := transaction.Model(&managedJournalDeliveryRecord{}).Where("observation_id = ?", observationID).UpdateColumn("observation_id", gorm.Expr("observation_id"))
+		lock := lockManagedJournalDelivery(transaction, observationID)
 		if lock.Error != nil {
 			return fmt.Errorf("lock usage delivery %s: %w", observationID, lock.Error)
 		}

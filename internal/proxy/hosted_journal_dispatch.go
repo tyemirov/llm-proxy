@@ -19,23 +19,6 @@ type journalWorkerClaim struct {
 	now       time.Time
 }
 
-func lockJournalClaim(transaction *gorm.DB, claim journalWorkerClaim) (managedJournalRequestRecord, error) {
-	result := transaction.Model(&managedJournalRequestRecord{}).
-		Where("id = ? AND owner_token = ? AND claim_expires_at > ? AND state IN ?", claim.requestID, claim.owner, claim.now, []journalRequestState{journalRequestAccepted, journalRequestExecuting}).
-		UpdateColumn("state", gorm.Expr("state"))
-	if result.Error != nil {
-		return managedJournalRequestRecord{}, fmt.Errorf("lock journal request %s: %w", claim.requestID, result.Error)
-	}
-	if result.RowsAffected != 1 {
-		return managedJournalRequestRecord{}, errJournalClaimLost
-	}
-	var record managedJournalRequestRecord
-	if err := transaction.Where("id = ?", claim.requestID).First(&record).Error; err != nil {
-		return record, fmt.Errorf("read claimed request %s: %w", claim.requestID, err)
-	}
-	return record, nil
-}
-
 func requireJournalAuthority(transaction *gorm.DB, request managedJournalRequestRecord) error {
 	var count int64
 	err := transaction.Model(&managedHostedGrantRecord{}).
@@ -124,14 +107,9 @@ func (database *gormManagedTenantDatabase) dispatchJournalAttempt(ctx context.Co
 func (database *gormManagedTenantDatabase) recoverJournalDispatches(ctx context.Context, kind journalExecutionKind, now time.Time) error {
 	return database.database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		// Serialize recovery with worker transitions before reading the expired set.
-		query := transaction.Model(&managedJournalRequestRecord{}).
-			Where("execution_kind = ? AND claim_expires_at <= ? AND state = ?", kind, now, journalRequestExecuting)
-		if err := query.UpdateColumn("state", gorm.Expr("state")).Error; err != nil {
-			return fmt.Errorf("lock expired journal dispatches: %w", err)
-		}
-		var requests []managedJournalRequestRecord
-		if err := query.Find(&requests).Error; err != nil {
-			return fmt.Errorf("read expired journal dispatches: %w", err)
+		requests, err := readManagedExpiredDispatches(transaction, kind, now)
+		if err != nil {
+			return err
 		}
 		for _, request := range requests {
 			if err := retainInterruptedJournalExecution(transaction, &request, now); err != nil {

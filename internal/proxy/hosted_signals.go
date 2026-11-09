@@ -5,13 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"math/big"
-	"net/url"
-	"path/filepath"
 	"time"
 
-	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 // HostedFinancialQueueSignal describes retained work without choosing an alert threshold.
@@ -46,17 +42,9 @@ type HostedFinancialSignals struct {
 // ReadHostedFinancialSignals reads one consistent SQLite snapshot without migration,
 // external calls, account creation, or changes to financial records.
 func ReadHostedFinancialSignals(ctx context.Context, databasePath string) (HostedFinancialSignals, error) {
-	if databasePath == "" {
-		return HostedFinancialSignals{}, fmt.Errorf("financial signals require the managed database path")
-	}
-	absolute, err := filepath.Abs(databasePath)
+	database, err := openManagedFinancialSignalsDatabase(databasePath)
 	if err != nil {
-		return HostedFinancialSignals{}, fmt.Errorf("resolve financial database path: %w", err)
-	}
-	location := url.URL{Scheme: "file", Path: absolute, RawQuery: "mode=ro"}
-	database, err := gorm.Open(sqlite.Open(location.String()), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
-	if err != nil {
-		return HostedFinancialSignals{}, fmt.Errorf("open financial signals database: %w", err)
+		return HostedFinancialSignals{}, err
 	}
 	// The fixed SQLite dialector has opened a *sql.DB before gorm.Open succeeds.
 	connection, _ := database.DB()

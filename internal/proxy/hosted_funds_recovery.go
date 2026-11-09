@@ -54,7 +54,7 @@ func (database *gormManagedTenantDatabase) reconcileHostedFunds(ctx context.Cont
 func (database *gormManagedTenantDatabase) reconcileHostedReservation(ctx context.Context, requestID string, now time.Time) error {
 	return database.database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		// Fence dispatch and claim renewal before examining retained evidence.
-		lock := transaction.Model(&managedJournalRequestRecord{}).Where("id = ?", requestID).UpdateColumn("state", gorm.Expr("state"))
+		lock := lockManagedReservationRequest(transaction, requestID)
 		if lock.Error != nil {
 			return fmt.Errorf("lock funds recovery request %s: %w", requestID, lock.Error)
 		}

@@ -160,7 +160,7 @@ func ReconcileProviderCosts(ctx context.Context, configuration ManagementConfigu
 		}
 	}
 	err = database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		lock := tx.Model(&managedPlatformConnectionRecord{}).Where("id = ?", input.PlatformConnectionID).UpdateColumn("id", gorm.Expr("id"))
+		lock := lockManagedPlatformConnection(tx, input.PlatformConnectionID)
 		if lock.Error != nil {
 			return fmt.Errorf("lock provider reconciliation scope: %w", lock.Error)
 		}
