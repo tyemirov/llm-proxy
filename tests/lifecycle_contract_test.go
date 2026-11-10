@@ -121,8 +121,8 @@ command: [make, ci]`)
 	}
 	caddy := currentContractMap(testingInstance, currentContractMap(testingInstance, targets["ingress"])["caddy"])
 	routes := currentContractIndex(testingInstance, caddy["routes"], "id")
-	if len(routes) != 1 || routes["public-api"] == nil {
-		testingInstance.Fatal("unexpected API routes")
+	if len(routes) != 1 || routes["llm-proxy-public-api"] == nil {
+		testingInstance.Fatal("API route must retain the deployed llm-proxy-public-api identity")
 	}
 	pages := currentContractIndex(testingInstance, currentContractMap(testingInstance, targets["github_pages"])["sites"], "id")
 	if len(pages) != 1 || pages["website"] == nil {
