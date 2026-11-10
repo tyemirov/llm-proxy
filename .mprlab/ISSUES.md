@@ -35,6 +35,23 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [-] [B319] (P0) Preserve the deployed API route identity.
+  Goal: Reconcile the current API route without an unintended removal.
+  Evidence: Gateway v9.2.0 rejects removal of `llm-proxy-public-api` during deployment of v1.12.8.
+  The manifest names the same route `public-api` instead.
+  Current state retains `llm-proxy-public-api` on `tutosh` with the same hostname and upstream.
+  Requirements:
+  - Keep `llm-proxy-public-api` as the route ID.
+  - Preserve the declared hostname, upstream, access policy, and TLS configuration.
+  - Preserve Gateway removal guards for shared configuration.
+  - Add no compatibility mapping or migration.
+  Implementation: The manifest and repository contract test now require the stable route ID.
+  Gateway regression coverage distinguishes stable identity from an unverified route removal.
+  Cases cover native stdio and Ansible, single and set admission, and missing and stale observations.
+  Independent source review passed. The regression cases remain unexecuted.
+  Validation: Tests, CI, publication, and deployment remain deferred by operator instruction.
+  Keep this issue unresolved until required validation passes.
+
 - [x] [B318] (P2) Return the specified media errors from quoted execution.
   Goal: Return HTTP 429 for capacity rejection and HTTP 410 for expired media results.
   Evidence: Quoted execution returns HTTP 503 for each condition.

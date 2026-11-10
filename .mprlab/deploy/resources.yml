@@ -241,7 +241,7 @@ mprlab_resources:
                             response_header_timeout_seconds: 3660
                           upstream: llm-proxy.http
                       hostname: llm-proxy-api.mprlab.com
-                      id: public-api
+                      id: llm-proxy-public-api
                       listener: https
                       tls:
                         mode: automatic
