@@ -124,6 +124,7 @@ command: [make, ci]`)
 	if len(routes) != 1 || routes["llm-proxy-public-api"] == nil {
 		testingInstance.Fatal("API route must retain the deployed llm-proxy-public-api identity")
 	}
+	requireCurrentContractYAML(testingInstance, "API route configuration policy", routes["llm-proxy-public-api"]["operations"], `[{name: app-deploy, timeouts: {startup: 1m, completion: 30m, readiness: 5m, request: 30s, shutdown: 30s}, polling: {initial: 1s, maximum: 10s, increment: 1s, multiplier: 2, attempt_limit: 200}}]`)
 	pages := currentContractIndex(testingInstance, currentContractMap(testingInstance, targets["github_pages"])["sites"], "id")
 	if len(pages) != 1 || pages["website"] == nil {
 		testingInstance.Fatal("unexpected Pages targets")
