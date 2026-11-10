@@ -28,10 +28,6 @@ mprlab_resources:
               variable: LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY
             - id: llm-proxy-management-provider-key-encryption-key
               variable: LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY
-            - id: mprlab-tauth-management-url
-              variable: MPRLAB_TAUTH_MANAGEMENT_URL
-            - id: mprlab-tauth-provisioning-credentials
-              variable: MPRLAB_TAUTH_PROVISIONING_CREDENTIALS
         source: .mprlab/deploy/.env
     lifecycle:
         ci:

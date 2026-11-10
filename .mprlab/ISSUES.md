@@ -2387,6 +2387,34 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## Improvements
 
+- [-] [I320] (P1) Audit the complete manifest against the installed Gateway contract.
+  Goal: Resolve declaration mismatches together before another deployment attempt.
+  Scope: Installed Gateway v9.2.1, the selected manifest, referenced application files, and current deployed state.
+  Findings:
+  - Two TAuth provisioning inputs have no current consumer and impose unnecessary capture requirements.
+  - Deployment guidance retains retired TAuth ownership and a manual lifecycle sequence.
+  - The v1.12.10 failure is a local GitHub identity HTTP 401 before Compose activation.
+  - Current Terminal and delegated Ansible identity requests authenticate successfully as `tyemirov`.
+  Changes: Remove the unused declarations, retain the private file, update regression assertions, and correct deployment guidance.
+  Evidence: [Complete manifest audit](../docs/gateway-manifest-audit.md).
+  Validation: Independent source review passed. Read-only delegated identity diagnostics authenticated with zero changed tasks.
+  The credential failure from the earlier invocation is not reproduced by current evidence.
+  Updated regression assertions remain unexecuted.
+  Tests, CI, publication, and deployment remain deferred by operator instruction.
+  Keep implementation acceptance pending until the required code checks pass.
+
+- [ ] [I319] (P1) Rewrite the README and organize the detailed guides.
+  Goal:
+  Give readers a concise project introduction and preserve the current operational detail in linked guides.
+  Requirements:
+  - Correct stale license, authentication, capability, client, and readiness claims.
+  - Move setup, deployment, development, and client procedures to their topic guides.
+  - Preserve material contracts and record the destination of each source section.
+  Validation:
+  - Check document links, language, source preservation, and repository whitespace.
+  - Complete an independent semantic review before acceptance.
+
+
 - [x] [I318] (P1) Keep database-specific transaction mechanisms in the persistence layer.
   Goal: Let application workflows request transaction coordination without database-specific operations.
   Requirements:
