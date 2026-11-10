@@ -419,6 +419,11 @@ func completedStructuredDataRestore(text string) completionContent {
 	return completedStructuredData(text)
 }
 func writeFinancialQuoteError(ctx *gin.Context, err error) {
+	var expired mediaOperationExpiredError
+	if errors.Is(err, errMediaOperationCapacity) || errors.As(err, &expired) {
+		writeMediaOperationError(ctx, err)
+		return
+	}
 	status := financialQuoteErrorStatus(err)
 	code := "quote_unavailable"
 	for _, known := range []error{errQuoteInvalid, errQuoteNotFound, errQuoteConflict, errQuoteExpired, errHostedAuthorityDenied, errInsufficientFunds, errFinancialAdmissionUnavailable} {

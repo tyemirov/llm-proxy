@@ -536,6 +536,71 @@ func newQuotedImageFixture(t *testing.T) (quotedFixture, map[string]any, *mediaO
 	return fixture, input, worker
 }
 
+func TestHostedQuoteImageCapacityRejection(t *testing.T) {
+	for _, scope := range []string{"tenant", "global"} {
+		t.Run(scope, func(t *testing.T) {
+			fixture, input, worker := newQuotedImageFixture(t)
+			if scope == "tenant" {
+				worker.tenantCapacity = 1
+			} else {
+				worker.globalCapacity = 1
+			}
+			first := fixture.exchange(t, "POST", "", "capacity-first", input, http.StatusCreated)
+			firstPath := "/" + first["id"].(string)
+			operation := fixture.exchange(t, "POST", firstPath+"/executions", "", input, http.StatusAccepted)
+			second := fixture.exchange(t, "POST", "", "capacity-second", input, http.StatusCreated)
+			secondPath := "/" + second["id"].(string)
+			failure := fixture.exchange(t, "POST", secondPath+"/executions", "", input, http.StatusTooManyRequests)
+			if failure["error"].(map[string]any)["code"] != llmproxycontract.ErrorCodeMediaOperationCapacity {
+				t.Fatal(failure)
+			}
+			if quote := fixture.exchange(t, "GET", secondPath, "", nil, http.StatusOK); quote["state"] != quoteReserved {
+				t.Fatal(quote)
+			}
+			if fixture.calls.Load() != 0 {
+				t.Fatal("capacity rejection dispatched provider work")
+			}
+			worker.runOperation("quoted-capacity-worker", operation["operation_id"].(string))
+			fixture.exchange(t, "POST", secondPath+"/executions", "", input, http.StatusAccepted)
+			fixture.exchange(t, "POST", secondPath+"/executions", "", input, http.StatusOK)
+			if fixture.calls.Load() != 1 {
+				t.Fatal("retry dispatched provider work before the worker ran")
+			}
+		})
+	}
+}
+
+func TestHostedQuoteImageExpiredExecutionReplay(t *testing.T) {
+	fixture, input, worker := newQuotedImageFixture(t)
+	quote := fixture.exchange(t, "POST", "", "expired-image", input, http.StatusCreated)
+	path := "/" + quote["id"].(string)
+	operation := fixture.exchange(t, "POST", path+"/executions", "", input, http.StatusAccepted)
+	id := operation["operation_id"].(string)
+	worker.runOperation("quoted-expiry-worker", id)
+	if result := fixture.exchange(t, "GET", path+"/executions", "", nil, http.StatusOK); result["state"] != MediaOperationStateSucceeded {
+		t.Fatal(result)
+	}
+	now := worker.store.now().Add(worker.terminalRetention + time.Second)
+	worker.store.now = func() time.Time { return now }
+	worker.expireTerminalData()
+	for _, method := range []string{http.MethodGet, http.MethodPost} {
+		var body any
+		if method == http.MethodPost {
+			body = input
+		}
+		failure := fixture.exchange(t, method, path+"/executions", "", body, http.StatusGone)
+		if failure["error"].(map[string]any)["code"] != llmproxycontract.ErrorCodeMediaOperationExpired || failure["operation_id"] != id || failure["state"] != MediaOperationStateSucceeded {
+			t.Fatal(failure)
+		}
+	}
+	if retained := fixture.exchange(t, "GET", path, "", nil, http.StatusOK); retained["state"] != quoteConsumed {
+		t.Fatal(retained)
+	}
+	if fixture.calls.Load() != 1 {
+		t.Fatal("expired replay repeated provider execution")
+	}
+}
+
 func TestHostedQuoteImageExecutionUsesSameHold(t *testing.T) {
 	fixture, input, worker := newQuotedImageFixture(t)
 	database, calls := fixture.database, fixture.calls
