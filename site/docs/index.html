@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="b483c816ab6205532b2799cc5e2aeb0450c745c4cbd40962f451fc203d4ede67">
+    <meta name="openapi-source-sha256" content="7bc23b519fab8490d2f8cf618c0930de8103be5127a27e8e301032f147aa7465">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="b483c816ab6205532b2799cc5e2aeb0450c745c4cbd40962f451fc203d4ede67">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="7bc23b519fab8490d2f8cf618c0930de8103be5127a27e8e301032f147aa7465">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>b483c816ab6205532b2799cc5e2aeb0450c745c4cbd40962f451fc203d4ede67</code></span>
+          <span>Source SHA-256 <code>7bc23b519fab8490d2f8cf618c0930de8103be5127a27e8e301032f147aa7465</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -4105,6 +4105,54 @@ paths:
           $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
         &#39;500&#39;:
           $ref: &#39;#/components/responses/ManagementInternalError&#39;
+  /model/v1/financial-requests:
+    get:
+      operationId: getApplicationFinancialRequestByIdempotency
+      summary: Read hosted financial evidence for one application intent.
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, pattern: &#39;^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$&#39;, minLength: 1, maxLength: 128}
+      responses:
+        &#39;200&#39;:
+          description: Retained hosted status. The read does not dispatch or reconcile work.
+          headers:
+            Cache-Control: {schema: {type: string, const: no-store}}
+          content:
+            application/json:
+              schema: {$ref: &#39;#/components/schemas/ApplicationFinancialRequest&#39;}
+        &#39;400&#39;: {description: Invalid request identity or unsupported query.}
+        &#39;403&#39;: {description: Missing or invalid tenant bearer key.}
+        &#39;404&#39;: {description: No hosted financial request belongs to this tenant and intent.}
+        &#39;405&#39;: {description: Method unavailable. Allow contains GET.}
+        &#39;503&#39;: {description: Retained financial evidence is unavailable or inconsistent.}
+  /model/v1/financial-requests/{request_id}:
+    get:
+      operationId: getApplicationFinancialRequest
+      summary: Read retained hosted evidence by journal request identity.
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema: {type: string, pattern: &#39;^request-&#39;, maxLength: 200}
+      responses:
+        &#39;200&#39;:
+          description: Tenant-owned retained financial evidence without execution payloads.
+          headers:
+            Cache-Control: {schema: {type: string, const: no-store}}
+          content:
+            application/json:
+              schema: {$ref: &#39;#/components/schemas/ApplicationFinancialRequest&#39;}
+        &#39;400&#39;: {description: Invalid request identity or unsupported header or query.}
+        &#39;403&#39;: {description: Missing or invalid tenant bearer key.}
+        &#39;404&#39;: {description: Request absent or owned by another tenant.}
+        &#39;405&#39;: {description: Method unavailable. Allow contains GET.}
+        &#39;503&#39;: {description: Retained financial evidence is unavailable or inconsistent.}
 components:
   securitySchemes:
     PaddleSignature:
@@ -5258,6 +5306,43 @@ components:
           - failed
           - uncertain
   schemas:
+    ApplicationFinancialRequest:
+      type: object
+      additionalProperties: false
+      required: [request_id, reservation_id, execution_id, execution_kind, request_digest, pricing_revision, price_snapshot_digest, currency, maximum_cents, reservation_state, reservation_revision, execution_state, state, receipt, updated_at]
+      properties:
+        request_id: {type: string}
+        reservation_id: {type: string}
+        execution_id: {type: string}
+        execution_kind: {type: string, enum: [text_request, media_operation, dictation_request]}
+        request_digest: {type: string, pattern: &#39;^[a-f0-9]{64}$&#39;}
+        pricing_revision: {type: string}
+        price_snapshot_digest: {type: string, pattern: &#39;^[a-f0-9]{64}$&#39;}
+        currency: {type: string, const: USD}
+        maximum_cents: {type: string, pattern: &#39;^[0-9]+$&#39;}
+        reservation_state: {type: string, enum: [held, settled, released, reconciliation_required]}
+        reservation_revision: {type: integer, minimum: 1}
+        execution_state: {type: string, enum: [accepted, executing, completed, failed, uncertain]}
+        state: {type: string, enum: [pending, uncertain, settled, definitely_undispatched_released]}
+        updated_at: {type: string, format: date-time}
+        receipt:
+          oneOf:
+            - type: &#39;null&#39;
+            - type: object
+              additionalProperties: false
+              required: [id, revision, exact_customer_charge, posted_cents, settled_at]
+              properties:
+                id: {type: string}
+                revision: {type: integer, const: 1}
+                exact_customer_charge:
+                  type: object
+                  additionalProperties: false
+                  required: [numerator, denominator]
+                  properties:
+                    numerator: {type: string, pattern: &#39;^[0-9]+$&#39;}
+                    denominator: {type: string, pattern: &#39;^[1-9][0-9]*$&#39;}
+                posted_cents: {type: string, pattern: &#39;^[0-9]+$&#39;}
+                settled_at: {type: string, format: date-time}
     AccountConnectionWrite:
       type: object
       additionalProperties: false
@@ -11420,6 +11505,8 @@ components:
 <a href="#operation-getTenantAsset"><span class="api-method api-method-get">GET</span><code>/model/v1/assets/{asset_id}</code><span>Read one tenant asset metadata record</span></a>
 <a href="#operation-downloadTenantAsset"><span class="api-method api-method-get">GET</span><code>/model/v1/assets/{asset_id}/content</code><span>Download exact tenant asset bytes</span></a>
 <a href="#operation-getTenantMediaCapabilities"><span class="api-method api-method-get">GET</span><code>/model/v1/capabilities</code><span>Read tenant-available durable media routes</span></a>
+<a href="#operation-getApplicationFinancialRequestByIdempotency"><span class="api-method api-method-get">GET</span><code>/model/v1/financial-requests</code><span>Read hosted financial evidence for one application intent.</span></a>
+<a href="#operation-getApplicationFinancialRequest"><span class="api-method api-method-get">GET</span><code>/model/v1/financial-requests/{request_id}</code><span>Read retained hosted evidence by journal request identity.</span></a>
 <a href="#operation-createTenantMediaOperation"><span class="api-method api-method-post">POST</span><code>/model/v1/operations</code><span>Accept one durable tenant media operation</span></a>
 <a href="#operation-getTenantMediaOperation"><span class="api-method api-method-get">GET</span><code>/model/v1/operations/{operation_id}</code><span>Read one durable tenant media operation</span></a>
 <a href="#operation-cancelTenantMediaOperation"><span class="api-method api-method-put">PUT</span><code>/model/v1/operations/{operation_id}/cancellation</code><span>Request cancellation of one durable tenant media operation</span></a>
@@ -14490,6 +14577,80 @@ components:
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>Tenant-available media capability routes.</td></tr>
 <tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getApplicationFinancialRequestByIdempotency">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/model/v1/financial-requests</code>
+          <span class="api-operation-id">getApplicationFinancialRequestByIdempotency</span>
+        </header>
+        <h2>Read hosted financial evidence for one application intent.</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>Idempotency-Key</code></td><td>header</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Retained hosted status. The read does not dispatch or reconcile work.</td></tr>
+<tr><td><code>400</code></td><td>none</td><td>none</td><td>Invalid request identity or unsupported query.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>Missing or invalid tenant bearer key.</td></tr>
+<tr><td><code>404</code></td><td>none</td><td>none</td><td>No hosted financial request belongs to this tenant and intent.</td></tr>
+<tr><td><code>405</code></td><td>none</td><td>none</td><td>Method unavailable. Allow contains GET.</td></tr>
+<tr><td><code>503</code></td><td>none</td><td>none</td><td>Retained financial evidence is unavailable or inconsistent.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getApplicationFinancialRequest">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/model/v1/financial-requests/{request_id}</code>
+          <span class="api-operation-id">getApplicationFinancialRequest</span>
+        </header>
+        <h2>Read retained hosted evidence by journal request identity.</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>request_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Tenant-owned retained financial evidence without execution payloads.</td></tr>
+<tr><td><code>400</code></td><td>none</td><td>none</td><td>Invalid request identity or unsupported header or query.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>Missing or invalid tenant bearer key.</td></tr>
+<tr><td><code>404</code></td><td>none</td><td>none</td><td>Request absent or owned by another tenant.</td></tr>
+<tr><td><code>405</code></td><td>none</td><td>none</td><td>Method unavailable. Allow contains GET.</td></tr>
+<tr><td><code>503</code></td><td>none</td><td>none</td><td>Retained financial evidence is unavailable or inconsistent.</td></tr>
               </tbody>
             </table>
           </div>
