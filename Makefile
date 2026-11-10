@@ -142,6 +142,25 @@ test-hosted-rating:
 test-hosted-funds:
 	$(GO) test ./internal/proxy -run '^TestHostedFunds' -count=1
 
+.PHONY: test-hosted-quotes-frontend
+test-hosted-quotes-frontend: prepare-shared-ui
+	$(NPM) run frontend:test:blackbox -- tests/blackbox/hosted-access.spec.js
+
+.PHONY: test-hosted-quotes
+test-hosted-quotes:
+	$(GO) test -race ./internal/proxy -run '^TestHostedQuote' -count=1
+
+.PHONY: test-quoted-clients
+test-quoted-clients:
+	$(GO) test ./pkg/llmproxyclient -run '^TestQuoted' -count=1
+	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev pytest tests/test_quoted_client.py
+
+.PHONY: test-hosted-financial-requests
+test-hosted-financial-requests:
+	$(GO) test -race ./internal/proxy ./pkg/llmproxyclient -run '^Test(HostedFundsApplicationFinancial|FinancialRequestSDK)' -count=1
+	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev pytest tests/test_financial_client.py
+	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev mypy llm_proxy_client
+
 .PHONY: test-hosted-payments
 test-hosted-payments:
 	$(GO) test ./internal/proxy ./cmd/cli -run '^Test(HostedPayments|RootCommandRunsConfiguredProxyFromConfigFile)' -count=1

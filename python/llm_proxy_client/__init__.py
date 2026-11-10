@@ -2,6 +2,10 @@
 
 from .client import (
     Client,
+    ClientFinancialRequest,
+    ClientFinancialQuoteReference,
+    ClientFinancialSettlementReceipt,
+    ClientFinancialExactMoney,
     ClientAsset,
     ClientAspectRatioImageInput,
     ClientAttachment,
@@ -44,8 +48,18 @@ from .client import (
     image_attachment,
 )
 
+from .quoted import FinancialQuoteInput, FinancialQuote, QuotedExecution, QuotedClient
+
 __all__ = [
+    "FinancialQuoteInput",
+    "FinancialQuote",
+    "QuotedExecution",
+    "QuotedClient",
     "Client",
+    "ClientFinancialRequest",
+    "ClientFinancialQuoteReference",
+    "ClientFinancialSettlementReceipt",
+    "ClientFinancialExactMoney",
     "ClientAsset",
     "ClientAspectRatioImageInput",
     "ClientAttachment",

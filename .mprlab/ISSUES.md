@@ -35,6 +35,18 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B318] (P2) Return the specified media errors from quoted execution.
+  Goal: Return HTTP 429 for capacity rejection and HTTP 410 for expired media results.
+  Evidence: Quoted execution returns HTTP 503 for each condition.
+  Requirements:
+  - Return the typed media error code and the specified HTTP status.
+  - Keep the same quote and prevent repeated provider calls.
+  Validation: Add HTTP regression tests and run `make test-hosted-quotes` and `make ci`.
+  Resolution: Quoted execution now uses the media error handler for capacity rejection and expired results.
+  Validation result: HTTP tests first failed with HTTP 503 instead of HTTP 429 and HTTP 410.
+  The quote tests passed with race detection after the correction.
+  Final `make ci` passed all 15 gates in 747 seconds with 100.0% Go statement coverage.
+
 - [x] [B317] (P1) Use the current Gateway v9 lifecycle commands.
   Goal:
   Make the repository lifecycle targets call the installed Gateway command contract.
@@ -4316,6 +4328,36 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   was required.
 
 ## Features
+
+- [x] [F091] (P1) Expose tenant-owned hosted financial receipts.
+  Goal: Let applications read existing hosted reservations and immutable settlement evidence with their own tenant key.
+  Requirements:
+  - Resolve requests by idempotency key or retained request ID.
+  - Preserve exact charges, posted cents, retained price identity, and explicit financial states.
+  - Keep financial reads separate from provider execution and reconciliation.
+  - Preserve tenant isolation after execution payload deletion.
+  Deliverables: Public API, official SDK reads, OpenAPI schema, documentation, and protocol tests.
+  Validation: Exercise real hosted admission, settlement, interrupted recovery, tenant isolation, and payload deletion through HTTP.
+  Validation: The public HTTP and SDK tests passed under the race detector. All 30 Python protocol checks and mypy passed.
+  Validation: OpenAPI contracts, hosted funds regression, go vet, and diff checks passed. Each new Go API and SDK function has full statement coverage.
+  Resolution: Added tenant-only financial reads, exact original receipts, SDK types and methods, schemas, and documentation.
+  Independent review found an SDK response identity gap. Both SDKs now reject a different addressed receipt; actual HTTP regressions passed.
+  Independent final review accepted F091 with no remaining material findings.
+  Evidence: `proxy-financial-stage-a-*` logs in the iRoom signal profile implementation output. Final shared stack CI remains at F092 completion.
+
+- [x] [F092] (P1) {F091} Bind hosted execution to application quotes.
+  Goal: Reserve an enforceable quoted maximum before structured and image processing.
+  Requirements:
+  - Bind quotes to the exact tenant, request, processing digest, retained prices, currency, maximum, and expiration.
+  - Consume reservations atomically before dispatch without a second hold.
+  - Retain financial receipts independently of execution payloads.
+  - Settle known processing failures separately from application assessments.
+  Deliverables: Quote resources, bound dispatch, SDK methods, durable recovery, and protocol tests.
+  Validation: Verify zero provider calls during quote and read operations, exact binding, retries, expiry, failures, and reconciliation.
+  Resolution: Added immutable quote resources, atomic native and image consumption, retained financial proof, and Go and Python clients.
+  Validation result: Public protocol, migration, recovery, SDK, browser, and independent reviews passed.
+  Full `make ci` passed all fifteen gates with 100.0% Go statement coverage and no uncovered blocks.
+  Live provider processing and production activation remain separate.
 
 - [ ] [F090] (P1) Add Amazon Bedrock Mantle BYOK access with cross-account IAM roles.
   Goal:

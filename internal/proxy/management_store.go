@@ -687,7 +687,7 @@ func migrateCurrentManagedSchema(database *gorm.DB) error {
 }
 
 func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) error {
-	return database.Transaction(func(transaction *gorm.DB) error {
+	return initializeWithHostedQuoteBoundary(database, func(transaction *gorm.DB) error {
 		if err := initializeManagedConnectionSchema(transaction.Session(&gorm.Session{DisableNestedTransaction: true}), providerKeyCipher, providers); err != nil {
 			return err
 		}
@@ -707,6 +707,9 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 			return err
 		}
 		if err := initializeHostedFundsSchema(transaction); err != nil {
+			return err
+		}
+		if err := initializeHostedFinancialQuoteSchema(transaction); err != nil {
 			return err
 		}
 		return initializeHostedPaymentsSchema(transaction)

@@ -136,6 +136,36 @@ func openAIClientAdapters(configuration Configuration, auth tenantAuthenticator,
 func registerClientMethodErrors(router *gin.Engine) {
 	methods := map[string]string{mcpPath: http.MethodPost, chatCompletionsPath: http.MethodPost, responsesPath: http.MethodPost, modelsPath: http.MethodGet, transcriptionsPath: http.MethodPost}
 	router.NoRoute(func(c *gin.Context) {
+		quotePath := strings.TrimPrefix(c.Request.URL.Path, llmproxycontract.FinancialQuotesPath)
+		quoteAllow := ""
+		if c.Request.URL.Path == llmproxycontract.FinancialQuotesPath {
+			quoteAllow = "GET, POST"
+		} else if strings.HasPrefix(c.Request.URL.Path, llmproxycontract.FinancialQuotesPath+"/") {
+			parts := strings.Split(strings.TrimPrefix(quotePath, "/"), "/")
+			if len(parts) == 1 && parts[0] != "" {
+				quoteAllow = "GET, PATCH"
+			}
+			if len(parts) == 2 && parts[0] != "" && parts[1] == "executions" {
+				quoteAllow = "GET, POST"
+			}
+		}
+		if quoteAllow != "" {
+			c.Header(headerCacheControl, cacheControlNoStore)
+			c.Header("Vary", "Authorization")
+			c.Header("Allow", quoteAllow)
+			c.JSON(http.StatusMethodNotAllowed, mediaOperationErrorEnvelope{Error: mediaOperationErrorResponse{Code: "method_not_allowed"}})
+			return
+		}
+
+		financialID, financialChild := strings.CutPrefix(c.Request.URL.Path, llmproxycontract.FinancialRequestsPath+"/")
+		if c.Request.URL.Path == llmproxycontract.FinancialRequestsPath || financialChild && financialID != "" && !strings.Contains(financialID, "/") {
+			c.Header(headerCacheControl, cacheControlNoStore)
+			c.Header("Vary", "Authorization")
+			c.Header("Allow", http.MethodGet)
+			c.JSON(http.StatusMethodNotAllowed, mediaOperationErrorEnvelope{Error: mediaOperationErrorResponse{Code: "method_not_allowed"}})
+			return
+		}
+
 		if provider, diagnostic := strings.CutPrefix(c.Request.URL.Path, llmproxycontract.ProviderDiagnosticsPath+"/"); diagnostic && provider != "" && !strings.Contains(provider, "/") && c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead {
 			c.Header("Cache-Control", "no-store")
 			c.Header("Allow", "GET, HEAD")

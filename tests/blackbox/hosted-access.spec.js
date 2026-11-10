@@ -175,6 +175,11 @@ test('hosted onboarding creates tenant access without provider credentials at de
     await page.clock.fastForward(30_001);
     await journalView.getByRole('button',{name:'Load more requests',exact:true}).click();
     await expect(journalView.locator('[data-journal-request]')).toHaveCount(2);
+    serviceRequest.state='quote_reserved';
+    await page.clock.fastForward(30_001);
+    await expect(journalView).toContainText('Quote reserved');
+    serviceRequest.state='uncertain';
+    await page.clock.fastForward(30_001);
     await expect(journalView).toContainText('audio alignment');
     await journalView.locator(`[data-journal-request="${requestID}"]`).click();
     const details=journalView.getByRole('region',{name:'Request evidence',exact:true});

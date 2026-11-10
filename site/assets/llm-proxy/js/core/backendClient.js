@@ -665,7 +665,7 @@ function assertJournalRequest(request) {
       (request.model === undefined ? request.execution_kind !== 'media_operation' : typeof request.model !== 'string' || !request.model || request.model !== request.model.trim()) ||
       !Number.isSafeInteger(request.grant_revision) || request.grant_revision < 1 ||
       !['text_request','media_operation','dictation_request'].includes(request.execution_kind) ||
-      !['accepted','executing','completed','failed','uncertain'].includes(request.state) ||
+      !['accepted','executing','completed','failed','uncertain','quote_reserved'].includes(request.state) ||
       !['pending','complete','unknown'].includes(request.usage_state) ||
       (request.failure_code !== undefined && typeof request.failure_code !== 'string') ||
       ![request.created_at,request.updated_at].every(value=>typeof value==='string' && Number.isFinite(Date.parse(value)))) throw new Error(APP_INTEGRITY_ERROR);

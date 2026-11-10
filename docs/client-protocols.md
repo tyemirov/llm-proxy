@@ -281,3 +281,93 @@ The response retains HTTP status and immutable headers as well as decoded text.
 All Python client operations use this response contract.
 
 Speech generation and conversion use the common media operation API. See [provider speech](provider-speech.md) for inputs and output artifacts.
+
+## Hosted financial requests
+
+F091 adds tenant-owned financial reads for existing hosted requests.
+These resources require the tenant bearer key.
+They do not require a management session or account owner authority.
+
+| Resource | Required identity |
+| --- | --- |
+| `GET /model/v1/financial-requests` | `Idempotency-Key` header |
+| `GET /model/v1/financial-requests/{request_id}` | Retained request ID |
+
+Go provides `GetFinancialRequest` and `GetFinancialRequestByID`.
+Python provides `get_financial_request` and `get_financial_request_by_id`.
+The SDKs return typed financial evidence and reject inconsistent receipts.
+Each method reads once without provider dispatch or automatic retries.
+
+The response separates `pending`, `uncertain`, `settled`, and `definitely_undispatched_released` states.
+Only a settled request has an original settlement receipt.
+The receipt retains its exact rational charge, posted cents, and settlement time.
+Account fractions can make posted cents differ from the rounded request charge.
+Later credits and corrections remain separate from the original receipt.
+
+Financial evidence remains available after execution payload deletion or grant revocation while the tenant key remains valid.
+Other tenants receive HTTP 404, including tenants that share the billing account.
+An ordinary request without a hosted reservation has no hosted financial receipt.
+These reads do not create a quote before execution.
+F092 tracks the separate quote and bound execution contract.
+
+## Quoted hosted execution
+
+F092 adds a separate execution contract with a mandatory quote.
+Existing native and media resources keep their current contracts.
+The new resources require the application tenant bearer key.
+
+| Resource | Operation |
+| --- | --- |
+| `POST /model/v1/financial-quotes` | Reserve a quote for a typed intent and processing digest. |
+| `GET /model/v1/financial-quotes` | Recover the original quote with `Idempotency-Key`. |
+| `GET /model/v1/financial-quotes/{quote_id}` | Read retained quote state. |
+| `PATCH /model/v1/financial-quotes/{quote_id}` | Release an unconsumed quote with its revision. |
+| `POST /model/v1/financial-quotes/{quote_id}/executions` | Consume the quote for the exact original intent. |
+| `GET /model/v1/financial-quotes/{quote_id}/executions` | Read the original result without provider work. |
+
+Quote creation uses one tenant-scoped idempotency key.
+The typed intent selects `native_v2` or `media_operation`.
+Native requests require an explicit model and structured output schema.
+Media requests support image generation and editing through the existing image adapters.
+The processing digest is the application's exact recipe identity.
+The server retains an opaque request digest that includes normalized inputs and materialized asset identities.
+
+Quote creation reserves the catalog's enforceable maximum in integer USD cents.
+It does not call a provider or create a queued operation.
+The quote expires five minutes after creation.
+Expiry recovery releases only unconsumed reservations.
+Reads do not process expiry, release funds, or start work.
+
+A quote has `reserved`, `consumed`, `expired`, or `released` state.
+Key replay returns the original quote, including its final state.
+It does not create another reservation.
+A released or expired quote proves that its reservation cannot fund execution.
+A consumed quote requires execution and financial reconciliation.
+A lost response alone does not prove a zero charge.
+
+Execution requires the same processing digest and normalized intent.
+It uses the original hold and price snapshot.
+The server checks current grant, assignment, account authority, and the pinned attempt bound before provider work.
+
+Expiry applies before consumption.
+It does not release an active execution's hold.
+The execution response headers bind the quote ID, processing digest, and request digest.
+Model output does not supply these trusted identifiers.
+
+Go uses `NewNativeFinancialQuoteInput`, `NewMediaFinancialQuoteInput`, and the client's financial quote methods.
+Python uses `FinancialQuoteInput.native`, `FinancialQuoteInput.media`, and `QuotedClient`.
+Both SDKs keep quote handles and submitted input immutable.
+The SDKs reject changed intent, foreign quote identities, and inconsistent execution headers.
+Quote and financial reads require no original candidate payload.
+
+A quoted financial request includes `quote.id` and `quote.processing_digest`.
+A reserved quote has `execution_state=quote_reserved` and an empty `execution_id`.
+An unconsumed released or expired quote also has no execution ID.
+Only consumption creates an execution identity.
+After result expiry, execution reads return HTTP 410 while quote and financial evidence remain readable.
+
+Known quoted processing failures can settle their actual charge without a successful result.
+Settlement requires complete rated evidence for every terminal attempt within the reserved bound.
+Unknown measurements or dispatch outcomes retain financial uncertainty and the reservation.
+The original receipt keeps exact rational charges separate from posted integer cents.
+Later credits remain separate from that immutable receipt.

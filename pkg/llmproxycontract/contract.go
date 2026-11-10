@@ -2,6 +2,32 @@
 package llmproxycontract
 
 const (
+	// FinancialRequestsPath exposes tenant-owned hosted financial evidence.
+	FinancialRequestsPath = "/model/v1/financial-requests"
+	// FinancialQuotesPath owns mandatory quoted hosted execution.
+	FinancialQuotesPath = "/model/v1/financial-quotes"
+	// ErrorCodeFinancialQuoteInvalid identifies invalid quote input.
+	ErrorCodeFinancialQuoteInvalid = "quote_invalid"
+	// ErrorCodeFinancialQuoteNotFound identifies absent tenant-owned quotes.
+	ErrorCodeFinancialQuoteNotFound = "quote_not_found"
+	// ErrorCodeFinancialQuoteConflict identifies an incompatible quote transition.
+	ErrorCodeFinancialQuoteConflict = "quote_conflict"
+	// ErrorCodeFinancialQuoteExpired identifies an expired unconsumed quote.
+	ErrorCodeFinancialQuoteExpired = "quote_expired"
+	// ErrorCodeFinancialQuoteUnavailable identifies unavailable hosted quoting.
+	ErrorCodeFinancialQuoteUnavailable = "quote_unavailable"
+	// HeaderFinancialQuoteID binds execution replies to the addressed quote.
+	HeaderFinancialQuoteID = "X-LLM-Proxy-Quote-ID"
+	// HeaderFinancialProcessingDigest pins the caller processing identity.
+	HeaderFinancialProcessingDigest = "X-LLM-Proxy-Processing-Digest"
+	// HeaderFinancialRequestDigest pins the exact prepared intent.
+	HeaderFinancialRequestDigest = "X-LLM-Proxy-Request-Digest"
+	// ErrorCodeFinancialRequestInvalid identifies an invalid financial read identity.
+	ErrorCodeFinancialRequestInvalid = "financial_request_invalid"
+	// ErrorCodeFinancialRequestNotFound identifies absent tenant-owned financial evidence.
+	ErrorCodeFinancialRequestNotFound = "financial_request_not_found"
+	// ErrorCodeFinancialStatusUnavailable identifies unavailable retained financial evidence.
+	ErrorCodeFinancialStatusUnavailable = "financial_status_unavailable"
 	// AssetPath is the authenticated tenant asset upload endpoint.
 	AssetPath = "/model/v1/assets"
 	// MediaCapabilitiesPath is the authenticated tenant media capability resource.

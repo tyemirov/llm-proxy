@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="b483c816ab6205532b2799cc5e2aeb0450c745c4cbd40962f451fc203d4ede67">
+    <meta name="openapi-source-sha256" content="b366a10fb2af4e1a46bed31bcb7540c53778830ccd7965742f9c1f9e97d30d64">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="b483c816ab6205532b2799cc5e2aeb0450c745c4cbd40962f451fc203d4ede67">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="b366a10fb2af4e1a46bed31bcb7540c53778830ccd7965742f9c1f9e97d30d64">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>b483c816ab6205532b2799cc5e2aeb0450c745c4cbd40962f451fc203d4ede67</code></span>
+          <span>Source SHA-256 <code>b366a10fb2af4e1a46bed31bcb7540c53778830ccd7965742f9c1f9e97d30d64</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -4105,6 +4105,614 @@ paths:
           $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
         &#39;500&#39;:
           $ref: &#39;#/components/responses/ManagementInternalError&#39;
+  /model/v1/financial-requests:
+    get:
+      operationId: getApplicationFinancialRequestByIdempotency
+      summary: Read hosted financial evidence for one application intent.
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, pattern: &#39;^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$&#39;, minLength: 1, maxLength: 128}
+      responses:
+        &#39;200&#39;:
+          description: Retained hosted status. The read does not dispatch or reconcile work.
+          headers:
+            Cache-Control: {schema: {type: string, const: no-store}}
+          content:
+            application/json:
+              schema: {$ref: &#39;#/components/schemas/ApplicationFinancialRequest&#39;}
+        &#39;400&#39;: {description: Invalid request identity or unsupported query.}
+        &#39;403&#39;: {description: Missing or invalid tenant bearer key.}
+        &#39;404&#39;: {description: No hosted financial request belongs to this tenant and intent.}
+        &#39;405&#39;: {description: Method unavailable. Allow contains GET.}
+        &#39;503&#39;: {description: Retained financial evidence is unavailable or inconsistent.}
+  /model/v1/financial-requests/{request_id}:
+    get:
+      operationId: getApplicationFinancialRequest
+      summary: Read retained hosted evidence by journal request identity.
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema: {type: string, pattern: &#39;^request-&#39;, maxLength: 200}
+      responses:
+        &#39;200&#39;:
+          description: Tenant-owned retained financial evidence without execution payloads.
+          headers:
+            Cache-Control: {schema: {type: string, const: no-store}}
+          content:
+            application/json:
+              schema: {$ref: &#39;#/components/schemas/ApplicationFinancialRequest&#39;}
+        &#39;400&#39;: {description: Invalid request identity or unsupported header or query.}
+        &#39;403&#39;: {description: Missing or invalid tenant bearer key.}
+        &#39;404&#39;: {description: Request absent or owned by another tenant.}
+        &#39;405&#39;: {description: Method unavailable. Allow contains GET.}
+        &#39;503&#39;: {description: Retained financial evidence is unavailable or inconsistent.}
+  /model/v1/financial-quotes:
+    post:
+      operationId: createFinancialQuote
+      summary: Reserve an exact hosted quote without execution.
+      security:
+      - TenantBearerKey: []
+      responses:
+        &#39;200&#39;: &amp;id002
+          description: Retained quote identity and the enforceable held maximum.
+          headers:
+            Cache-Control: &amp;id008
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuote&#39;
+        &#39;201&#39;:
+          description: Reserved quote without provider work or an execution operation.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuote&#39;
+        &#39;400&#39;:
+          description: Invalid typed quote identity or request.
+          headers: &amp;id001
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;402&#39;:
+          description: The current hosted account cannot reserve the bounded maximum.
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;404&#39;:
+          description: No quote belongs to this tenant and identity.
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;409&#39;:
+          description: The exact quote, intent, state, or expiration conflicts.
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;410&#39;:
+          description: Execution payload expired. Financial evidence remains available.
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;429&#39;:
+          description: The bounded execution is temporarily unavailable.
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;502&#39;:
+          description: Processing failed. Financial status is a separate retained resource.
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;503&#39;:
+          description: The hosted financial contract is unavailable.
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;403&#39;:
+          description: The tenant key or current execution authority is unavailable.
+          headers: *id001
+          content:
+            text/plain:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - &amp;id004
+        $ref: &#39;#/components/parameters/IdempotencyKey&#39;
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: &#39;#/components/schemas/FinancialQuoteInput&#39;
+    get:
+      operationId: getFinancialQuoteByKey
+      summary: Recover the original quote by deterministic key.
+      security:
+      - TenantBearerKey: []
+      responses:
+        &#39;200&#39;: *id002
+        &#39;400&#39;:
+          description: Invalid typed quote identity or request.
+          headers: &amp;id003
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;402&#39;:
+          description: The current hosted account cannot reserve the bounded maximum.
+          headers: *id003
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;404&#39;:
+          description: No quote belongs to this tenant and identity.
+          headers: *id003
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;409&#39;:
+          description: The exact quote, intent, state, or expiration conflicts.
+          headers: *id003
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;410&#39;:
+          description: Execution payload expired. Financial evidence remains available.
+          headers: *id003
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;429&#39;:
+          description: The bounded execution is temporarily unavailable.
+          headers: *id003
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;502&#39;:
+          description: Processing failed. Financial status is a separate retained resource.
+          headers: *id003
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;503&#39;:
+          description: The hosted financial contract is unavailable.
+          headers: *id003
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;403&#39;:
+          description: The tenant key or current execution authority is unavailable.
+          headers: *id003
+          content:
+            text/plain:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - *id004
+  /model/v1/financial-quotes/{quote_id}:
+    get:
+      operationId: getFinancialQuote
+      summary: Read retained quote state without recovery or provider work.
+      security:
+      - TenantBearerKey: []
+      responses:
+        &#39;200&#39;: *id002
+        &#39;400&#39;:
+          description: Invalid typed quote identity or request.
+          headers: &amp;id005
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;402&#39;:
+          description: The current hosted account cannot reserve the bounded maximum.
+          headers: *id005
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;404&#39;:
+          description: No quote belongs to this tenant and identity.
+          headers: *id005
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;409&#39;:
+          description: The exact quote, intent, state, or expiration conflicts.
+          headers: *id005
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;410&#39;:
+          description: Execution payload expired. Financial evidence remains available.
+          headers: *id005
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;429&#39;:
+          description: The bounded execution is temporarily unavailable.
+          headers: *id005
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;502&#39;:
+          description: Processing failed. Financial status is a separate retained resource.
+          headers: *id005
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;503&#39;:
+          description: The hosted financial contract is unavailable.
+          headers: *id005
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;403&#39;:
+          description: The tenant key or current execution authority is unavailable.
+          headers: *id005
+          content:
+            text/plain:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - &amp;id007
+        name: quote_id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^quote-[a-f0-9]{32}$
+    patch:
+      operationId: releaseFinancialQuote
+      summary: Release one unconsumed quote with its retained revision.
+      security:
+      - TenantBearerKey: []
+      responses:
+        &#39;200&#39;: *id002
+        &#39;400&#39;:
+          description: Invalid typed quote identity or request.
+          headers: &amp;id006
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;402&#39;:
+          description: The current hosted account cannot reserve the bounded maximum.
+          headers: *id006
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;404&#39;:
+          description: No quote belongs to this tenant and identity.
+          headers: *id006
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;409&#39;:
+          description: The exact quote, intent, state, or expiration conflicts.
+          headers: *id006
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;410&#39;:
+          description: Execution payload expired. Financial evidence remains available.
+          headers: *id006
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;429&#39;:
+          description: The bounded execution is temporarily unavailable.
+          headers: *id006
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;502&#39;:
+          description: Processing failed. Financial status is a separate retained resource.
+          headers: *id006
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;503&#39;:
+          description: The hosted financial contract is unavailable.
+          headers: *id006
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;403&#39;:
+          description: The tenant key or current execution authority is unavailable.
+          headers: *id006
+          content:
+            text/plain:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - *id007
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - revision
+              - state
+              properties:
+                revision:
+                  type: integer
+                  minimum: 1
+                state:
+                  const: released
+  /model/v1/financial-quotes/{quote_id}/executions:
+    post:
+      operationId: createQuotedExecution
+      summary: Consume the same reservation for an exact typed intent.
+      security:
+      - TenantBearerKey: []
+      responses:
+        &#39;200&#39;:
+          description: Original native structured JSON or media operation, selected
+            by quote execution_kind.
+          headers: &amp;id009
+            Cache-Control: *id008
+            X-LLM-Proxy-Quote-ID:
+              schema:
+                type: string
+                pattern: ^quote-[a-f0-9]{32}$
+              x-required: true
+            X-LLM-Proxy-Processing-Digest:
+              schema:
+                type: string
+                pattern: ^[a-f0-9]{64}$
+              x-required: true
+            X-LLM-Proxy-Request-Digest:
+              schema:
+                type: string
+                pattern: ^[a-f0-9]{64}$
+              x-required: true
+          content:
+            application/json:
+              schema: {}
+        &#39;202&#39;:
+          description: Original pending native execution or accepted image operation.
+          headers: *id009
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: &#39;#/components/schemas/StructuredRequestStatus&#39;
+                - $ref: &#39;#/components/schemas/MediaOperation&#39;
+        &#39;400&#39;:
+          description: Invalid typed quote identity or request.
+          headers: &amp;id010
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;402&#39;:
+          description: The current hosted account cannot reserve the bounded maximum.
+          headers: *id010
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;404&#39;:
+          description: No quote belongs to this tenant and identity.
+          headers: *id010
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;409&#39;:
+          description: The exact quote, intent, state, or expiration conflicts.
+          headers: *id010
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;410&#39;:
+          description: Execution payload expired. Financial evidence remains available.
+          headers: *id010
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;429&#39;:
+          description: The bounded execution is temporarily unavailable.
+          headers: *id010
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;502&#39;:
+          description: Processing failed. Financial status is a separate retained resource.
+          headers: *id010
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;503&#39;:
+          description: The hosted financial contract is unavailable.
+          headers: *id010
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;403&#39;:
+          description: The tenant key or current execution authority is unavailable.
+          headers: *id010
+          content:
+            text/plain:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - *id007
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: &#39;#/components/schemas/FinancialQuoteInput&#39;
+    get:
+      operationId: getQuotedExecution
+      summary: Read the original result without original inputs or provider work.
+      security:
+      - TenantBearerKey: []
+      responses:
+        &#39;200&#39;:
+          description: Retained original structured JSON or media operation.
+          headers: *id009
+          content:
+            application/json:
+              schema: {}
+        &#39;202&#39;:
+          description: Original execution remains pending or uncertain.
+          headers: *id009
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/StructuredRequestStatus&#39;
+        &#39;400&#39;:
+          description: Invalid typed quote identity or request.
+          headers: &amp;id011
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;402&#39;:
+          description: The current hosted account cannot reserve the bounded maximum.
+          headers: *id011
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;404&#39;:
+          description: No quote belongs to this tenant and identity.
+          headers: *id011
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;409&#39;:
+          description: The exact quote, intent, state, or expiration conflicts.
+          headers: *id011
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;410&#39;:
+          description: Execution payload expired. Financial evidence remains available.
+          headers: *id011
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;429&#39;:
+          description: The bounded execution is temporarily unavailable.
+          headers: *id011
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;502&#39;:
+          description: Processing failed. Financial status is a separate retained resource.
+          headers: *id011
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;503&#39;:
+          description: The hosted financial contract is unavailable.
+          headers: *id011
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/FinancialQuoteError&#39;
+        &#39;403&#39;:
+          description: The tenant key or current execution authority is unavailable.
+          headers: *id011
+          content:
+            text/plain:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - *id007
 components:
   securitySchemes:
     PaddleSignature:
@@ -5258,6 +5866,198 @@ components:
           - failed
           - uncertain
   schemas:
+    FinancialQuoteInput:
+      type: object
+      additionalProperties: false
+      required:
+      - processing_digest
+      - intent
+      properties:
+        processing_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        intent:
+          oneOf:
+          - type: object
+            additionalProperties: false
+            required:
+            - kind
+            - provider
+            - request
+            properties:
+              kind:
+                const: native_v2
+              provider:
+                type: string
+                pattern: ^[a-z][a-z0-9_-]*$
+              request:
+                allOf:
+                - $ref: &#39;#/components/schemas/V2Request&#39;
+                - required:
+                  - model
+                  - structured_output
+          - type: object
+            additionalProperties: false
+            required:
+            - kind
+            - provider
+            - request
+            properties:
+              kind:
+                const: media_operation
+              provider:
+                type: string
+                pattern: ^[a-z][a-z0-9_-]*$
+              request:
+                allOf:
+                - $ref: &#39;#/components/schemas/MediaOperationRequest&#39;
+                - properties:
+                    capability:
+                      enum:
+                      - image.generate
+                      - image.edit
+    FinancialQuote:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - revision
+      - state
+      - execution_kind
+      - processing_digest
+      - request_digest
+      - price_snapshot_digest
+      - request_id
+      - reservation_id
+      - pricing_revision
+      - currency
+      - maximum_cents
+      - expires_at
+      - created_at
+      - updated_at
+      - execution_id
+      properties:
+        id:
+          type: string
+          pattern: ^quote-[a-f0-9]{32}$
+        revision:
+          type: integer
+          minimum: 1
+        state:
+          enum:
+          - reserved
+          - consumed
+          - expired
+          - released
+        execution_kind:
+          enum:
+          - native_v2
+          - media_operation
+        processing_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        request_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        price_snapshot_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        request_id:
+          type: string
+          pattern: ^request-[a-f0-9]{32}$
+        reservation_id:
+          type: string
+          pattern: ^request-[a-f0-9]{32}$
+        pricing_revision:
+          type: string
+          minLength: 1
+        currency:
+          const: USD
+        maximum_cents:
+          type: string
+          pattern: ^(0|[1-9][0-9]*)$
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        execution_id:
+          type: string
+      allOf:
+      - if:
+          properties:
+            state:
+              const: consumed
+        then:
+          properties:
+            execution_id:
+              minLength: 1
+        else:
+          properties:
+            execution_id:
+              const: &#39;&#39;
+    FinancialQuoteError:
+      type: object
+      required:
+      - error
+      properties:
+        error:
+          type: object
+          required:
+          - code
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    ApplicationFinancialRequest:
+      type: object
+      additionalProperties: false
+      required: [request_id, reservation_id, execution_id, execution_kind, request_digest, pricing_revision, price_snapshot_digest, currency, maximum_cents, reservation_state, reservation_revision, execution_state, state, receipt, updated_at]
+      properties:
+        quote:
+          type: object
+          additionalProperties: false
+          required: [id, processing_digest]
+          properties:
+            id: {type: string, pattern: &#39;^quote-[a-f0-9]{32}$&#39;}
+            processing_digest: {type: string, pattern: &#39;^[a-f0-9]{64}$&#39;}
+        request_id: {type: string}
+        reservation_id: {type: string}
+        execution_id: {type: string}
+        execution_kind: {type: string, enum: [text_request, media_operation, dictation_request]}
+        request_digest: {type: string, pattern: &#39;^[a-f0-9]{64}$&#39;}
+        pricing_revision: {type: string}
+        price_snapshot_digest: {type: string, pattern: &#39;^[a-f0-9]{64}$&#39;}
+        currency: {type: string, const: USD}
+        maximum_cents: {type: string, pattern: &#39;^[0-9]+$&#39;}
+        reservation_state: {type: string, enum: [held, settled, released, reconciliation_required]}
+        reservation_revision: {type: integer, minimum: 1}
+        execution_state: {type: string, enum: [accepted, executing, completed, failed, uncertain, quote_reserved]}
+        state: {type: string, enum: [pending, uncertain, settled, definitely_undispatched_released]}
+        updated_at: {type: string, format: date-time}
+        receipt:
+          oneOf:
+            - type: &#39;null&#39;
+            - type: object
+              additionalProperties: false
+              required: [id, revision, exact_customer_charge, posted_cents, settled_at]
+              properties:
+                id: {type: string}
+                revision: {type: integer, const: 1}
+                exact_customer_charge:
+                  type: object
+                  additionalProperties: false
+                  required: [numerator, denominator]
+                  properties:
+                    numerator: {type: string, pattern: &#39;^[0-9]+$&#39;}
+                    denominator: {type: string, pattern: &#39;^[1-9][0-9]*$&#39;}
+                posted_cents: {type: string, pattern: &#39;^[0-9]+$&#39;}
+                settled_at: {type: string, format: date-time}
     AccountConnectionWrite:
       type: object
       additionalProperties: false
@@ -9682,7 +10482,7 @@ components:
           description: The identity retained by the execution owner.
         state:
           type: string
-          enum: [accepted, executing, completed, failed, uncertain]
+          enum: [accepted, executing, completed, failed, uncertain, quote_reserved]
         usage_state:
           type: string
           enum: [pending, complete, unknown]
@@ -11420,6 +12220,14 @@ components:
 <a href="#operation-getTenantAsset"><span class="api-method api-method-get">GET</span><code>/model/v1/assets/{asset_id}</code><span>Read one tenant asset metadata record</span></a>
 <a href="#operation-downloadTenantAsset"><span class="api-method api-method-get">GET</span><code>/model/v1/assets/{asset_id}/content</code><span>Download exact tenant asset bytes</span></a>
 <a href="#operation-getTenantMediaCapabilities"><span class="api-method api-method-get">GET</span><code>/model/v1/capabilities</code><span>Read tenant-available durable media routes</span></a>
+<a href="#operation-getFinancialQuoteByKey"><span class="api-method api-method-get">GET</span><code>/model/v1/financial-quotes</code><span>Recover the original quote by deterministic key.</span></a>
+<a href="#operation-createFinancialQuote"><span class="api-method api-method-post">POST</span><code>/model/v1/financial-quotes</code><span>Reserve an exact hosted quote without execution.</span></a>
+<a href="#operation-getFinancialQuote"><span class="api-method api-method-get">GET</span><code>/model/v1/financial-quotes/{quote_id}</code><span>Read retained quote state without recovery or provider work.</span></a>
+<a href="#operation-releaseFinancialQuote"><span class="api-method api-method-patch">PATCH</span><code>/model/v1/financial-quotes/{quote_id}</code><span>Release one unconsumed quote with its retained revision.</span></a>
+<a href="#operation-getQuotedExecution"><span class="api-method api-method-get">GET</span><code>/model/v1/financial-quotes/{quote_id}/executions</code><span>Read the original result without original inputs or provider work.</span></a>
+<a href="#operation-createQuotedExecution"><span class="api-method api-method-post">POST</span><code>/model/v1/financial-quotes/{quote_id}/executions</code><span>Consume the same reservation for an exact typed intent.</span></a>
+<a href="#operation-getApplicationFinancialRequestByIdempotency"><span class="api-method api-method-get">GET</span><code>/model/v1/financial-requests</code><span>Read hosted financial evidence for one application intent.</span></a>
+<a href="#operation-getApplicationFinancialRequest"><span class="api-method api-method-get">GET</span><code>/model/v1/financial-requests/{request_id}</code><span>Read retained hosted evidence by journal request identity.</span></a>
 <a href="#operation-createTenantMediaOperation"><span class="api-method api-method-post">POST</span><code>/model/v1/operations</code><span>Accept one durable tenant media operation</span></a>
 <a href="#operation-getTenantMediaOperation"><span class="api-method api-method-get">GET</span><code>/model/v1/operations/{operation_id}</code><span>Read one durable tenant media operation</span></a>
 <a href="#operation-cancelTenantMediaOperation"><span class="api-method api-method-put">PUT</span><code>/model/v1/operations/{operation_id}/cancellation</code><span>Request cancellation of one durable tenant media operation</span></a>
@@ -14490,6 +15298,362 @@ components:
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>Tenant-available media capability routes.</td></tr>
 <tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getFinancialQuoteByKey">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/model/v1/financial-quotes</code>
+          <span class="api-operation-id">getFinancialQuoteByKey</span>
+        </header>
+        <h2>Recover the original quote by deterministic key.</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>Idempotency-Key</code></td><td>header</td><td>Yes</td><td>string</td><td>Exact key of the durable structured-output request to reconcile.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Retained quote identity and the enforceable held maximum.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>Invalid typed quote identity or request.</td></tr>
+<tr><td><code>402</code></td><td>application/json</td><td>Cache-Control</td><td>The current hosted account cannot reserve the bounded maximum.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>Cache-Control</td><td>The tenant key or current execution authority is unavailable.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>No quote belongs to this tenant and identity.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The exact quote, intent, state, or expiration conflicts.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>Cache-Control</td><td>Execution payload expired. Financial evidence remains available.</td></tr>
+<tr><td><code>429</code></td><td>application/json</td><td>Cache-Control</td><td>The bounded execution is temporarily unavailable.</td></tr>
+<tr><td><code>502</code></td><td>application/json</td><td>Cache-Control</td><td>Processing failed. Financial status is a separate retained resource.</td></tr>
+<tr><td><code>503</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted financial contract is unavailable.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-createFinancialQuote">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/model/v1/financial-quotes</code>
+          <span class="api-operation-id">createFinancialQuote</span>
+        </header>
+        <h2>Reserve an exact hosted quote without execution.</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>Idempotency-Key</code></td><td>header</td><td>Yes</td><td>string</td><td>Exact key of the durable structured-output request to reconcile.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>processing_digest</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>intent</code></td><td>Yes</td><td>object</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Retained quote identity and the enforceable held maximum.</td></tr>
+<tr><td><code>201</code></td><td>application/json</td><td>Cache-Control</td><td>Reserved quote without provider work or an execution operation.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>Invalid typed quote identity or request.</td></tr>
+<tr><td><code>402</code></td><td>application/json</td><td>Cache-Control</td><td>The current hosted account cannot reserve the bounded maximum.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>Cache-Control</td><td>The tenant key or current execution authority is unavailable.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>No quote belongs to this tenant and identity.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The exact quote, intent, state, or expiration conflicts.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>Cache-Control</td><td>Execution payload expired. Financial evidence remains available.</td></tr>
+<tr><td><code>429</code></td><td>application/json</td><td>Cache-Control</td><td>The bounded execution is temporarily unavailable.</td></tr>
+<tr><td><code>502</code></td><td>application/json</td><td>Cache-Control</td><td>Processing failed. Financial status is a separate retained resource.</td></tr>
+<tr><td><code>503</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted financial contract is unavailable.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getFinancialQuote">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/model/v1/financial-quotes/{quote_id}</code>
+          <span class="api-operation-id">getFinancialQuote</span>
+        </header>
+        <h2>Read retained quote state without recovery or provider work.</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>quote_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Retained quote identity and the enforceable held maximum.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>Invalid typed quote identity or request.</td></tr>
+<tr><td><code>402</code></td><td>application/json</td><td>Cache-Control</td><td>The current hosted account cannot reserve the bounded maximum.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>Cache-Control</td><td>The tenant key or current execution authority is unavailable.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>No quote belongs to this tenant and identity.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The exact quote, intent, state, or expiration conflicts.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>Cache-Control</td><td>Execution payload expired. Financial evidence remains available.</td></tr>
+<tr><td><code>429</code></td><td>application/json</td><td>Cache-Control</td><td>The bounded execution is temporarily unavailable.</td></tr>
+<tr><td><code>502</code></td><td>application/json</td><td>Cache-Control</td><td>Processing failed. Financial status is a separate retained resource.</td></tr>
+<tr><td><code>503</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted financial contract is unavailable.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-releaseFinancialQuote">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-patch">PATCH</span>
+          <code>/model/v1/financial-quotes/{quote_id}</code>
+          <span class="api-operation-id">releaseFinancialQuote</span>
+        </header>
+        <h2>Release one unconsumed quote with its retained revision.</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>quote_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>revision</code></td><td>Yes</td><td>integer</td><td></td></tr>
+<tr><td><code>state</code></td><td>Yes</td><td>object</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Retained quote identity and the enforceable held maximum.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>Invalid typed quote identity or request.</td></tr>
+<tr><td><code>402</code></td><td>application/json</td><td>Cache-Control</td><td>The current hosted account cannot reserve the bounded maximum.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>Cache-Control</td><td>The tenant key or current execution authority is unavailable.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>No quote belongs to this tenant and identity.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The exact quote, intent, state, or expiration conflicts.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>Cache-Control</td><td>Execution payload expired. Financial evidence remains available.</td></tr>
+<tr><td><code>429</code></td><td>application/json</td><td>Cache-Control</td><td>The bounded execution is temporarily unavailable.</td></tr>
+<tr><td><code>502</code></td><td>application/json</td><td>Cache-Control</td><td>Processing failed. Financial status is a separate retained resource.</td></tr>
+<tr><td><code>503</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted financial contract is unavailable.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getQuotedExecution">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/model/v1/financial-quotes/{quote_id}/executions</code>
+          <span class="api-operation-id">getQuotedExecution</span>
+        </header>
+        <h2>Read the original result without original inputs or provider work.</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>quote_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Quote-ID, X-LLM-Proxy-Processing-Digest, X-LLM-Proxy-Request-Digest</td><td>Retained original structured JSON or media operation.</td></tr>
+<tr><td><code>202</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Quote-ID, X-LLM-Proxy-Processing-Digest, X-LLM-Proxy-Request-Digest</td><td>Original execution remains pending or uncertain.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>Invalid typed quote identity or request.</td></tr>
+<tr><td><code>402</code></td><td>application/json</td><td>Cache-Control</td><td>The current hosted account cannot reserve the bounded maximum.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>Cache-Control</td><td>The tenant key or current execution authority is unavailable.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>No quote belongs to this tenant and identity.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The exact quote, intent, state, or expiration conflicts.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>Cache-Control</td><td>Execution payload expired. Financial evidence remains available.</td></tr>
+<tr><td><code>429</code></td><td>application/json</td><td>Cache-Control</td><td>The bounded execution is temporarily unavailable.</td></tr>
+<tr><td><code>502</code></td><td>application/json</td><td>Cache-Control</td><td>Processing failed. Financial status is a separate retained resource.</td></tr>
+<tr><td><code>503</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted financial contract is unavailable.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-createQuotedExecution">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/model/v1/financial-quotes/{quote_id}/executions</code>
+          <span class="api-operation-id">createQuotedExecution</span>
+        </header>
+        <h2>Consume the same reservation for an exact typed intent.</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>quote_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>processing_digest</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>intent</code></td><td>Yes</td><td>object</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Quote-ID, X-LLM-Proxy-Processing-Digest, X-LLM-Proxy-Request-Digest</td><td>Original native structured JSON or media operation, selected by quote execution_kind.</td></tr>
+<tr><td><code>202</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Quote-ID, X-LLM-Proxy-Processing-Digest, X-LLM-Proxy-Request-Digest</td><td>Original pending native execution or accepted image operation.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>Invalid typed quote identity or request.</td></tr>
+<tr><td><code>402</code></td><td>application/json</td><td>Cache-Control</td><td>The current hosted account cannot reserve the bounded maximum.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>Cache-Control</td><td>The tenant key or current execution authority is unavailable.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>No quote belongs to this tenant and identity.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The exact quote, intent, state, or expiration conflicts.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>Cache-Control</td><td>Execution payload expired. Financial evidence remains available.</td></tr>
+<tr><td><code>429</code></td><td>application/json</td><td>Cache-Control</td><td>The bounded execution is temporarily unavailable.</td></tr>
+<tr><td><code>502</code></td><td>application/json</td><td>Cache-Control</td><td>Processing failed. Financial status is a separate retained resource.</td></tr>
+<tr><td><code>503</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted financial contract is unavailable.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getApplicationFinancialRequestByIdempotency">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/model/v1/financial-requests</code>
+          <span class="api-operation-id">getApplicationFinancialRequestByIdempotency</span>
+        </header>
+        <h2>Read hosted financial evidence for one application intent.</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>Idempotency-Key</code></td><td>header</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Retained hosted status. The read does not dispatch or reconcile work.</td></tr>
+<tr><td><code>400</code></td><td>none</td><td>none</td><td>Invalid request identity or unsupported query.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>Missing or invalid tenant bearer key.</td></tr>
+<tr><td><code>404</code></td><td>none</td><td>none</td><td>No hosted financial request belongs to this tenant and intent.</td></tr>
+<tr><td><code>405</code></td><td>none</td><td>none</td><td>Method unavailable. Allow contains GET.</td></tr>
+<tr><td><code>503</code></td><td>none</td><td>none</td><td>Retained financial evidence is unavailable or inconsistent.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getApplicationFinancialRequest">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/model/v1/financial-requests/{request_id}</code>
+          <span class="api-operation-id">getApplicationFinancialRequest</span>
+        </header>
+        <h2>Read retained hosted evidence by journal request identity.</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>request_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Tenant-owned retained financial evidence without execution payloads.</td></tr>
+<tr><td><code>400</code></td><td>none</td><td>none</td><td>Invalid request identity or unsupported header or query.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>Missing or invalid tenant bearer key.</td></tr>
+<tr><td><code>404</code></td><td>none</td><td>none</td><td>Request absent or owned by another tenant.</td></tr>
+<tr><td><code>405</code></td><td>none</td><td>none</td><td>Method unavailable. Allow contains GET.</td></tr>
+<tr><td><code>503</code></td><td>none</td><td>none</td><td>Retained financial evidence is unavailable or inconsistent.</td></tr>
               </tbody>
             </table>
           </div>

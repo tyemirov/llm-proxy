@@ -79,7 +79,7 @@ type managedJournalRequestRecord struct {
 	CatalogRevision      string                           `gorm:"not null"`
 	ExecutionKind        journalExecutionKind             `gorm:"not null;uniqueIndex:idx_journal_execution;check:execution_kind IN ('text_request','media_operation','dictation_request')"`
 	ExecutionID          string                           `gorm:"not null;uniqueIndex:idx_journal_execution"`
-	State                journalRequestState              `gorm:"not null;check:state IN ('accepted','executing','completed','failed','uncertain')"`
+	State                journalRequestState              `gorm:"not null;check:state IN ('accepted','executing','completed','failed','uncertain','quote_reserved')"`
 	UsageState           journalUsageState                `gorm:"not null;check:usage_state IN ('pending','complete','unknown')"`
 	FailureCode          string
 	OwnerToken           string    `gorm:"not null"`

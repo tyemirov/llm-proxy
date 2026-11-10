@@ -14,6 +14,9 @@ const fundsUndispatchedExpired = "undispatched_request_expired"
 // Each effect has one database transaction. A later run resumes retained
 // deliveries and reservations without a process-local recovery checkpoint.
 func (database *gormManagedTenantDatabase) reconcileHostedFunds(ctx context.Context, now time.Time) error {
+	if err := database.expireFinancialQuotes(ctx, now); err != nil {
+		return err
+	}
 	for {
 		var observations []managedJournalObservationRecord
 		fundedAttempts := database.database.Model(&managedJournalAttemptRecord{}).Select("id").
@@ -66,6 +69,9 @@ func (database *gormManagedTenantDatabase) reconcileHostedReservation(ctx contex
 		if err := transaction.Where("request_id = ? AND billing_account_id = ?", request.ID, request.BillingAccountID).First(&reservation).Error; err != nil {
 			return fmt.Errorf("read recovery reservation %s: %w", requestID, err)
 		}
+		if request.State == journalRequestQuoteReserved {
+			return nil
+		}
 		if reservation.State != fundsReservationHeld {
 			return nil
 		}
@@ -110,7 +116,17 @@ func (database *gormManagedTenantDatabase) reconcileHostedReservation(ctx contex
 			}
 			return retainHostedFundsForReconciliation(transaction, reservation, reason, now)
 		case journalRequestFailed:
-			return retainHostedFundsForReconciliation(transaction, reservation, chargePolicyUnresolved, now)
+			if err := settleHostedFunds(transaction, request.ID, now); err != nil {
+				return err
+			}
+			var current managedFundsReservationRecord
+			if err := transaction.First(&current, "request_id = ?", request.ID).Error; err != nil {
+				return err
+			}
+			if current.State == fundsReservationHeld {
+				return retainHostedFundsForReconciliation(transaction, current, chargePolicyUnresolved, now)
+			}
+			return nil
 		default:
 			return fmt.Errorf("invalid request state for funds recovery %s", requestID)
 		}
