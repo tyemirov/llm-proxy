@@ -23,7 +23,8 @@ func requireJournalAuthority(transaction *gorm.DB, request managedJournalRequest
 	var count int64
 	err := transaction.Model(&managedHostedGrantRecord{}).
 		Where("id = ? AND tenant_id = ? AND provider = ? AND billing_account_id = ? AND platform_connection_id = ? AND state = ?", request.GrantID, request.TenantID, request.Provider, request.BillingAccountID, request.PlatformConnectionID, hostedGrantActive).
-		Where("id IN (?)", transaction.Model(&managedHostedTenantAssignmentRecord{}).Select("grant_id").Where("tenant_id = ? AND provider_id = ?", request.TenantID, request.Provider)).Count(&count).Error
+		Where("id IN (?)", transaction.Model(&managedHostedTenantAssignmentRecord{}).Select("grant_id").Where("tenant_id = ? AND provider_id = ?", request.TenantID, request.Provider)).
+		Where("revision = ? OR NOT EXISTS (SELECT 1 FROM managed_financial_quote_records WHERE request_id = ?)", request.GrantRevision, request.ID).Count(&count).Error
 	if err != nil {
 		return fmt.Errorf("read dispatch authority for request %s: %w", request.ID, err)
 	}

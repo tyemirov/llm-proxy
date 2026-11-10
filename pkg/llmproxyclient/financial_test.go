@@ -114,3 +114,27 @@ func TestFinancialRequestSDKRejectsOtherAddressedReceipt(t *testing.T) {
 		t.Fatalf("another request's receipt accepted: %v", err)
 	}
 }
+
+func TestFinancialRequestSDKRetainsAndValidatesQuoteOrigin(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		reference interface{}
+		valid     bool
+	}{{"quoted-origin", map[string]interface{}{"id": "quote-" + strings.Repeat("1", 32), "processing_digest": strings.Repeat("d", 64)}, true}, {"malformed-origin", []interface{}{}, false}, {"unknown-origin-field", map[string]interface{}{"id": "quote-" + strings.Repeat("1", 32), "processing_digest": strings.Repeat("d", 64), "other": "unexpected"}, false}, {"invalid-origin-id", map[string]interface{}{"id": "another", "processing_digest": strings.Repeat("d", 64)}, false}, {"invalid-processing-digest", map[string]interface{}{"id": "quote-" + strings.Repeat("1", 32), "processing_digest": "wrong"}, false}, {"null-origin", nil, false}} {
+		t.Run(test.name, func(t *testing.T) {
+			payload := financialPayload()
+			payload["quote"] = test.reference
+			client := financialClient(t, func(writer http.ResponseWriter, _ *http.Request) { _ = json.NewEncoder(writer).Encode(payload) })
+			result, err := client.GetFinancialRequestByID(context.Background(), payload["request_id"].(string))
+			if !test.valid {
+				if !errors.Is(err, llmproxyclient.ErrClientHTTPFailure) {
+					t.Fatal("invalid financial quote origin accepted", err)
+				}
+				return
+			}
+			if err != nil || result.Quote == nil || result.Quote.ID != "quote-"+strings.Repeat("1", 32) || result.Quote.ProcessingDigest != strings.Repeat("d", 64) || result.Receipt == nil || result.Receipt.PostedCents != "0" {
+				t.Fatal("financial quote origin or exact receipt lost", result, err)
+			}
+		})
+	}
+}

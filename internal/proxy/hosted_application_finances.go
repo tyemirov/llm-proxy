@@ -23,22 +23,27 @@ type applicationSettlementReceipt struct {
 	PostedCents         string     `json:"posted_cents"`
 	SettledAt           string     `json:"settled_at"`
 }
+type applicationFinancialQuoteReference struct {
+	ID               string `json:"id"`
+	ProcessingDigest string `json:"processing_digest"`
+}
 type applicationFinancialRequest struct {
-	RequestID           string                        `json:"request_id"`
-	ReservationID       string                        `json:"reservation_id"`
-	ExecutionID         string                        `json:"execution_id"`
-	ExecutionKind       journalExecutionKind          `json:"execution_kind"`
-	RequestDigest       string                        `json:"request_digest"`
-	PricingRevision     string                        `json:"pricing_revision"`
-	PriceSnapshotDigest string                        `json:"price_snapshot_digest"`
-	Currency            string                        `json:"currency"`
-	MaximumCents        string                        `json:"maximum_cents"`
-	ReservationState    string                        `json:"reservation_state"`
-	ReservationRevision uint64                        `json:"reservation_revision"`
-	ExecutionState      journalRequestState           `json:"execution_state"`
-	State               string                        `json:"state"`
-	Receipt             *applicationSettlementReceipt `json:"receipt"`
-	UpdatedAt           string                        `json:"updated_at"`
+	Quote               *applicationFinancialQuoteReference `json:"quote,omitempty"`
+	RequestID           string                              `json:"request_id"`
+	ReservationID       string                              `json:"reservation_id"`
+	ExecutionID         string                              `json:"execution_id"`
+	ExecutionKind       journalExecutionKind                `json:"execution_kind"`
+	RequestDigest       string                              `json:"request_digest"`
+	PricingRevision     string                              `json:"pricing_revision"`
+	PriceSnapshotDigest string                              `json:"price_snapshot_digest"`
+	Currency            string                              `json:"currency"`
+	MaximumCents        string                              `json:"maximum_cents"`
+	ReservationState    string                              `json:"reservation_state"`
+	ReservationRevision uint64                              `json:"reservation_revision"`
+	ExecutionState      journalRequestState                 `json:"execution_state"`
+	State               string                              `json:"state"`
+	Receipt             *applicationSettlementReceipt       `json:"receipt"`
+	UpdatedAt           string                              `json:"updated_at"`
 }
 
 // Financial reads use tenant authority, not management account ownership.
@@ -98,6 +103,20 @@ func applicationFinancialRequestHandler(database *gormManagedTenantDatabase) gin
 				return fmt.Errorf("read retained price: %w", err)
 			}
 			response = applicationFinancialRequest{RequestID: request.ID, ReservationID: reservation.RequestID, ExecutionID: request.ExecutionID, ExecutionKind: request.ExecutionKind, RequestDigest: request.IntentDigest, PricingRevision: request.CatalogRevision, PriceSnapshotDigest: price.Digest, Currency: reservation.Currency, MaximumCents: strconv.FormatInt(reservation.MaximumCents, 10), ReservationState: reservation.State, ReservationRevision: reservation.Revision, ExecutionState: request.State, State: "pending", UpdatedAt: reservation.UpdatedAt.UTC().Format(time.RFC3339Nano)}
+			var quote managedFinancialQuoteRecord
+			quoteError := transaction.First(&quote, "request_id = ?", request.ID).Error
+			if quoteError == nil {
+				if quote.TenantID != request.TenantID || quote.RequestDigest != request.IntentDigest {
+					return fmt.Errorf("financial quote identity differs")
+				}
+				response.Quote = &applicationFinancialQuoteReference{ID: quote.ID, ProcessingDigest: quote.ProcessingDigest}
+				if quote.State != quoteConsumed {
+					response.ExecutionID = ""
+				}
+			} else if !errors.Is(quoteError, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("read financial quote identity: %w", quoteError)
+			}
+
 			switch reservation.State {
 			case fundsReservationSettled:
 				var settlement managedFundsSettlementRecord

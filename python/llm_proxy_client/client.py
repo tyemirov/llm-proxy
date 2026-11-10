@@ -154,6 +154,14 @@ class ClientFinancialSettlementReceipt:
 
 
 @dataclass(frozen=True)
+class ClientFinancialQuoteReference:
+    """The retained quote and processing identity for a financial request."""
+
+    id: str
+    processing_digest: str
+
+
+@dataclass(frozen=True)
 class ClientFinancialRequest:
     """Tenant-owned hosted financial evidence without execution payloads."""
 
@@ -172,6 +180,7 @@ class ClientFinancialRequest:
     state: str
     receipt: ClientFinancialSettlementReceipt | None
     updated_at: str
+    quote: ClientFinancialQuoteReference | None = None
 
 
 class LLMProxyRequestPendingError(RuntimeError):
@@ -1361,6 +1370,28 @@ class Client:
             raise LLMProxyTransportError("llm_proxy_client_transport_failure: inconsistent provider operation counts")
         return ClientProviderDiagnostics(**response)
 
+    def _media_resource_response(
+        self,
+        method: str,
+        resource_path: str,
+        body: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        query: dict[str, str] | None = None,
+        timeout_seconds: float | None = None,
+    ) -> ClientHTTPResponse:
+        """Read the exact HTTP response for a tenant resource."""
+
+        request_headers = {ACCEPT_HEADER: "application/json", "Authorization": f"Bearer {self.config.secret.strip()}"}
+        request_headers.update(headers or {})
+        request_data = None
+        if body is not None:
+            request_data = json.dumps(body, ensure_ascii=False, allow_nan=False).encode("utf-8")
+            request_headers[CONTENT_TYPE_HEADER] = "application/json"
+        prepared_request = urllib.request.Request(
+            self.config.media_resource_url(resource_path, query), data=request_data, headers=request_headers, method=method,
+        )
+        return _open_response(self.opener or default_response_opener, prepared_request, f"operation=media_resource method={method}", timeout_seconds)
+
     def _media_json_request(
         self,
         method: str,
@@ -1372,19 +1403,7 @@ class Client:
     ) -> dict[str, Any]:
         """Execute one strict tenant media-resource request."""
 
-        request_headers = {ACCEPT_HEADER: "application/json", "Authorization": f"Bearer {self.config.secret.strip()}"}
-        request_headers.update(headers or {})
-        request_data = None
-        if body is not None:
-            request_data = json.dumps(body, ensure_ascii=False, allow_nan=False).encode("utf-8")
-            request_headers[CONTENT_TYPE_HEADER] = "application/json"
-        prepared_request = urllib.request.Request(
-            self.config.media_resource_url(resource_path, query),
-            data=request_data,
-            headers=request_headers,
-            method=method,
-        )
-        response_text = _open_response(self.opener or default_response_opener, prepared_request, f"operation=media_resource method={method}", timeout_seconds).body
+        response_text = self._media_resource_response(method, resource_path, body, headers, query, timeout_seconds).body
         if not isinstance(response_text, str) or len(response_text.encode("utf-8")) > 8 * 1024 * 1024:
             raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media response")
         try:
@@ -1801,6 +1820,7 @@ def _proxy_error_code(body: str) -> str:
     recognized = {
         "insufficient_funds", "financial_admission_unavailable",
         "financial_request_invalid", "financial_request_not_found", "financial_status_unavailable",
+        "quote_invalid", "quote_not_found", "quote_conflict", "quote_expired", "quote_unavailable",
         "hosted_authority_denied", "hosted_result_expired", "usage_journal_conflict", "usage_journal_claim_lost",
         "invalid_idempotency_key", "structured_request_failed", "structured_request_intent_conflict",
         "structured_request_invalid", "structured_request_not_found", "structured_request_outcome_unknown",
@@ -1875,7 +1895,7 @@ def _financial_integer(value: Any) -> bool:
 def _decode_client_financial_request(response: dict[str, Any]) -> ClientFinancialRequest:
     fields = {"request_id", "reservation_id", "execution_id", "execution_kind", "request_digest", "pricing_revision", "price_snapshot_digest", "currency", "maximum_cents", "reservation_state", "reservation_revision", "execution_state", "state", "receipt", "updated_at"}
     failure = "llm_proxy_client_transport_failure: invalid financial response"
-    if set(response) != fields or any(not isinstance(response[key], str) or not response[key] for key in fields - {"receipt", "reservation_revision"}):
+    if set(response) not in (fields,fields|{"quote"}) or any(not isinstance(response[key], str) or not response[key] for key in fields - {"receipt", "reservation_revision", "execution_id"}):
         raise LLMProxyTransportError(failure)
     if not FINANCIAL_REQUEST_ID_PATTERN.fullmatch(response["request_id"]) or response["reservation_id"] != response["request_id"] or response["currency"] != "USD":
         raise LLMProxyTransportError(failure)
@@ -1883,9 +1903,17 @@ def _decode_client_financial_request(response: dict[str, Any]) -> ClientFinancia
         raise LLMProxyTransportError(failure)
     if type(response["reservation_revision"]) is not int or response["reservation_revision"] < 1 or not _financial_timestamp(response["updated_at"]):
         raise LLMProxyTransportError(failure)
-    if response["execution_kind"] not in {"text_request", "media_operation", "dictation_request"} or response["execution_state"] not in {"accepted", "executing", "completed", "failed", "uncertain"}:
+    if response["execution_kind"] not in {"text_request", "media_operation", "dictation_request"} or response["execution_state"] not in {"accepted", "executing", "completed", "failed", "uncertain", "quote_reserved"}:
         raise LLMProxyTransportError(failure)
     if response["state"] not in {"pending", "uncertain", "settled", "definitely_undispatched_released"} or response["reservation_state"] not in {"held", "settled", "released", "reconciliation_required"}:
+        raise LLMProxyTransportError(failure)
+    quote = None
+    if "quote" in response:
+        reference = response["quote"]
+        if not isinstance(reference,dict) or set(reference)!={"id","processing_digest"} or not isinstance(reference["id"],str) or not re.fullmatch(r"quote-[a-f0-9]{32}",reference["id"]) or not isinstance(reference["processing_digest"],str) or not FINANCIAL_DIGEST_PATTERN.fullmatch(reference["processing_digest"]):
+            raise LLMProxyTransportError(failure)
+        quote = ClientFinancialQuoteReference(**reference)
+    if not isinstance(response["execution_id"],str) or (not response["execution_id"] and (quote is None or (response["execution_state"]!="quote_reserved" and response["state"]!="definitely_undispatched_released"))):
         raise LLMProxyTransportError(failure)
     receipt = None
     raw = response["receipt"]
@@ -1903,4 +1931,4 @@ def _decode_client_financial_request(response: dict[str, Any]) -> ClientFinancia
         or response["state"] == "definitely_undispatched_released" and response["reservation_state"] == "released" and response["execution_state"] == "failed"
     ):
         raise LLMProxyTransportError(failure)
-    return ClientFinancialRequest(**{**response, "receipt": receipt})
+    return ClientFinancialRequest(**{**response, "receipt": receipt,"quote":quote})

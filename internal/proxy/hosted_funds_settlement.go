@@ -71,7 +71,30 @@ func settleHostedFunds(transaction *gorm.DB, requestID string, now time.Time) er
 			return retainHostedFundsForReconciliation(transaction, reservation, charge.State, now)
 		}
 	}
-	if request.State != journalRequestCompleted || request.ResultPublishedAt == nil {
+	switch request.State {
+	case journalRequestCompleted:
+		if request.ResultPublishedAt == nil {
+			return nil
+		}
+	case journalRequestFailed:
+		var quoted int64
+		if err := transaction.Model(&managedFinancialQuoteRecord{}).Where("request_id = ? AND state = ?", request.ID, quoteConsumed).Count(&quoted).Error; err != nil {
+			return fmt.Errorf("read failed quote settlement authority: %w", err)
+		}
+		if quoted != 1 {
+			return nil
+		}
+		if request.UsageState != journalUsageComplete {
+			return nil
+		}
+		var unfinished int64
+		if err := transaction.Model(&managedJournalAttemptRecord{}).Where("request_id = ? AND state <> ?", request.ID, journalAttemptObserved).Count(&unfinished).Error; err != nil {
+			return fmt.Errorf("read failed request terminal evidence: %w", err)
+		}
+		if unfinished != 0 {
+			return nil
+		}
+	default:
 		return nil
 	}
 	var attempts int64

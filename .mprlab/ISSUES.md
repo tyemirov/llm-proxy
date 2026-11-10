@@ -4333,7 +4333,7 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   Independent final review accepted F091 with no remaining material findings.
   Evidence: `proxy-financial-stage-a-*` logs in the iRoom signal profile implementation output. Final shared stack CI remains at F092 completion.
 
-- [ ] [F092] (P1) {F091} Bind hosted execution to application quotes.
+- [x] [F092] (P1) {F091} Bind hosted execution to application quotes.
   Goal: Reserve an enforceable quoted maximum before structured and image processing.
   Requirements:
   - Bind quotes to the exact tenant, request, processing digest, retained prices, currency, maximum, and expiration.
@@ -4342,7 +4342,10 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Settle known processing failures separately from application assessments.
   Deliverables: Quote resources, bound dispatch, SDK methods, durable recovery, and protocol tests.
   Validation: Verify zero provider calls during quote and read operations, exact binding, retries, expiry, failures, and reconciliation.
-  Progress: Architecture review accepted dedicated quote execution resources and a separate reserved journal state. Implementation follows the F091 PR.
+  Resolution: Added immutable quote resources, atomic native and image consumption, retained financial proof, and Go and Python clients.
+  Validation result: Public protocol, migration, recovery, SDK, browser, and independent reviews passed.
+  Full `make ci` passed all fifteen gates with 100.0% Go statement coverage and no uncovered blocks.
+  Live provider processing and production activation remain separate.
 
 - [ ] [F090] (P1) Add Amazon Bedrock Mantle BYOK access with cross-account IAM roles.
   Goal:

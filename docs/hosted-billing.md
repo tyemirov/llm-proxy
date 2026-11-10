@@ -2158,3 +2158,42 @@ Later credits and corrections remain separate records.
 The receipt survives deletion of execution payload files.
 Current financial reads do not establish a quote before execution.
 F092 owns that additional contract.
+
+## Mandatory quote contract
+
+F092 adds [quoted hosted execution](client-protocols.md#quoted-hosted-execution) for application consumers.
+Each quote binds the tenant, request, processing digest, grant, account, price snapshot, maximum, and expiry.
+Quote creation and its ledger hold share one database transaction.
+The journal uses explicit `quote_reserved` state before consumption.
+Ordinary request keys cannot address the quoted journal namespace.
+
+Consumption, explicit release, and expiry recovery use the same database writer fence.
+Only consumption creates the native response or media operation identity.
+It transfers the existing hold instead of reserving again.
+The server checks current authority before each provider attempt.
+The retained price snapshot enforces the cumulative attempt and quantity bounds.
+
+The quote resource remains readable after payload deletion or grant revocation while the tenant key remains valid.
+An explicit release returns durable `released` state.
+Expiry recovery returns durable `expired` state.
+Neither terminal state permits later consumption.
+GET requests do not change those states.
+
+Known processing failures in this quoted contract can settle without a result publication receipt.
+All attempts must be terminal, complete, and rated within the original bound.
+An unknown attempt keeps the financial outcome unresolved.
+The original exact charge and account cent effect remain separate.
+This policy does not change the existing unquoted failure resolution contract.
+
+The journal CHECK transition accepts only the exact predecessor schema.
+Startup pins one connection and suspends its foreign keys before the migration transaction.
+The database writer lock serializes migration with other instances.
+The transaction preserves journal rows, indexes, triggers, financial receipts, and references.
+It validates the current schema and requires an empty `foreign_key_check` result.
+
+Startup restores and verifies foreign key enforcement after commit or rollback.
+A restoration failure discards the connection and closes its pool before service publication.
+
+Controlled HTTP, SDK, browser, migration, and provider protocol tests establish this implementation behavior.
+They do not establish operational provider access, model quality, hosted account qualification, or production activation.
+Those qualifications remain separate under the existing hosted activation contract.

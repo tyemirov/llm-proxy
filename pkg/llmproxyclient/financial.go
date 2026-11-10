@@ -2,6 +2,7 @@ package llmproxyclient
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -32,7 +33,14 @@ type FinancialSettlementReceipt struct {
 }
 
 // FinancialRequest is a tenant-owned hosted financial snapshot without execution payloads.
+// FinancialQuoteReference binds retained financial evidence to a quoted processing identity.
+type FinancialQuoteReference struct {
+	ID               string `json:"id"`
+	ProcessingDigest string `json:"processing_digest"`
+}
+
 type FinancialRequest struct {
+	Quote               *FinancialQuoteReference    `json:"quote,omitempty"`
 	RequestID           string                      `json:"request_id"`
 	ReservationID       string                      `json:"reservation_id"`
 	ExecutionID         string                      `json:"execution_id"`
@@ -84,20 +92,37 @@ func (client Client) readFinancialRequest(ctx context.Context, path, key string)
 	if err != nil {
 		return FinancialRequest{}, err
 	}
-	var result FinancialRequest
-	if err := decodeExactJSON(body, &result); err != nil || !validFinancialRequest(result) {
+	var wire struct {
+		FinancialRequest
+		Quote json.RawMessage `json:"quote"`
+	}
+	if err := decodeExactJSON(body, &wire); err != nil {
+		return FinancialRequest{}, fmt.Errorf("%w: invalid financial response", ErrClientHTTPFailure)
+	}
+	result := wire.FinancialRequest
+	if len(wire.Quote) > 0 {
+		var reference FinancialQuoteReference
+		if err := decodeExactJSON(wire.Quote, &reference); err != nil {
+			return FinancialRequest{}, fmt.Errorf("%w: invalid financial quote reference", ErrClientHTTPFailure)
+		}
+		result.Quote = &reference
+	}
+	if !validFinancialRequest(result) {
 		return FinancialRequest{}, fmt.Errorf("%w: invalid financial response", ErrClientHTTPFailure)
 	}
 	return result, nil
 }
 func validFinancialRequest(value FinancialRequest) bool {
-	if !financialRequestIDPattern.MatchString(value.RequestID) || value.ReservationID != value.RequestID || value.ExecutionID == "" || value.PricingRevision == "" || value.Currency != "USD" || value.ReservationRevision == 0 || !financialDigestPattern.MatchString(value.RequestDigest) || !financialDigestPattern.MatchString(value.PriceSnapshotDigest) || !financialIntegerPattern.MatchString(value.MaximumCents) {
+	if value.Quote != nil && (!financialQuoteIDPattern.MatchString(value.Quote.ID) || !financialDigestPattern.MatchString(value.Quote.ProcessingDigest)) {
+		return false
+	}
+	if !financialRequestIDPattern.MatchString(value.RequestID) || value.ReservationID != value.RequestID || (value.ExecutionID == "" && (value.Quote == nil || (value.ExecutionState != "quote_reserved" && value.State != "definitely_undispatched_released"))) || value.PricingRevision == "" || value.Currency != "USD" || value.ReservationRevision == 0 || !financialDigestPattern.MatchString(value.RequestDigest) || !financialDigestPattern.MatchString(value.PriceSnapshotDigest) || !financialIntegerPattern.MatchString(value.MaximumCents) {
 		return false
 	}
 	if _, err := time.Parse(time.RFC3339Nano, value.UpdatedAt); err != nil {
 		return false
 	}
-	if !financialEnum(value.ExecutionKind, "text_request", "media_operation", "dictation_request") || !financialEnum(value.ExecutionState, "accepted", "executing", "completed", "failed", "uncertain") {
+	if !financialEnum(value.ExecutionKind, "text_request", "media_operation", "dictation_request") || !financialEnum(value.ExecutionState, "accepted", "executing", "completed", "failed", "uncertain", "quote_reserved") {
 		return false
 	}
 	if !financialEnum(value.State, "pending", "uncertain", "settled", "definitely_undispatched_released") || !financialEnum(value.ReservationState, "held", "settled", "released", "reconciliation_required") {

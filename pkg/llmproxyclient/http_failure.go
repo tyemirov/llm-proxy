@@ -67,6 +67,7 @@ func recognizedProxyErrorCode(responseBody []byte) string {
 		llmproxycontract.ErrorCodeFinancialRequestInvalid,
 		llmproxycontract.ErrorCodeFinancialRequestNotFound,
 		llmproxycontract.ErrorCodeFinancialStatusUnavailable,
+		llmproxycontract.ErrorCodeFinancialQuoteInvalid, llmproxycontract.ErrorCodeFinancialQuoteNotFound, llmproxycontract.ErrorCodeFinancialQuoteConflict, llmproxycontract.ErrorCodeFinancialQuoteExpired, llmproxycontract.ErrorCodeFinancialQuoteUnavailable,
 		llmproxycontract.ErrorCodeHostedAuthorityDenied,
 		llmproxycontract.ErrorCodeHostedResultExpired,
 		llmproxycontract.ErrorCodeUsageJournalConflict,

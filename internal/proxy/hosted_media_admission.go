@@ -31,21 +31,31 @@ func mediaJournalCredentialReference(request managedJournalRequestRecord) string
 }
 
 func (service *mediaOperationService) admitHostedMedia(transaction *gorm.DB, requestTenant tenant, key string, canonicalIntent []byte, operation mediaOperationRecord) error {
+	proposalKey := key
+	if quoted, ok := transaction.Statement.Context.Value(quotedExecutionContextKey{}).(quotedExecutionIdentity); ok {
+		proposalKey = quoted.quote.ID
+	}
 	intent, err := newJournalAdmissionIntent(journalAdmissionInput{
 		OwnerUserID: requestTenant.userID, TenantID: operation.TenantID, Provider: operation.Provider,
 		Model: operation.Model, Operation: operation.CatalogOperation, CatalogRevision: operation.CatalogRevision,
-		IdempotencyKey: key, CanonicalIntent: canonicalIntent, ExecutionKind: journalExecutionMedia, ExecutionID: operation.OperationID,
+		IdempotencyKey: proposalKey, CanonicalIntent: canonicalIntent, ExecutionKind: journalExecutionMedia, ExecutionID: operation.OperationID,
 		OwnerToken: operation.OperationID, Now: operation.AcceptedAt, ClaimExpiresAt: operation.DeadlineAt,
 	}, rand.Reader)
 	if err != nil {
 		return fmt.Errorf("%w: create media journal intent: %w", errMediaOperationStore, err)
 	}
-	accepted, err := admitJournalRequest(transaction, intent, func(transaction *gorm.DB, request managedJournalRequestRecord) error {
+	reserve := func(transaction *gorm.DB, request managedJournalRequestRecord) error {
 		if mediaJournalCredentialReference(request) != operation.CredentialReference {
 			return errHostedAuthorityDenied
 		}
 		return service.hostedAdmission(transaction, request, operation)
-	})
+	}
+	var accepted managedJournalRequestRecord
+	if quoted, ok := transaction.Statement.Context.Value(quotedExecutionContextKey{}).(quotedExecutionIdentity); ok {
+		accepted, err = (&gormManagedTenantDatabase{database: service.store.database}).consumeFinancialQuote(transaction, quoted, intent.record, operation.AcceptedAt, reserve)
+	} else {
+		accepted, err = admitJournalRequest(transaction, intent, reserve)
+	}
 	if errors.Is(err, errUsageJournalConflict) {
 		return errMediaOperationIntentConflict
 	}

@@ -456,7 +456,7 @@ export {};
  * @property {string} catalog_revision
  * @property {'text_request'|'media_operation'|'dictation_request'} execution_kind
  * @property {string} execution_id
- * @property {'accepted'|'executing'|'completed'|'failed'|'uncertain'} state
+ * @property {'accepted'|'executing'|'completed'|'failed'|'uncertain'|'quote_reserved'} state
  * @property {'pending'|'complete'|'unknown'} usage_state
  * @property {string} [failure_code]
  * @property {string} created_at

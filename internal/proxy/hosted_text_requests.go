@@ -17,7 +17,7 @@ import (
 var errHostedResultExpired = errors.New(llmproxycontract.ErrorCodeHostedResultExpired)
 
 func hostedRequestErrorCode(err error) (string, bool) {
-	for _, failure := range []error{errUsageJournalConflict, errJournalClaimLost, errHostedAuthorityDenied, errHostedResultExpired, errInsufficientFunds, errFinancialAdmissionUnavailable} {
+	for _, failure := range []error{errUsageJournalConflict, errJournalClaimLost, errHostedAuthorityDenied, errHostedResultExpired, errInsufficientFunds, errFinancialAdmissionUnavailable, errQuoteInvalid, errQuoteNotFound, errQuoteConflict, errQuoteExpired, errQuoteUnavailable} {
 		if errors.Is(err, failure) {
 			return failure.Error(), true
 		}
@@ -151,7 +151,17 @@ func (service *hostedTextRequests) executeCompletion(ctx context.Context, reques
 	authorize := func(transaction *gorm.DB, record managedJournalRequestRecord) error {
 		return service.authorize(transaction, record, request)
 	}
-	accepted, err := service.database.admitJournalRequest(ctx, intent, authorize)
+	var accepted managedJournalRequestRecord
+	if quoted, ok := ctx.Value(quotedExecutionContextKey{}).(quotedExecutionIdentity); ok {
+		identity.key = quotedResponseKey(quoted.quote.ID)
+		err = service.database.database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			var consumeErr error
+			accepted, consumeErr = service.database.consumeFinancialQuote(tx, quoted, intent.record, service.now().UTC(), authorize)
+			return consumeErr
+		})
+	} else {
+		accepted, err = service.database.admitJournalRequest(ctx, intent, authorize)
+	}
 	if err != nil {
 		return completionResult{}, err
 	}

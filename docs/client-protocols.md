@@ -309,3 +309,65 @@ Other tenants receive HTTP 404, including tenants that share the billing account
 An ordinary request without a hosted reservation has no hosted financial receipt.
 These reads do not create a quote before execution.
 F092 tracks the separate quote and bound execution contract.
+
+## Quoted hosted execution
+
+F092 adds a separate execution contract with a mandatory quote.
+Existing native and media resources keep their current contracts.
+The new resources require the application tenant bearer key.
+
+| Resource | Operation |
+| --- | --- |
+| `POST /model/v1/financial-quotes` | Reserve a quote for a typed intent and processing digest. |
+| `GET /model/v1/financial-quotes` | Recover the original quote with `Idempotency-Key`. |
+| `GET /model/v1/financial-quotes/{quote_id}` | Read retained quote state. |
+| `PATCH /model/v1/financial-quotes/{quote_id}` | Release an unconsumed quote with its revision. |
+| `POST /model/v1/financial-quotes/{quote_id}/executions` | Consume the quote for the exact original intent. |
+| `GET /model/v1/financial-quotes/{quote_id}/executions` | Read the original result without provider work. |
+
+Quote creation uses one tenant-scoped idempotency key.
+The typed intent selects `native_v2` or `media_operation`.
+Native requests require an explicit model and structured output schema.
+Media requests support image generation and editing through the existing image adapters.
+The processing digest is the application's exact recipe identity.
+The server retains an opaque request digest that includes normalized inputs and materialized asset identities.
+
+Quote creation reserves the catalog's enforceable maximum in integer USD cents.
+It does not call a provider or create a queued operation.
+The quote expires five minutes after creation.
+Expiry recovery releases only unconsumed reservations.
+Reads do not process expiry, release funds, or start work.
+
+A quote has `reserved`, `consumed`, `expired`, or `released` state.
+Key replay returns the original quote, including its final state.
+It does not create another reservation.
+A released or expired quote proves that its reservation cannot fund execution.
+A consumed quote requires execution and financial reconciliation.
+A lost response alone does not prove a zero charge.
+
+Execution requires the same processing digest and normalized intent.
+It uses the original hold and price snapshot.
+The server checks current grant, assignment, account authority, and the pinned attempt bound before provider work.
+
+Expiry applies before consumption.
+It does not release an active execution's hold.
+The execution response headers bind the quote ID, processing digest, and request digest.
+Model output does not supply these trusted identifiers.
+
+Go uses `NewNativeFinancialQuoteInput`, `NewMediaFinancialQuoteInput`, and the client's financial quote methods.
+Python uses `FinancialQuoteInput.native`, `FinancialQuoteInput.media`, and `QuotedClient`.
+Both SDKs keep quote handles and submitted input immutable.
+The SDKs reject changed intent, foreign quote identities, and inconsistent execution headers.
+Quote and financial reads require no original candidate payload.
+
+A quoted financial request includes `quote.id` and `quote.processing_digest`.
+A reserved quote has `execution_state=quote_reserved` and an empty `execution_id`.
+An unconsumed released or expired quote also has no execution ID.
+Only consumption creates an execution identity.
+After result expiry, execution reads return HTTP 410 while quote and financial evidence remain readable.
+
+Known quoted processing failures can settle their actual charge without a successful result.
+Settlement requires complete rated evidence for every terminal attempt within the reserved bound.
+Unknown measurements or dispatch outcomes retain financial uncertainty and the reservation.
+The original receipt keeps exact rational charges separate from posted integer cents.
+Later credits remain separate from that immutable receipt.

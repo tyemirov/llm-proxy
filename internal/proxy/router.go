@@ -201,6 +201,7 @@ func buildProxyApplication(configuration Configuration, structuredLogger *zap.Su
 		return nil, err
 	}
 	registerApplicationFinancialRoutes(router, tenantAuthenticator, structuredLogger, journalDatabase)
+	registerApplicationQuoteRoutes(router, tenantAuthenticator, configuration.requestTimeoutPolicy, &applicationQuoteRuntime{database: journalDatabase, text: upstreamProviders.hostedText, providers: providers, coordinator: upstreamProviders, media: mediaOperations, assets: assetStore, store: managedTenants, logger: structuredLogger, now: time.Now, maxBytes: maximumV2RequestBytes(configuration.MaxPromptBytes, configuration.ModelCatalog)})
 	router.GET(llmproxycontract.TenantIdentityPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, tenantIdentityHandler()))
 	router.GET(llmproxycontract.StructuredRequestPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, structuredRequestStatusHandler(structuredRequests)))
 	router.POST(llmproxycontract.AssetPath, mediaTenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, tenantAssetUploadHandler(assetStore))))
@@ -874,11 +875,11 @@ func validateTextMaxTokens(providerDefinition providerDefinition, modelIdentifie
 
 func statusCodeForError(requestError error) int {
 	switch {
-	case errors.Is(requestError, ErrInvalidAudioInput):
+	case errors.Is(requestError, ErrInvalidAudioInput), errors.Is(requestError, errQuoteInvalid):
 		return http.StatusBadRequest
 	case errors.Is(requestError, ErrUnknownProvider), errors.Is(requestError, ErrUnknownModel), errors.Is(requestError, ErrUnsupportedCapability), errors.Is(requestError, ErrUnsupportedEndpoint), errors.Is(requestError, ErrConflictingModelParameters), errors.Is(requestError, ErrInvalidChatMessages), errors.Is(requestError, errAssetInvalid), errors.Is(requestError, errAssetMIMEMismatch):
 		return http.StatusBadRequest
-	case errors.Is(requestError, errAssetNotFound):
+	case errors.Is(requestError, errAssetNotFound), errors.Is(requestError, errQuoteNotFound):
 		return http.StatusNotFound
 	case errors.Is(requestError, errAssetExpired), errors.Is(requestError, errAssetDeleted):
 		return http.StatusGone
@@ -886,13 +887,13 @@ func statusCodeForError(requestError error) int {
 		return http.StatusRequestEntityTooLarge
 	case errors.Is(requestError, ErrProviderNotConfigured):
 		return http.StatusConflict
-	case errors.Is(requestError, errUsageJournalConflict), errors.Is(requestError, errJournalClaimLost):
+	case errors.Is(requestError, errUsageJournalConflict), errors.Is(requestError, errJournalClaimLost), errors.Is(requestError, errQuoteConflict), errors.Is(requestError, errQuoteExpired):
 		return http.StatusConflict
 	case errors.Is(requestError, errHostedAuthorityDenied):
 		return http.StatusForbidden
 	case errors.Is(requestError, errInsufficientFunds):
 		return http.StatusPaymentRequired
-	case errors.Is(requestError, errFinancialAdmissionUnavailable):
+	case errors.Is(requestError, errFinancialAdmissionUnavailable), errors.Is(requestError, errQuoteUnavailable):
 		return http.StatusServiceUnavailable
 	case errors.Is(requestError, errHostedResultExpired):
 		return http.StatusGone

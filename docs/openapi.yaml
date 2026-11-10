@@ -4090,6 +4090,566 @@ paths:
         '404': {description: Request absent or owned by another tenant.}
         '405': {description: Method unavailable. Allow contains GET.}
         '503': {description: Retained financial evidence is unavailable or inconsistent.}
+  /model/v1/financial-quotes:
+    post:
+      operationId: createFinancialQuote
+      summary: Reserve an exact hosted quote without execution.
+      security:
+      - TenantBearerKey: []
+      responses:
+        '200': &id002
+          description: Retained quote identity and the enforceable held maximum.
+          headers:
+            Cache-Control: &id008
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuote'
+        '201':
+          description: Reserved quote without provider work or an execution operation.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuote'
+        '400':
+          description: Invalid typed quote identity or request.
+          headers: &id001
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '402':
+          description: The current hosted account cannot reserve the bounded maximum.
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '404':
+          description: No quote belongs to this tenant and identity.
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '409':
+          description: The exact quote, intent, state, or expiration conflicts.
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '410':
+          description: Execution payload expired. Financial evidence remains available.
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '429':
+          description: The bounded execution is temporarily unavailable.
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '502':
+          description: Processing failed. Financial status is a separate retained resource.
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '503':
+          description: The hosted financial contract is unavailable.
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '403':
+          description: The tenant key or current execution authority is unavailable.
+          headers: *id001
+          content:
+            text/plain:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - &id004
+        $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinancialQuoteInput'
+    get:
+      operationId: getFinancialQuoteByKey
+      summary: Recover the original quote by deterministic key.
+      security:
+      - TenantBearerKey: []
+      responses:
+        '200': *id002
+        '400':
+          description: Invalid typed quote identity or request.
+          headers: &id003
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '402':
+          description: The current hosted account cannot reserve the bounded maximum.
+          headers: *id003
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '404':
+          description: No quote belongs to this tenant and identity.
+          headers: *id003
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '409':
+          description: The exact quote, intent, state, or expiration conflicts.
+          headers: *id003
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '410':
+          description: Execution payload expired. Financial evidence remains available.
+          headers: *id003
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '429':
+          description: The bounded execution is temporarily unavailable.
+          headers: *id003
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '502':
+          description: Processing failed. Financial status is a separate retained resource.
+          headers: *id003
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '503':
+          description: The hosted financial contract is unavailable.
+          headers: *id003
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '403':
+          description: The tenant key or current execution authority is unavailable.
+          headers: *id003
+          content:
+            text/plain:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - *id004
+  /model/v1/financial-quotes/{quote_id}:
+    get:
+      operationId: getFinancialQuote
+      summary: Read retained quote state without recovery or provider work.
+      security:
+      - TenantBearerKey: []
+      responses:
+        '200': *id002
+        '400':
+          description: Invalid typed quote identity or request.
+          headers: &id005
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '402':
+          description: The current hosted account cannot reserve the bounded maximum.
+          headers: *id005
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '404':
+          description: No quote belongs to this tenant and identity.
+          headers: *id005
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '409':
+          description: The exact quote, intent, state, or expiration conflicts.
+          headers: *id005
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '410':
+          description: Execution payload expired. Financial evidence remains available.
+          headers: *id005
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '429':
+          description: The bounded execution is temporarily unavailable.
+          headers: *id005
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '502':
+          description: Processing failed. Financial status is a separate retained resource.
+          headers: *id005
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '503':
+          description: The hosted financial contract is unavailable.
+          headers: *id005
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '403':
+          description: The tenant key or current execution authority is unavailable.
+          headers: *id005
+          content:
+            text/plain:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - &id007
+        name: quote_id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^quote-[a-f0-9]{32}$
+    patch:
+      operationId: releaseFinancialQuote
+      summary: Release one unconsumed quote with its retained revision.
+      security:
+      - TenantBearerKey: []
+      responses:
+        '200': *id002
+        '400':
+          description: Invalid typed quote identity or request.
+          headers: &id006
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '402':
+          description: The current hosted account cannot reserve the bounded maximum.
+          headers: *id006
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '404':
+          description: No quote belongs to this tenant and identity.
+          headers: *id006
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '409':
+          description: The exact quote, intent, state, or expiration conflicts.
+          headers: *id006
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '410':
+          description: Execution payload expired. Financial evidence remains available.
+          headers: *id006
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '429':
+          description: The bounded execution is temporarily unavailable.
+          headers: *id006
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '502':
+          description: Processing failed. Financial status is a separate retained resource.
+          headers: *id006
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '503':
+          description: The hosted financial contract is unavailable.
+          headers: *id006
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '403':
+          description: The tenant key or current execution authority is unavailable.
+          headers: *id006
+          content:
+            text/plain:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - *id007
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - revision
+              - state
+              properties:
+                revision:
+                  type: integer
+                  minimum: 1
+                state:
+                  const: released
+  /model/v1/financial-quotes/{quote_id}/executions:
+    post:
+      operationId: createQuotedExecution
+      summary: Consume the same reservation for an exact typed intent.
+      security:
+      - TenantBearerKey: []
+      responses:
+        '200':
+          description: Original native structured JSON or media operation, selected
+            by quote execution_kind.
+          headers: &id009
+            Cache-Control: *id008
+            X-LLM-Proxy-Quote-ID:
+              schema:
+                type: string
+                pattern: ^quote-[a-f0-9]{32}$
+              x-required: true
+            X-LLM-Proxy-Processing-Digest:
+              schema:
+                type: string
+                pattern: ^[a-f0-9]{64}$
+              x-required: true
+            X-LLM-Proxy-Request-Digest:
+              schema:
+                type: string
+                pattern: ^[a-f0-9]{64}$
+              x-required: true
+          content:
+            application/json:
+              schema: {}
+        '202':
+          description: Original pending native execution or accepted image operation.
+          headers: *id009
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/StructuredRequestStatus'
+                - $ref: '#/components/schemas/MediaOperation'
+        '400':
+          description: Invalid typed quote identity or request.
+          headers: &id010
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '402':
+          description: The current hosted account cannot reserve the bounded maximum.
+          headers: *id010
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '404':
+          description: No quote belongs to this tenant and identity.
+          headers: *id010
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '409':
+          description: The exact quote, intent, state, or expiration conflicts.
+          headers: *id010
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '410':
+          description: Execution payload expired. Financial evidence remains available.
+          headers: *id010
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '429':
+          description: The bounded execution is temporarily unavailable.
+          headers: *id010
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '502':
+          description: Processing failed. Financial status is a separate retained resource.
+          headers: *id010
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '503':
+          description: The hosted financial contract is unavailable.
+          headers: *id010
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '403':
+          description: The tenant key or current execution authority is unavailable.
+          headers: *id010
+          content:
+            text/plain:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - *id007
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinancialQuoteInput'
+    get:
+      operationId: getQuotedExecution
+      summary: Read the original result without original inputs or provider work.
+      security:
+      - TenantBearerKey: []
+      responses:
+        '200':
+          description: Retained original structured JSON or media operation.
+          headers: *id009
+          content:
+            application/json:
+              schema: {}
+        '202':
+          description: Original execution remains pending or uncertain.
+          headers: *id009
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StructuredRequestStatus'
+        '400':
+          description: Invalid typed quote identity or request.
+          headers: &id011
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '402':
+          description: The current hosted account cannot reserve the bounded maximum.
+          headers: *id011
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '404':
+          description: No quote belongs to this tenant and identity.
+          headers: *id011
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '409':
+          description: The exact quote, intent, state, or expiration conflicts.
+          headers: *id011
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '410':
+          description: Execution payload expired. Financial evidence remains available.
+          headers: *id011
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '429':
+          description: The bounded execution is temporarily unavailable.
+          headers: *id011
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '502':
+          description: Processing failed. Financial status is a separate retained resource.
+          headers: *id011
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '503':
+          description: The hosted financial contract is unavailable.
+          headers: *id011
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialQuoteError'
+        '403':
+          description: The tenant key or current execution authority is unavailable.
+          headers: *id011
+          content:
+            text/plain:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - *id007
 components:
   securitySchemes:
     PaddleSignature:
@@ -5243,11 +5803,166 @@ components:
           - failed
           - uncertain
   schemas:
+    FinancialQuoteInput:
+      type: object
+      additionalProperties: false
+      required:
+      - processing_digest
+      - intent
+      properties:
+        processing_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        intent:
+          oneOf:
+          - type: object
+            additionalProperties: false
+            required:
+            - kind
+            - provider
+            - request
+            properties:
+              kind:
+                const: native_v2
+              provider:
+                type: string
+                pattern: ^[a-z][a-z0-9_-]*$
+              request:
+                allOf:
+                - $ref: '#/components/schemas/V2Request'
+                - required:
+                  - model
+                  - structured_output
+          - type: object
+            additionalProperties: false
+            required:
+            - kind
+            - provider
+            - request
+            properties:
+              kind:
+                const: media_operation
+              provider:
+                type: string
+                pattern: ^[a-z][a-z0-9_-]*$
+              request:
+                allOf:
+                - $ref: '#/components/schemas/MediaOperationRequest'
+                - properties:
+                    capability:
+                      enum:
+                      - image.generate
+                      - image.edit
+    FinancialQuote:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - revision
+      - state
+      - execution_kind
+      - processing_digest
+      - request_digest
+      - price_snapshot_digest
+      - request_id
+      - reservation_id
+      - pricing_revision
+      - currency
+      - maximum_cents
+      - expires_at
+      - created_at
+      - updated_at
+      - execution_id
+      properties:
+        id:
+          type: string
+          pattern: ^quote-[a-f0-9]{32}$
+        revision:
+          type: integer
+          minimum: 1
+        state:
+          enum:
+          - reserved
+          - consumed
+          - expired
+          - released
+        execution_kind:
+          enum:
+          - native_v2
+          - media_operation
+        processing_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        request_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        price_snapshot_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        request_id:
+          type: string
+          pattern: ^request-[a-f0-9]{32}$
+        reservation_id:
+          type: string
+          pattern: ^request-[a-f0-9]{32}$
+        pricing_revision:
+          type: string
+          minLength: 1
+        currency:
+          const: USD
+        maximum_cents:
+          type: string
+          pattern: ^(0|[1-9][0-9]*)$
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        execution_id:
+          type: string
+      allOf:
+      - if:
+          properties:
+            state:
+              const: consumed
+        then:
+          properties:
+            execution_id:
+              minLength: 1
+        else:
+          properties:
+            execution_id:
+              const: ''
+    FinancialQuoteError:
+      type: object
+      required:
+      - error
+      properties:
+        error:
+          type: object
+          required:
+          - code
+          properties:
+            code:
+              type: string
+            message:
+              type: string
     ApplicationFinancialRequest:
       type: object
       additionalProperties: false
       required: [request_id, reservation_id, execution_id, execution_kind, request_digest, pricing_revision, price_snapshot_digest, currency, maximum_cents, reservation_state, reservation_revision, execution_state, state, receipt, updated_at]
       properties:
+        quote:
+          type: object
+          additionalProperties: false
+          required: [id, processing_digest]
+          properties:
+            id: {type: string, pattern: '^quote-[a-f0-9]{32}$'}
+            processing_digest: {type: string, pattern: '^[a-f0-9]{64}$'}
         request_id: {type: string}
         reservation_id: {type: string}
         execution_id: {type: string}
@@ -5259,7 +5974,7 @@ components:
         maximum_cents: {type: string, pattern: '^[0-9]+$'}
         reservation_state: {type: string, enum: [held, settled, released, reconciliation_required]}
         reservation_revision: {type: integer, minimum: 1}
-        execution_state: {type: string, enum: [accepted, executing, completed, failed, uncertain]}
+        execution_state: {type: string, enum: [accepted, executing, completed, failed, uncertain, quote_reserved]}
         state: {type: string, enum: [pending, uncertain, settled, definitely_undispatched_released]}
         updated_at: {type: string, format: date-time}
         receipt:
@@ -9704,7 +10419,7 @@ components:
           description: The identity retained by the execution owner.
         state:
           type: string
-          enum: [accepted, executing, completed, failed, uncertain]
+          enum: [accepted, executing, completed, failed, uncertain, quote_reserved]
         usage_state:
           type: string
           enum: [pending, complete, unknown]

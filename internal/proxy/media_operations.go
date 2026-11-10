@@ -652,55 +652,12 @@ func (service *mediaOperationService) create(requestContext context.Context, req
 	if !errors.Is(tombstoneError, gorm.ErrRecordNotFound) {
 		return mediaOperationRecord{}, false, errMediaOperationStore
 	}
-	if payload.Model == "" {
-		if _, err := service.catalog.ResolveService(payload.Provider, catalogOperation); err != nil {
-			return mediaOperationRecord{}, false, errMediaOperationUnavailable
-		}
-	} else {
-		offering, offeringError := service.catalog.ResolveOffering(payload.Provider, payload.Model)
-		if offeringError != nil || !offeringSupportsOperation(offering, catalogOperation) {
-			return mediaOperationRecord{}, false, errMediaOperationUnavailable
-		}
+	record, validated, hosted, prepareError := service.prepareNewMediaOperation(requestContext, requestTenant, payload, canonicalInput, canonicalControls, intentDigest, keyDigest, catalogOperation)
+	if prepareError != nil {
+		return mediaOperationRecord{}, false, prepareError
 	}
-	provider, providerError := service.providers.forTenant(requestTenant).resolveProvider(payload.Provider, "")
-	if providerError != nil {
-		return mediaOperationRecord{}, false, errMediaOperationUnavailable
-	}
-	adapter := service.adapters[mediaOperationAdapterKey(payload.Capability, payload.Provider, payload.Model)]
-	if adapter == nil || !service.mediaOperationCredentialAvailable(requestTenant, provider, adapter) {
-		return mediaOperationRecord{}, false, errMediaOperationUnavailable
-	}
-	var credentialVersionReference string
-	var credentialError error
-	validationContext := requestContext
-	hosted := requestTenant.providerSettings[provider.identifier].hostedGrantID != ""
-	if hosted {
-		validationContext, credentialVersionReference, credentialError = service.hostedMediaValidationContext(requestContext, requestTenant, payload)
-	} else {
-		credentialVersionReference, credentialError = service.mediaOperationCredentialReference(requestContext, requestTenant, provider, adapter)
-	}
-	if credentialError != nil {
-		return mediaOperationRecord{}, false, credentialError
-	}
-	validated, validationError := adapter.Validate(validationContext, MediaOperationAdapterRequest{TenantID: requestTenant.identifier.string(), CredentialReference: credentialVersionReference, Capability: payload.Capability, Provider: payload.Provider, Model: payload.Model, Input: canonicalInput, Controls: canonicalControls})
-	if validationError != nil {
-		return mediaOperationRecord{}, false, errMediaOperationInvalid
-	}
-	canonicalInput, inputError = canonicalJSONObject(validated.Input)
-	canonicalControls, controlsError = canonicalJSONObject(validated.Controls)
-	if inputError != nil || controlsError != nil {
-		return mediaOperationRecord{}, false, errMediaOperationInvalid
-	}
-	now := service.store.now()
-	record := mediaOperationRecord{
-		OperationID: newMediaOperationIdentifier(), TenantID: requestTenant.identifier.string(), IdempotencyKeyDigest: keyDigest,
-		IntentDigest: intentDigest, Capability: payload.Capability, CatalogOperation: catalogOperation,
-		Provider: payload.Provider, Model: payload.Model, CatalogRevision: service.catalog.Revision(),
-		CredentialReference: credentialVersionReference, NormalizedInput: canonicalInput, NormalizedControls: canonicalControls,
-		ParentOperationID: validated.ParentOperationID, ExecutionBinding: validated.ExecutionBinding,
-		PublicState: MediaOperationStateQueued, ProviderExecutionState: MediaProviderExecutionNotDispatched,
-		CancellationState: MediaCancellationNotRequested, AcceptedAt: now, UpdatedAt: now, DeadlineAt: now.Add(service.lifetime),
-	}
+	now := record.AcceptedAt
+
 	created := false
 	service.store.acceptanceMutex.Lock()
 	defer service.store.acceptanceMutex.Unlock()
@@ -1707,4 +1664,61 @@ func writeMediaOperationError(ginContext *gin.Context, operationError error) {
 		statusCode, code = http.StatusInternalServerError, errMediaOperationStore.Error()
 	}
 	ginContext.JSON(statusCode, mediaOperationErrorEnvelope{Error: mediaOperationErrorResponse{Code: code}})
+}
+
+// Preparation resolves local catalog, credential, asset and adapter data without
+// inserting an operation or admitting a journal request.
+func (service *mediaOperationService) prepareNewMediaOperation(requestContext context.Context, requestTenant tenant, payload mediaOperationCreatePayload, canonicalInput, canonicalControls []byte, intentDigest, keyDigest, catalogOperation string) (mediaOperationRecord, MediaOperationValidatedRequest, bool, error) {
+	var inputError, controlsError error
+
+	if payload.Model == "" {
+		if _, err := service.catalog.ResolveService(payload.Provider, catalogOperation); err != nil {
+			return mediaOperationRecord{}, MediaOperationValidatedRequest{}, false, errMediaOperationUnavailable
+		}
+	} else {
+		offering, offeringError := service.catalog.ResolveOffering(payload.Provider, payload.Model)
+		if offeringError != nil || !offeringSupportsOperation(offering, catalogOperation) {
+			return mediaOperationRecord{}, MediaOperationValidatedRequest{}, false, errMediaOperationUnavailable
+		}
+	}
+	provider, providerError := service.providers.forTenant(requestTenant).resolveProvider(payload.Provider, "")
+	if providerError != nil {
+		return mediaOperationRecord{}, MediaOperationValidatedRequest{}, false, errMediaOperationUnavailable
+	}
+	adapter := service.adapters[mediaOperationAdapterKey(payload.Capability, payload.Provider, payload.Model)]
+	if adapter == nil || !service.mediaOperationCredentialAvailable(requestTenant, provider, adapter) {
+		return mediaOperationRecord{}, MediaOperationValidatedRequest{}, false, errMediaOperationUnavailable
+	}
+	var credentialVersionReference string
+	var credentialError error
+	validationContext := requestContext
+	hosted := requestTenant.providerSettings[provider.identifier].hostedGrantID != ""
+	if hosted {
+		validationContext, credentialVersionReference, credentialError = service.hostedMediaValidationContext(requestContext, requestTenant, payload)
+	} else {
+		credentialVersionReference, credentialError = service.mediaOperationCredentialReference(requestContext, requestTenant, provider, adapter)
+	}
+	if credentialError != nil {
+		return mediaOperationRecord{}, MediaOperationValidatedRequest{}, false, credentialError
+	}
+	validated, validationError := adapter.Validate(validationContext, MediaOperationAdapterRequest{TenantID: requestTenant.identifier.string(), CredentialReference: credentialVersionReference, Capability: payload.Capability, Provider: payload.Provider, Model: payload.Model, Input: canonicalInput, Controls: canonicalControls})
+	if validationError != nil {
+		return mediaOperationRecord{}, MediaOperationValidatedRequest{}, false, errMediaOperationInvalid
+	}
+	canonicalInput, inputError = canonicalJSONObject(validated.Input)
+	canonicalControls, controlsError = canonicalJSONObject(validated.Controls)
+	if inputError != nil || controlsError != nil {
+		return mediaOperationRecord{}, MediaOperationValidatedRequest{}, false, errMediaOperationInvalid
+	}
+	now := service.store.now()
+	record := mediaOperationRecord{
+		OperationID: newMediaOperationIdentifier(), TenantID: requestTenant.identifier.string(), IdempotencyKeyDigest: keyDigest,
+		IntentDigest: intentDigest, Capability: payload.Capability, CatalogOperation: catalogOperation,
+		Provider: payload.Provider, Model: payload.Model, CatalogRevision: service.catalog.Revision(),
+		CredentialReference: credentialVersionReference, NormalizedInput: canonicalInput, NormalizedControls: canonicalControls,
+		ParentOperationID: validated.ParentOperationID, ExecutionBinding: validated.ExecutionBinding,
+		PublicState: MediaOperationStateQueued, ProviderExecutionState: MediaProviderExecutionNotDispatched,
+		CancellationState: MediaCancellationNotRequested, AcceptedAt: now, UpdatedAt: now, DeadlineAt: now.Add(service.lifetime),
+	}
+	return record, validated, hosted, nil
 }
