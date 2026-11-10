@@ -35,6 +35,22 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [-] [B320] (P0) Match the API route configuration policy to its shared provider.
+  Goal: Reconcile the API route with the current Caddy execution policy.
+  Evidence: Gateway v9.2.0 rejects v1.12.9 with `deployment_graph.configuration_policy_conflict`.
+  The route inherits application defaults that differ from the current Caddy provider policy.
+  The provider policy from iRoom v1.0.39 reproduces its current stored fingerprint exactly.
+  Source: https://github.com/MarcoPoloResearchLab/iroom/blob/v1.0.39/.mprlab/deploy/resources.yml
+  Requirements:
+  - Declare the matching deployment policy on `llm-proxy-public-api` only.
+  - Keep the application-wide timeouts and polling unchanged.
+  - Preserve the Gateway policy guard and current route identity.
+  Implementation: The route now declares the matching timeout and polling values.
+  Regression assertions cover inherited mismatch, scoped equality, root scope isolation, and changed timeout or polling values.
+  Independent source review passed. The regression cases remain unexecuted.
+  Validation: Tests, CI, publication, and deployment remain deferred by operator instruction.
+  Keep this issue unresolved until required validation passes.
+
 - [-] [B319] (P0) Preserve the deployed API route identity.
   Goal: Reconcile the current API route without an unintended removal.
   Evidence: Gateway v9.2.0 rejects removal of `llm-proxy-public-api` during deployment of v1.12.8.

@@ -243,5 +243,19 @@ mprlab_resources:
                       hostname: llm-proxy-api.mprlab.com
                       id: llm-proxy-public-api
                       listener: https
+                      operations:
+                        - name: app-deploy
+                          timeouts:
+                            completion: 30m
+                            readiness: 5m
+                            request: 30s
+                            shutdown: 30s
+                            startup: 1m
+                          polling:
+                            attempt_limit: 200
+                            increment: 1s
+                            initial: 1s
+                            maximum: 10s
+                            multiplier: 2
                       tls:
                         mode: automatic
