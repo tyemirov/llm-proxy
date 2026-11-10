@@ -136,6 +136,15 @@ func openAIClientAdapters(configuration Configuration, auth tenantAuthenticator,
 func registerClientMethodErrors(router *gin.Engine) {
 	methods := map[string]string{mcpPath: http.MethodPost, chatCompletionsPath: http.MethodPost, responsesPath: http.MethodPost, modelsPath: http.MethodGet, transcriptionsPath: http.MethodPost}
 	router.NoRoute(func(c *gin.Context) {
+		financialID, financialChild := strings.CutPrefix(c.Request.URL.Path, llmproxycontract.FinancialRequestsPath+"/")
+		if c.Request.URL.Path == llmproxycontract.FinancialRequestsPath || financialChild && financialID != "" && !strings.Contains(financialID, "/") {
+			c.Header(headerCacheControl, cacheControlNoStore)
+			c.Header("Vary", "Authorization")
+			c.Header("Allow", http.MethodGet)
+			c.JSON(http.StatusMethodNotAllowed, mediaOperationErrorEnvelope{Error: mediaOperationErrorResponse{Code: "method_not_allowed"}})
+			return
+		}
+
 		if provider, diagnostic := strings.CutPrefix(c.Request.URL.Path, llmproxycontract.ProviderDiagnosticsPath+"/"); diagnostic && provider != "" && !strings.Contains(provider, "/") && c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead {
 			c.Header("Cache-Control", "no-store")
 			c.Header("Allow", "GET, HEAD")

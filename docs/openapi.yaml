@@ -4042,6 +4042,54 @@ paths:
           $ref: '#/components/responses/ManagementUnsupportedMediaType'
         '500':
           $ref: '#/components/responses/ManagementInternalError'
+  /model/v1/financial-requests:
+    get:
+      operationId: getApplicationFinancialRequestByIdempotency
+      summary: Read hosted financial evidence for one application intent.
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$', minLength: 1, maxLength: 128}
+      responses:
+        '200':
+          description: Retained hosted status. The read does not dispatch or reconcile work.
+          headers:
+            Cache-Control: {schema: {type: string, const: no-store}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApplicationFinancialRequest'}
+        '400': {description: Invalid request identity or unsupported query.}
+        '403': {description: Missing or invalid tenant bearer key.}
+        '404': {description: No hosted financial request belongs to this tenant and intent.}
+        '405': {description: Method unavailable. Allow contains GET.}
+        '503': {description: Retained financial evidence is unavailable or inconsistent.}
+  /model/v1/financial-requests/{request_id}:
+    get:
+      operationId: getApplicationFinancialRequest
+      summary: Read retained hosted evidence by journal request identity.
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema: {type: string, pattern: '^request-', maxLength: 200}
+      responses:
+        '200':
+          description: Tenant-owned retained financial evidence without execution payloads.
+          headers:
+            Cache-Control: {schema: {type: string, const: no-store}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApplicationFinancialRequest'}
+        '400': {description: Invalid request identity or unsupported header or query.}
+        '403': {description: Missing or invalid tenant bearer key.}
+        '404': {description: Request absent or owned by another tenant.}
+        '405': {description: Method unavailable. Allow contains GET.}
+        '503': {description: Retained financial evidence is unavailable or inconsistent.}
 components:
   securitySchemes:
     PaddleSignature:
@@ -5195,6 +5243,43 @@ components:
           - failed
           - uncertain
   schemas:
+    ApplicationFinancialRequest:
+      type: object
+      additionalProperties: false
+      required: [request_id, reservation_id, execution_id, execution_kind, request_digest, pricing_revision, price_snapshot_digest, currency, maximum_cents, reservation_state, reservation_revision, execution_state, state, receipt, updated_at]
+      properties:
+        request_id: {type: string}
+        reservation_id: {type: string}
+        execution_id: {type: string}
+        execution_kind: {type: string, enum: [text_request, media_operation, dictation_request]}
+        request_digest: {type: string, pattern: '^[a-f0-9]{64}$'}
+        pricing_revision: {type: string}
+        price_snapshot_digest: {type: string, pattern: '^[a-f0-9]{64}$'}
+        currency: {type: string, const: USD}
+        maximum_cents: {type: string, pattern: '^[0-9]+$'}
+        reservation_state: {type: string, enum: [held, settled, released, reconciliation_required]}
+        reservation_revision: {type: integer, minimum: 1}
+        execution_state: {type: string, enum: [accepted, executing, completed, failed, uncertain]}
+        state: {type: string, enum: [pending, uncertain, settled, definitely_undispatched_released]}
+        updated_at: {type: string, format: date-time}
+        receipt:
+          oneOf:
+            - type: 'null'
+            - type: object
+              additionalProperties: false
+              required: [id, revision, exact_customer_charge, posted_cents, settled_at]
+              properties:
+                id: {type: string}
+                revision: {type: integer, const: 1}
+                exact_customer_charge:
+                  type: object
+                  additionalProperties: false
+                  required: [numerator, denominator]
+                  properties:
+                    numerator: {type: string, pattern: '^[0-9]+$'}
+                    denominator: {type: string, pattern: '^[1-9][0-9]*$'}
+                posted_cents: {type: string, pattern: '^[0-9]+$'}
+                settled_at: {type: string, format: date-time}
     AccountConnectionWrite:
       type: object
       additionalProperties: false

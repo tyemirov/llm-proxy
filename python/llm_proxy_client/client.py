@@ -28,6 +28,10 @@ MEDIA_CAPABILITIES_ENDPOINT_PATH = "/model/v1/capabilities"
 MEDIA_OPERATIONS_ENDPOINT_PATH = "/model/v1/operations"
 MEDIA_VOICES_ENDPOINT_PATH = "/model/v1/voices"
 PROVIDER_DIAGNOSTICS_ENDPOINT_PATH = "/model/v1/provider-diagnostics"
+FINANCIAL_REQUESTS_ENDPOINT_PATH = "/model/v1/financial-requests"
+FINANCIAL_REQUEST_ID_PATTERN = re.compile(r"^request-[a-f0-9]{32}$")
+FINANCIAL_DIGEST_PATTERN = re.compile(r"^[a-f0-9]{64}$")
+FINANCIAL_INTEGER_PATTERN = re.compile(r"^(0|[1-9][0-9]*)$")
 PROVIDER_RESOURCES_ENDPOINT_PATH = "/model/v1/provider-resources"
 DIAGNOSTIC_PROVIDER_PATTERN = re.compile(r"^[a-z][a-z0-9_-]*$")
 DIAGNOSTIC_COUNTER_FIELDS = ("operations_total", "queued", "running", "succeeded", "failed", "cancelled", "uncertain")
@@ -128,6 +132,46 @@ class ClientTextRequestResult:
                 raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid text request result") from error
         elif any(not isinstance(value, str) or not value.strip() for value in (self.proxy_request_id, self.started_at, self.updated_at)) or type(self.elapsed_seconds) is not int or self.elapsed_seconds < 0:
             raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid text request receipt")
+
+
+@dataclass(frozen=True)
+class ClientFinancialExactMoney:
+    """An exact rational amount in the financial response currency."""
+
+    numerator: str
+    denominator: str
+
+
+@dataclass(frozen=True)
+class ClientFinancialSettlementReceipt:
+    """The original immutable settlement before later credits or corrections."""
+
+    id: str
+    revision: int
+    exact_customer_charge: ClientFinancialExactMoney
+    posted_cents: str
+    settled_at: str
+
+
+@dataclass(frozen=True)
+class ClientFinancialRequest:
+    """Tenant-owned hosted financial evidence without execution payloads."""
+
+    request_id: str
+    reservation_id: str
+    execution_id: str
+    execution_kind: str
+    request_digest: str
+    pricing_revision: str
+    price_snapshot_digest: str
+    currency: str
+    maximum_cents: str
+    reservation_state: str
+    reservation_revision: int
+    execution_state: str
+    state: str
+    receipt: ClientFinancialSettlementReceipt | None
+    updated_at: str
 
 
 class LLMProxyRequestPendingError(RuntimeError):
@@ -1225,6 +1269,25 @@ class Client:
                 )
             time.sleep(min(poll_interval_seconds, remaining_seconds))
 
+    def get_financial_request(self, idempotency_key: str) -> ClientFinancialRequest:
+        """Read hosted evidence without provider dispatch or reconciliation."""
+
+        if not isinstance(idempotency_key, str) or not IDEMPOTENCY_KEY_PATTERN.fullmatch(idempotency_key):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid financial idempotency key")
+        response = self._media_json_request("GET", FINANCIAL_REQUESTS_ENDPOINT_PATH, headers={IDEMPOTENCY_KEY_HEADER: idempotency_key})
+        return _decode_client_financial_request(response)
+
+    def get_financial_request_by_id(self, request_id: str) -> ClientFinancialRequest:
+        """Read retained evidence after execution payload deletion."""
+
+        if not isinstance(request_id, str) or not FINANCIAL_REQUEST_ID_PATTERN.fullmatch(request_id):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid financial request ID")
+        response = self._media_json_request("GET", f"{FINANCIAL_REQUESTS_ENDPOINT_PATH}/{request_id}")
+        result = _decode_client_financial_request(response)
+        if result.request_id != request_id:
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: financial response belongs to another request")
+        return result
+
     def get_media_capabilities(self) -> ClientMediaCapabilities:
         """Read durable media routes available to the authenticated tenant."""
 
@@ -1737,6 +1800,7 @@ def _proxy_error_code(body: str) -> str:
     code = envelope["error"].get("code")
     recognized = {
         "insufficient_funds", "financial_admission_unavailable",
+        "financial_request_invalid", "financial_request_not_found", "financial_status_unavailable",
         "hosted_authority_denied", "hosted_result_expired", "usage_journal_conflict", "usage_journal_claim_lost",
         "invalid_idempotency_key", "structured_request_failed", "structured_request_intent_conflict",
         "structured_request_invalid", "structured_request_not_found", "structured_request_outcome_unknown",
@@ -1793,3 +1857,50 @@ def _decode_provider_subscription(value: Any) -> ClientProviderSubscription:
         current_overage=ClientProviderOverage(**overage) if overage is not None else None,
         has_open_invoices=value["has_open_invoices"], currency=value["currency"], next_character_count_reset_unix=value["next_character_count_reset_unix"],
     )
+
+
+def _financial_timestamp(value: Any) -> bool:
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})", value):
+        return False
+    try:
+        return datetime.fromisoformat(value).tzinfo is not None
+    except ValueError:
+        return False
+
+
+def _financial_integer(value: Any) -> bool:
+    return isinstance(value, str) and bool(FINANCIAL_INTEGER_PATTERN.fullmatch(value))
+
+
+def _decode_client_financial_request(response: dict[str, Any]) -> ClientFinancialRequest:
+    fields = {"request_id", "reservation_id", "execution_id", "execution_kind", "request_digest", "pricing_revision", "price_snapshot_digest", "currency", "maximum_cents", "reservation_state", "reservation_revision", "execution_state", "state", "receipt", "updated_at"}
+    failure = "llm_proxy_client_transport_failure: invalid financial response"
+    if set(response) != fields or any(not isinstance(response[key], str) or not response[key] for key in fields - {"receipt", "reservation_revision"}):
+        raise LLMProxyTransportError(failure)
+    if not FINANCIAL_REQUEST_ID_PATTERN.fullmatch(response["request_id"]) or response["reservation_id"] != response["request_id"] or response["currency"] != "USD":
+        raise LLMProxyTransportError(failure)
+    if not FINANCIAL_DIGEST_PATTERN.fullmatch(response["request_digest"]) or not FINANCIAL_DIGEST_PATTERN.fullmatch(response["price_snapshot_digest"]) or not _financial_integer(response["maximum_cents"]):
+        raise LLMProxyTransportError(failure)
+    if type(response["reservation_revision"]) is not int or response["reservation_revision"] < 1 or not _financial_timestamp(response["updated_at"]):
+        raise LLMProxyTransportError(failure)
+    if response["execution_kind"] not in {"text_request", "media_operation", "dictation_request"} or response["execution_state"] not in {"accepted", "executing", "completed", "failed", "uncertain"}:
+        raise LLMProxyTransportError(failure)
+    if response["state"] not in {"pending", "uncertain", "settled", "definitely_undispatched_released"} or response["reservation_state"] not in {"held", "settled", "released", "reconciliation_required"}:
+        raise LLMProxyTransportError(failure)
+    receipt = None
+    raw = response["receipt"]
+    if response["state"] == "settled":
+        receipt_fields = {"id", "revision", "exact_customer_charge", "posted_cents", "settled_at"}
+        if response["reservation_state"] != "settled" or not isinstance(raw, dict) or set(raw) != receipt_fields or raw["id"] != response["request_id"] or type(raw["revision"]) is not int or raw["revision"] != 1 or not _financial_integer(raw["posted_cents"]) or not _financial_timestamp(raw["settled_at"]):
+            raise LLMProxyTransportError(failure)
+        money = raw["exact_customer_charge"]
+        if not isinstance(money, dict) or set(money) != {"numerator", "denominator"} or not _financial_integer(money["numerator"]) or not _financial_integer(money["denominator"]) or money["denominator"] == "0":
+            raise LLMProxyTransportError(failure)
+        receipt = ClientFinancialSettlementReceipt(id=raw["id"], revision=raw["revision"], exact_customer_charge=ClientFinancialExactMoney(**money), posted_cents=raw["posted_cents"], settled_at=raw["settled_at"])
+    elif raw is not None or not (
+        response["state"] == "pending" and response["reservation_state"] == "held"
+        or response["state"] == "uncertain" and response["reservation_state"] in {"held", "reconciliation_required"}
+        or response["state"] == "definitely_undispatched_released" and response["reservation_state"] == "released" and response["execution_state"] == "failed"
+    ):
+        raise LLMProxyTransportError(failure)
+    return ClientFinancialRequest(**{**response, "receipt": receipt})

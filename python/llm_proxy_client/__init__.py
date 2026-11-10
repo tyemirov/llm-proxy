@@ -2,6 +2,9 @@
 
 from .client import (
     Client,
+    ClientFinancialRequest,
+    ClientFinancialSettlementReceipt,
+    ClientFinancialExactMoney,
     ClientAsset,
     ClientAspectRatioImageInput,
     ClientAttachment,
@@ -46,6 +49,9 @@ from .client import (
 
 __all__ = [
     "Client",
+    "ClientFinancialRequest",
+    "ClientFinancialSettlementReceipt",
+    "ClientFinancialExactMoney",
     "ClientAsset",
     "ClientAspectRatioImageInput",
     "ClientAttachment",

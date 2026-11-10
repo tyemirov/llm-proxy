@@ -200,6 +200,7 @@ func buildProxyApplication(configuration Configuration, structuredLogger *zap.Su
 	if err := registerMCPRoutes(router, configuration, managementService, upstreamProviders, assetStore, mediaOperations); err != nil {
 		return nil, err
 	}
+	registerApplicationFinancialRoutes(router, tenantAuthenticator, structuredLogger, journalDatabase)
 	router.GET(llmproxycontract.TenantIdentityPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, tenantIdentityHandler()))
 	router.GET(llmproxycontract.StructuredRequestPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, structuredRequestStatusHandler(structuredRequests)))
 	router.POST(llmproxycontract.AssetPath, mediaTenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, tenantAssetUploadHandler(assetStore))))

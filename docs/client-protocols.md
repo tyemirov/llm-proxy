@@ -281,3 +281,31 @@ The response retains HTTP status and immutable headers as well as decoded text.
 All Python client operations use this response contract.
 
 Speech generation and conversion use the common media operation API. See [provider speech](provider-speech.md) for inputs and output artifacts.
+
+## Hosted financial requests
+
+F091 adds tenant-owned financial reads for existing hosted requests.
+These resources require the tenant bearer key.
+They do not require a management session or account owner authority.
+
+| Resource | Required identity |
+| --- | --- |
+| `GET /model/v1/financial-requests` | `Idempotency-Key` header |
+| `GET /model/v1/financial-requests/{request_id}` | Retained request ID |
+
+Go provides `GetFinancialRequest` and `GetFinancialRequestByID`.
+Python provides `get_financial_request` and `get_financial_request_by_id`.
+The SDKs return typed financial evidence and reject inconsistent receipts.
+Each method reads once without provider dispatch or automatic retries.
+
+The response separates `pending`, `uncertain`, `settled`, and `definitely_undispatched_released` states.
+Only a settled request has an original settlement receipt.
+The receipt retains its exact rational charge, posted cents, and settlement time.
+Account fractions can make posted cents differ from the rounded request charge.
+Later credits and corrections remain separate from the original receipt.
+
+Financial evidence remains available after execution payload deletion or grant revocation while the tenant key remains valid.
+Other tenants receive HTTP 404, including tenants that share the billing account.
+An ordinary request without a hosted reservation has no hosted financial receipt.
+These reads do not create a quote before execution.
+F092 tracks the separate quote and bound execution contract.

@@ -2139,3 +2139,22 @@ Record the source revision, configuration identity, date, and result for each ch
 - [ ] Use [audited financial resolution](#audited-financial-resolution) for uncertain outcomes. Keep their reservations until the recorded decision permits settlement or release.
 
 An unsuccessful check leaves its offering or financial operation unqualified. Keep its cause and required corrective action in the activation record.
+
+## Application financial evidence
+
+F091 exposes retained financial evidence to the tenant bearer key.
+The application can resolve one request by its idempotency key or retained request ID.
+The resources appear in the [client protocol contract](client-protocols.md#hosted-financial-requests).
+
+The reads use existing journal, reservation, price snapshot, and settlement records.
+They do not dispatch provider work, reconcile execution, or change funds.
+Each response retains the request digest, price digest, catalog revision, currency, and held maximum cents.
+Only the owning tenant can read the response.
+The API omits provider credentials, execution payloads, account owner identity, and account remainder values.
+
+The original settlement receipt remains immutable.
+Its exact customer charge and posted integer cents describe different financial boundaries.
+Later credits and corrections remain separate records.
+The receipt survives deletion of execution payload files.
+Current financial reads do not establish a quote before execution.
+F092 owns that additional contract.
