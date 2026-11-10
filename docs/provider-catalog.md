@@ -10,18 +10,9 @@ The loader reads `providers.yml` from the directory of the selected
 `config.yml`. It parses the provider catalog before it validates service
 configuration. The loader accepts only schema version 6.
 
-The current provider catalog has these records:
-
-- 14 provider definitions.
-- 13 model publishers.
-- 30 model families, with 27 runtime families.
-- 82 exact models, with 72 enabled models.
-- 87 provider offerings, with 75 runtime offerings.
-- 92 price records, with 80 runtime records.
-- 15 managed model migrations.
-- Eleven configured request and response codec identifiers.
-- Three authentication kinds.
-- Three lifecycle values.
+The catalog defines provider declarations, exact models, offerings, prices, and managed model migrations.
+Read the YAML for the complete inventory. Use public capability discovery for enabled routes.
+Disabled entries remain validated source declarations. They do not establish runtime availability.
 
 The two [GLM 5.3 candidates](zai-current-models.md) remain disabled during provider qualification.
 The five [Qwen 3.8 candidates](qwen-current-models.md) remain disabled during provider qualification.
@@ -32,7 +23,7 @@ Gemini 3.8 Flash and 3.5 Flash-Lite are enabled on Vertex after service-account 
 Their Developer API offerings remain disabled.
 See the [Vertex contract and cutover procedure](vertex-gemini.md).
 Their [candidate contract](gemini-current-models.md) records current limits, prices, effort levels, and acceptance requirements.
-The disabled [Muse Spark 1.3 candidate](meta-current-model.md) adds Standard-tier text and six reasoning effort levels.
+The enabled [Muse Spark 1.3 offering](meta-current-model.md) adds Standard-tier text and six reasoning effort levels.
 The disabled [Grok 4.6 candidate](grok-current-model.md) adds xAI reasoning controls and current price tiers.
 
 The application calculates a SHA-256 catalog revision from the exact file
@@ -641,3 +632,364 @@ See [FAL image operations](fal-image-operations.md) for request, recovery, and a
 Each entry references a transport in the same provider and declares controls, limits, and a price observation.
 Public, tenant, and management discovery expose these services without additional model identities.
 See [Provider services](provider-services.md) for forced alignment, client requests, and recovery.
+
+## Text provider transports
+
+Provider selectors and aliases are accepted anywhere the public API accepts
+`provider`. Omitted text models use the authenticated tenant default when
+`provider` is omitted. Otherwise, they use the selected provider offering that
+declares the text default.
+
+This table describes the original text-provider transports.
+Vertex, Dictator, FAL, ElevenLabs, and HeyGen have additional provider and media contracts below.
+The complete inventory remains in [configs/providers.yml](../configs/providers.yml).
+Upstream providers may expose additional speech APIs that need separate proxy
+adapters before they are available through `/dictate`.
+
+| Provider selector | Aliases | Wire contract | Execution lifecycle | Configured default text model | Credential field | Default base URL | Dictation | Web search |
+|-------------------|---------|---------------|---------------------|-------------------------------|------------------|------------------|-----------|------------|
+| `openai` | none | `openai_responses` | `pollable_resource` | `gpt-4.1` | Account connection API key | `https://api.openai.com/v1` | Yes: `gpt-transcribe` | Yes, on marked OpenAI models |
+| `baidu` | none | `openai_chat_completions` | `synchronous_completion` | `ernie-5.0` | Account connection API key | `https://api.baiduqianfan.ai/v1` | No | No |
+| `meta` | none | `openai_chat_completions` | `synchronous_completion` | `muse-spark-1.1` | Account connection API key | `https://api.meta.ai/v1` | No | No |
+| `deepseek` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-v4-flash` | Account connection API key | `https://api.deepseek.com` | No | No |
+| `dashscope` | `qwen` | `dashscope_responses` | `synchronous_completion` | `qwen-plus` | Account connection API key | Account connection Singapore workspace URL | No | No |
+| `moonshot` | `kimi` | `openai_chat_completions` | `synchronous_completion` | `kimi-k2.6` | Account connection API key | `https://api.moonshot.ai/v1` | No | No |
+| `minimax` | none | `openai_chat_completions` | `synchronous_completion` | `minimax-m2.7` | Account connection API key | `https://api.minimax.io/v1` | No | No |
+| `siliconflow` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-reasoner` | Account connection API key | `https://api.siliconflow.com/v1` | Yes: `sensevoice-small` | No |
+| `zai` | none | `openai_chat_completions` | `synchronous_completion` | `glm-5.1` | Account connection API key | `https://api.z.ai/api/paas/v4` | Yes: `glm-asr-2512` | No |
+| `gemini` | none | `gemini_interactions` | `pollable_resource` | `gemini-3.5-flash` | Account connection API key | `https://generativelanguage.googleapis.com/v1beta` | Yes: `gemini-3.5-transcribe` | No |
+| `anthropic` | `claude` | `anthropic_messages` | `synchronous_completion` | `claude-sonnet-4-6` | Account connection API key | `https://api.anthropic.com` | No | No |
+| `xai` | none | `xai_responses` | `synchronous_completion` | `grok-4.3` | Account connection API key | `https://api.x.ai/v1` | Yes: `xai-stt` | No |
+
+All upstream provider credentials are server-side only. Client requests must
+never send OpenAI, Meta, Anthropic, xAI, Gemini, or other upstream API keys.
+Media input is model-scoped. The checked-in catalog declares media input only
+when the provider offering has a code-owned transport.
+
+Standard-message media input depends on the exact offering's `media_inputs` declaration.
+Read the catalog for the permitted media types and transport limits.
+A capability on another model does not authorize media for the selected route.
+Use native `/v2` for these attachments.
+
+## Route execution
+
+Anthropic includes `claude-fable-5-1` and `claude-opus-5` with text, image input, structured output, and five reasoning effort levels.
+Both models have a 1,000,000-token context and a 128,000-token output maximum.
+`claude-sonnet-4-6` remains the Anthropic default.
+See [current Claude models](claude-current-models.md) for prices, provider retention requirements, and live acceptance evidence.
+See [Opus 4.1 retirement](claude-retirement.md) for the bounded Opus 5 selection migration and operator procedure.
+Gemini 3.6 and 3.7 Flash are enabled after their live reasoning and stored interaction checks passed.
+See [qualified Gemini models](gemini-qualified-models.md) for the exact route controls.
+Gemini 3.8 Flash and 3.5 Flash-Lite are enabled through Vertex after service-account qualification.
+Their Developer API offerings remain disabled.
+See the [Vertex configuration and tenant cutover](vertex-gemini.md).
+See [current Gemini candidates](gemini-current-models.md) for their limits, prices, and acceptance checks.
+Grok 4.6 remains disabled until live qualification passes.
+See [the GLM 5.3 candidates](zai-current-models.md) for text and Flash image contracts, current prices, and qualification requirements.
+See [the Grok 4.6 candidate](grok-current-model.md) for its reasoning controls, image limits, and two price tiers.
+
+The versioned [provider catalog](provider-catalog.md) has root records for
+operations, publishers, families, exact models, and provider definitions. Each
+provider definition owns its fields, transports, provider offerings, and
+prices.
+
+The loader rejects unknown fields and unsupported schema versions. It also
+rejects invalid identities, references, defaults, protocols, capabilities,
+limits, and prices.
+
+The catalog defines the current inventory.
+Use public capability discovery for enabled routes.
+A declared or enabled route does not establish provider connectivity or production acceptance.
+The application compiles one immutable registry from this snapshot.
+
+[Baidu Qianfan](baidu-qianfan.md) provides four text offerings through one API key.
+Its response policy checks finish reasons and Qianfan flags before text or key verification succeeds.
+
+Each provider offering references one exact model and one provider transport.
+The transport selects reusable request and response codecs, authentication,
+and an execution lifecycle. Provider identifiers remain route data and do not
+select shared execution code.
+
+Public resources omit credential fields, setting fields, authentication data,
+environment names, and upstream model identifiers. Management resources return
+safe field definitions and masked connection state.
+
+Offerings use `request_profile` to select a stable payload shape:
+
+| Request profile | Payload behavior |
+|-----------------|------------------|
+| `openai_responses_temperature` | Adds `temperature`. |
+| `openai_responses_temperature_tools` | Adds `temperature` and enabled web-search tools. |
+| `openai_responses_reasoning_tools` | Adds reasoning controls and enabled web-search tools. |
+| `minimax_chat_completions` | Sends `reasoning_split: true` for separate reasoning output. |
+
+All OpenAI Responses text requests also send `background: true` and
+`store: true`. llm-proxy polls the stored OpenAI response server-side until it
+reaches a documented terminal state or the request's effective work budget
+expires. Only `queued` and `in_progress` are pending states; unknown states do
+not trigger polling. Only `completed` can produce a successful response.
+Plain REST callers use one `GET /`, `POST /`, or `POST /v2` request and receive
+the final formatted answer; they do not stream, poll, or follow a separate
+resume endpoint. Separately published provider-specific deferred, batch, or
+asynchronous APIs are not implicit variants of these routes and are not
+activated by an arbitrary response `id`.
+
+The OpenAI adapter requests provider storage because background Responses need `store: true`.
+For ordinary customer-credential text, the response identifier remains in the active request lifecycle.
+Hosted recovery retains private provider identifiers in its journal.
+The proxy does not expose these provider identifiers.
+
+For ordinary customer-credential text, the adapter stops observation when the caller cancels or the proxy budget expires.
+It does not issue an upstream cancel or delete after success, failure, timeout, or cancellation.
+The OpenAI account retention policy governs the stored resource.
+
+Gemini 3.x Interactions requires `store: true` for background execution.
+The proxy sends `Api-Revision: 2026-05-20` and polls only `queued` and `in_progress`.
+It keeps interaction identifiers private.
+Ordinary customer-credential calls retain them in the active lifecycle. Hosted recovery can persist them as private journal evidence.
+
+On every exit, it cancels an active interaction and then deletes the resource.
+It deletes a terminal interaction directly.
+Cancel and delete each receive an independent bounded cleanup context.
+A stalled or failed cancel cannot consume the delete attempt.
+A failed deletion prevents a successful or output-limit result from escaping as success.
+
+When a transport declares continuation actions, output-limit continuation
+starts a distinct inference request. It never treats an arbitrary upstream
+identifier as pollable state. Each Gemini Interactions route rejects a request
+that contains an `assistant` message.
+
+Provider-specific details:
+
+* OpenAI is the only provider currently exposed with `web_search` support.
+  This support applies only to catalog entries with `web_search: true`.
+  OpenAI derives each endpoint from its provider transports in `providers.yml`.
+  Text and dictation use the same catalog-defined credential field.
+  Each catalog model with image input sends ordered Data URLs through OpenAI Responses.
+  The adapter uses `detail: auto` for each image.
+* OpenAI-compatible text providers send chat completion requests with
+  `Authorization: Bearer <api_key>` and the selected provider base URL. The
+  shared adapter normalizes `finish_reason=length` into the common
+  missing-suffix loop and accepts the assembled text only after
+  `finish_reason=stop`; `content_filter`, `tool_calls`, missing, and
+  provider-specific non-stop reasons are upstream failures.
+* Moonshot Kimi K3 accepts exact public `reasoning_effort` values `low`,
+  `high`, and `max`. The adapter sends the selected value as the top-level
+  provider field and omits it when no value is selected. Kimi K2.6 and both
+  Kimi K2.7 Code routes keep Moonshot's thinking default because the proxy does
+  not send a `thinking` field. Kimi K3, K2.6, K2.7 Code, and K2.7 Code
+  Highspeed accept ordered JPEG, PNG, or WebP inputs through canonical
+  `POST /v2` messages. The adapter sends exact bytes as ordered Data URL blocks
+  before message text. Only visible answer `content` enters the proxy response
+  and usage path. For output continuation, the adapter stores the complete
+  truncated assistant message as private state. It sends that message,
+  including `reasoning_content`, only to the next upstream Kimi request.
+  Provider `reasoning_content` stays absent from public responses and logs. See
+  Moonshot's
+  [Kimi K3 guide](https://platform.kimi.ai/docs/guide/kimi-k3-quickstart),
+  [reasoning-effort guide](https://platform.kimi.ai/docs/guide/use-reasoning-effort),
+  [vision guide](https://platform.kimi.ai/docs/guide/use-kimi-vision-model),
+  and [Chat Completions reference](https://platform.kimi.ai/docs/api/chat).
+* MiniMax uses selector `minimax`, a tenant-managed API key, and
+  `https://api.minimax.io/v1`. `minimax-m2.7` remains the default. The catalog
+  also includes M2.7 Highspeed, M2.5, M2.5 Highspeed, M2.1, M2.1 Highspeed,
+  and M2. The shared Chat Completions adapter maps public `max_tokens` to
+  upstream `max_completion_tokens`. All seven routes enforce the documented
+  204,800-token completion maximum. Generation and key verification send
+  `reasoning_split: true`. Public answers contain only visible content.
+  Reasoning remains private during output continuation.
+  The private catalog also contains the disabled [M3 candidate](minimax-m3.md).
+  M3 adds JPEG, PNG, and WebP input with a 524,288-token output maximum.
+  Live text and image acceptance must pass before M3 activation. See the official
+  [OpenAI SDK guide](https://platform.minimax.io/docs/api-reference/text-openai-api),
+  [Chat Completions reference](https://platform.minimax.io/docs/api-reference/text-chat-openai),
+  and [PAYG prices](https://platform.minimax.io/docs/guides/pricing-paygo).
+* Meta Model API requests use that shared Chat Completions adapter with the
+  exact `meta` selector and `https://api.meta.ai/v1` base URL. The provider
+  offerings are `muse-spark-1.1`, `muse-spark-1.2`, and `muse-spark-1.3`. Muse Spark 1.1 remains
+  the Meta default. llm-proxy exposes the public `max_tokens` input upstream as Meta's current
+  `max_completion_tokens` field rather than Meta's deprecated `max_tokens` field.
+  The enabled [Muse Spark 1.3 offering](meta-current-model.md) passed live qualification with the existing Meta key.
+  That Standard-tier model adds six reasoning effort levels and current prices.
+  The proxy exposes these models as text generation through `GET /`,
+  `POST /`, and `POST /v2`. Meta describes Muse Spark 1.2 as coding-focused.
+  This focus does not change the provider transport or add agent orchestration.
+  The proxy does not expose Meta dictation, `web_search`, tools, multimodal
+  input, or a Responses API fallback. See Meta's
+  [Muse Spark 1.2 announcement](https://research.meta.ai/blog/introducing-muse-code-and-muse-spark-1-2),
+  [model reference](https://dev.meta.ai/docs/models),
+  [Chat Completions reference](https://dev.meta.ai/docs/protocols/chat-completions),
+  and [pricing and rate-limit documentation](https://dev.meta.ai/docs/pricing-rate-limits).
+* Gemini file dictation uses synchronous `gemini_interactions`. See the
+  [transcription contract](gemini-transcription.md).
+* Other dictation providers use a `multipart_transcription` transport in
+  `providers.yml`. That transport owns the exact endpoint and model-field rule.
+* Gemini text requests use native `POST /interactions` against the configured
+  `v1beta` base URL with `x-goog-api-key` and
+  `Api-Revision: 2026-05-20`. Every configured Gemini 3.x route sends
+  `background: true` and `store: true`. The proxy polls its `queued` and
+  `in_progress` states. User messages become `user_input` steps. System
+  messages become the top-level `system_instruction`. Assistant history is
+  invalid because the public request cannot carry provider interaction state or
+  thought signatures. Only `completed` with visible model text succeeds.
+  `incomplete` returns a provider error after interaction deletion. A `failed`
+  response can include diagnostic errors. The adapter accepts each code only
+  when it is a canonical HTTPS URI of 2,048 characters or fewer. The URI must
+  contain a host and a clean path. It must not contain user information, a
+  query, a fragment, or an escaped path. The final path segment must be a
+  1-to-64-character `snake_case` value. The adapter discards each provider
+  message. A malformed URI is a response protocol failure. A failed
+  Interaction is retryable only when every URI has a retryable final path
+  segment. The retryable segments are `aborted`, `api_error`,
+  `deadline_exceeded`, `rate_limit_exceeded`, `service_unavailable`, and
+  `too_many_requests`. An empty list or an unknown segment fails closed.
+  `cancelled`, `requires_action`, malformed, missing, and unknown states are
+  safe upstream failures. Usage
+  totals map from `total_input_tokens`, `total_output_tokens`, and
+  `total_tokens`, preserving provider-counted thought tokens. For exact models
+  whose catalog declares `media_inputs`, ordered image and audio attachments
+  become native typed interaction content after the message text. The adapter
+  sends an inline request when the complete encoded request is at most the
+  offering's inline limit of 20,000,000 bytes for image and audio requests.
+  It streams exact media bytes through the Gemini
+  Files API when the encoded request is larger, then deletes each provider
+  file after the interaction ends. See Google's
+  [Interactions overview](https://ai.google.dev/gemini-api/docs/interactions-overview),
+  [file input methods](https://ai.google.dev/gemini-api/docs/file-input-methods),
+  [Files API guide](https://ai.google.dev/gemini-api/docs/files),
+  [background execution guide](https://ai.google.dev/gemini-api/docs/background-execution),
+  and [Interactions API reference](https://ai.google.dev/api/interactions-api).
+* Anthropic text requests use `POST /v1/messages` with `x-api-key` and
+  `anthropic-version: 2023-06-01`. The proxy maps system messages to Anthropic's
+  top-level `system` field. Anthropic requires `max_tokens`.
+  When the client omits it, the proxy sends the selected model output limit.
+  `stop_reason=max_tokens` starts the common missing-suffix loop.
+  `end_turn` or `stop_sequence` completes the assembled answer.
+  Tool use, paused turns, refusals, and unknown reasons remain upstream failures.
+  Each catalog model with image input sends ordered base64 image blocks before the message text.
+* Z.AI dictation uses the catalog-defined GLM-ASR transport with the selected
+  exact dictation model.
+* All xAI text models use the xAI Responses codec at
+  `https://api.x.ai/v1/responses`. Requests use `store: false` and omit `background`.
+  The `grok-4.5` image blocks use `detail: high`. Grok/xAI dictation
+  uses the catalog-defined xAI STT transport. The upstream STT endpoint does
+  not receive a `model` multipart field.
+
+See the [xAI Responses contract and live acceptance procedure](xai-responses.md).
+
+Tenant access keys, defaults, prompts, and usage belong to the tenant.
+Customer provider credentials and fields belong to named account connections.
+A tenant selects one account connection or one hosted access grant per provider.
+Multiple tenants in the same account can use the same connection.
+A customer-credential request requires an assigned connection with its required fields.
+Otherwise, the native proxy returns `409 provider_not_configured` before dispatch.
+Hosted assignments require financial admission. The tracked configuration omits `hosted`, so it does not activate hosted execution.
+
+Static provider URLs and paths belong to `providers.yml`.
+Alibaba Cloud and Baidu also use a `base_url` connection field.
+Baidu supplies the international Qianfan URL as its catalog default.
+The `management` configuration is mandatory.
+Provider blocks in `config.yml` are unknown YAML keys and fail startup.
+
+## Additional provider contracts
+
+| Provider | Current reference |
+| --- | --- |
+| Vertex AI | [Google credentials, Gemini, and image routes](vertex-gemini.md) |
+| Dictator | [Speech workflows](speech-workflows.md) and [acceptance scope](dictator-live-acceptance.md) |
+| FAL | [Image operations](fal-image-operations.md) |
+| ElevenLabs | [Speech](provider-speech.md), [voices](provider-voices.md), [dictionaries](provider-dictionaries.md), and [account resources](elevenlabs-account-resources.md) |
+| HeyGen | [Video and resource contract](heygen-v3.md) |
+
+The [provider inventory](media-provider-completeness.md) separates retained capability work from completed adapters.
+
+## Model catalog
+
+The [catalog](../configs/providers.yml) defines exact models and their controls.
+The `/dictate` endpoint uses the saved tenant transcription route when provider and model are omitted.
+Transcription providers include OpenAI, SiliconFlow, Z.AI, Gemini, and xAI.
+Web search requires an offering with `web_search: true`.
+
+### Reasoning effort
+
+Read the exact model's `reasoning_effort` declaration in the catalog.
+Omission retains the saved tenant effort. An explicit value must belong to that route's permitted list.
+See [Astra](astra.md), [Claude](claude-current-models.md), [Gemini](gemini-qualified-models.md), and [Qwen](qwen-current-models.md) for provider evidence.
+
+See OpenAI's [GPT-4.1 model reference](https://developers.openai.com/api/docs/models/gpt-4.1),
+[GPT-5 API launch contract](https://openai.com/index/introducing-gpt-5-for-developers/),
+[GPT-5 model reference](https://developers.openai.com/api/docs/models/gpt-5),
+[GPT-5.5 model reference](https://developers.openai.com/api/docs/models/gpt-5.5),
+[GPT-5.5 Pro model reference](https://developers.openai.com/api/docs/models/gpt-5.5-pro),
+and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-model).
+
+### DeepSeek model retirement
+
+Direct DeepSeek routes use `deepseek-v4-flash` and `deepseek-v4-pro`.
+Both routes accept `reasoning_effort` values `none`, `low`, `high`, and `max`.
+The schema-version-14 migration replaces saved direct selections and retains historical usage identities.
+See the [operator procedure](deepseek-retirement.md) for acceptance, migration checks, and conflicting profile settings.
+
+### Exact models and controls
+
+Use [the catalog](../configs/providers.yml) for exact models, provider defaults, prices, and limits.
+Use `/api/public/capabilities` for enabled catalog routes and `/v1/models` for usable routes under a tenant bearer key.
+The [route explorer](https://llm-proxy.mprlab.com/) presents capability tasks for each offering.
+The catalog validates disabled candidates but excludes them from runtime discovery.
+
+Qwen 3.7 Plus and Qwen 3.6 Flash accept image input and return text. Qwen Plus
+and Qwen 3.7 Max remain text-only offerings. Each route uses the tenant's exact
+Singapore workspace URL and the DashScope Responses endpoint.
+`max_tokens` maps to `max_output_tokens` and has an inclusive `16..65536` proxy boundary. Each versioned model has a 1,000,000-token context window.
+The catalog records Singapore pay-as-you-go list rates for the lowest published
+input tier. Qwen 3.7 Max costs $2.50 for input and $7.50 for output per million
+tokens. Qwen 3.7 Plus costs $0.40 for input and $1.60 for output. Qwen 3.6 Flash
+costs $0.25 for input and $1.50 for output. The limits, prices, Singapore
+availability, and workspace URL were verified on 2026-08-13 against Alibaba's
+[text model guide](https://www.alibabacloud.com/help/en/model-studio/text-generation-model),
+[model catalog](https://www.alibabacloud.com/help/en/model-studio/models),
+[OpenAI compatibility guide](https://www.alibabacloud.com/help/en/model-studio/compatibility-with-openai-responses-api),
+and [pricing page](https://www.alibabacloud.com/help/en/model-studio/model-pricing).
+The image input declarations were verified on 2026-09-02 against Alibaba's
+[visual understanding guide](https://www.alibabacloud.com/help/en/model-studio/vision-model)
+and [Chat Completions guide](https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions).
+
+All seven MiniMax M2 routes are text-only Chat Completions offerings with a
+204,800-token context record and output boundary. M2.7 input and output cost
+$0.30 and $1.20 per million tokens. M2.7 Highspeed costs $0.60 and $2.40.
+The M2.5, M2.1, and M2 routes use the same standard input and output rates as
+M2.7. Their Highspeed variants use the M2.7 Highspeed rates. The catalog also
+records the published prompt-cache read and write rates. MiniMax now lists
+M2.5, M2.1, and M2 under legacy prices, but still includes them in the supported
+OpenAI-compatible model list. Limits, availability, and standard PAYG prices
+were verified on 2026-08-13 against the MiniMax references in [Route execution](#route-execution).
+
+### Dictation capabilities
+
+| Provider selector | Models | Credential field | Provider transport | Notes |
+|-------------------|--------|------------------|--------------------|-------|
+| `openai` | `gpt-transcribe` | Account connection API key | Catalog `dictation` transport | OpenAI catalog default `gpt-transcribe`. The saved tenant transcription route controls omitted provider selection. |
+| `siliconflow` | `sensevoice-small` | Account connection API key | Catalog `dictation` transport | OpenAI-compatible audio transcription. |
+| `zai` | `glm-asr-2512` | Account connection API key | Catalog `dictation` transport | Z.AI GLM-ASR sends `model=glm-asr-2512`. |
+| `xai` | `xai-stt` | Account connection API key | Catalog `dictation` transport | The upstream request omits the multipart `model` field. |
+| `gemini` | `gemini-3.5-transcribe` | Account connection API key | Synchronous Interactions | See [Gemini transcription](gemini-transcription.md). |
+
+See [OpenAI transcription retirement](openai-transcription-retirement.md) for the current model, saved-selection migration, and operator activation checks.
+
+## Public catalog presentation
+
+The landing page and route explorer use the validated runtime catalog.
+The explorer starts with All capabilities and both weight access groups selected.
+Visitors can select Tools, Web search, Reasoning, Images, Audio, or Video.
+Input and output filters must match one task on the same offering.
+For a media group, the task must use a capability in that group.
+
+Model details identify each supported task and its input and output direction.
+The explorer selects a family, exact model, and provider offering in that order.
+The model matrix has one row for each exact model and shows its current provider offerings.
+A catalog change updates both interfaces without a separate inventory.
+
+LLM Proxy owns the durable media gateway, tenant assets, and official gateway client.
+MediaOps retains product workflows, application data, and local processing.
+I286 defines the current [provider boundary](mediaops-model-access-boundary.md) and replaces F071.
+The [consolidation contract](media-gateway-consolidation.md) records shared lifecycle requirements.

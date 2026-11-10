@@ -115,3 +115,134 @@ Production still requires this transaction before source removal.
 No production transfer or deployment occurred during this investigation.
 
 I244 independently owns the MediaOps operation-import bridge.
+
+## Historical predecessor transfers
+
+These procedures describe predecessor database shapes. Fresh databases create the current schema directly.
+Current account-connection databases validate their records without a schema-version query.
+Retained predecessor inputs still require the bounded transfer procedure above.
+The historical version numbers below do not define the current schema.
+
+Management startup requires every persisted routing field to be canonical and
+catalog-valid and every nonempty provider default to have the tenant's saved
+key. It never infers or repairs a provider, model, or reasoning effort at read
+time. The bounded schema-version-3 migration performs the one-time
+reconciliation of older managed defaults against saved provider keys. The
+bounded schema-version-4 migration then removes retired `qwencloud` provider
+settings and reconciles affected text defaults to the first remaining keyed
+provider. The schema-version-5 migration converts affected provider-native
+model values to canonical exact model identifiers. These migrations preserve
+tenant timestamps and verify their result before recording the version.
+Invalid keys, models, or routing data stop startup with
+the owner, tenant, endpoint, provider, and model context.
+
+
+F014 upgrades the previous one-tenant-per-user database to schema version 1
+as one bounded startup transaction:
+
+1. Drain every old llm-proxy instance and take an operator-owned database
+   backup. Never run the old and new binaries against the same database during
+   this migration.
+2. Exercise the exact SQLite migration on a disposable database through the
+   repository `make ci` gate.
+3. Start one new instance. Preflight reads all legacy tenant, provider-key, and
+   usage rows before opening the mutation transaction. It rejects missing
+   tables, unclaimed `static-config:` owners, blank or duplicate owners and
+   tenant ids, duplicate or malformed secret digests, orphan provider or
+   usage rows, plaintext or corrupt provider keys, and non-canonical routing
+   data.
+4. The transaction renames the two colliding legacy GORM indexes and the three
+   legacy tables, creates explicit user and tenant tables, preserves every
+   opaque tenant id, moves secret digests and routing data, rebinds encrypted
+   provider keys from the prior user id to the tenant id, copies usage rows,
+   verifies counts and values including decryption, writes schema version 1,
+   and removes the bounded legacy tables.
+5. Verify account, tenant, provider, secret, routing, and usage behavior
+   before adding capacity. A failed stage rolls the transaction back to the
+   untouched legacy schema and prevents startup. Correct the source data or
+   restore the backup; do not hand-edit a partially migrated shape.
+
+The subsequent bounded schema-version-2 migration preflights every schema-1
+usage row, maps successful rows to `success`, and maps historical `400`, `413`,
+`429`, `499`, `502`, `503`, and `504` statuses to their exact canonical failure
+codes. Caller cancellation `499` and proxy-budget expiry `504` both become
+`request_timeout`. It rejects any other historical failure status before
+mutation, then writes the non-null outcome field and the
+tenant/success/time/id failure-page index in one transaction. Historical
+diagnostics therefore contain normalized, status-derived codes, never
+reconstructed raw error messages.
+
+The bounded schema-version-3 migration preflights every managed provider key
+and canonical routing pair. For each tenant it preserves currently eligible
+defaults, otherwise selects the first keyed text provider and first keyed
+dictation-capable provider by canonical provider id, and clears the corresponding
+pair when no provider is eligible. It writes the reconciled defaults without
+changing tenant timestamps, verifies every row against its decrypted saved
+keys, and records schema version 3 in the same transaction. Reopening a
+version-3 database validates this invariant and rejects drift instead of
+repairing it at read time.
+
+The bounded schema-version-4 migration removes every stored `qwencloud` key,
+selected model, and provider system prompt. Affected text defaults move to the
+first remaining keyed provider by canonical identifier. The default uses that
+provider's stored text model. If no key remains, the migration clears the text
+route and reasoning effort. Tenant timestamps and
+historical usage provider/model identifiers remain unchanged. The transaction
+verifies deleted settings, reconciled defaults, decrypted remaining keys,
+timestamps, and usage rows before recording version 4. Current-version startup
+rejects retired provider settings or routing defaults instead of repairing them.
+
+The bounded schema-version-5 migration converts stored provider-native model
+values to canonical exact model identifiers. It updates affected provider
+settings and tenant defaults in one transaction. It preserves tenant timestamps
+and all historical usage records. Current-version startup rejects an invalid
+or dangling canonical route.
+
+The bounded schema-version-6 migration replaces the retired `grok` provider
+identity with `xai`. The bounded schema-version-7 migration adds the provider
+base URL field to managed provider settings. Existing Alibaba Cloud records do not
+contain a workspace URL. The migration removes those incomplete records and
+reconciles affected text defaults. It preserves tenant timestamps and
+historical usage. The owner must then save the complete Alibaba Cloud key and URL
+pair. The bounded schema-version-8 migration replaces the retired `zhipu`
+provider identity with `zai`. It preflights all provider settings and defaults,
+decrypts each affected key with `zhipu` associated data, and re-encrypts it with
+  `zai` associated data. The transaction updates keys and current routing
+defaults, preserves tenant timestamps and historical usage, and rejects
+conflicting, corrupt, or noncanonical stored values before mutation.
+
+The bounded schema-version-9 migration replaces each provider-key row with
+provider connection records and one provider profile record. It maps every
+predecessor value through the current provider definition. It re-encrypts the
+credential with the provider field identity as associated data. The transaction
+verifies every value and timestamp before it removes the predecessor table.
+Before current-catalog validation, startup atomically replaces each predecessor
+model that a schema-version-10 catalog record identifies. It also replaces the
+matching tenant default.
+Current-schema reads use only provider connection records and provider profile
+records.
+
+The bounded schema-version-10 migration replaces each stored Gemini 2.5 text
+model and same-provider tenant default with `gemini-3.5-flash`. It updates the
+provider profile and current default in one transaction. It preserves tenant
+and profile timestamps and all historical usage model identifiers. Current
+startup rejects retired Gemini routes instead of accepting an alias or fallback.
+
+The bounded schema-version-11 migration replaces stored
+`gemini-3.1-flash-lite` and `gemini-3.1-pro-preview` selections with
+`gemini-3.5-flash`. It updates the provider profile and same-provider tenant
+default in one transaction. It preserves provider connections, system prompts,
+timestamps, and historical usage model identifiers.
+
+The bounded schema-version-13 migration replaces the historical success flag
+with the required request disposition. It maps successful events to
+`succeeded`. It maps input and payload-size outcomes to `rejected`. It maps
+attempted provider or proxy outcomes to `failed`. A historical `service_unavailable`
+event without a resolved route becomes `provider_not_configured`. A historical
+server-side `invalid_request` becomes `proxy_error`. The transaction preserves
+safe event metadata, copies records in fixed batches of 256, validates each
+mapped row, records version 13, and removes the predecessor table. Current
+startup validates each distinct disposition and outcome pair. It rejects the
+obsolete success column, an invalid pair, a missing disposition index, or a
+retained predecessor table. A report returns a store error if usage data
+changes to an invalid pair after startup.

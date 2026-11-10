@@ -2,7 +2,8 @@
 
 F070 defines the prepaid hosted service. F065 through F069 own its implementation in that order.
 This document records the shared contract and current decisions.
-The service is not complete. Tracked runtime configuration keeps hosted activation disabled until F070 acceptance passes.
+F065 through F070 development acceptance passed with controlled provider and processor protocols.
+The tracked configuration omits `hosted`. Production activation and actual processor qualification remain separate.
 
 ## Product Decisions
 
@@ -508,7 +509,7 @@ Run `make test-hosted-runtime` for this matrix and the normal text, image, dicti
 This matrix does not establish actual supplier prices, account limits, connectivity, or invoice agreement.
 Other operations and separate live qualification remain subject to the complete F070 acceptance requirements.
 
-The rendered funded usage flow passed controlled browser acceptance. Complete provider-operation qualification remains open under F070.
+The rendered funded usage flow passed controlled browser acceptance. Actual provider-operation qualification remains separate from the completed F070 development acceptance.
 All existing providers and supported operations remain in scope.
 The tracked configuration omits `hosted`. Production activation still requires complete acceptance and explicit operator authorization.
 

@@ -554,7 +554,7 @@ Ready origins and tenants receive active capacity in turn.
 A request retains its active permit until its response body is closed.
 The scheduler releases active capacity between polls.
 Accepted media jobs have separate durable limits.
-The [README capacity contract](../../README.md#configuration) defines the fields and origin allocation rules.
+The [capacity contract](../local-setup.md#configuration) defines the fields and origin allocation rules.
 
 `server.upstream_rate_limits` is enforced by the same shared HTTP client for
 text and dictation. Each rule is a strict rolling-window budget keyed by exact
