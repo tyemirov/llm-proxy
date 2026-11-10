@@ -28,13 +28,37 @@ func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.
 	environment := currentContractMap(testingInstance, manifest["environment"])
 	requireCurrentContractYAML(testingInstance, "environment.source", environment["source"], `.mprlab/deploy/.env`)
 	inputs := currentContractIndex(testingInstance, environment["private_inputs"], "variable")
-	expectedInputNames := []string{"LLM_PROXY_MANAGEMENT_ADMIN_EMAILS", "LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID", "LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY", "LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY", "DEPLOY_SUDO_PASSWORD_TUTOSH", "MPRLAB_TAUTH_MANAGEMENT_URL", "MPRLAB_TAUTH_PROVISIONING_CREDENTIALS"}
+	expectedInputNames := []string{"LLM_PROXY_MANAGEMENT_ADMIN_EMAILS", "LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID", "LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY", "LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY", "DEPLOY_SUDO_PASSWORD_TUTOSH"}
 	if len(inputs) != len(expectedInputNames) {
 		testingInstance.Fatalf("unexpected private inputs: %#v", inputs)
 	}
 	for _, name := range expectedInputNames {
 		if inputs[name] == nil {
 			testingInstance.Fatalf("missing declared input %s", name)
+		}
+	}
+	inputReferences := map[string]bool{}
+	var collectInputReferences func(any)
+	collectInputReferences = func(value any) {
+		switch item := value.(type) {
+		case map[string]any:
+			if reference, ok := item["input"].(string); ok {
+				inputReferences[reference] = true
+			}
+			for _, child := range item {
+				collectInputReferences(child)
+			}
+		case []any:
+			for _, child := range item {
+				collectInputReferences(child)
+			}
+		}
+	}
+	collectInputReferences(manifest)
+	for _, input := range inputs {
+		identity := lifecycleStringField(testingInstance, input, "id")
+		if !inputReferences[identity] {
+			testingInstance.Fatalf("private input %s has no current manifest consumer", identity)
 		}
 	}
 	targets := currentContractMap(testingInstance, manifest["targets"])
