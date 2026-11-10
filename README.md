@@ -1752,6 +1752,7 @@ retained data volume, HTTP endpoints, Caddy route, public health observations,
 GitHub Pages publication, and private inputs.
 Runtime readiness uses the existing `http` endpoint at `llm-proxy:8080/healthz`.
 It requires HTTP 200 through the same alias that public API routing uses.
+The API route keeps the resource ID `llm-proxy-public-api` for reconciliation of the existing shared configuration.
 
 The manifest selects the ignored `.mprlab/deploy/.env` file through `environment.source`.
 This field is optional.
