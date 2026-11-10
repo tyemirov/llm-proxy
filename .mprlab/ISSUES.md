@@ -35,6 +35,18 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
+- [x] [B318] (P2) Return the specified media errors from quoted execution.
+  Goal: Return HTTP 429 for capacity rejection and HTTP 410 for expired media results.
+  Evidence: Quoted execution returns HTTP 503 for each condition.
+  Requirements:
+  - Return the typed media error code and the specified HTTP status.
+  - Keep the same quote and prevent repeated provider calls.
+  Validation: Add HTTP regression tests and run `make test-hosted-quotes` and `make ci`.
+  Resolution: Quoted execution now uses the media error handler for capacity rejection and expired results.
+  Validation result: HTTP tests first failed with HTTP 503 instead of HTTP 429 and HTTP 410.
+  The quote tests passed with race detection after the correction.
+  Final `make ci` passed all 15 gates in 747 seconds with 100.0% Go statement coverage.
+
 - [x] [B317] (P1) Use the current Gateway v9 lifecycle commands.
   Goal:
   Make the repository lifecycle targets call the installed Gateway command contract.
