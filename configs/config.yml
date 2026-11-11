@@ -2,7 +2,7 @@ server:
   port: 8080
   log_level: info
   upstream_capacity:
-    global: {active: 32, admitted: 652}
+    global: {active: 32, admitted: 680}
     tenant: {active: 8, admitted: 32}
     account: {active: 8, admitted: 32}
     media: {active: 24, admitted: 256}
@@ -30,6 +30,7 @@ server:
       - {origin: https://api.z.ai, active: 4, queued: 24}
       - {origin: https://generativelanguage.googleapis.com, active: 4, queued: 24}
       - {origin: https://api.anthropic.com, active: 4, queued: 24}
+      - {origin: https://api.typesafe.ai, active: 4, queued: 24}
       - {origin: https://api.meta.ai, active: 4, queued: 24}
       - {origin: https://api.x.ai, active: 4, queued: 24}
       - {origin: https://api.baiduqianfan.ai, active: 4, queued: 24}

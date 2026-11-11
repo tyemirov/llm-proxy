@@ -86,6 +86,9 @@ model_migrations:
       target_model: gpt-transcribe
       preserve_source_usage: true
 operations:
+    - id: typed_decision
+      input_artifacts: [json, image]
+      output_artifacts: [json]
     - id: avatar_creation
       input_artifacts: [image]
       output_artifacts: [text]
@@ -162,6 +165,8 @@ operations:
       input_artifacts: [text, image]
       output_artifacts: [image]
 publishers:
+    - id: typesafe
+      label: TypeSafe
     - id: elevenlabs
       label: ElevenLabs
     - id: reve
@@ -193,6 +198,10 @@ publishers:
     - id: mprlab
       label: Marco Polo Research Lab
 families:
+    - id: jev
+      publisher: typesafe
+      label: Jev
+      weight_access: proprietary
     - id: eleven-speech
       publisher: elevenlabs
       label: Eleven Speech
@@ -338,6 +347,13 @@ families:
       label: GPT Image
       weight_access: proprietary
 models:
+    - id: jev-1.14.0
+      enabled: true
+      publisher: typesafe
+      family: jev
+      version: jev-1.14.0
+      operations: [typed_decision]
+      media_inputs: [image]
     - id: eleven_multilingual_v2
       enabled: true
       publisher: elevenlabs
@@ -7124,3 +7140,121 @@ providers:
             response_codec: {id: heygen_avatar_video_v3}
             authentication: {kind: header, field: api_key, header: X-Api-Key, prefix: ""}
             execution: {id: asynchronous_job}
+
+    - id: typesafe
+      verification:
+        transport: models
+      connection_ownership: tenant
+      label: TypeSafe
+      api_service_label: TypeSafe API
+      key_acquisition_url: https://console.typesafe.ai/keys
+      fields:
+        - id: api_key
+          label: TypeSafe API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation:
+            minimum_length: 1
+      transports:
+        - id: system_one
+          endpoint:
+            protocol: http
+            method: POST
+            default_base_url: https://api.typesafe.ai
+            path: /v1/systemone
+          components:
+            request_codec:
+              id: system_one
+            response_codec:
+              id: system_one
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
+        - id: models
+          endpoint:
+            protocol: http
+            method: GET
+            default_base_url: https://api.typesafe.ai
+            path: /v1/models
+          components:
+            request_codec:
+              id: system_one_models
+            response_codec:
+              id: system_one_models
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: read_only
+      offerings:
+        - model: jev-1.14.0
+          created: 1794355200
+          upstream_model: jev-1.14.0
+          transport: system_one
+          operations: [typed_decision]
+          default_operations: [typed_decision]
+          media_inputs: [image]
+          image_mime_types: [image/png, image/jpeg]
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://api.typesafe.ai/openapi.json
+              last_verified: "2026-11-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: unknown
+              unit: files
+              scope: request
+              source: https://api.typesafe.ai/openapi.json
+              last_verified: "2026-11-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment_encoded_bytes
+              source: https://api.typesafe.ai/openapi.json
+              last_verified: "2026-11-11"
+            - id: image_file_bytes
+              media_type: image
+              transport: file
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://api.typesafe.ai/openapi.json
+              last_verified: "2026-11-11"
+          limits:
+            - id: request_tokens
+              value: 64000
+              unit: tokens
+            - id: question_tokens
+              value: 32000
+              unit: tokens
+          prices:
+            - operation: typed_decision
+              available: true
+              source: https://docs.typesafe.ai/models
+              last_verified: "2026-11-11"
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: '0.042'
+                  unit: USD/1M_tokens
+                - component: output_tokens
+                  currency: USD
+                  rate: '0'
+                  unit: USD/1M_tokens
