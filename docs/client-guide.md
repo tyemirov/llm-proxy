@@ -324,7 +324,7 @@ uv pip install --upgrade "llm-proxy-client @ git+https://github.com/tyemirov/llm
 
 Replace `<release-tag>` with the exact published repository tag for the selected application build. The default
 branch contains development source for the next release.
-The Python package version comes from the Gix-selected `v1.X.X` release tag.
+The Python package version comes from the selected `v1.X.X` release tag.
 Python builds use `setuptools-scm` to read this tag.
 Wheel and source distribution metadata keep the version without the `v` prefix.
 Use the Git checkout or a Python source distribution as the package build input.

@@ -35,7 +35,7 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## BugFixes
 
-- [-] [B320] (P0) Match the API route configuration policy to its shared provider.
+- [x] [B320] (P0) Match the API route configuration policy to its shared provider.
   Goal: Reconcile the API route with the current Caddy execution policy.
   Evidence: Gateway v9.2.0 rejects v1.12.9 with `deployment_graph.configuration_policy_conflict`.
   The route inherits application defaults that differ from the current Caddy provider policy.
@@ -47,11 +47,12 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Preserve the Gateway policy guard and current route identity.
   Implementation: The route now declares the matching timeout and polling values.
   Regression assertions cover inherited mismatch, scoped equality, root scope isolation, and changed timeout or polling values.
-  Independent source review passed. The regression cases remain unexecuted.
-  Validation: Tests, CI, publication, and deployment remain deferred by operator instruction.
-  Keep this issue unresolved until required validation passes.
+  Independent source review and the focused Gateway regression passed.
+  Validation: The focused Gateway regression and full application CI passed.
+  All 15 CI gates passed in 737 seconds with 100.0% Go statement coverage.
+  Publication and production activation have separate results.
 
-- [-] [B319] (P0) Preserve the deployed API route identity.
+- [x] [B319] (P0) Preserve the deployed API route identity.
   Goal: Reconcile the current API route without an unintended removal.
   Evidence: Gateway v9.2.0 rejects removal of `llm-proxy-public-api` during deployment of v1.12.8.
   The manifest names the same route `public-api` instead.
@@ -64,9 +65,10 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   Implementation: The manifest and repository contract test now require the stable route ID.
   Gateway regression coverage distinguishes stable identity from an unverified route removal.
   Cases cover native stdio and Ansible, single and set admission, and missing and stale observations.
-  Independent source review passed. The regression cases remain unexecuted.
-  Validation: Tests, CI, publication, and deployment remain deferred by operator instruction.
-  Keep this issue unresolved until required validation passes.
+  Independent source review and the focused Gateway regression passed.
+  Validation: The focused Gateway regression and full application CI passed.
+  All 15 CI gates passed in 737 seconds with 100.0% Go statement coverage.
+  Publication and production activation have separate results.
 
 - [x] [B318] (P2) Return the specified media errors from quoted execution.
   Goal: Return HTTP 429 for capacity rejection and HTTP 410 for expired media results.
@@ -2387,7 +2389,7 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
 
 ## Improvements
 
-- [-] [I320] (P1) Audit the complete manifest against the installed Gateway contract.
+- [x] [I320] (P1) Audit the complete manifest against the installed Gateway contract.
   Goal: Resolve declaration mismatches together before another deployment attempt.
   Scope: Installed Gateway v9.2.1, the selected manifest, referenced application files, and current deployed state.
   Findings:
@@ -2399,11 +2401,12 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   Evidence: [Complete manifest audit](../docs/gateway-manifest-audit.md).
   Validation: Independent source review passed. Read-only delegated identity diagnostics authenticated with zero changed tasks.
   The credential failure from the earlier invocation is not reproduced by current evidence.
-  Updated regression assertions remain unexecuted.
-  Tests, CI, publication, and deployment remain deferred by operator instruction.
-  Keep implementation acceptance pending until the required code checks pass.
+  The manifest contract test and installed Gateway integration tests passed.
+  Full application CI passed all 15 gates in 737 seconds with 100.0% Go statement coverage.
+  Governor found eight existing managed-guide differences. Application structure passed.
+  Publication and production activation have separate results.
 
-- [ ] [I319] (P1) Rewrite the README and organize the detailed guides.
+- [x] [I319] (P1) Rewrite the README and organize the detailed guides.
   Goal:
   Give readers a concise project introduction and preserve the current operational detail in linked guides.
   Requirements:
@@ -2411,8 +2414,21 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Move setup, deployment, development, and client procedures to their topic guides.
   - Preserve material contracts and record the destination of each source section.
   Validation:
-  - Check document links, language, source preservation, and repository whitespace.
+  - Examine document links, language, source preservation, and repository whitespace.
   - Complete an independent semantic review before acceptance.
+  Resolution:
+  The README now has 1,209 words instead of 20,197 words.
+  Five topic guides retain setup, deployment, development, client, and execution detail.
+  Existing owner guides retain management, provider, and predecessor-transfer contracts.
+  Corrected license, authentication, defaults, client protocols, catalog scope, retention, and hosted development status.
+
+  All 170 local links passed. New prose has zero mechanical language findings.
+  The README shell example passed syntax analysis without execution.
+  Independent review covered all 45 sections and 412 source units. The preservation gate passed.
+  Repository whitespace checks passed. Public API and event contracts are unchanged.
+
+  Governor reported eight existing managed-guide differences outside this change.
+  Concurrent I320 manifest changes and their separate acceptance state remain intact.
 
 
 - [x] [I318] (P1) Keep database-specific transaction mechanisms in the persistence layer.

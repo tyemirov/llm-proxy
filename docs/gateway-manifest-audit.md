@@ -10,7 +10,7 @@ The audit covers the complete `.mprlab/deploy/resources.yml` declaration.
 | Boundary | Reviewed result |
 | --- | --- |
 | Owner and release | `llm-proxy`, SemVer, and fixed major `1` match repository release authority. |
-| Schema and defaults | The v1.12.10 invocation parsed and admitted the runtime and target declarations. The unused-input deletions remain source-reviewed only. |
+| Schema and defaults | The v1.12.10 invocation parsed and admitted the runtime and target declarations. The manifest and installed Gateway integration tests passed. |
 | Container artifact | `Dockerfile` and the declared AMD64/ARM64 build inputs agree. Its `/app` working directory matches configuration paths. |
 | Pages artifact | `docker/pages/Dockerfile` has the selected `pages` target and exports the static site. |
 | Image publication | `llm-proxy-image` connects the build artifact, GHCR repository, and runtime image reference. |
@@ -66,6 +66,13 @@ No manifest change or Gateway credential change is justified by that failed requ
 ## Verification limits
 
 Independent source review covers the declarations and corrections listed above.
-The manifest contract and installed Gateway regressions are updated but unexecuted.
-No test suite, CI, build, publication, installation, or deployment ran during this audit.
+The operator subsequently authorized validation and deployment.
+The manifest contract and installed Gateway integration tests passed.
+Focused Gateway regressions passed for route identity and contributor policy.
+
+Full application CI passed all 15 gates in 737 seconds with 100.0% Go statement coverage.
+Governor found eight existing managed-guide differences. Application structure passed.
+
+Publication and deployment remain pending at the conclusion of this source audit.
+
 The read-only credential probe does not establish GHCR pull acceptance or successful application activation.
