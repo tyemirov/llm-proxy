@@ -68,6 +68,7 @@ const (
 	publicWireContractDictatorSpeechV1       = "dictator_speech_v1"
 	publicWireContractElevenLabsSpeech       = "elevenlabs_speech"
 	publicWireContractElevenLabsConversion   = "elevenlabs_conversion"
+	publicWireContractSystemOne              = "system_one"
 
 	publicExecutionLifecyclePollable     = "pollable_resource"
 	publicExecutionLifecycleSynchronous  = "synchronous_completion"
@@ -102,7 +103,7 @@ const (
 
 var publicCapabilityValues = map[string]struct{}{
 	publicCapabilityAudioInput: {}, "dictation": {}, publicCapabilityImageInput: {}, "reasoning": {},
-	"text": {}, "image_generation": {}, "image_editing": {}, "video_generation": {}, "web_search": {}, "caller_tools": {},
+	"typed_decision": {}, "text": {}, "image_generation": {}, "image_editing": {}, "video_generation": {}, "web_search": {}, "caller_tools": {},
 	"audio_transcription": {}, "audio_diarization": {}, "audio_alignment": {},
 	"subtitle_creation": {}, "speech_generation": {}, "speech_conversion": {}, "voice_extraction": {},
 }
@@ -113,6 +114,7 @@ type publicOfferingRoute struct {
 }
 
 var publicOfferingMediaTransports = map[publicOfferingRoute]string{
+	{wireContract: publicWireContractSystemOne, executionLifecycle: publicExecutionLifecycleSynchronous}:              publicMediaTransportInline,
 	{wireContract: publicWireContractElevenLabsSpeech, executionLifecycle: publicExecutionLifecycleSynchronous}:       "",
 	{wireContract: publicWireContractElevenLabsConversion, executionLifecycle: publicExecutionLifecycleSynchronous}:   "",
 	{wireContract: publicWireContractFALQueueImages, executionLifecycle: publicExecutionLifecycleAsynchronous}:        "",
