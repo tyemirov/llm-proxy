@@ -4974,80 +4974,112 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Confirm that buffered SSE is the first-release behavior for routes without native streaming.
   - Confirm that Files, Batches, token counting, prompt caching, citations, and computer-use endpoints stay out of scope.
 
-- [ ] [F074] (P1) Add Jev typed-decision offerings with provider protocol adapters.
+- [x] [F074] (P1) Expose the TypeSafe System One API for Jev with TypeScript SDK acceptance.
   Goal:
-  Add Jev as a provider-independent model family with one canonical typed-decision contract and explicit provider transports.
-  Preserve Jev's typed Choice, Score, and Noul semantics when a tenant selects the direct TypeSafe route or a broker route.
-  Do not present a general text model or a model-backed System One emulator as Jev.
+  Expose the TypeSafe API one-to-one at `POST /v1/systemone`.
+  Use TypeSafe as the first upstream provider.
+  Permit other upstream providers through the same public API in future work.
+  Decisions:
+  - The user confirmed that exact TypeSafe API behavior controls differences in SDK validation.
+  - Use the TypeSafe System One API as the public contract.
+  - Use the official `@typesafe-ai/sdk` TypeScript SDK for consumer acceptance.
+  - Keep the existing TypeSafe request syntax and response syntax.
+  - Keep TypeSafe as the only required upstream provider for the first implementation.
+  - Add other providers later through internal protocol adapters.
+  - Close F074 when the implementation and deterministic validation pass.
   Research:
-  - The TypeSafe HTTP contract uses `POST https://api.typesafe.ai/v1/systemone` with a bearer key, `state`, `model`, and typed `questions`.
-  - The TypeSafe quickstart creates the key in `https://console.typesafe.ai/settings/keys` after account access.
-  - Vercel exposes Jev through `experimental_evaluate` with model `typesafe-ai/jev`.
-  - OpenRouter lists Jev as `~typesafe/jev-latest` through its OpenAI-compatible API at `https://openrouter.ai/api/v1`.
-  - The official TypeSafe System One Adapter keeps the typed `system_one` interface while executing against OpenAI or Anthropic.
-  - The System One Adapter is a separate model-backed evaluator. It is not the Jev model and must not be registered as a Jev provider offering.
-  - Source references: `https://docs.typesafe.ai/introduction/quickstart`, `https://vercel.com/ai-gateway/models/jev`, `https://openrouter.ai/typesafe`, and `https://github.com/typesafe-ai/system-one-adapter-python`.
+  - TypeSafe uses synchronous `POST https://api.typesafe.ai/v1/systemone` with bearer authentication.
+  - The TypeScript SDK provides `TypeSafeClient.systemOne()` and typed question helpers.
+  - The TypeSafe API defines model selection, state, questions, assets, answers, usage, errors, and experimental headers.
+  - The TypeSafe console provides API key management at `https://console.typesafe.ai/keys`.
+  - Vercel and OpenRouter are possible future upstream providers. Each provider needs separate protocol qualification.
+  - The TypeSafe System One Adapter executes evaluations through OpenAI or Anthropic. It is a separate model-backed evaluator.
+  - Sources: `https://docs.typesafe.ai/api/system-one`, `https://api.typesafe.ai/openapi.json`, and `https://docs.typesafe.ai/sdk/javascript`.
+  - Additional sources: `https://docs.typesafe.ai/introduction/quickstart`, `https://vercel.com/ai-gateway/models/jev`, and `https://openrouter.ai/typesafe`.
+  - Adapter source: `https://github.com/typesafe-ai/system-one-adapter-python`.
   Requirements:
-  - Add one closed provider-catalog operation for typed decisions. Use one canonical internal name for the operation and document its relation to TypeSafe's `system_one` protocol.
-  - Define one canonical request type with an exact model, one structured `state` value, and named questions.
-  - Define a closed question union for Choice, Score, and Noul. Reject unknown question kinds and unknown fields at the public boundary.
-  - Validate question identifiers, required instructions, Choice labels, Score criteria, and Noul criteria before provider dispatch.
-  - Define one canonical response type with the exact model and answers keyed by question identifier.
-  - Include typed answer values, provider probabilities or confidence data, and normalized usage.
-  - Keep typed answers as typed values. Do not parse a free-text completion to reconstruct a Jev answer in the canonical direct route.
-  - Add a narrow decision protocol adapter interface.
-  - Make the interface accept the canonical request and return the canonical response or a typed provider error.
-  - Add a TypeSafe transport for synchronous bearer-authenticated `POST /v1/systemone` requests with the `jev-latest` upstream model.
-  - Add an OpenRouter transport only after a request and response fixture proves the `~typesafe/jev-latest` route.
-  - Use the fixture to verify canonical typed-decision semantics through the OpenAI-compatible endpoint.
-  - Add a Vercel transport only after the raw gateway request, response, authentication, usage, and error contract is verified. Do not infer a Go transport from the Vercel SDK example alone.
-  - Keep the TypeSafe, OpenRouter, and Vercel routes as separate provider definitions.
-  - Give each route separate credentials, endpoints, terms, prices, usage mapping, and provider identity.
-  - Keep provider identity as catalog data. Select adapter code from the declared provider transport and protocol components.
-  - Do not route Jev through the current text route adapter or structured-output text contract.
-  - Use a generic OpenAI Chat Completions composition only after an exact fixture proves that composition is verified.
-  - Do not add an automatic provider fallback, a legacy Jev alias, or a compatibility read for an obsolete request shape.
-  - Add one canonical resource-oriented REST representation to `docs/openapi.yaml` and the native client contract. Do not overload chat message paths with Jev question objects.
-  - Return typed errors for invalid questions, unsupported operations, authentication failures, provider failures, malformed answers, and missing required usage fields.
-  - Keep provider secrets and raw provider responses out of tenant responses, logs, and usage views.
-  - Keep private broker metadata out of public capability projections.
-  - Add provider connection fields and key-acquisition links for each route without storing credential values in `configs/providers.yml`.
-  - Register the TypeSafe publisher, Jev model family, exact model records, provider offerings, operation defaults, limits, and prices.
-  - Register each route only after its transport contract is verified.
-  - Treat official and community SDKs as client libraries. Do not create provider definitions for SDK implementations.
+  - Expose `POST /v1/systemone` as a separate public endpoint.
+  - Match the TypeSafe HTTP method, path, request fields, response fields, status codes, and error schemas.
+  - Match the TypeSafe content types and documented headers, including experimental feature headers.
+  - Match the TypeSafe rules for required fields, optional fields, omitted values, null values, and unknown fields.
+  - Accept `model`, `state`, `questions`, and `assets` as the TypeSafe API defines them.
+  - Match the TypeSafe schemas for Choice, Score, Noul, and Box questions and their answers.
+  - Keep the TypeSafe rules for structured instructions, criteria, image assets, and experimental opt-in.
+  - Keep answer identifiers, typed values, probabilities, confidence, model identity, and usage in the TypeSafe response shape.
+  - Keep public usage fields unchanged. Record normalized usage separately for internal accounting.
+  - Accept the proxy tenant bearer key with the TypeSafe `Authorization: Bearer` syntax.
+  - Authorize the tenant request before an upstream call.
+  - Select the upstream provider from the tenant configuration and requested model.
+  - Keep provider selection outside the public request body.
+  - Use the selected provider connection credentials for the upstream request.
+  - Use the TypeSafe wire API for production requests. Verify consumer acceptance with the official TypeScript SDK.
+  - Pin the SDK version during implementation and verify its serialization, response parsing, retries, and cancellation behavior.
+  - Keep credentials, model selection, and request context separate for each tenant request.
+  - Keep SDK execution on the server. Keep provider credentials outside browser code and the provider catalog.
+  - Keep the internal adapter interface narrow and independent of the selected upstream provider.
+  - Let future adapters translate provider protocols while the public TypeSafe contract stays unchanged.
+  - Require verified request and response fixtures before a future provider route becomes available.
+  - Keep each provider's credentials, endpoint, terms, prices, usage mapping, and catalog identity separate.
+  - Select adapter code through the declared transport and protocol components.
+  - Register the TypeSafe publisher, Jev family, model records, offerings, defaults, limits, and prices in `configs/providers.yml`.
+  - Obey TypeSafe model-name rules without a new public provider/model syntax.
+  - Keep internal provider identities and broker details outside public payloads unless the TypeSafe schema defines those fields.
+  - Return documented TypeSafe result fields without a proxy response wrapper.
+  - Use TypeSafe error schemas for local validation and authentication failures.
+  - Keep upstream error status codes and documented error fields. Remove credential values from error content.
+  - Keep provider secrets, request content, and raw response bodies outside logs and usage views.
+  - Add provider connection fields and API key setup links without catalog credential values.
+  - Keep this endpoint separate from text completion paths and `textRouteAdapter`.
+  - Use the upstream synchronous lifecycle without a new public decision resource or retrieval endpoint.
+  - Add no mandatory idempotency key or result retention contract beyond the TypeSafe API.
+  - Add no automatic provider fallback or free-text reconstruction of typed Jev answers.
+  - Keep the System One Adapter separate from Jev offerings. Treat SDKs as client libraries, not provider identities.
+  - Use a separate feature issue for any future System One Adapter implementation.
   Deliverables:
-  - Canonical typed-decision request, response, question, answer, usage, and error types.
-  - Decision protocol adapters and provider transports for the qualified TypeSafe route and each approved broker route.
-  - Provider catalog definitions in `configs/providers.yml` and startup composition support in `internal/proxy/provider_catalog_schema.go`, `internal/proxy/catalog_service.go`, and `internal/proxy/provider_protocol_definitions.go`.
-  - Decision routing integration separate from `textRouteAdapter` in `internal/proxy/provider_router.go` and the current text request types.
-  - OpenAPI schemas, native Go and Python client support, model discovery, public capability output, management connection forms, and provider setup documentation.
-  - A provider-specific Jev/System One integration document.
-  - Record account registration, credential fields, endpoint ownership, upstream model identifiers, usage fields, error mapping, and live-qualification evidence.
-  - Explicit documentation for the boundary between direct Jev, brokered Jev, and the non-Jev System One Adapter.
+  - Add the TypeSafe-compatible endpoint and its TypeScript SDK acceptance test.
+  - Add internal provider selection that permits future upstream adapters without public API changes.
+  - Add the required catalog, protocol composition, connection management, and capability discovery support.
+  - Document the exact TypeSafe wire contract in `docs/openapi.yaml`.
+  - Add Go and Python client methods for this endpoint with the same wire contract.
+  - Add a Jev/System One integration guide with SDK setup and TypeSafe-compatible client examples.
+  - Document account setup, credentials, endpoint ownership, model names, usage, errors, and qualification evidence.
+  - Document the distinction between direct Jev, future broker routes, and the separate System One Adapter.
   Validation:
-  - Add public-entrypoint integration tests before production changes. Use injected upstream HTTP servers for deterministic protocol tests.
-  - Verify that valid Choice, Score, and Noul requests produce the canonical typed response through the TypeSafe adapter fixture.
-  - Verify that invalid question kinds, unknown fields, invalid criteria, unsupported models, and unsupported provider operations fail before any upstream request.
-  - Verify request serialization, bearer authentication, model selection, and response parsing for each adapter.
-  - Verify usage normalization, provider error mapping, malformed-answer handling, and request identifiers for each adapter.
-  - Verify equivalent typed answers through each qualified route for identical canonical requests.
-  - Preserve distinct provider and upstream model identity in each result.
-  - Verify that a provider failure does not call another provider and does not invoke the System One Adapter.
-  - Verify tenant credential isolation, management connection creation, and management connection update.
-  - Verify key verification, route discovery, and public capability output for every registered provider.
-  - Verify the native REST contract, client behavior, status codes, and typed errors through a real HTTP listener.
-  - Verify generated or checked OpenAPI artifacts through the same listener.
+  - Add public-entrypoint integration tests before production changes.
+  - Use local upstream HTTP fixtures for deterministic TypeSafe protocol tests.
+  - Compare requests, responses, headers, and errors with the official TypeSafe API schema.
+  - Verify Choice, Score, Noul, Box, assets, and experimental opt-in through supported TypeSafe fixtures.
+  - Verify required fields, optional fields, omitted values, null values, and unknown fields against TypeSafe rules.
+  - Verify malformed requests and unsupported models fail according to the TypeSafe contract.
+  - Verify the TypeScript SDK calls the real endpoint with the selected tenant connection and model.
+  - Verify SDK serialization, response parsing, retries, deadlines, cancellation, and safe error handling.
+  - Verify malformed-answer handling and request identifiers against the TypeSafe contract.
+  - Verify public usage stays unchanged while internal accounting retains its measurement evidence.
+  - Verify tenant credential isolation, connection creation, connection updates, key verification, and model discovery.
+  - Verify route discovery and public capability output for the TypeSafe provider.
+  - Verify provider selection leaves the public request and response unchanged.
+  - Verify one provider failure does not call another provider or the System One Adapter.
+  - Verify TypeSafe-compatible clients work through the proxy with their base URL and bearer key changed.
+  - Verify Go and Python client behavior through a real HTTP listener.
+  - Verify OpenAPI artifacts against the same listener.
   - Run `make test-provider-catalog` and `make test-protocol-acceptance` after catalog and adapter changes.
-  - Run one separate authorized live qualification for each route with its own account and key. Record the exact model, endpoint, request, response, usage, and provider evidence.
-  - Run final `make ci` after the last source, catalog, client, documentation, and test change.
-  Open Decisions:
-  - Select the canonical operation identifier and public REST path before implementation.
-  - Use `typed_decision` to describe the capability. Use `system_one` to match the TypeSafe protocol name.
-  - Confirm whether the first release includes Vercel and OpenRouter, or only direct TypeSafe access.
-  - Confirm whether `state` accepts arbitrary JSON or one closed state shape in the public contract.
-  - Confirm whether broker routes must expose provider-selected upstream metadata to tenants or only retain it in private usage records.
-  - Open a separate feature if the product needs the TypeSafe System One Adapter.
-  - Define that feature as a model-backed evaluator over OpenAI or Anthropic.
+  - Record live qualification separately in `docs/typesafe-live-acceptance.md` as operational acceptance.
+  - Run final `make ci` after the last implementation change.
+  Implementation state:
+  - Implemented the endpoint, catalog, connection verification, discovery, clients, and browser support on November 11, 2026.
+  - Preserved TypeSafe JSON, multipart, compression, model names, typed answers, usage, request identifiers, and error representations.
+  - Verified seven requests through the official TypeScript SDK, including retries, errors, cancellation, and timeout behavior.
+  - Final `make ci` passed all 15 gates with 100.0 percent Go statement coverage and zero uncovered blocks.
+  - Validation included 176 frontend browser tests, 13 management browser tests, 192 Python tests, and five package tests.
+  - Independent architecture review found no remaining code defects after the corrections.
+  - Resolution: Closed on November 11, 2026, after completed implementation and successful deterministic CI.
+  - Operational acceptance: `docs/typesafe-live-acceptance.md` tracks live qualification and its pending evidence.
+  - Integration guide: `docs/typesafe-system-one.md`. Public path: `POST /v1/systemone`. Event contracts: No changes.
+  Future providers:
+  - Qualify Vercel, OpenRouter, or another upstream provider separately before its adapter becomes available.
+  - Verify authentication, model names, request and response schemas, usage, errors, terms, and prices for each provider.
+  - Require each future provider to satisfy the same public TypeSafe contract.
+  - Keep future provider implementation outside the first TypeSafe implementation.
 
 - [ ] [F072] (P1) Expose granular Dictator models for Whisper transcription and Qwen3 and Silero synthesis.
   Current handoff:
