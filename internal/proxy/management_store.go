@@ -1163,6 +1163,9 @@ func managedUsageRouteIsCurrent(record managedUsageEventRecord, providers *provi
 		return false
 	}
 	switch record.Endpoint {
+	case usageEndpointSystemOne:
+		model, modelExists := definition.typedDecisionModels[strings.ToLower(record.ModelID)]
+		return modelExists && model.identifier.string() == record.ModelID
 	case usageEndpointText, usageEndpointV2, usageEndpointMCP:
 		model, modelExists := definition.textModels[strings.ToLower(record.ModelID)]
 		return modelExists && model.identifier.string() == record.ModelID

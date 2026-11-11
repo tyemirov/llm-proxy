@@ -9,6 +9,10 @@ import (
 const (
 	// ProviderNameOpenAI identifies the OpenAI provider.
 	ProviderNameOpenAI = "openai"
+	// ProviderNameTypeSafe identifies the TypeSafe System One provider.
+	ProviderNameTypeSafe = "typesafe"
+	// ModelNameJev1140 identifies the exact Jev 1.14 model.
+	ModelNameJev1140 = "jev-1.14.0"
 	// ProviderNameBaidu identifies international Baidu Qianfan routing.
 	ProviderNameBaidu = "baidu"
 	// ProviderNameDeepSeek identifies the DeepSeek provider.
@@ -352,7 +356,15 @@ func (definition textModelDefinition) supportsMediaInput(mediaInput messageMedia
 	return supported
 }
 
+type typedDecisionModelDefinition struct {
+	identifier          modelID
+	providerIdentifier  modelID
+	transportIdentifier string
+}
+
 type providerDefinition struct {
+	typedDecisionModels       map[string]typedDecisionModelDefinition
+	defaultTypedDecisionModel modelID
 	hostedGrantID             string
 	upstreamScope             upstreamRequestScope
 	identifier                providerID

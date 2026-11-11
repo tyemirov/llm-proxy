@@ -111,6 +111,7 @@ const (
 // alignment, and subtitle creation. Speech unifies speech generation and
 // voice extraction.
 const (
+	PublicCapabilityDomainDecision      = "decision"
 	PublicCapabilityDomainText          = "text"
 	PublicCapabilityDomainTranscription = "transcription"
 	PublicCapabilityDomainSpeech        = "speech"
@@ -122,6 +123,8 @@ const (
 // canonical dashboard domain.
 func PublicCapabilityDomainForOperation(operation string) string {
 	switch operation {
+	case ModelOperationTypedDecision:
+		return PublicCapabilityDomainDecision
 	case PublicModelCapabilityText:
 		return PublicCapabilityDomainText
 	case PublicModelCapabilityDictation,

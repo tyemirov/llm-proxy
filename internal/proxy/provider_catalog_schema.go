@@ -41,6 +41,8 @@ const (
 	CatalogEndpointProtocolGRPC           = "grpc"
 	CatalogEndpointMethodPost             = "POST"
 	CatalogEndpointMethodGet              = "GET"
+	CatalogProtocolSystemOneModels        = "system_one_models"
+	CatalogProtocolSystemOne              = "system_one"
 	CatalogProtocolJSONResource           = "json_resource"
 	CatalogProtocolElevenLabsVoices       = "elevenlabs_voices"
 	CatalogProtocolElevenLabsModels       = "elevenlabs_models"

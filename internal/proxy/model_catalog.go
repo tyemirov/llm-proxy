@@ -12,6 +12,8 @@ import (
 const (
 	// ModelOperationText identifies text generation through the proxy messages contract.
 	ModelOperationText = "text"
+	// ModelOperationTypedDecision identifies typed System One decisions.
+	ModelOperationTypedDecision = "typed_decision"
 	// ModelOperationVideoLipSync identifies model-free video lip synchronization.
 	ModelOperationVideoLipSync = "video_lipsync"
 	// ModelOperationAvatarCreation identifies reusable photo avatars.
@@ -48,6 +50,8 @@ const (
 	CatalogCredentialAPIKey = "api_key"
 	// CatalogCredentialDeployment identifies server-owned provider access.
 	CatalogCredentialDeployment = "deployment"
+	// CatalogArtifactJSON identifies structured JSON input or output.
+	CatalogArtifactJSON = "json"
 	// CatalogArtifactText identifies text input or output.
 	CatalogArtifactText = "text"
 	// CatalogArtifactImage identifies image input or output.
@@ -406,6 +410,10 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 		for _, operation := range offering.Operations {
 			var routeError error
 			switch operation {
+			case ModelOperationTypedDecision:
+				if offering.WireContract != CatalogProtocolSystemOne || offering.ExecutionLifecycle != string(textExecutionLifecycleSynchronousCompletion) {
+					routeError = fmt.Errorf("%w: field=%s reason=unsupported_typed_decision_route", ErrInvalidModelCatalog, fieldPrefix)
+				}
 			case ModelOperationText:
 				routeError = validateTextOffering(offering, fieldPrefix)
 			case ModelOperationVideoGeneration:
@@ -634,7 +642,7 @@ func supportedModelOperation(operation string) bool {
 		ModelOperationSubtitleCreation,
 		ModelOperationSpeechGeneration,
 		ModelOperationSpeechConversion,
-		ModelOperationVoiceExtraction:
+		ModelOperationVoiceExtraction, ModelOperationTypedDecision:
 		return true
 	default:
 		return false

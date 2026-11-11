@@ -214,7 +214,7 @@ func TestHeyGenCanonicalOriginAllocationContract(t *testing.T) {
 		}
 	}
 	capacity := configuration.UpstreamCapacity
-	if capacity.Global != (proxy.UpstreamCapacityLimit{Active: 32, Admitted: 652}) || capacity.Tenant != (proxy.UpstreamCapacityLimit{Active: 8, Admitted: 32}) || capacity.Account != (proxy.UpstreamCapacityLimit{Active: 8, Admitted: 32}) || capacity.Media != (proxy.UpstreamCapacityLimit{Active: 24, Admitted: 256}) || capacity.Status != (proxy.UpstreamCapacityLimit{Active: 8, Admitted: 128}) || capacity.Transfer != (proxy.UpstreamCapacityLimit{Active: 8, Admitted: 128}) || capacity.InteractiveReserve != 1 {
+	if capacity.Global != (proxy.UpstreamCapacityLimit{Active: 32, Admitted: 680}) || capacity.Tenant != (proxy.UpstreamCapacityLimit{Active: 8, Admitted: 32}) || capacity.Account != (proxy.UpstreamCapacityLimit{Active: 8, Admitted: 32}) || capacity.Media != (proxy.UpstreamCapacityLimit{Active: 24, Admitted: 256}) || capacity.Status != (proxy.UpstreamCapacityLimit{Active: 8, Admitted: 128}) || capacity.Transfer != (proxy.UpstreamCapacityLimit{Active: 8, Admitted: 128}) || capacity.InteractiveReserve != 1 {
 		t.Fatal("canonical capacity limits differ from the exact allocation contract")
 	}
 	total := 0
@@ -228,7 +228,7 @@ func TestHeyGenCanonicalOriginAllocationContract(t *testing.T) {
 			}
 		}
 	}
-	if total != 652 || qualified != 2 {
+	if total != 680 || qualified != 2 {
 		t.Fatalf("global allocated=%d qualified origins=%d", total, qualified)
 	}
 }
