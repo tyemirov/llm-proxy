@@ -11,6 +11,7 @@ export const PUBLIC_SITE_PATH = "/";
 export const ROUTE_CAPABILITY_ALL = "all";
 export const ROUTE_CAPABILITY_FILTERS = Object.freeze([
   {id:ROUTE_CAPABILITY_ALL,label:'All capabilities',kind:'all',capabilities:[]},
+  {id:'typed_decision',label:'Decisions',kind:'feature',capabilities:['typed_decision']},
   {id:'caller_tools',label:'Tools',kind:'feature',capabilities:['caller_tools']},
   {id:'web_search',label:'Web search',kind:'feature',capabilities:['web_search']},
   {id:'reasoning',label:'Reasoning',kind:'feature',capabilities:['reasoning']},
@@ -133,6 +134,7 @@ export const PROVIDER_KEY_VERIFICATION_ERRORS = Object.freeze({
 });
 
 export const PROVIDER_CAPABILITY_LABELS = Object.freeze({
+  typed_decision: "Typed decisions",
   video_lipsync: "Video lip sync",
   video_translation: "Video translation",
   avatar_creation: "Avatar creation",
@@ -155,6 +157,7 @@ export const PROVIDER_CAPABILITY_LABELS = Object.freeze({
 });
 
 export const CAPABILITY_DOMAINS = Object.freeze({
+  DECISION: "decision",
   TEXT: "text",
   TRANSCRIPTION: "transcription",
   SPEECH: "speech",
@@ -163,6 +166,7 @@ export const CAPABILITY_DOMAINS = Object.freeze({
 });
 
 export const OPERATION_CAPABILITY_DOMAINS = Object.freeze({
+  typed_decision: "decision",
   video_lipsync: "video",
   video_translation: "video",
   avatar_creation: "image",

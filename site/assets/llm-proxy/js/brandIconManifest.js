@@ -116,6 +116,7 @@ export const brandIconManifest = {
     }
   },
   "providers": {
+    "typesafe": null,
     "heygen": null,
     "fal": null,
     "elevenlabs": null,
@@ -135,6 +136,7 @@ export const brandIconManifest = {
     "dictator": null
   },
   "families": {
+    "jev": null,
     "eleven-voice-conversion": null,
     "eleven-speech": null,
     "reve": null,
