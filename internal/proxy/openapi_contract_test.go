@@ -128,7 +128,7 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 			expectedSecurity = [][]string{}
 		case "/", "/v2", llmproxycontract.TenantIdentityPath, "/v2/requests", "/dictate":
 			expectedSecurity = [][]string{{"TenantClientKey"}}
-		case "/v1/chat/completions", "/v1/responses", "/v1/models", "/v1/audio/transcriptions", llmproxycontract.AssetPath, "/model/v1/assets/{asset_id}", "/model/v1/assets/{asset_id}/content", llmproxycontract.MediaCapabilitiesPath, llmproxycontract.FinancialRequestsPath, llmproxycontract.FinancialRequestsPath + "/{request_id}", llmproxycontract.FinancialQuotesPath, llmproxycontract.FinancialQuotesPath + "/{quote_id}", llmproxycontract.FinancialQuotesPath + "/{quote_id}/executions", llmproxycontract.MediaOperationsPath, "/model/v1/operations/{operation_id}", "/model/v1/operations/{operation_id}/cancellation", llmproxycontract.MediaVoicesPath, "/model/v1/voices/{voice_id}", "/model/v1/voices/{voice_id}/previews/{preview}", llmproxycontract.ProviderDiagnosticsPath + "/{provider}", llmproxycontract.ProviderResourcesPath + "/{provider}/{kind}":
+		case "/v1/chat/completions", "/v1/responses", "/v1/models", "/v1/audio/transcriptions", llmproxycontract.SystemOnePath, llmproxycontract.AssetPath, "/model/v1/assets/{asset_id}", "/model/v1/assets/{asset_id}/content", llmproxycontract.MediaCapabilitiesPath, llmproxycontract.FinancialRequestsPath, llmproxycontract.FinancialRequestsPath + "/{request_id}", llmproxycontract.FinancialQuotesPath, llmproxycontract.FinancialQuotesPath + "/{quote_id}", llmproxycontract.FinancialQuotesPath + "/{quote_id}/executions", llmproxycontract.MediaOperationsPath, "/model/v1/operations/{operation_id}", "/model/v1/operations/{operation_id}/cancellation", llmproxycontract.MediaVoicesPath, "/model/v1/voices/{voice_id}", "/model/v1/voices/{voice_id}/previews/{preview}", llmproxycontract.ProviderDiagnosticsPath + "/{provider}", llmproxycontract.ProviderResourcesPath + "/{provider}/{kind}":
 			expectedSecurity = [][]string{{"TenantBearerKey"}}
 		case "/healthz", proxy.ManagementConfigUIPath, proxy.PublicCapabilitiesPath:
 			expectedSecurity = [][]string{}
@@ -512,8 +512,8 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	if decodeError := json.Unmarshal(capabilitiesResponse.Body.Bytes(), &capabilityCatalog); decodeError != nil {
 		t.Fatalf("decode public capability catalog: %v", decodeError)
 	}
-	if len(capabilityCatalog.Providers) != 17 {
-		t.Fatalf("public capability providers=%d want=17", len(capabilityCatalog.Providers))
+	if len(capabilityCatalog.Providers) != 18 {
+		t.Fatalf("public capability providers=%d want=18", len(capabilityCatalog.Providers))
 	}
 
 	configRequest := httptest.NewRequest(http.MethodGet, proxy.ManagementConfigUIPath, nil)

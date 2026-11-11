@@ -1,9 +1,18 @@
 # Client protocols
 
-LLM Proxy accepts native messages and OpenAI client protocols. Each client protocol adapter uses the same completion coordinator.
+LLM Proxy accepts native messages, OpenAI client protocols, and TypeSafe System One requests.
+The text protocol adapters use the same completion coordinator.
 Provider credentials remain on the server. The client executes each caller tool.
 
 `docs/openapi.yaml` defines all HTTP fields and responses. This document explains the supported subset.
+
+## Connect a TypeSafe client
+
+Use `POST /v1/systemone` with the TypeSafe request body and a tenant bearer key.
+Keep TypeSafe model names unchanged.
+Set the official TypeScript SDK base URL to the proxy API origin, without a `/v1` suffix.
+The [System One guide](typesafe-system-one.md) defines setup, compression, images, errors, and SDK acceptance.
+This endpoint uses its own TypeSafe protocol path, separate from the text completion coordinator.
 
 ## Connect an OpenAI client
 
@@ -26,7 +35,7 @@ console.log(result.choices[0].message.content);
 ```
 
 Each `/v1` endpoint requires `Authorization: Bearer <tenant-client-key>`.
-The server rejects query parameters and credentials in request bodies.
+The OpenAI handlers reject query parameters and credentials in request bodies.
 The bearer key selects a tenant. It never becomes a provider credential.
 
 ## Supported fields
@@ -61,7 +70,7 @@ The provider protocol adapter supports explicit Chat Completions tool capabiliti
 JSON Schema output requires `response_format.type: json_schema` or `text.format.type: json_schema`.
 The selected provider must support the canonical structured request schema.
 Caller tools and structured output cannot be combined in one request.
-Sampling controls, provider web tools, images, and audio message parts are unsupported on `/v1`.
+The OpenAI text endpoints reject sampling controls, provider web tools, images, and audio message parts.
 Use `/v2` for canonical media inputs and supported provider web search.
 
 ## OpenCode examples

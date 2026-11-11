@@ -38,6 +38,11 @@ func openAIModelsHandler(catalog *ProviderCatalog, providers *providerRegistry) 
 				supported := false
 				for _, operation := range offering.Operations {
 					switch operation {
+					case ModelOperationTypedDecision:
+						definition := registry.definitions[providerID(provider.ID)]
+						model := definition.typedDecisionModels[offering.Model]
+						resolved, found := definition.resolvedTransport(model.transportIdentifier)
+						supported = supported || (found && resolved.credentialFor(endpointKindText) != "")
 					case ModelOperationText:
 						_, _, err := registry.resolveTextRequest(provider.ID, offering.Model, "", "", false)
 						supported = supported || err == nil
@@ -47,7 +52,13 @@ func openAIModelsHandler(catalog *ProviderCatalog, providers *providerRegistry) 
 					}
 				}
 				if supported {
-					records = append(records, openAIModelRecord{ID: provider.ID + "/" + offering.Model, Object: "model", Created: offering.Created, OwnedBy: owners[offering.Model]})
+					identifier := provider.ID + "/" + offering.Model
+					for _, operation := range offering.Operations {
+						if operation == ModelOperationTypedDecision {
+							identifier = offering.Model
+						}
+					}
+					records = append(records, openAIModelRecord{ID: identifier, Object: "model", Created: offering.Created, OwnedBy: owners[offering.Model]})
 				}
 			}
 		}

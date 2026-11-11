@@ -14,7 +14,7 @@
  */
 
 /**
- * @typedef {"text" | "transcription" | "speech" | "image" | "video"} CapabilityDomain
+ * @typedef {"text" | "transcription" | "speech" | "image" | "video" | "decision"} CapabilityDomain
  * @typedef {{provider:string, model:string, capabilities:string[], domains:CapabilityDomain[]}} DashboardOffering
  */
 

@@ -316,7 +316,7 @@ func validateArtifactKinds(artifacts []string, field string) error {
 	seen := map[string]struct{}{}
 	for artifactIndex, artifact := range artifacts {
 		switch artifact {
-		case CatalogArtifactText, CatalogArtifactImage, CatalogArtifactAudio, CatalogArtifactVideo:
+		case CatalogArtifactText, CatalogArtifactImage, CatalogArtifactAudio, CatalogArtifactVideo, CatalogArtifactJSON:
 		default:
 			return fmt.Errorf("%w: field=%s[%d] artifact=%s", ErrInvalidModelCatalog, field, artifactIndex, artifact)
 		}

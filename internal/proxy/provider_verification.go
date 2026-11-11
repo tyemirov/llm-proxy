@@ -15,7 +15,7 @@ func validateProviderCatalogVerification(provider ProviderCatalogProvider, trans
 		return fmt.Errorf("%w: field=%s.transport transport=%s reason=dangling_reference", ErrInvalidModelCatalog, field, verification.Transport)
 	}
 	codec := transport.Components.RequestCodec.ID
-	if codec == CatalogProtocolHeyGenAccount || codec == CatalogProtocolJSONResource || codec == CatalogProtocolElevenLabsSubscription || codec == CatalogProtocolDictatorSpeechV1 {
+	if codec == CatalogProtocolHeyGenAccount || codec == CatalogProtocolJSONResource || codec == CatalogProtocolSystemOneModels || codec == CatalogProtocolElevenLabsSubscription || codec == CatalogProtocolDictatorSpeechV1 {
 		if verification.Model != "" {
 			return fmt.Errorf("%w: field=%s.model reason=resource_verification_has_no_model", ErrInvalidModelCatalog, field)
 		}
@@ -48,9 +48,34 @@ func (verifier *operationalProviderKeyVerifier) verifyJSONResource(ctx context.C
 	if err != nil {
 		return err
 	}
+	if provider.activeTransport.responseCodec == CatalogProtocolSystemOneModels {
+		if !validSystemOneModelsResponse(content) {
+			return errProviderKeyVerificationUnavailable
+		}
+		return nil
+	}
 	var resource map[string]json.RawMessage
 	if err := json.Unmarshal(content, &resource); err != nil || resource == nil {
 		return errProviderKeyVerificationUnavailable
 	}
 	return nil
+}
+
+func validSystemOneModelsResponse(content []byte) bool {
+	var resource struct {
+		Models *[]struct {
+			Name        *string `json:"name"`
+			Description *string `json:"description"`
+			ReleaseDate *string `json:"release_date"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal(content, &resource); err != nil || resource.Models == nil {
+		return false
+	}
+	for _, model := range *resource.Models {
+		if model.Name == nil || model.Description == nil || model.ReleaseDate == nil {
+			return false
+		}
+	}
+	return true
 }

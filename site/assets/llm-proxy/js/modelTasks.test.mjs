@@ -88,3 +88,16 @@ describe("offeringMatchesTasksWithModalities", () => {
     assert.equal(offeringMatchesTasksWithModalities(textOffering, ["text", "image_generation"], "", ""), false);
   });
 });
+
+
+describe("typed decision tasks", () => {
+  it("keeps structured input and output separate from text generation", () => {
+    const offering = {capabilities:['typed_decision','image_input']};
+    assert.deepEqual(tasksForOffering(offering).map(task=>task.id), ['typed_decision']);
+    assert.equal(offeringMatchesTasksWithModalities(offering,['typed_decision'],'json','json'),true);
+    assert.equal(offeringMatchesTasksWithModalities(offering,['typed_decision'],'image','json'),true);
+    assert.equal(offeringMatchesTasks(offering,['text']),false);
+    assert.deepEqual(tasksForOffering(offering)[0].required,['json']);
+    assert.deepEqual(tasksForOffering({capabilities:['typed_decision']})[0].inputs,['json']);
+  });
+});

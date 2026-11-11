@@ -2,6 +2,7 @@
 
 from .client import (
     Client,
+    JSONValue,
     ClientFinancialRequest,
     ClientFinancialQuoteReference,
     ClientFinancialSettlementReceipt,
@@ -56,6 +57,7 @@ __all__ = [
     "QuotedExecution",
     "QuotedClient",
     "Client",
+    "JSONValue",
     "ClientFinancialRequest",
     "ClientFinancialQuoteReference",
     "ClientFinancialSettlementReceipt",

@@ -108,6 +108,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			verification:        provider.Verification,
 			resources:           append([]ProviderCatalogResource(nil), provider.Resources...),
 			services:            cloneProviderServices(provider.Services),
+			typedDecisionModels: map[string]typedDecisionModelDefinition{},
 			textModels:          map[string]textModelDefinition{},
 			transcriptionModels: map[string]dictationModelDefinition{},
 			speechModels:        map[string]dictationModelDefinition{},
@@ -158,6 +159,12 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 				}
 			}
 			transport := definition.transports[offering.Transport]
+			if slices.Contains(offering.Operations, ModelOperationTypedDecision) {
+				definition.typedDecisionModels[offering.Model] = typedDecisionModelDefinition{identifier: modelID(offering.Model), providerIdentifier: modelID(offering.UpstreamModel), transportIdentifier: offering.Transport}
+				if slices.Contains(offering.DefaultOperations, ModelOperationTypedDecision) {
+					definition.defaultTypedDecisionModel = modelID(offering.Model)
+				}
+			}
 			if slices.Contains(offering.Operations, ModelOperationText) {
 				routeCapabilities := textRouteCapabilities{
 					wireContract:       textWireContract(transport.requestCodec),

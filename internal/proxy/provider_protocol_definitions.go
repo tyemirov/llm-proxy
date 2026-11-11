@@ -68,7 +68,7 @@ func composeProviderTransport(transport ProviderCatalogTransport, field string) 
 	if transport.Components.RequestCodec.ID != transport.Components.ResponseCodec.ID {
 		return providerTransportComposition{}, unsupportedTransportComponentCombination(transport, field, "codec_pair")
 	}
-	resourceCodec := transport.Components.RequestCodec.ID == CatalogProtocolHeyGenAccount || transport.Components.RequestCodec.ID == CatalogProtocolJSONResource || transport.Components.RequestCodec.ID == CatalogProtocolElevenLabsModels || transport.Components.RequestCodec.ID == CatalogProtocolElevenLabsSubscription || transport.Components.RequestCodec.ID == CatalogProtocolElevenLabsVoices
+	resourceCodec := transport.Components.RequestCodec.ID == CatalogProtocolHeyGenAccount || transport.Components.RequestCodec.ID == CatalogProtocolJSONResource || transport.Components.RequestCodec.ID == CatalogProtocolSystemOneModels || transport.Components.RequestCodec.ID == CatalogProtocolElevenLabsModels || transport.Components.RequestCodec.ID == CatalogProtocolElevenLabsSubscription || transport.Components.RequestCodec.ID == CatalogProtocolElevenLabsVoices
 	if transport.Endpoint.Protocol == CatalogEndpointProtocolHTTP && (transport.Endpoint.Method == CatalogEndpointMethodGet) != resourceCodec {
 		return providerTransportComposition{}, unsupportedTransportComponentCombination(transport, field, "request_method")
 	}
@@ -122,8 +122,11 @@ func composeProviderTransport(transport ProviderCatalogTransport, field string) 
 func providerRequestCodecDefinitionFor(reference ProviderCatalogCodecReference, field string) (providerRequestCodecDefinition, error) {
 	definition := providerRequestCodecDefinition{}
 	switch reference.ID {
-	case CatalogProtocolHeyGenAccount, CatalogProtocolElevenLabsVoices, CatalogProtocolJSONResource, CatalogProtocolElevenLabsModels, CatalogProtocolElevenLabsSubscription:
+	case CatalogProtocolSystemOneModels, CatalogProtocolHeyGenAccount, CatalogProtocolElevenLabsVoices, CatalogProtocolJSONResource, CatalogProtocolElevenLabsModels, CatalogProtocolElevenLabsSubscription:
 	case CatalogProtocolElevenLabsAlignment, CatalogProtocolElevenLabsDictionary:
+		definition.mediaExecutionLifecycle = textExecutionLifecycleSynchronousCompletion
+	case CatalogProtocolSystemOne:
+		definition.modelField = "model"
 		definition.mediaExecutionLifecycle = textExecutionLifecycleSynchronousCompletion
 	case CatalogProtocolOpenAIResponses:
 		definition.modelField = "model"
@@ -205,6 +208,15 @@ func providerRequestCodecDefinitionFor(reference ProviderCatalogCodecReference, 
 func providerResponseCodecDefinitionFor(reference ProviderCatalogCodecReference, field string) (providerResponseCodecDefinition, error) {
 	definition := providerResponseCodecDefinition{}
 	switch reference.ID {
+	case CatalogProtocolSystemOneModels:
+		definition.outputFields = []string{"models[].name", "models[].description", "models[].release_date"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_2xx"}}
+		definition.errorRules = []string{"malformed_response", "provider_error"}
+	case CatalogProtocolSystemOne:
+		definition.outputFields = []string{"model", "answers", "usage"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_200"}}
+		definition.errorRules = []string{"provider_error", "malformed_response"}
+		definition.usageFields = providerProtocolUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "derived_input_plus_output"}
 	case CatalogProtocolElevenLabsSpeech:
 		definition.outputFields = []string{"audio", "audio_base64", "alignment", "normalized_alignment", "request-id", "history-item-id"}
 		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_200"}}
@@ -313,7 +325,7 @@ func providerResponseCodecDefinitionFor(reference ProviderCatalogCodecReference,
 
 func requestCodecSupportsLifecycle(codec string, lifecycle textExecutionLifecycle) bool {
 	switch codec {
-	case CatalogProtocolHeyGenAccount, CatalogProtocolElevenLabsVoices, CatalogProtocolJSONResource, CatalogProtocolElevenLabsModels, CatalogProtocolElevenLabsSubscription:
+	case CatalogProtocolSystemOneModels, CatalogProtocolHeyGenAccount, CatalogProtocolElevenLabsVoices, CatalogProtocolJSONResource, CatalogProtocolElevenLabsModels, CatalogProtocolElevenLabsSubscription:
 		return lifecycle == textExecutionLifecycle(CatalogExecutionReadOnly)
 	case CatalogProtocolOpenAIResponses, CatalogProtocolXAIVideosGenerations:
 		return lifecycle == textExecutionLifecyclePollableResource
@@ -321,7 +333,7 @@ func requestCodecSupportsLifecycle(codec string, lifecycle textExecutionLifecycl
 		return lifecycle == textExecutionLifecyclePollableResource || lifecycle == textExecutionLifecycleSynchronousCompletion
 	case CatalogProtocolHeyGenAvatarV3, CatalogProtocolHeyGenAvatarVideoV3, CatalogProtocolHeyGenLipSync, CatalogProtocolHeyGenTranslation, CatalogProtocolDictatorSpeechV1, CatalogProtocolFALQueueImages:
 		return lifecycle == textExecutionLifecycle(CatalogExecutionAsynchronousJob)
-	case CatalogProtocolDashScopeResponses, CatalogProtocolXAIResponses, CatalogProtocolOpenAIChatCompletions,
+	case CatalogProtocolSystemOne, CatalogProtocolDashScopeResponses, CatalogProtocolXAIResponses, CatalogProtocolOpenAIChatCompletions,
 		CatalogProtocolAnthropicMessages, CatalogProtocolVertexGenerateContent,
 		CatalogProtocolMetaTranscription, CatalogProtocolMultipartTranscription, CatalogProtocolOpenAIImages, CatalogProtocolElevenLabsAlignment, CatalogProtocolElevenLabsDictionary, CatalogProtocolElevenLabsConversion, CatalogProtocolElevenLabsSpeech:
 		return lifecycle == textExecutionLifecycleSynchronousCompletion

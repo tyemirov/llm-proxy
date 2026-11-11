@@ -297,6 +297,14 @@ release publish deploy:
 	exec "$(MPRLAB_GATEWAY_EXECUTABLE)" "$@" --app-root "$${application_root}"
 
 .PHONY: test-client-protocols test-protocol-acceptance test-media-operations
+.PHONY: test-system-one test-system-one-clients
+test-system-one: frontend-dependencies
+	$(GO) test ./internal/proxy -run '^TestSystemOne' -count=1 $(SYSTEM_ONE_TEST_ARGS)
+
+test-system-one-clients: frontend-dependencies
+	$(GO) test ./pkg/llmproxyclient -run '^TestSystemOne' -count=1
+	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev pytest tests/test_system_one.py
+
 .PHONY: test-mcp-versions
 test-mcp-versions:
 	$(GO) test ./internal/proxy -run '^TestMCPHandshakeVersions$$' -count=1
@@ -318,7 +326,7 @@ test-client-protocols: frontend-dependencies
 	$(GO) test ./internal/proxy -run '^TestClientProtocols' -count=1
 
 test-protocol-acceptance: frontend-dependencies
-	$(GO) test ./internal/proxy -run '^Test(ClientProtocols.*|AccountConnection(Lifecycle|SharedRoutingAndTenantUsage)|Management(ConnectionCredentialsRemainMaskedAndOwnerScoped|DatabasePersistenceAndOpenFailures)|V2(RoutesExactOrderedImageAndAudioAttachmentsThroughGemini|RoutesExactOrderedImagesThroughProviderAdapters|RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork))$$' -count=1
+	$(GO) test ./internal/proxy -run '^Test(SystemOne.*|ClientProtocols.*|AccountConnection(Lifecycle|SharedRoutingAndTenantUsage)|Management(ConnectionCredentialsRemainMaskedAndOwnerScoped|DatabasePersistenceAndOpenFailures)|V2(RoutesExactOrderedImageAndAudioAttachmentsThroughGemini|RoutesExactOrderedImagesThroughProviderAdapters|RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork))$$' -count=1
 
 test-media-operations: frontend-dependencies
 	$(GO) test ./internal/proxy -run '^Test(MediaOperation|TenantAsset|DictatorWorkerIsolation)' -count=1
@@ -349,6 +357,7 @@ test-client-contracts: frontend-dependencies
 	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run 'Test(ClientProtocols|ClientRejectsInvalidOrCompetingModelProfilesBeforeHTTP|ClientUploadsAsset|OpenAPI|MessagesRequest|CoverageOpenAILifecycle|ManagementDashScopeWorkspaceChangeVerifiesRetainedKeyAndRoutesWithStoredURL)' -count=1
 
 generate-api-docs:
+	$(NPM) exec -- node scripts/generate_system_one_schema.mjs
 	$(NPM) exec -- node scripts/generate_openapi_docs.mjs
 
 .PHONY: test-installed-gateway

@@ -14,6 +14,9 @@ from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Any, Mapping, Protocol, Sequence, cast
 
+JSONValue = None | bool | int | float | str | list["JSONValue"] | dict[str, "JSONValue"]
+SYSTEM_ONE_ENDPOINT_PATH = "/v1/systemone"
+
 ACCEPT_HEADER = "Accept"
 CONTENT_TYPE_HEADER = "Content-Type"
 FORMAT_QUERY_KEY = "format"
@@ -79,11 +82,12 @@ class LLMProxyModelProfileError(LLMProxyClientError):
 class LLMProxyHTTPError(RuntimeError):
     """Raised when llm-proxy returns a non-success HTTP status."""
 
-    def __init__(self, status_code: int, body: str, reason: str, request_context: str) -> None:
+    def __init__(self, status_code: int, body: str, reason: str, request_context: str, headers: Mapping[str, str] | None = None) -> None:
         super().__init__(
             f"llm_proxy_client_http_failure: status={status_code} reason={reason} "
             f"{request_context} body={body!r}"
         )
+        self.headers = MappingProxyType({key.lower(): value for key, value in (headers or {}).items()})
         self.status_code = status_code
         self.body = body
         self.reason = reason
@@ -1114,6 +1118,38 @@ class Client:
     config: ClientConfig
     opener: ResponseOpener | None = None
 
+    def post_system_one(
+        self,
+        body: Mapping[str, JSONValue] | bytes,
+        *,
+        content_type: str = "application/json",
+        content_encoding: str = "",
+        headers: Mapping[str, str] | None = None,
+    ) -> ClientHTTPResponse:
+        """Send TypeSafe JSON or encoded wire bytes and retain the response."""
+        if isinstance(body, bytes):
+            request_data = body
+        elif isinstance(body, Mapping):
+            try:
+                request_data = json.dumps(dict(body), ensure_ascii=False, allow_nan=False).encode("utf-8")
+            except (TypeError, ValueError) as error:
+                raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid System One JSON") from error
+        else:
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: expected System One JSON or bytes")
+        request_headers = {name.lower(): value for name, value in (headers or {}).items()}
+        request_headers["authorization"] = f"Bearer {self.config.secret.strip()}"
+        request_headers["content-type"] = content_type
+        request_headers["accept"] = "application/json"
+        if content_encoding:
+            request_headers["content-encoding"] = content_encoding
+        request = urllib.request.Request(
+            self.config.media_resource_url(SYSTEM_ONE_ENDPOINT_PATH),
+            data=request_data,
+            headers=request_headers,
+            method="POST",
+        )
+        return _open_response(self.opener or default_response_opener, request, "operation=system_one")
+
     def post_messages(self, request: ClientMessagesRequest) -> str:
         """Send a v2 messages-only JSON POST request and return the response text."""
 
@@ -1787,14 +1823,14 @@ def _open_response(opener: ResponseOpener, request: urllib.request.Request, fail
         response = opener(request, timeout=timeout)
     except urllib.error.HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")
-        raise LLMProxyHTTPError(error.code, body, str(error.reason), failure_context) from error
+        raise LLMProxyHTTPError(error.code, body, str(error.reason), failure_context, dict(error.headers.items())) from error
     except (urllib.error.URLError, TimeoutError, OSError) as error:
         reason = error.reason if isinstance(error, urllib.error.URLError) else str(error)
         raise LLMProxyTransportError(f"llm_proxy_client_transport_failure: {failure_context} reason={reason}") from error
     if not isinstance(response, ClientHTTPResponse):
         raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid HTTP transport response")
     if response.status_code < 200 or response.status_code >= 300:
-        raise LLMProxyHTTPError(response.status_code, response.body, "", failure_context)
+        raise LLMProxyHTTPError(response.status_code, response.body, "", failure_context, response.headers)
     return response
 
 

@@ -67,6 +67,10 @@ var geminiInteractionsMessageMediaContract = textRouteMessageMediaContract{
 }
 
 var textRouteMessageMediaContracts = map[textRouteCapabilities]textRouteMessageMediaContract{
+	{wireContract: textWireContract(CatalogProtocolSystemOne), executionLifecycle: textExecutionLifecycleSynchronousCompletion}: {
+		attachmentLimitTransport: CatalogMediaTransportInline,
+		mimeTypes:                map[messageMediaType]map[string]struct{}{messageMediaTypeImage: {messageImageMIMEPNG: {}, messageImageMIMEJPEG: {}}},
+	},
 	vertexGenerateContentRouteCapabilities: {attachmentLimitTransport: CatalogMediaTransportInline, mimeTypes: geminiInteractionsMessageMediaContract.mimeTypes},
 	openAIResponsesPollableRouteCapabilities: {
 		attachmentLimitTransport: CatalogMediaTransportInline,

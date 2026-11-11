@@ -230,6 +230,11 @@ func buildProxyApplication(configuration Configuration, structuredLogger *zap.Su
 		},
 	}}
 	adapters = append(adapters, openAIClientAdapters(configuration, tenantAuthenticator, providers, upstreamProviders, managedTenants, structuredLogger)...)
+	systemOneAdapter, systemOneError := systemOneClientAdapter(configuration, tenantAuthenticator, providers, upstreamHTTPClient, managedTenants, structuredLogger)
+	if systemOneError != nil {
+		return nil, systemOneError
+	}
+	adapters = append(adapters, systemOneAdapter)
 	registerClientMethodErrors(router)
 	// Built-in adapters declare fixed, disjoint routes. The public registry
 	// validates external route declarations before using this same core.

@@ -96,7 +96,7 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 	switch provider.activeTransport.requestCodec {
 	case CatalogProtocolDictatorSpeechV1:
 		return verifyDictatorConnection(verificationContext, provider.connectionValues, provider.activeTransport)
-	case CatalogProtocolHeyGenAccount, CatalogProtocolJSONResource, CatalogProtocolElevenLabsSubscription:
+	case CatalogProtocolSystemOneModels, CatalogProtocolHeyGenAccount, CatalogProtocolJSONResource, CatalogProtocolElevenLabsSubscription:
 		return verifier.verifyJSONResource(verificationContext, provider, apiKey)
 	}
 

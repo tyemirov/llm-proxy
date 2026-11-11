@@ -172,6 +172,13 @@ func registerClientMethodErrors(router *gin.Engine) {
 			c.JSON(http.StatusMethodNotAllowed, mediaOperationErrorEnvelope{Error: mediaOperationErrorResponse{Code: "method_not_allowed"}})
 			return
 		}
+		if c.Request.URL.Path == llmproxycontract.SystemOnePath {
+			c.Header("Cache-Control", "no-store")
+			c.Header("Vary", "Authorization")
+			c.Header("Allow", http.MethodPost)
+			writeSystemOneError(c, http.StatusMethodNotAllowed, "method_not_allowed", "Unsupported HTTP method.")
+			return
+		}
 		if method, found := methods[c.Request.URL.Path]; found {
 			c.Header("Allow", method)
 			writeOpenAIError(c, http.StatusMethodNotAllowed, "method_not_allowed", "Unsupported HTTP method.")

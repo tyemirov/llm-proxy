@@ -1,12 +1,13 @@
 // @ts-check
 
 /**
- * @typedef {'text'|'image'|'audio'|'video'} Modality
+ * @typedef {'text'|'image'|'audio'|'video'|'json'} Modality
  * @typedef {{id:string,label:string,description:string,requires:string[],inputs:Modality[],outputs:Modality[],required:Modality[],defaultDomain:import('./types.d.js').CapabilityDomain|null}} ModelTask
  */
 
 /** One task describes one supported transformation, not every combination of model modalities. @type {ModelTask[]} */
 export const MODEL_TASKS = [
+  {id:'typed_decision',label:'Decisions',description:'Evaluate typed decisions',requires:['typed_decision'],inputs:['json'],outputs:['json'],required:['json'],defaultDomain:null},
   {id:'text',label:'Text',description:'Generate text',requires:['text'],inputs:['text'],outputs:['text'],required:['text'],defaultDomain:'text'},
   {id:'vision',label:'Vision',description:'Understand images',requires:['text','image_input'],inputs:['text','image'],outputs:['text'],required:['text','image'],defaultDomain:'text'},
   {id:'image_generation',label:'Images',description:'Generate images',requires:['image_generation'],inputs:['text'],outputs:['image'],required:['text'],defaultDomain:null},
@@ -24,8 +25,9 @@ export const MODEL_TASKS = [
   {id:'pronunciation_dictionary_creation',label:'Dictionary',description:'Create a pronunciation dictionary',requires:['pronunciation_dictionary_creation'],inputs:['text'],outputs:['text'],required:['text'],defaultDomain:null},
 ];
 
-export const MODALITY_LABELS = Object.freeze({text:'Text',image:'Image',audio:'Audio',video:'Video'});
+export const MODALITY_LABELS = Object.freeze({json:'JSON',text:'Text',image:'Image',audio:'Audio',video:'Video'});
 const ICON_PATHS = Object.freeze({
+  json:'<path d="M8 3H6v7l-3 2 3 2v7h2m8-18h2v7l3 2-3 2v7h-2"/>',
   text:'<path d="M4 5h16M4 10h16M4 15h10M4 20h13"/>',
   image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="m3 17 6-6 4 4 3-3 5 5"/>',
   audio:'<path d="M3 10v4m4-8v12m5-16v20m5-16v12m4-8v4"/>',
@@ -36,8 +38,8 @@ const ICON_PATHS = Object.freeze({
 export function tasksForOffering(offering) {
   return MODEL_TASKS.filter(task => task.requires.every(capability =>
     offering.capabilities.includes(capability) || (capability === 'dictation' && offering.capabilities.includes('audio_transcription')),
-  )).map(task => task.id === 'video_generation' && offering.capabilities.includes('image_input')
-    ? {...task, inputs: /** @type {Modality[]} */ (['text','image'])} : task);
+  )).map(task => offering.capabilities.includes('image_input') && ['video_generation','typed_decision'].includes(task.id)
+    ? {...task, inputs: /** @type {Modality[]} */ ([task.id === 'typed_decision' ? 'json' : 'text','image'])} : task);
 }
 
 /** @param {Modality} modality @param {'input'|'output'} direction */
@@ -48,6 +50,7 @@ function modalityIcon(modality, direction) {
 
 /** @type {Readonly<Record<string, string>>} */
 const TASK_ICON_PATHS = Object.freeze({
+  typed_decision:'<path d="M9 3H4v18h5m6-18h5v18h-5M8 12l3 3 5-6"/>',
   text:'<path d="M3 5h11M3 10h8M3 15h5m3 6 1-5L19 8l3 3-8 8-4 1Zm7-10 3 3"/>',
   vision:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
   image_generation:'<path d="M13 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-8M3 17l6-6 4 4 3-3 5 5M18 1l1.5 4.5L24 7l-4.5 1.5L18 13l-1.5-4.5L12 7l4.5-1.5Z"/><circle cx="7" cy="7" r="1"/>',
