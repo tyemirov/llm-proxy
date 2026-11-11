@@ -17,6 +17,7 @@ const legacyRuntimeConfigFile = "llm-proxy-config.json";
 const binaryBytesPerMiB = 1024 * 1024;
 
 const capabilityDefinitions = Object.freeze([
+  { identifier: "typed_decision", label: "Typed decisions", routeLabel: "Decisions", className: "capability-badge--info" },
   { identifier: "video_lipsync", label: "Video lip sync", routeLabel: "Video lip sync", className: "capability-badge--info" },
   { identifier: "video_translation", label: "Video translation", routeLabel: "Video translation", className: "capability-badge--info" },
   { identifier: "avatar_creation", label: "Avatar creation", routeLabel: "Avatar creation", className: "capability-badge--info" },
@@ -45,13 +46,14 @@ const capabilityDefinitionsByIdentifier = new Map(
   capabilityDefinitions.map((definition) => [definition.identifier, definition]),
 );
 const modelOperationIdentifiers = new Set([
+  "typed_decision",
   "video_lipsync", "video_translation", "avatar_creation", "avatar_video_generation",
   "text", "dictation", "image_generation", "image_editing", "video_generation", "audio_transcription", "audio_diarization",
   "pronunciation_dictionary_creation", "audio_alignment", "subtitle_creation", "speech_generation", "speech_conversion", "voice_extraction",
 ]);
 const providerCredentialKinds = new Set(["api_key", "deployment"]);
 const providerResourceKinds = new Set(Object.keys(PROVIDER_RESOURCE_LABELS));
-const capabilityDomainIdentifiers = new Set(["text", "transcription", "speech", "image", "video"]);
+const capabilityDomainIdentifiers = new Set(["text", "transcription", "speech", "image", "video", "decision"]);
 const executionLifecycleIdentifiers = new Set(["synchronous_completion", "pollable_resource", "asynchronous_job"]);
 const weightAccessDefinitions = Object.freeze([
   { identifier: "proprietary", label: "Proprietary" },
@@ -494,7 +496,7 @@ function parseCapabilities(rawCapabilities, field) {
 function parseArtifactKinds(rawArtifacts, field) {
   const artifacts = requiredNonemptyStringArray(rawArtifacts, field);
   for (const artifact of artifacts) {
-    if (artifact !== "text" && artifact !== "image" && artifact !== "audio" && artifact !== "video") {
+    if (artifact !== "json" && artifact !== "text" && artifact !== "image" && artifact !== "audio" && artifact !== "video") {
       throw new Error(`public_capabilities_invalid: ${field} value=${artifact}`);
     }
   }
