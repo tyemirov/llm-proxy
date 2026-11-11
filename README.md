@@ -54,6 +54,7 @@ See the [client guide](docs/client-guide.md) for provider selection, media input
 | --- | --- | --- |
 | Native `/v2` | Tenant key in `key` query parameter | Messages, tenant defaults, declared image and audio inputs, provider web search, caller tools, and structured output. |
 | OpenAI `/v1` | Tenant bearer key | Supported Chat Completions, Responses, model discovery, and transcription clients. Select an exact `provider/model`. |
+| TypeSafe `/v1/systemone` | Tenant bearer key | The TypeSafe System One API for Jev decisions. Keep TypeSafe model names and client request syntax. |
 | Media `/model/v1` | Tenant bearer key | Asset uploads, capability discovery, durable operations, cancellation requests, and result downloads. |
 | MCP `/mcp` | TAuth OAuth token | Account tenant discovery, route discovery, text generation, and media operation tools. Each operation selects an explicit tenant. |
 | Management `/api/management` | TAuth session | Accounts, tenants, connections, defaults, keys, and usage. |
@@ -71,7 +72,7 @@ The [OpenAPI file](docs/openapi.yaml) owns the complete HTTP contract.
 ## Capabilities and limits
 
 The [provider catalog](configs/providers.yml) defines exact models, provider offerings, controls, limits, and prices.
-It covers OpenAI, Anthropic, Gemini, Vertex AI, DeepSeek, Alibaba Cloud, Moonshot, MiniMax, Meta, xAI, Baidu, SiliconFlow, Z.AI, Dictator, FAL, ElevenLabs, and HeyGen.
+It covers OpenAI, Anthropic, Gemini, Vertex AI, DeepSeek, Alibaba Cloud, Moonshot, MiniMax, Meta, xAI, Baidu, SiliconFlow, Z.AI, Dictator, FAL, ElevenLabs, HeyGen, and TypeSafe.
 Some entries remain disabled during qualification.
 A catalog declaration does not establish live availability for an account.
 
@@ -79,6 +80,7 @@ A catalog declaration does not establish live availability for an account.
 | --- | --- |
 | Text and reasoning | Exact model selection, saved defaults, and route-specific controls. |
 | Structured JSON | Caller JSON Schema validation and durable reconciliation on supported routes. |
+| Typed decisions | The [TypeSafe System One contract](docs/typesafe-system-one.md) with Choice, Score, Noul, Box, and image assets. |
 | Image and audio input | Ordered native message attachments where the offering declares the input capability. |
 | Transcription | File transcription through configured tenant routes. |
 | Media operations | Implemented image, speech, audio-processing, and video routes with tenant assets and retained execution state. |
