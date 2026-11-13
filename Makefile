@@ -546,3 +546,10 @@ test-provider-speech: frontend-dependencies
 .PHONY: test-heygen
 test-heygen: frontend-dependencies
 	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^TestHeyGen' -count=1 $(HEYGEN_TEST_ARGS)
+
+.PHONY: test-dashscope-inventory inventory-dashscope
+test-dashscope-inventory:
+	$(GO) test ./cmd/cli -run '^TestDashScopeInventory' -count=1 $(DASHSCOPE_INVENTORY_TEST_ARGS)
+
+inventory-dashscope:
+	@$(GO) run ./cmd/cli inventory-dashscope

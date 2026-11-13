@@ -221,7 +221,11 @@ func TestQwenCurrentCatalog(t *testing.T) {
 		}
 		price := public.Prices[priceIndex]
 		expected := [][2]proxy.CatalogDecimal{{"2", "6"}, {"2", "6"}, {"0.15", "0.47"}, {"2", "6"}, {"0.5", "3"}}[index]
-		if !price.Available || len(price.Rates) != 2 || price.Source != "https://www.alibabacloud.com/help/en/model-studio/model-pricing" || price.LastVerified != "2026-09-05" {
+		verified := "2026-09-05"
+		if model == "qwen3.8-flash" {
+			verified = "2026-11-13"
+		}
+		if !price.Available || len(price.Rates) != 2 || price.Source != "https://www.alibabacloud.com/help/en/model-studio/model-pricing" || price.LastVerified != verified {
 			t.Fatalf("price=%+v", price)
 		}
 		for index, rate := range price.Rates {
@@ -241,9 +245,71 @@ func TestQwenCurrentCatalog(t *testing.T) {
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest("GET", proxy.PublicCapabilitiesPath, nil))
 	for _, model := range currentQwenModels {
-		if strings.Contains(response.Body.String(), model) {
+		if model == "qwen3.8-flash" {
+			if !strings.Contains(response.Body.String(), model) {
+				t.Error("qualified Flash offering is absent from public discovery")
+			}
+		} else if strings.Contains(response.Body.String(), model) {
 			t.Errorf("unqualified model is public: %s", model)
 		}
+	}
+}
+
+func TestQwenCurrentFlashActivation(t *testing.T) {
+	var dispatched []string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload struct {
+			Model string `json:"model"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Error(err)
+			return
+		}
+		dispatched = append(dispatched, payload.Model)
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"OK"}]}],"usage":{"input_tokens":2,"output_tokens":3,"total_tokens":5}}`)
+	}))
+	defer upstream.Close()
+	router, err := buildRouterWithCatalogs(t, proxy.Configuration{Endpoints: providerEndpointOverrides(map[string]string{"dashscope": upstream.URL}, nil)}, zap.NewNop().Sugar())
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(router)
+	defer server.Close()
+	for _, path := range []string{proxy.PublicCapabilitiesPath, "/v1/models"} {
+		request, err := http.NewRequest(http.MethodGet, server.URL+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Authorization", "Bearer "+TestSecret)
+		response, err := server.Client().Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, readErr := io.ReadAll(response.Body)
+		response.Body.Close()
+		if readErr != nil || response.StatusCode != http.StatusOK || !strings.Contains(string(body), "qwen3.8-flash") {
+			t.Fatalf("Flash discovery path=%s status=%d read_error=%v", path, response.StatusCode, readErr)
+		}
+		for _, model := range currentQwenModels {
+			if model != "qwen3.8-flash" && strings.Contains(string(body), model) {
+				t.Errorf("unqualified model %s in %s", model, path)
+			}
+		}
+	}
+	for _, selection := range []string{"&model=qwen3.8-flash", ""} {
+		response, err := server.Client().Get(server.URL + "/?key=" + TestSecret + "&provider=dashscope&prompt=test&max_tokens=32" + selection)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, readErr := io.ReadAll(response.Body)
+		response.Body.Close()
+		if readErr != nil || response.StatusCode != http.StatusOK || string(body) != "OK" || response.Header.Get("X-LLM-Proxy-Total-Tokens") != "5" {
+			t.Fatalf("Flash selection=%s status=%d read_error=%v", selection, response.StatusCode, readErr)
+		}
+	}
+	if !reflect.DeepEqual(dispatched, []string{"qwen3.8-flash", "qwen-plus"}) {
+		t.Fatalf("explicit Flash selection changed provider default: %v", dispatched)
 	}
 }
 

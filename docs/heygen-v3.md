@@ -43,7 +43,7 @@ The [native video reference](https://developers.heygen.com/reference/get-video) 
 Other HeyGen transport origin scopes stay unchanged.
 
 Each new origin has four active requests and 24 queued requests in the checked-in capacity contract.
-The global admitted budget is 652. The global active limit stays 32.
+Global admission limits follow the [local setup contract](local-setup.md).
 
 Select `speed` or `precision` for lip sync and translation.
 Supply translation languages as an ordered `output_languages` array.

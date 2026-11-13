@@ -14,7 +14,7 @@ import (
 )
 
 func TestDashScopeMediaImageCount(t *testing.T) {
-	for _, model := range []string{"qwen3.7-plus", "qwen3.6-flash"} {
+	for _, model := range []string{"qwen3.7-plus", "qwen3.6-flash", "qwen3.8-flash"} {
 		t.Run(model, func(t *testing.T) {
 			calls := 0
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +61,7 @@ func TestDashScopeMediaImageCount(t *testing.T) {
 }
 
 func TestDashScopeMediaDataURIBoundary(t *testing.T) {
-	for _, model := range []string{"qwen3.7-plus", "qwen3.6-flash"} {
+	for _, model := range []string{"qwen3.7-plus", "qwen3.6-flash", "qwen3.8-flash"} {
 		t.Run(model, func(t *testing.T) {
 			calls := 0
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +123,11 @@ func TestDashScopeMediaCatalog(t *testing.T) {
 				}
 				continue
 			}
-			if limit.Source != "https://www.alibabacloud.com/help/en/model-studio/vision" || limit.LastVerified != "2026-09-05" || limit.Status != "bounded" || limit.Value == nil {
+			verified := "2026-09-05"
+			if offering.Model == "qwen3.8-flash" {
+				verified = "2026-11-13"
+			}
+			if limit.Source != "https://www.alibabacloud.com/help/en/model-studio/vision" || limit.LastVerified != verified || limit.Status != "bounded" || limit.Value == nil {
 				t.Fatalf("source/status=%+v", limit)
 			}
 			switch limit.ID {
@@ -140,7 +144,7 @@ func TestDashScopeMediaCatalog(t *testing.T) {
 			}
 		}
 	}
-	if count != 2 {
+	if count != 3 {
 		t.Fatalf("image offerings=%d", count)
 	}
 }

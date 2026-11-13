@@ -1,0 +1,171 @@
+{
+  "date": "2026-11-13",
+  "implementation_issue": "F064",
+  "review_issue": "P019",
+  "next_model_issue": "F093",
+  "milestone": "Alibaba workspace inventory export",
+  "status": "milestone_accepted_with_remaining_issue_scope",
+  "audit": {
+    "initial_unresolved_or_taken_entries": 99,
+    "sections": {
+      "BugFixes": 11,
+      "Improvements": 31,
+      "Maintenance": 9,
+      "Features": 40,
+      "Planning": 8
+    },
+    "missing_review_identifiers": [],
+    "duplicate_active_or_archive_identifiers": [],
+    "plan": "docs/backend-execution-plan.md"
+  },
+  "checks": {
+    "make_test_dashscope_inventory": "passed",
+    "make_test_dashscope_responses": "passed",
+    "make_test_upstream_admission": "passed",
+    "heygen_canonical_origin_allocation": "passed_after_total_correction",
+    "inventory_new_statement_blocks": 55,
+    "inventory_uncovered_statement_blocks": 0,
+    "independent_plan_review": "passed_after_corrections",
+    "independent_command_review": "passed_after_trial_host_correction",
+    "changed_prose_mechanical_findings": 0,
+    "governor_existing_drift_entries": 13,
+    "governor_drift_unchanged": false,
+    "git_diff_check": "passed",
+    "make_ci": "passed",
+    "final_ci_gates": 15,
+    "go_statement_coverage": "100.0%",
+    "final_ci_duration_seconds": 772,
+    "configured_key_in_nonignored_changes": false,
+    "final_ci_log": "/tmp/llm-proxy-f064-ci-terminal.log",
+    "governor_check": "existing_template_drift",
+    "governor_exit_code": 1,
+    "governor_initial_drift_entries": 14,
+    "governor_added_drift_entries": 0,
+    "governor_resolved_drift_paths": [
+      "/Users/tyemirov/Development/llm-proxy/AGENTS.md"
+    ],
+    "independent_capacity_review": "passed_after_document_corrections"
+  },
+  "retained_failures": [
+    {
+      "kind": "expected_integration_first_failure",
+      "command": "make test-dashscope-inventory",
+      "output": "unknown command \"inventory-dashscope\" for \"llm-proxy\""
+    },
+    {
+      "kind": "expected_trial_host_regression_failure",
+      "command": "make test-dashscope-inventory DASHSCOPE_INVENTORY_TEST_ARGS=-run=TestDashScopeInventoryCommandRejectsUnsafeInputsBeforeHTTP/reserved_trial",
+      "output": "trial endpoint received workspace credential",
+      "regions": [
+        "ap-southeast-1",
+        "us-east-1"
+      ]
+    },
+    {
+      "kind": "environment_failure",
+      "command": "make ci",
+      "stage": "Go integration tests",
+      "output": "no space left on device",
+      "recovery": "Removal of the rebuildable Go compiler cache restored 18 GiB of available space."
+    },
+    {
+      "kind": "configuration_contract_expectation",
+      "command": "make ci",
+      "test": "TestHeyGenCanonicalOriginAllocationContract",
+      "output": "canonical capacity limits differ from the exact allocation contract",
+      "recovery": "Both expected global totals were changed from 680 to 708. The focused public contract test passed."
+    }
+  ],
+  "initial_provider_input_check": {
+    "sources": [
+      "process",
+      "configs/.env",
+      "configs/.env.local"
+    ],
+    "absent_fields": [
+      "DASHSCOPE_API_KEY",
+      "DASHSCOPE_BASE_URL",
+      "SILICONFLOW_API_KEY"
+    ],
+    "live_harness_result": "Required DashScope inputs were absent before dispatch.",
+    "upstream_requests": 0,
+    "live_workspace_qualification": "unverified"
+  },
+  "configured_provider_access": {
+    "private_input": "configs/.env",
+    "key_record_id": "1363489",
+    "allowed_models": [
+      "qwen-plus",
+      "qwen3.7-flash",
+      "qwen3.8-flash"
+    ],
+    "allowed_ipv4_sources": "all",
+    "raw_inventory": "_scratch/F064-dashscope-inventory-20261113.json",
+    "raw_inventory_ignored": true,
+    "retrieved_at": "2026-11-13T19:23:05.425663Z",
+    "inference_models": 186,
+    "inference_pages": 10,
+    "deployment_models": 33,
+    "deployment_pages": 2,
+    "model_inventory_requests": 12,
+    "workspace_service_scope": "unknown",
+    "proxy_connection_verification": "HTTP 200",
+    "proxy_text_smoke": {
+      "model": "qwen3.8-flash",
+      "reasoning_effort": "omitted",
+      "status": 200
+    },
+    "complete_model_qualification": "incomplete",
+    "initial_smoke_failure": "invalid_upstream_capacity: workspace origin missing before provider dispatch",
+    "capacity_correction": {
+      "provider": "dashscope",
+      "active": 4,
+      "queued": 24,
+      "global_active": 32,
+      "global_admitted": 708
+    },
+    "credential_replacement": "The user reset the first key before use after incomplete output redaction. The replacement was saved privately.",
+    "inventory_sha256": "ab8a780180e7334e21e14d9c27f9d3576fbc5239ebb63685669fe8d2212be0fd",
+    "connection_verification_model": "qwen-plus"
+  },
+  "browser_handoff": {
+    "site": "https://modelstudio.console.alibabacloud.com/ap-southeast-1",
+    "authentication_site": "https://account.alibabacloud.com",
+    "browser": "Chrome",
+    "profile": "Vadym",
+    "tab_id": "232482989",
+    "state": "Account, workspace, and saved key record were verified. The temporary Chrome tab was closed.",
+    "target_access_region": "ap-southeast-1",
+    "account_identifier": "5123889231922603",
+    "workspace_identifier": "ws-s8jvkkuq2w12az3h",
+    "workspace_name": "默认业务空间",
+    "workspace_base_url": "https://ws-s8jvkkuq2w12az3h.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+    "initial_api_keys": 0,
+    "current_api_keys": 1,
+    "required_console_access": "Alibaba Cloud account or RAM administrator/API-Key page permission",
+    "mfa_state": "The signed-in session permits API-key page access. No additional challenge appeared during inspection.",
+    "approved_private_input": "configs/.env",
+    "prepared_operation": "Verify account and workspace, inspect existing API access, then run the inventory command.",
+    "key_kind": "Model Studio pay-as-you-go",
+    "key_creation": "The user approved the scoped key and private storage, then completed its reset.",
+    "temporary_tab_closed": true,
+    "recovery": "Reuse the private inputs for local validation. Reopen the recorded site only for unfinished provider-console work."
+  },
+  "sources": [
+    "https://www.alibabacloud.com/help/en/model-studio/model-pricing",
+    "https://www.alibabacloud.com/help/en/model-studio/qwen3-7-flash",
+    "https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-responses",
+    "https://www.alibabacloud.com/help/en/model-studio/list-models",
+    "https://www.alibabacloud.com/help/en/model-studio/regions"
+  ],
+  "remaining_f064_scope": [
+    "Authenticated workspace inventory and service deployment scope",
+    "Reviewed catalog proposals and explicit capability gaps",
+    "Typed regional restrictions across connection and route selection",
+    "Live qualification of every enabled regional offering"
+  ],
+  "public_http_event_contracts": "unchanged",
+  "release": "not_requested",
+  "publication": "not_requested",
+  "deployment": "not_requested"
+}

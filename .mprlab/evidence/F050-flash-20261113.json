@@ -1,0 +1,289 @@
+{
+  "issue": "F050",
+  "scope": "Alibaba Singapore Qwen 3.8 Flash production preparation",
+  "recorded_at": "2026-11-13T20:25:02.689854+00:00",
+  "provider": "dashscope",
+  "model": "qwen3.8-flash",
+  "account_id": "5123889231922603",
+  "workspace_id": "ws-s8jvkkuq2w12az3h",
+  "access_region": "ap-southeast-1",
+  "qualification_environment": "Real local CLI proxy, disposable managed database and saved provider connection, real Alibaba inference; automated Chromium for browser acceptance",
+  "private_input": "configs/.env; secret values omitted",
+  "source_activation": "Flash enabled; other four Qwen3.8 candidates disabled; qwen-plus provider default retained",
+  "production": {
+    "state": "not_deployed",
+    "tenant": "TellTale",
+    "tenant_id": "managed-13f5fc612c3fac74f219d0bd483286be",
+    "observed_owner_display_name": "Vadym Tyemirov",
+    "existing_connections": 2,
+    "existing_client_key": true,
+    "alibaba_connection_present": false,
+    "temporary_inspection_tab_closed": true,
+    "owner_email_masked": "tem****@gmail.com",
+    "owner_verified_by": "Admin user listing directly associates this email owner with the exact TellTale tenant",
+    "public_preflight": {
+      "health_http_status": 200,
+      "capabilities_http_status": 200,
+      "exact_models": 87,
+      "qwen3.8_flash_present": false
+    }
+  },
+  "live_commands": [
+    "LLM_PROXY_LIVE_QUALIFICATION=true LLM_PROXY_LIVE_REASONING_MATRIX=true make test-live-provider-candidate LIVE_CANDIDATE_MODEL=dashscope/qwen3.8-flash LIVE_ENV_FILE=configs/.env",
+    "LLM_PROXY_LIVE_QUALIFICATION=true make test-live-provider-candidate-media LIVE_CANDIDATE_MODEL=dashscope/qwen3.8-flash LIVE_ENV_FILE=configs/.env"
+  ],
+  "cases": [
+    {
+      "event": "live_qualification",
+      "provider": "dashscope",
+      "model": "qwen3.8-flash",
+      "kind": "text",
+      "reasoning_effort": "omitted",
+      "request_id": "GAB3XKAMD7L5MWU3FIBKYKQX6P",
+      "elapsed_ms": 1317,
+      "request_tokens": 101,
+      "response_tokens": 31,
+      "total_tokens": 132,
+      "http_status": 200,
+      "accepted": true
+    },
+    {
+      "event": "live_qualification",
+      "provider": "dashscope",
+      "model": "qwen3.8-flash",
+      "kind": "text",
+      "reasoning_effort": "none",
+      "request_id": "PEXQHTO7EKXGEPRF6XN54AVEOI",
+      "elapsed_ms": 809,
+      "request_tokens": 65,
+      "response_tokens": 1,
+      "total_tokens": 66,
+      "http_status": 200,
+      "accepted": true
+    },
+    {
+      "event": "live_qualification",
+      "provider": "dashscope",
+      "model": "qwen3.8-flash",
+      "kind": "text",
+      "reasoning_effort": "low",
+      "request_id": "PWRTPS3NHPBWEZFHG5EBXB354J",
+      "elapsed_ms": 1112,
+      "request_tokens": 89,
+      "response_tokens": 19,
+      "total_tokens": 108,
+      "http_status": 200,
+      "accepted": true
+    },
+    {
+      "event": "live_qualification",
+      "provider": "dashscope",
+      "model": "qwen3.8-flash",
+      "kind": "text",
+      "reasoning_effort": "medium",
+      "request_id": "2UXE7DWIVQQMOUKKITVILMPKQ7",
+      "elapsed_ms": 2017,
+      "request_tokens": 63,
+      "response_tokens": 63,
+      "total_tokens": 126,
+      "http_status": 200,
+      "accepted": true
+    },
+    {
+      "event": "live_qualification",
+      "provider": "dashscope",
+      "model": "qwen3.8-flash",
+      "kind": "text",
+      "reasoning_effort": "xhigh",
+      "request_id": "3VT7FDLTBXWEFM4DZDCHQC63SE",
+      "elapsed_ms": 1332,
+      "request_tokens": 101,
+      "response_tokens": 22,
+      "total_tokens": 123,
+      "http_status": 200,
+      "accepted": true
+    },
+    {
+      "event": "live_qualification",
+      "provider": "dashscope",
+      "model": "qwen3.8-flash",
+      "kind": "image",
+      "reasoning_effort": "omitted",
+      "request_id": "Z6YJCOYYIBYIJKAAYX2CTDP4RB",
+      "elapsed_ms": 2593,
+      "request_tokens": 238,
+      "response_tokens": 67,
+      "total_tokens": 305,
+      "http_status": 200,
+      "accepted": true
+    }
+  ],
+  "validation": {
+    "expected_initial_failures": [
+      "Flash absent from public discovery with disabled catalog flag",
+      "250-image Flash request rejected as unknown model",
+      "Flash Data URI offering absent",
+      "Image offering count 2 instead of3",
+      "Public capability totals and media dates required selective update"
+    ],
+    "focused": "make test-qwen-current test-dashscope-media-limits test-dashscope-responses passed",
+    "catalog": "make test-provider-catalog passed after updating exact activated counts and Flash dates",
+    "harness": "make test-operational-live-contracts passed",
+    "browser": "Three selected Chromium tests passed: public catalog, no-JavaScript catalog, Flash explicit selection and reload",
+    "final_ci": {
+      "command": "make ci",
+      "exit_code": 0,
+      "status": "passed",
+      "duration_seconds": 839,
+      "gates": [
+        {
+          "number": 1,
+          "name": "Installed Gateway qualification",
+          "result": "PASS",
+          "evidence": "37s"
+        },
+        {
+          "number": 2,
+          "name": "Release version contract",
+          "result": "PASS",
+          "evidence": "2s"
+        },
+        {
+          "number": 3,
+          "name": "Go formatting",
+          "result": "PASS",
+          "evidence": "1s"
+        },
+        {
+          "number": 4,
+          "name": "Go static analysis",
+          "result": "PASS",
+          "evidence": "6s"
+        },
+        {
+          "number": 5,
+          "name": "Python static analysis",
+          "result": "PASS",
+          "evidence": "1s"
+        },
+        {
+          "number": 6,
+          "name": "Frontend static analysis",
+          "result": "PASS",
+          "evidence": "2s"
+        },
+        {
+          "number": 7,
+          "name": "Protocol acceptance",
+          "result": "PASS",
+          "evidence": "20s"
+        },
+        {
+          "number": 8,
+          "name": "Upstream admission race tests",
+          "result": "PASS",
+          "evidence": "33s"
+        },
+        {
+          "number": 9,
+          "name": "Go integration tests",
+          "result": "PASS",
+          "evidence": "589s"
+        },
+        {
+          "number": 10,
+          "name": "Python client tests",
+          "result": "PASS",
+          "evidence": "72s"
+        },
+        {
+          "number": 11,
+          "name": "Frontend browser tests",
+          "result": "PASS",
+          "evidence": "106s"
+        },
+        {
+          "number": 12,
+          "name": "OpenAPI Pages artifact",
+          "result": "PASS",
+          "evidence": "2s"
+        },
+        {
+          "number": 13,
+          "name": "TAuth management browser black box",
+          "result": "PASS",
+          "evidence": "70s"
+        },
+        {
+          "number": 14,
+          "name": "Live-provider harness preflight",
+          "result": "PASS",
+          "evidence": "2s"
+        },
+        {
+          "number": 15,
+          "name": "Go coverage verification",
+          "result": "PASS",
+          "evidence": "100.0%"
+        }
+      ],
+      "go_statement_coverage": "100.0%",
+      "frontend_browser_tests": 177,
+      "authentication_browser_tests": 13
+    },
+    "independent_review": "Final architect review found no actionable code or security findings. Historical CI wording corrected. Browser reload evidence uses mocked management persistence; production tenant acceptance remains pending. Final one-line management discovery expectation independently accepted. Final cross-repository catalog count/date search found no remaining Flash-related stale assertions.",
+    "initial_ci_failure": "TestManagementProfileListsCurrentCatalogModels expected four DashScope models; active Flash correctly added a fifth. Exact-list expectation updated; qwen-plus default assertion retained.",
+    "management": "make test-management-contracts passed (12.867s) after the exact model-list correction",
+    "second_ci_failure": "All backend, race, Python and coverage gates passed. Frontend had176passed and1failed because static landing HTML still expected87models/90offerings; corrected those exact assertions to88/91.",
+    "frontend_final": "make ci-frontend passed:177frontendbrowsertests, OpenAPI Pages artifact check,13authenticationblackboxtests; staticanalysis passed",
+    "harness_preflight_final": "make test-live-provider-harness passed after all code changes",
+    "harness_tdd": "New public shell regressions initially found missing/invalid usage accepted and no safe timing evidence; all cases now pass, including ordered image rejection."
+  },
+  "limits": {
+    "per_provider_response_qualification_tokens": 4096,
+    "additional_continuations_possible": true,
+    "nominal_context_tokens": 1000000,
+    "responses_effective_input": "approximately80percent; automatic truncation; exact preserved-input threshold undocumented",
+    "maximum_context_preservation_qualified": false,
+    "load_reliability_qualified": false
+  },
+  "sources": [
+    "https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-responses",
+    "https://www.alibabacloud.com/help/en/model-studio/model-pricing",
+    "https://www.alibabacloud.com/help/en/model-studio/vision"
+  ],
+  "pending_operations": [
+    "Finalize selected validated changes through normal commit workflow; current checkout also includes separate TypeSafe and governance edits",
+    "Release publication and operator deployment",
+    "Create or reuse account-owned Alibaba connection and attach to TellTale after deployed origin allocation",
+    "Authenticate production requests with existing TellTale client key and verify exact Flash route"
+  ],
+  "lifecycle_preparation": {
+    "application_base_commit": "cd32123b6c7508ce7dcde164e9a081679a27f0f5",
+    "repository": "tyemirov/llm-proxy",
+    "default_branch": "master",
+    "github_actor": "tyemirov",
+    "github_permission": "ADMIN",
+    "gateway_version": "v9.2.2",
+    "gateway_platform": "darwin-arm64",
+    "gateway_contract": 4,
+    "release_for_flash_changes": "not_prepared",
+    "readiness_for_new_flash_production_activation": "NOT READY: selected Flash source is not yet committed or published",
+    "selected_flash_release_identity": null
+  },
+  "updated_at": "2026-11-13T21:07:00.360265+00:00",
+  "activation_issue": "F095",
+  "implementation_state": "F050 completed; Flash source-enabled and qualified; other four candidates implemented and disabled",
+  "validated_public_source_hashes": {
+    "configs/providers.yml": "4e14aaa1b2d0206be47530c63d9238e74d9cf1208e92634b8d1aba55f84fa26c",
+    "configs/config.yml": "aa75c13723c7bc3ef3e8ff8ea63d32a242b0187a778adc1ebdca92cda27b8cd0",
+    "scripts/test_live_providers.sh": "a12a898d552808b628823a6b8de09289de0a0e06f5b48bb23304d10aae9dc43f",
+    "internal/proxy/responses_codec.go": "529c6e13d11f28557f3791c8d5ea8545c32fb1e11c92b8741598ce02c4a2ddef",
+    "internal/proxy/qwen_current_models_test.go": "2b78c51b2874175cdf2e42bfc1af193d209917d9066ffd23e2c54b0e28910ac5",
+    "internal/proxy/dashscope_media_limits_test.go": "716824c4666c73ddc5c3c8758170cd6d4a57d64e3c190ff11b62ab306a8821e9",
+    "internal/proxy/management_test.go": "0ef4c1de2075702c73b1bad56f9db4a83d245f2f9a7b9574ffdcc923edfc6699",
+    "tests/capabilities_test.go": "6a431ee6156c0bb718f63a882019e678959c18071057223951757db35c846ab5",
+    "tests/live_provider_qualification_test.go": "d8c55857b020e60fd726042f31d3ee27d0515f68657a2f566d122612759f0946",
+    "tests/e2e/management-ui.spec.js": "84c9f28421222a043143d7bef267c7810ce3a6d6c4ef73a341c2c3ebb559b957"
+  }
+}

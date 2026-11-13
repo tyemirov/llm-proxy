@@ -33,6 +33,14 @@ TelePrompter is the separate timeline and prompt website. Frame Picker and other
 Umbrellas coordinate executable dependencies. Complete dependency issues before closing their umbrella.
 Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I092 owns final acceptance.
 
+Provider priority (2026-11-13):
+The user selected Alibaba Model Studio access as the first provider priority.
+Use the cost order and issue review in `docs/backend-execution-plan.md`.
+The F064 inventory and initial connection milestone passed local and live smoke acceptance.
+The user subsequently selected Qwen 3.8 and Qwen 4 as the production targets.
+Prioritize F095 Flash production activation and F094 production access. F093 is deferred.
+Keep I038, I226, and F095 live qualification separate from regional implementation.
+
 ## BugFixes
 
 - [x] [B320] (P0) Match the API route configuration policy to its shared provider.
@@ -3765,7 +3773,7 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   Let managed tenants select current Qwen flagship and cost-efficient models
   through their existing Alibaba Model Studio workspace connection.
   Evidence:
-  - The current DashScope catalog contains only exact model `qwen-plus`.
+  - The original DashScope catalog contained only exact model `qwen-plus`.
   - Alibaba lists `qwen3.7-max`, `qwen3.7-plus`, and `qwen3.6-flash` as current
     recommended text models:
     https://www.alibabacloud.com/help/en/model-studio/text-generation-model
@@ -3803,9 +3811,17 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Run one paid verification and text request for each new model.
   - Keep credentials, prompts, and response bodies out of test output.
   - Run `make ci` after the last application change.
-  Blocked: A DashScope credential and tenant Singapore workspace URL are not
-  available in this workspace. The operator must supply `DASHSCOPE_API_KEY`
-  and `DASHSCOPE_BASE_URL` and authorize the six paid live calls.
+  Review on 2026-11-13:
+  - All four text offerings now exist in the catalog and use the synchronous Responses transport.
+  - `make test-dashscope-responses` passes through the public proxy interfaces.
+  - The live harness rejects absent `DASHSCOPE_API_KEY` and `DASHSCOPE_BASE_URL` before dispatch.
+  - The local source check covered the process, `configs/.env`, and `configs/.env.local`.
+  - F093 adds the separate lower-cost Flash candidate. F064 adds regional inventory and access.
+  Access update on 2026-11-13:
+  - The user approved a scoped Singapore key and saved workspace URL in the private `configs/.env` file.
+  - The key permits `qwen-plus`, `qwen3.7-flash`, and `qwen3.8-flash`.
+  - Account connection verification and the Qwen 3.8 Flash text smoke returned HTTP 200 through the disposable proxy.
+  Blocked: The complete I226 matrix needs grants for `qwen3.7-max`, `qwen3.7-plus`, and `qwen3.6-flash`, plus their live acceptance.
 - [!] [I225] (P1) Move GLM routes to the international Z.AI API.
   Goal:
   Use one canonical `zai` provider for international Z.AI text and dictation
@@ -4129,9 +4145,9 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
     `/tmp/llm-proxy-i038-ci.log`.
   - Current contract and live command: `docs/dashscope-responses.md`.
   Blocked:
-  - On 2026-09-05, `DASHSCOPE_API_KEY` and `DASHSCOPE_BASE_URL` were absent from
-    the process and all six authorized repository input files. All four models
-    require live workspace acceptance. I226 retains that acceptance gate.
+  - On 2026-11-13, a scoped Singapore connection passed live account verification and a Qwen 3.8 Flash text smoke.
+  - The key permits `qwen-plus`, `qwen3.7-flash`, and `qwen3.8-flash`.
+  - Full route acceptance needs the remaining I226 model grants and checks.
 - [ ] [I035] (P2) Persist each user's selected Usage interval across sessions.
   Goal:
   Make the Usage Overview reopen with the last interval the authenticated user
@@ -4405,6 +4421,102 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   was required.
 
 ## Features
+
+- [!] [F095] (P0) Activate qualified Qwen 3.8 offerings in production.
+  Goal:
+  Complete production activation and exact-tenant acceptance independently from F050's repository implementation.
+  Requirements:
+  - Prioritize Qwen 3.8 Flash on Alibaba through the verified Singapore workspace.
+  - Use the existing TellTale tenant `managed-13f5fc612c3fac74f219d0bd483286be` under the verified signed-in owner.
+  - Publish committed, validated source through the canonical repository lifecycle; keep unrelated pending edits under their owners' control.
+  - Deploy the exact workspace admission allocation before saving a production connection to that origin.
+  - Create or reuse the account-owned Alibaba connection and explicitly assign it to TellTale.
+  - Preserve the existing TellTale client key. Use an authorized private input for native production acceptance.
+  - Verify exact Flash dispatch, text, declared images, usage, request IDs, discovery, and the selected tenant routing after deployment.
+  - Record a tenant default change explicitly; source catalog activation alone preserves existing defaults.
+  - Keep the other four Qwen 3.8 candidates disabled until their required grants and complete text, reasoning, and declared media qualification pass.
+  - Run the applicable repository validation after each later source activation change.
+  Deliverables:
+  - Exact release and deployment identities, account connection and tenant assignment, and safe production acceptance evidence.
+  - Per-model activation state in `docs/qwen-flash-production.md` or a linked operational record.
+  Qualification snapshot before Git finalization (2026-11-13):
+  - Flash passed five live reasoning cases and ordered PNG/JPEG input with measured usage and is enabled in source.
+  - The other four candidates are implemented and disabled; their model grants and live qualification remain pending.
+  - Chrome confirmed TellTale exists with two connections and an existing client key; the account has no Alibaba connection.
+  - At qualification completion, the selected source changes were uncommitted. Separate TypeSafe and governance work remains outside this release scope.
+  - The user subsequently approved manual Qwen/Alibaba source finalization, release preparation, and publication. Production rollout remains the operator's next phase.
+  - The private existing TellTale client key has not been selected for native API acceptance.
+  Validation:
+  - Retain deployed API and website release markers, exact tenant identity, and authenticated Flash request IDs and measured usage.
+  - Keep local protocol coverage, live provider qualification, and deployed tenant acceptance as distinct evidence.
+  Runbook: `docs/qwen-flash-production.md`.
+  Implementation history: F050. This activation issue does not reopen completed development work.
+  Blocked: Production rollout is the operator's next phase. Native TellTale acceptance awaits selection of its existing private client-key input.
+
+- [!] [F094] (P0) Add supported Qwen 4 application access.
+  Goal:
+  Add an exact Qwen 4 model through a provider contract that supports application backends.
+  Requirements:
+  - Establish the exact model identifier, lifecycle, service eligibility, region, endpoint, credential scope, quotas, and prices before implementation.
+  - Confirm an access period suitable for the intended production lifetime.
+  - Keep preview evaluation separate from production model selection.
+  - Implement the selected protocol, reasoning controls, output budget, usage, and declared media contract from current primary sources.
+  - Keep the candidate disabled until the required qualification passes.
+  - Record activation, release, publication, deployment, and production acceptance in the operational runbook.
+  Deliverables:
+  - A supported provider and model contract with dated primary sources.
+  - Exact catalog metadata, protocol implementation, public integration coverage, and qualification instructions.
+  Validation:
+  - Cover the selected request and response contract through public entry points before implementation.
+  - Run focused integration checks and the applicable final CI gate after application changes.
+  - Qualify provider connectivity separately from local protocol coverage.
+  Evidence (2026-11-13):
+  - Alibaba documents only `qwen4-max-preview` for Qwen 4; Token Plan access requires separate credentials and an endpoint.
+  - Pay-as-you-go access is unsupported. The preview ends at 24:00 on 2026-11-25 (UTC+8), followed by model retirement.
+  - The configured pay-as-you-go inventory and public production catalog contain no Qwen 4 offering.
+  - The inspected Together, Fireworks, Novita, SiliconFlow, and DeepInfra listings did not establish a durable Qwen 4 production route.
+  - Source: https://www.alibabacloud.com/help/en/model-studio/qwen4-max-preview.
+  - Source: https://www.alibabacloud.com/help/en/model-studio/token-plan-overview.
+  Blocked: A provider-supported application access contract, suitable model lifecycle, and eligible credentials remain unestablished. The retiring Token Plan preview does not establish those prerequisites.
+
+- [ ] [F093] (P2) Add the cost-efficient Qwen 3.7 Flash candidate.
+  Priority update:
+  The user selected Qwen 3.8 and Qwen 4 on 2026-11-13. This cost alternative follows F050 and F094.
+  Goal:
+  Make `qwen3.7-flash` available through the existing Singapore DashScope connection after qualification.
+  Requirements:
+  - Use the existing synchronous `dashscope_responses` transport and the exact upstream identifier.
+  - Add a disabled candidate until text, reasoning, and declared image qualification pass.
+  - Confirm the current protocol, context limits, output limits, and distinct reasoning controls from official sources.
+  - Record every Singapore input tier and its output price with the source date.
+  - Keep the selected tenant defaults unchanged until an explicit model selection.
+  - Restrict advertised capabilities to those implemented by the selected codec.
+  - Keep provider tools, video input, caching, and structured output outside this candidate unless separately implemented and qualified.
+  Initial contract:
+  - Use a 1,000,000-token context window and a 131,072-token visible output maximum.
+  - Accept `max_tokens` from 16 through 131,072 through the existing Responses mapping.
+  - Leave reasoning controls undeclared until the provider-specific Qwen 3.7 effort mapping passes qualification.
+  - Start text qualification with omitted reasoning effort.
+  - Distinguish visible output limits from billed reasoning tokens in usage acceptance.
+  - Verify the effective Responses input bound and truncation behavior before accepting maximum-context requests.
+  - Qualify ordered image inputs before the image capability enters active discovery.
+  Deliverables:
+  - Add the exact model, offering, controls, limits, and conditional USD prices.
+  - Add public HTTP tests for exact dispatch, reasoning, usage, continuation, images, and input rejection.
+  - Add catalog tests that exclude the candidate from active discovery before qualification.
+  - Update the current Qwen documentation and live qualification instructions.
+  Validation:
+  - Run the new public integration tests before production edits and retain their expected failure.
+  - Run focused catalog, DashScope, and image-limit targets after implementation.
+  - Run `make ci` after the last application change.
+  - Run the candidate text and image targets with the matching Singapore workspace inputs.
+  Evidence:
+  - On 2026-11-13, official Singapore prices were $0.030 input and $0.130 output per million tokens through 32K input.
+  - The next tiers were $0.10/$0.40 through 256K and $0.20/$0.80 through 1M input tokens.
+  - A 10,000-input and 1,000-output request costs $0.00043 before discounts or free quota.
+  - Sources: https://www.alibabacloud.com/help/en/model-studio/qwen3-7-flash and https://www.alibabacloud.com/help/en/model-studio/model-pricing.
+  - The authenticated 2026-11-13 inventory confirms the exact selector and its context and output limits.
+  - The Responses effort table lists distinct Qwen 3.8 levels but does not establish the Qwen 3.7 mapping.
 
 - [x] [F091] (P1) Expose tenant-owned hosted financial receipts.
   Goal: Let applications read existing hosted reservations and immutable settlement evidence with their own tenant key.
@@ -5847,12 +5959,49 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Run `make ci` after the last application change and record the complete acceptance target result.
   - Mark this issue complete only after its development deliverables and acceptance requirements pass.
 
-- [ ] [F064] (P1) Add Alibaba Model Studio US East access and its complete model inventory.
+- [ ] [F064] (P0) Add Alibaba Model Studio US East access and its complete model inventory.
   Goal:
   Let users connect an Alibaba Cloud Model Studio workspace in US (Virginia), `us-east-1`.
   Make all models available through that workspace part of the integration scope, including third-party models.
   Keep access region and service deployment scope distinct.
-  This issue records future implementation work. The 2026-09-13 investigation changes documentation only.
+  The 2026-09-13 investigation changed documentation only.
+  The 2026-11-13 execution starts with a validated inventory export.
+  Current execution order and account preparation are in `docs/backend-execution-plan.md`.
+  Current source corrections:
+  - The 2026-11-12 regional guide assigns US deployment scopes through workspaces.
+  - Determine current exact selectors from the selected workspace inventory before catalog registration.
+  - Treat the historical `-us` examples below as dated evidence, not a current selector requirement.
+  - The Models API page still shows a shared US host. Live qualification must confirm the selected workspace inventory host.
+  Inventory milestone on 2026-11-13:
+  - Added `inventory-dashscope` with separate complete inference and deployment queries.
+  - Added public CLI tests before production code. The initial test failed because the command was absent.
+  - Independent review found that the initial URL rule accepted the reserved trial host.
+  - Public regression tests reproduced dispatch to both trial hosts before the correction.
+  - The corrected command rejects both trial hosts before HTTP dispatch.
+  - Focused tests pass with all 55 new production statement blocks covered.
+  - Independent completion review has no remaining actionable findings.
+  - The inventory implementation passed all 15 CI gates with 100.0 percent Go statement coverage.
+  - The first full CI result stopped during Go tests with `no space left on device`.
+  - Removal of the rebuildable Go compiler cache restored 18 GiB of available space before validation resumed.
+  - Changed files: `cmd/cli/dashscope_inventory.go`, `cmd/cli/dashscope_inventory_test.go`, `Makefile`, `configs/config.yml`, `docs/dashscope-responses.md`, and `docs/local-setup.md`.
+  - The operator export adds source, region, unknown scope, collection, page, and exact model metadata fields.
+  - Public HTTP event contracts are unchanged.
+  - The initial live harness stopped before dispatch because the two DashScope inputs were absent.
+  - The user approved a scoped key and private configuration for the verified Singapore workspace.
+  - The authenticated export contains 186 inference models across 10 pages and 33 deployment models across two pages.
+  - Raw metadata is in the ignored `_scratch/F064-dashscope-inventory-20261113.json` file.
+  - A proxy smoke then rejected the missing workspace admission allocation before dispatch.
+  - Independent review approved the exact workspace origin with four active slots and 24 queued slots.
+  - Global admitted capacity is 708. The global active limit remains 32.
+  - After that configuration change, connection verification and the Qwen 3.8 Flash text smoke returned HTTP 200.
+  - The following CI run exposed the HeyGen allocation test's obsolete 680 total.
+  - Both expected totals now use 708. Its HeyGen-specific allocation checks are retained, and the focused test passes.
+  - Additional changed files: `internal/proxy/heygen_canonical_origins_test.go` and `docs/heygen-v3.md`.
+  - Final CI after the configuration and test corrections passed all 15 gates, with 100.0 percent Go statement coverage.
+  - Execution evidence is in `.mprlab/evidence/F064-inventory-20261113.json`.
+  - F050 subsequently qualified Flash's five reasoning cases and ordered PNG/JPEG input with measured usage on 2026-11-13.
+  - Flash is now enabled in source. Its publication and production activation are tracked in `docs/qwen-flash-production.md`.
+  - The remaining catalog proposals, regional restrictions, and other-model qualification remain unresolved.
   Requirements:
   - Extend the current `dashscope` provider with US East workspace support.
   - Use the Alibaba Cloud labels and English credential setup link defined by I262.
@@ -5861,7 +6010,7 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Use a pay-as-you-go API key from the same region and workspace as the API host.
   - Use `https://{WorkspaceId}.us-east-1.maas.aliyuncs.com/compatible-mode/v1` as the US East base URL.
   - Keep Singapore and US East available as explicit current regions.
-  - Keep each upstream model selector exact, including each documented `-us` suffix.
+  - Keep each current upstream model selector exact as established by the selected workspace inventory and API reference.
   - Show whether each US East offering uses Global or US service deployment scope.
   - Treat US East access as distinct from a guarantee of inference in Virginia.
   - Preserve model publishers such as Alibaba, DeepSeek, Moonshot, and Z.ai when Alibaba supplies the provider offering.
@@ -5889,7 +6038,7 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Preserve the response date, request ID, source host, and total count as inventory evidence.
   - Keep credentials out of inventory files and logs.
   - Compare the inventory with the US East console model list and each selected model's API reference.
-  Current implementation and gaps:
+  Implementation state recorded on 2026-09-13:
   - `configs/providers.yml` has one `dashscope` provider, four active Qwen offerings, and five disabled Qwen 3.8 candidates.
   - Its `base_url` pattern permits only `ap-southeast-1` workspace hosts.
   - `internal/proxy/account_connections_store.go` validates current connection fields through `validatedProviderFieldValue` and the catalog pattern.
@@ -6279,7 +6428,7 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   The disposable media command stopped before dispatch with `required catalog environment is not set: ZAI_API_KEY`.
   No live Flash image request ran. Live image qualification requires the key.
   Evidence: `/tmp/llm-proxy-f052-live.log`.
-- [!] [F050] (P1) Add current hosted Qwen 3.8 models.
+- [x] [F050] (P0) Add current hosted Qwen 3.8 models.
   Goal:
   Add the current Qwen 3.8 models through the Singapore DashScope workspace connection.
   Requirements:
@@ -6295,7 +6444,7 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   - Start with failing public HTTP integration tests.
   - Verify exact dispatch, effort, continuation, visible output, usage, and declared image input.
   - Verify catalog metadata and candidate exclusion from public discovery.
-  - Run final CI and each disposable live candidate command.
+  - Run final repository CI. F095 owns remaining live candidate qualification and production activation.
   Sources:
   - https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-responses
   - https://www.alibabacloud.com/help/en/model-studio/text-generation-model
@@ -6327,11 +6476,26 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
   `internal/proxy/qwen_current_models_test.go`, `tests/e2e/management-ui.spec.js`, `Makefile`, `README.md`,
   `docs/provider-catalog.md`, `docs/dashscope-responses.md`, and `docs/qwen-current-models.md`.
   Public event schemas did not change.
-  Blocked:
-  `DASHSCOPE_API_KEY` and `DASHSCOPE_BASE_URL` are absent from the process and all six private repository environment files.
-  All five text commands and four media commands stopped before provider dispatch because both inputs are missing.
-  No live Qwen 3.8 request ran.
-  The operator must configure the Singapore workspace connection and complete each candidate's qualification before activation.
+  Flash continuation (2026-11-13):
+  The user approved a scoped key and the private Singapore workspace configuration.
+  Connection verification and the `qwen3.8-flash` text smoke returned HTTP 200 through the disposable proxy.
+  The Flash-only continuation passed all five live reasoning cases and ordered PNG/JPEG input with positive, consistent token usage.
+  Flash is enabled in the source catalog. Public and tenant discovery, explicit dispatch, retained provider defaults, image boundaries, and browser selection after reload pass focused checks.
+  The qualification harness now has an explicit measured-usage mode with safe timing evidence and a 4,096-token per-response limit.
+  Alibaba's Responses input truncation and per-response budget semantics are documented in the current model guide and production runbook.
+  The other four candidates still need model grants and their complete live qualification; those candidates remain disabled.
+  Final `make ci` passed all 15 gates with 100.0% Go statement coverage in 839 seconds.
+  All 177 frontend browser tests and 13 authentication browser tests passed. Independent final review found no remaining actionable findings.
+  Resolution: All five candidates are implemented and repository-validated. Flash is qualified and enabled in source; the other four remain disabled.
+  F095 owns remaining model grants, live qualification, source activation, release, deployment, and TellTale production acceptance.
+  Current evidence: `.mprlab/evidence/F050-flash-20261113.json` and `docs/qwen-flash-production.md`.
+  Flash continuation changed files:
+  `configs/providers.yml`, `scripts/test_live_providers.sh`, `internal/proxy/qwen_current_models_test.go`,
+  `internal/proxy/dashscope_media_limits_test.go`, `internal/proxy/management_test.go`, `tests/capabilities_test.go`,
+  `tests/live_provider_qualification_test.go`, `tests/e2e/management-ui.spec.js`,
+  `docs/qwen-current-models.md`, `docs/dashscope-responses.md`, `docs/provider-catalog.md`,
+  `docs/backend-execution-plan.md`, `docs/qwen-flash-production.md`, and the Flash execution record.
+  Public event schemas did not change. The public catalog adds the qualified Flash offering.
   Evidence: `/tmp/llm-proxy-f050-qwen3.8-*-live.log`.
 - [!] [F049] (P1) Add Muse Spark 1.3.
   Goal:
@@ -7770,6 +7934,30 @@ Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I09
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
 ## Planning
+
+- [x] [P019] (P0) Review back-end plan readiness and prioritize low-cost Alibaba access.
+  Goal:
+  Establish the current execution order for Alibaba Model Studio access and the remaining back-end work.
+  Deliverables:
+  - Review every unresolved or taken entry and identify its back-end scope.
+  - Separate executable plans, external prerequisites, and unresolved decisions.
+  - Compare current Qwen list prices under explicit regional and workload conditions.
+  - Record detailed decision procedures where implementation is not ready.
+  - Record the authorized F064 implementation milestone and the separate F093 model task.
+  Validation:
+  - Match all 99 initial unresolved or taken issue identifiers to the review tables.
+  - Confirm no duplicate identifiers across the active tracker and archive.
+  - Complete document checks and independent plan review.
+  Progress:
+  - The review and cost order are in `docs/backend-execution-plan.md`.
+  - Current official rates favor the Singapore `qwen3.7-flash` candidate for the stated short-input example.
+  - F064 implementation starts with the credential-independent inventory export.
+  Resolution:
+  - All 99 initial unresolved or taken entries appear in the dated readiness tables.
+  - Current price evidence, execution order, and missing decision procedures are documented.
+  - Independent review corrected the I241 scope and F081 key-transition prerequisites.
+  - Document checks found no mechanical findings in the new plan or changed tracker prose.
+  - The active tracker and archive have no duplicate issue identifiers.
 
 - [ ] [P014] (P2) Assess the native provider contract for Seedance and HeyGen avatar use.
   Goal:

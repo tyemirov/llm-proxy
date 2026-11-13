@@ -133,7 +133,7 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 	if catalogError != nil {
 		testingInstance.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
 	}
-	if catalog.Revision == "" || len(catalog.Operations) != 18 || len(catalog.Prices) != 111 || catalog.Counts.Providers != 18 || catalog.Counts.ModelPublishers != 16 || catalog.Counts.ModelFamilies != 34 || catalog.Counts.ModelFamilies != len(catalog.Families) || catalog.Counts.ExactModels != 87 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != 90 || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
+	if catalog.Revision == "" || len(catalog.Operations) != 18 || len(catalog.Prices) != 112 || catalog.Counts.Providers != 18 || catalog.Counts.ModelPublishers != 16 || catalog.Counts.ModelFamilies != 34 || catalog.Counts.ModelFamilies != len(catalog.Families) || catalog.Counts.ExactModels != 88 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != 91 || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
 		testingInstance.Fatalf("catalog summary=%+v", catalog)
 	}
 	weightAccessFound := map[string]bool{}
@@ -372,7 +372,7 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 		proxy.ProviderNameTypeSafe:  1,
 		proxy.ProviderNameOpenAI:    12,
 		"vertex":                    4,
-		proxy.ProviderNameDashScope: 2,
+		proxy.ProviderNameDashScope: 3,
 		proxy.ProviderNameGemini:    4,
 		proxy.ProviderNameAnthropic: 10,
 		proxy.ProviderNameMoonshot:  4,
@@ -381,6 +381,7 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 	expectedDashScopeImageCounts := map[string]int64{
 		proxy.ModelNameDashScopeQwen37Plus:  250,
 		proxy.ModelNameDashScopeQwen36Flash: 250,
+		"qwen3.8-flash":                     250,
 	}
 	observedOfferingCounts := map[string]int{}
 	for _, offering := range catalog.Offerings {
@@ -414,6 +415,9 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 				expectedVerificationDate = "2026-09-05"
 			} else if offering.Provider == proxy.ProviderNameDashScope {
 				expectedVerificationDate = "2026-09-05"
+				if offering.Model == "qwen3.8-flash" {
+					expectedVerificationDate = "2026-11-13"
+				}
 			}
 			if limit.LastVerified != expectedVerificationDate {
 				testingInstance.Fatalf("media limit=%+v", limit)

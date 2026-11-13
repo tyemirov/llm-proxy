@@ -1491,7 +1491,7 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 	}
 	expectedModels := map[string][]string{
 		proxy.ProviderNameOpenAI:    {"gpt-6-astra", "gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
-		proxy.ProviderNameDashScope: {proxy.ModelNameDashScopeQwenPlus, proxy.ModelNameDashScopeQwen36Flash, proxy.ModelNameDashScopeQwen37Max, proxy.ModelNameDashScopeQwen37Plus},
+		proxy.ProviderNameDashScope: {proxy.ModelNameDashScopeQwenPlus, proxy.ModelNameDashScopeQwen36Flash, proxy.ModelNameDashScopeQwen37Max, proxy.ModelNameDashScopeQwen37Plus, "qwen3.8-flash"},
 		proxy.ProviderNameMoonshot:  {proxy.ModelNameMoonshotKimiK26, proxy.ModelNameMoonshotKimiK27Code, proxy.ModelNameMoonshotKimiK27CodeHighSpeed, proxy.ModelNameMoonshotKimiK3},
 		proxy.ProviderNameMiniMax: {
 			proxy.ModelNameMiniMaxM2,

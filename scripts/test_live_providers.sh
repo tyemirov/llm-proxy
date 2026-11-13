@@ -26,6 +26,12 @@ Optional environment:
                              reasoning-effort request and one request for each
                              effort published by the selected exact route.
                              Default: false. Gemini candidate default: true.
+  LLM_PROXY_LIVE_QUALIFICATION
+                             Exact true or false. Default: false. Require measured
+                             positive token counts, request ID, and safe timing evidence.
+                             Images must identify ordered red PNG and blue JPEG.
+                             Caps each provider response at 4096 output tokens;
+                             proxy continuation can make additional provider calls.
   LLM_PROXY_LIVE_PORT        Local port for the temporary proxy. Default: a
                              freshly allocated loopback port.
   LLM_PROXY_LIVE_MANAGEMENT_ENV_FILE
@@ -934,6 +940,35 @@ pathlib.Path(sys.argv[3]).write_text(
   echo "live provider verification passed: provider=${provider} model=${model} status=${http_status}"
 }
 
+qualification_evidence() {
+  python3 -c '
+import json
+import pathlib
+import re
+import sys
+import time
+
+headers = {}
+for line in pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
+    name, separator, value = line.partition(":")
+    if separator:
+        headers.setdefault(name.lower(), []).append(value.strip())
+def single(name, pattern):
+    values = headers.get("x-llm-proxy-" + name, [])
+    if len(values) != 1 or re.fullmatch(pattern, values[0]) is None:
+        raise SystemExit("error: live qualification requires one valid " + name + " header")
+    return values[0]
+request_id = single("request-id", r"[A-Z2-7]{26,}")
+counts = {name: int(single(name.replace("_", "-"), r"[1-9][0-9]{0,18}")) for name in ("request_tokens", "response_tokens", "total_tokens")}
+if counts["request_tokens"] + counts["response_tokens"] != counts["total_tokens"]:
+    raise SystemExit("error: live qualification token counts are inconsistent")
+elapsed_ms = (time.monotonic_ns() - int(sys.argv[2])) // 1000000
+if elapsed_ms < 0:
+    raise SystemExit("error: live qualification elapsed duration is invalid")
+print(json.dumps(dict(event="live_qualification", provider=sys.argv[3], model=sys.argv[4], kind=sys.argv[5], reasoning_effort=sys.argv[6], request_id=request_id, elapsed_ms=elapsed_ms, **counts), separators=(",", ":")))
+' "$@"
+}
+
 run_text_smoke() {
   local provider="$1"
   local requested_model="${2:-}"
@@ -964,9 +999,18 @@ run_text_smoke() {
     request_model_label="omitted"
   fi
 
+  local qualification_headers=()
+  local headers_path="${TMP_DIR}/${provider}-text-headers.txt"
+  local started=""
+  if [[ "${LIVE_QUALIFICATION}" == "true" ]]; then
+    request_body="${request_body%\}} ,\"max_tokens\":4096}"
+    qualification_headers=(-D "${headers_path}")
+    started="$(python3 -c 'import time; print(time.monotonic_ns())')"
+  fi
   http_status="$(
     curl -sS --max-time "${LIVE_TIMEOUT}" \
       -X POST \
+      "${qualification_headers[@]}" \
       -H "Content-Type: application/json" \
       --data "${request_body}" \
       -o "${response_path}" \
@@ -979,6 +1023,9 @@ run_text_smoke() {
     echo "error: live ${provider} smoke failed: model=${request_model_label} status=${http_status}" >&2
     redact_log
     exit 1
+  fi
+  if [[ "${LIVE_QUALIFICATION}" == "true" ]]; then
+    qualification_evidence "${headers_path}" "${started}" "${provider}" "${request_model_label}" text "${reasoning_effort_label}"
   fi
   echo "live provider smoke passed: provider=${provider} model=${request_model_label} status=${http_status} reasoning_effort=${reasoning_effort_label}"
 }
@@ -1067,11 +1114,18 @@ payload = {
     "model": sys.argv[1],
     "web_search": False,
 }
+if sys.argv[3] == "true":
+    payload["max_tokens"] = 4096
+    payload["messages"][0]["content"] = "Identify the solid colors of these images in their attachment order. Reply with exactly RED BLUE and no punctuation."
+    # Fixed 256x256 solid blue JPEG, encoded once with the standard Go JPEG encoder.
+    payload["messages"][0]["attachments"].append({
+        "type": "image", "mime_type": "image/jpeg", "data": "/9j/2wCEAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRQBAwQEBQQFCQUFCRQNCw0UFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFP/AABEIAQABAAMBIgACEQEDEQH/xAGiAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgsQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+gEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoLEQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2gAMAwEAAhEDEQA/APz3ooor/VM+HCiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAP/Z",
+    })
 pathlib.Path(sys.argv[2]).write_text(
     json.dumps(payload, separators=(",", ":")),
     encoding="utf-8",
 )
-' "${model}" "${request_path}"
+' "${model}" "${request_path}" "${LIVE_QUALIFICATION}"
 }
 
 validated_response_request_id() {
@@ -1099,6 +1153,12 @@ run_image_smoke() {
   local response_path="${TMP_DIR}/${provider}-image-response.txt"
   local http_status
   local response_text
+  local expected_response="RED"
+  local started=""
+  if [[ "${LIVE_QUALIFICATION}" == "true" ]]; then
+    expected_response="RED BLUE"
+    started="$(python3 -c 'import time; print(time.monotonic_ns())')"
+  fi
   write_image_smoke_request "${model}" "${request_path}"
 
   http_status="$(
@@ -1113,10 +1173,13 @@ run_image_smoke() {
   )"
 
   response_text="$(tr -d '\r\n' <"${response_path}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
-  if [[ "${http_status}" != "200" || "${response_text}" != "RED" ]] || ! validated_response_request_id "${headers_path}"; then
+  if [[ "${http_status}" != "200" || "${response_text}" != "${expected_response}" ]] || ! validated_response_request_id "${headers_path}"; then
     echo "error: live provider image smoke failed: provider=${provider} model=${model} status=${http_status}" >&2
     redact_log
     exit 1
+  fi
+  if [[ "${LIVE_QUALIFICATION}" == "true" ]]; then
+    qualification_evidence "${headers_path}" "${started}" "${provider}" "${model}" image omitted
   fi
   echo "live provider image smoke passed: provider=${provider} model=${model} status=${http_status}"
 }
@@ -1254,6 +1317,11 @@ fi
 LIVE_REASONING_MATRIX="$(env_or_default LLM_PROXY_LIVE_REASONING_MATRIX "${LIVE_REASONING_MATRIX_DEFAULT}")"
 if [[ "${LIVE_REASONING_MATRIX}" != "true" && "${LIVE_REASONING_MATRIX}" != "false" ]]; then
   echo "error: LLM_PROXY_LIVE_REASONING_MATRIX must be true or false" >&2
+  exit 1
+fi
+LIVE_QUALIFICATION="${LLM_PROXY_LIVE_QUALIFICATION-false}"
+if [[ "${LIVE_QUALIFICATION}" != "true" && "${LIVE_QUALIFICATION}" != "false" ]]; then
+  echo "error: LLM_PROXY_LIVE_QUALIFICATION must be true or false" >&2
   exit 1
 fi
 LIVE_TIMEOUT="$(env_or_default LLM_PROXY_LIVE_TIMEOUT 45)"

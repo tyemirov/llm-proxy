@@ -112,6 +112,7 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `service deployment scope`: The geographic area in which Alibaba can execute model inference.
 - `model inventory`: A dated list of upstream model identifiers and their documented capabilities.
 - `model inventory importer`: An operator tool that converts upstream model data into a proposed provider catalog change.
+- `inventory export`: A complete, validated copy of upstream model metadata for review before a provider catalog change.
 
 ## Hosted Billing Technical Nouns
 

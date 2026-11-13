@@ -149,7 +149,9 @@ Each allocation contains the origin's active and queued limits.
 Thus, one origin cannot consume another origin's admission allocation.
 
 The canonical OpenAI allocation has eight active slots and 24 queued slots.
-It supports the 32-request tenant and account admission limits. Global admitted capacity is 652.
+It supports the 32-request tenant and account admission limits. Global admitted capacity is 708.
+The configured Singapore DashScope workspace has four active slots and 24 queued slots.
+
 Ready origins and tenants receive capacity in turn.
 An exhausted allocation returns `503 request queue full`.
 Accepted media operations retain their separate durable-job limits.
@@ -158,6 +160,7 @@ Startup rejects missing, duplicate, unknown, and contradictory origin rules.
 Every saved HTTP connection must resolve to declared origins at startup.
 It also rejects the removed `workers` and `queue_size` fields.
 The checked-in configuration declares the catalog's configured HTTP origins.
+
 Before you configure a connection URL, add its exact origin to `origins`.
 For a connection-specific origin, also set `provider` to its catalog provider identifier.
 The provider must declare an HTTP endpoint supplied by a connection field.

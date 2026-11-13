@@ -604,7 +604,7 @@ models:
       media_inputs:
         - image
     - id: qwen3.8-flash
-      enabled: false
+      enabled: true
       publisher: alibaba
       family: qwen
       version: qwen3.8-flash
@@ -2663,7 +2663,7 @@ providers:
               unit: bytes
               scope: request_encoded_bytes
               source: https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-responses
-              last_verified: "2026-09-05"
+              last_verified: "2026-11-13"
             - id: image_count
               media_type: image
               transport: any
@@ -2672,7 +2672,7 @@ providers:
               unit: files
               scope: request
               source: https://www.alibabacloud.com/help/en/model-studio/vision
-              last_verified: "2026-09-05"
+              last_verified: "2026-11-13"
             - id: image_inline_bytes
               media_type: image
               transport: inline
@@ -2681,12 +2681,12 @@ providers:
               unit: bytes
               scope: attachment_data_uri_bytes
               source: https://www.alibabacloud.com/help/en/model-studio/vision
-              last_verified: "2026-09-05"
+              last_verified: "2026-11-13"
           prices:
             - operation: text
               available: true
               source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
-              last_verified: "2026-09-05"
+              last_verified: "2026-11-13"
               rates:
                 - component: input_tokens
                   currency: USD

@@ -15,7 +15,8 @@ Read the YAML for the complete inventory. Use public capability discovery for en
 Disabled entries remain validated source declarations. They do not establish runtime availability.
 
 The two [GLM 5.3 candidates](zai-current-models.md) remain disabled during provider qualification.
-The five [Qwen 3.8 candidates](qwen-current-models.md) remain disabled during provider qualification.
+[Qwen 3.8 Flash](qwen-current-models.md) is enabled after live text, reasoning, image, and usage qualification.
+The other four Qwen 3.8 offerings remain disabled.
 The two open models use the `qwen3-8` family with `open_weights` metadata.
 Gemini 3.5 Transcribe is enabled for file dictation. See the [transcription contract](gemini-transcription.md).
 Gemini 3.6 and 3.7 Flash are enabled. See [qualified Gemini models](gemini-qualified-models.md).

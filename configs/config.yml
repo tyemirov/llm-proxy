@@ -2,7 +2,7 @@ server:
   port: 8080
   log_level: info
   upstream_capacity:
-    global: {active: 32, admitted: 680}
+    global: {active: 32, admitted: 708}
     tenant: {active: 8, admitted: 32}
     account: {active: 8, admitted: 32}
     media: {active: 24, admitted: 256}
@@ -10,6 +10,7 @@ server:
     transfer: {active: 8, admitted: 128}
     interactive_reserve: 1
     origins:
+      - {origin: https://ws-s8jvkkuq2w12az3h.ap-southeast-1.maas.aliyuncs.com, provider: dashscope, active: 4, queued: 24}
       - {origin: https://api.fal.ai, active: 4, queued: 24}
       - {origin: https://api.elevenlabs.io, active: 5, queued: 24}
       - {origin: https://api.heygen.com, active: 4, queued: 24}
