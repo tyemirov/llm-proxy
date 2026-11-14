@@ -1,0 +1,79 @@
+{
+  "date": "2026-11-12",
+  "started_at": "2026-11-13T06:29:14.829Z",
+  "proxy_origin": "https://llm-proxy-api.mprlab.com",
+  "endpoint": "/v1/systemone",
+  "sdk": "@typesafe-ai/sdk@0.7.0",
+  "model": "jev-1.14.0",
+  "sdk_retries": 0,
+  "credential_kind": "llm-proxy-issued tenant client key",
+  "provider_credentials_supplied_to_test_process": false,
+  "connection": {
+    "name": "TypeSafe Jev",
+    "tenant": "Default",
+    "saved": true,
+    "verified_by": "management UI: Connection saved, Connected, Used by Default"
+  },
+  "cases": [
+    {
+      "case": "typesafe-text",
+      "passed": true,
+      "exit_code": 0,
+      "provider": "typesafe",
+      "status": 200,
+      "request_id": "3D32PX3UFAYCK5HHWVIMBO4CWH",
+      "typesafe_request_id": "req_01a1d39896a870fcab814bbe9eb0023a",
+      "model": "jev-1.14.0",
+      "input_tokens": 375,
+      "output_tokens": 61
+    },
+    {
+      "case": "typesafe-image",
+      "passed": true,
+      "exit_code": 0,
+      "provider": "typesafe",
+      "status": 200,
+      "request_id": "GL3OVB3S7ZLJHMDB742UZFCBYW",
+      "typesafe_request_id": "req_01a1d398975d7340981d879cd700a209",
+      "model": "jev-1.14.0",
+      "input_tokens": 1036,
+      "output_tokens": 20
+    }
+  ],
+  "identity": {
+    "status": 200,
+    "tenant_id": "managed-60634d2470f31557462f52e319f07d07",
+    "matches_management_selected_default": true
+  },
+  "passed": true,
+  "finished_at": "2026-11-13T06:29:15.320Z",
+  "website_release_marker": {
+    "status": 200,
+    "version": "v1.12.12",
+    "url": "https://llm-proxy.mprlab.com/.mprlab-release.json"
+  },
+  "source_fingerprints": {
+    "scripts/system_one_live_acceptance.ts": "7b00c00f206b2891bedd2b00397e2133e687c4bf9053e5e746522e6345739a49",
+    "tests/testdata/system-one-black-rectangle.png": "d46710820707b4ef3a9a913e08552b7e4448c437a212aed125417aa787274380"
+  },
+  "assertions": {
+    "text": [
+      "typed Choice with blue result",
+      "bounded Score with low/high legend",
+      "positive Noul",
+      "exact answer identifiers",
+      "exact model",
+      "proxy and TypeSafe request identifiers",
+      "valid usage"
+    ],
+    "image": [
+      "multipart 512 by 512 synthetic PNG",
+      "typed Box within 0.1 normalized tolerance",
+      "exact answer identifier",
+      "exact model",
+      "proxy and TypeSafe request identifiers",
+      "valid usage"
+    ]
+  },
+  "credential_handling": "Explicit private input read by parent. Only the llm-proxy tenant key passed to the SDK process. No credential values or credential-bearing URLs recorded."
+}

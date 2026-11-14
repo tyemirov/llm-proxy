@@ -91,7 +91,7 @@ This guide applies when the repository declares or implements an API contract. A
 
 ## Testing And Validation
 
-- For a behavior change, start with an integration test through the real HTTP listener or public gRPC service entry point.
+- Apply the proportional test sequence in `.mprlab/POLICY.md`. Use integration tests for the changed public contract.
 - Use dependency injection for integration scenarios that are difficult to reproduce.
 - Keep the product logic under test real.
 - Exercise REST behavior through a real HTTP listener and gRPC behavior through the real public service entrypoint.

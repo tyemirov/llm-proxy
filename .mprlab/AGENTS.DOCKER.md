@@ -19,11 +19,10 @@ Docker and container guidance for this repository. Use this guide only when Dock
 
 - Treat local orchestration and production orchestration as different contracts.
 - MPR Lab has no current plan to put these contracts together.
-- Use the permanent versionless selected-manifest contract for production.
+- Use the current versionless selected manifest contract for production.
 - Reject a selected manifest that contains `schema_version`.
-- Each later gateway must accept every manifest that an earlier versionless gateway accepted.
-- A field added to an existing shape must be optional and have one canonical default.
-- The gateway must normalize that default before manifest identity calculation.
+- Apply the Selected Manifest Contract and Single Manifest Authority sections in `.mprlab/AGENTS.DEPLOYMENT.md`.
+- Extend the same versionless schema under those rules.
 - Keep app-owned local orchestration during a versionless selected-manifest cutover.
 - Keep local Compose files, configuration, scripts, `make up`, `make down`, and local tests during a production contract change.
 - A local topology can be different from the production topology.
@@ -31,14 +30,14 @@ Docker and container guidance for this repository. Use this guide only when Dock
 - Do not use local orchestration files as production lifecycle inputs.
 - For a deployable application, use `.mprlab/deploy/resources.yml` as the only
   tracked production deployment file.
-- Permit the ignored `.mprlab/deploy/.env` file as the canonical private deployment input.
+- Use only the optional environment source selected by the manifest. Keep that private input outside source control.
 - A container can create a GitHub Pages artifact. The container does not own the public website hostname.
-- Publish the container output through the `github_pages` resource.
+- Publish the container output through `publications.github_pages.sites[]`.
 - Keep each `caddy_route` on a hostname that differs from the GitHub Pages domain.
 
 ## Validation
 
-- For a behavior change, start with an integration test through the real container entry point.
+- Apply the proportional test sequence in `.mprlab/POLICY.md`. Use integration tests for the changed public contract.
 - Use dependency injection for integration scenarios that are difficult to reproduce.
 - Keep the product logic under test real.
 - Use `.mprlab/POLICY.md` for validation.

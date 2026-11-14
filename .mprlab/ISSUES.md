@@ -31,7 +31,8 @@ Migration scope (2026-09-23):
 LLM Proxy owns all media-provider API access. MediaOps provides one API and processing service.
 TelePrompter is the separate timeline and prompt website. Frame Picker and other retained interfaces stay in MediaOps.
 Umbrellas coordinate executable dependencies. Complete dependency issues before closing their umbrella.
-Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I092 owns final acceptance.
+The media migration sequence starts with I274.
+MediaOps I093 owns its backend, I094 owns TelePrompter, and I092 owns final acceptance.
 
 Provider priority (2026-11-13):
 The user selected Alibaba Model Studio access as the first provider priority.
@@ -2397,6 +2398,32 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
 
 ## Improvements
 
+- [x] [I321] (P1) {F074} Add Jev to the production live test suite.
+  Goal:
+  Include repeatable TypeSafe System One checks in the existing `make live-test` command.
+  Requirements:
+  - Use the production proxy and the verified Default tenant identity.
+  - Use only the existing tenant client key. Keep provider credentials in the saved connection.
+  - Use the official TypeScript SDK with automatic retries disabled.
+  - Exercise Choice, Score, Noul, image assets, and Box answers through `/v1/systemone`.
+  - Preserve the existing text cases and report each Jev case independently.
+  - Validate prerequisites before paid requests. Keep credentials and response bodies outside diagnostics.
+  Deliverables:
+  - Add a reusable SDK consumer, a valid image fixture, and live-suite integration.
+  - Add public-entry-point regression tests and command guidance.
+  Validation:
+  - Run the focused suite before and after the change.
+  - Run final `make ci` after the last stack change.
+  - Record actual provider execution separately from controlled regression evidence.
+  Resolution:
+  - Added two Jev SDK cases to `make live-test`. The command now runs eleven cases.
+  - Added a valid synthetic PNG, prerequisite checks, and public-entry-point regression tests.
+  - Confirmed the initial failure: the command reported nine cases instead of eleven.
+  - Passed `make test-production-live-contract` and final `make ci` with all 15 gates and 100.0 percent Go statement coverage.
+  - Independent review found no blocking issue.
+  - Governor structure checks passed. Eight existing managed-document differences remain.
+  - Live proxy qualification remains in the separate operational acceptance record.
+
 - [x] [I320] (P1) Audit the complete manifest against the installed Gateway contract.
   Goal: Resolve declaration mismatches together before another deployment attempt.
   Scope: Installed Gateway v9.2.1, the selected manifest, referenced application files, and current deployed state.
@@ -4434,7 +4461,6 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
   Resolution: Added exact-offering schema admission, text-only validation, SDK discovery, and public capability rendering.
   Validation passed: both Flash targets, protocol acceptance, hosted clients, frontend lint, browser regression, and final hosted CI 43562093954.
   Independent design and final source reviews found no remaining actionable findings.
-
 
 
 - [!] [F095] (P0) Activate qualified Qwen 3.8 offerings in production.

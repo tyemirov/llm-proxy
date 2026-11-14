@@ -20,7 +20,11 @@ Git and GitHub workflow guidance for this repository. Use this guide whenever br
 
 ## Pull Requests
 
-- Open pull requests only after necessary local validation passes or a concrete blocker is documented.
+- Create each pull request as ready for review. Never create a draft pull request.
+
+- Open pull requests after the applicable focused local checks pass.
+- Use successful full CI from the pull request instead of a duplicate local run.
+- Require successful final CI before merge or completion.
 - A pull request description must summarize changed behavior and completed validation.
 - Keep release, publish, deploy, and production availability as separate statuses.
 
@@ -35,6 +39,8 @@ Git and GitHub workflow guidance for this repository. Use this guide whenever br
 ## Validation
 
 Before you finalize Git work, complete the applicable validation after the last change.
+Use the policy's [Validation](POLICY.md#validation) rule to select the full CI gate.
+Focused local checks permit a commit or pull request while its full CI remains pending.
 
 Use that result while the applicable files stay the same.
 
