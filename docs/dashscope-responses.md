@@ -6,7 +6,8 @@ I259 uses the shared Responses codec with the DashScope protocol variation.
 The catalog selects this variation through `dashscope_responses`.
 The shared code owns common message serialization, response items, and usage translation.
 The DashScope variation omits image detail and caller tools.
-An error-free terminal `incomplete` result starts continuation without an output-limit reason check.
+An error-free terminal `incomplete` result starts continuation for ordinary text.
+Structured generation fails at an incomplete result and never continues partial JSON.
 
 Its execution remains synchronous. Requests use `store:false` and omit `background`.
 Local protocol tests establish code behavior. The live acceptance requirements below remain separate.
@@ -51,6 +52,30 @@ Reasoning details remain private. Reasoning tokens are part of the output
 breakdown and are not added again. An error-free terminal `incomplete` result
 starts the shared missing-suffix continuation. Each continuation is a new
 stateless POST. Nonterminal results and provider errors return safe failures.
+
+## Structured generation
+
+Only the exact `qwen3.8-flash` offering declares strict JSON Schema support.
+The native structured request sends `text.format` with `type: json_schema`,
+`strict: true`, and the supplied supported schema through the same Responses codec.
+The proxy validates the completed JSON against that schema before returning success.
+Unsupported schema keywords and external references fail before provider work.
+The conservative string-format allowlist contains `email` and `date`, the documented
+examples. This proxy policy does not claim that Alibaba rejects every other format.
+Structured request identity, replay, and reconciliation use the existing request resource.
+
+Schema-constrained requests must contain only text.
+The proxy rejects image inputs with a schema because Alibaba documents a downgrade
+from JSON Schema to JSON object mode for multimodal input.
+This restriction also applies to compatible client protocols and stored media assets.
+Ordinary Flash image requests retain their existing contract.
+
+Use explicit reasoning effort `none` for the cost-oriented TellTale route.
+The provider output limit includes reasoning and visible tokens; incomplete structured
+responses fail even when the visible prefix happens to be valid JSON.
+Local protocol coverage and live application qualification are separate checks.
+Sources: [Responses parameters](https://docs.modelstudio.console.alibabacloud.com/en/model-studio/qwen-api-via-openai-responses)
+and [supported schema keywords](https://docs.modelstudio.console.alibabacloud.com/en/model-studio/qwen-structured-output).
 
 ## Acceptance
 

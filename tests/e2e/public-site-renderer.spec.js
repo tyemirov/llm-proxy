@@ -291,6 +291,26 @@ test("public site rendering exposes the caller tool capability", async () => {
   });
 });
 
+test("public site rendering exposes the structured output capability", async ({ page }) => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.models[0].capabilities.push("structured_output");
+  capabilities.offerings[0].capabilities.push("structured_output");
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await renderFixture(fixture, capabilitiesURL);
+      const html = await readFile(path.join(fixture.output, "index.html"), "utf8");
+      await page.setContent(html);
+      await expect(page.locator('[data-catalog-capability][value="structured_output"]')).toHaveCount(1);
+      await expect(page.locator('[data-catalog-capability][value="structured_output"]')).not.toBeChecked();
+      await expect(page.locator('[data-route-provider="deepseek"]')).toHaveAttribute("data-route-provider-capabilities", "text structured_output");
+      await expect(page.locator("body")).toContainText("Structured JSON");
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+});
+
 function normalizedCapabilityFixture() {
   return {
     revision: "2026-08-10.test.1",

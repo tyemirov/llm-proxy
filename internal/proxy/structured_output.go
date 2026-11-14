@@ -71,6 +71,13 @@ var (
 		requireClosedObjects: true, rejectRecursiveRoot: true, restrictArrayMinimum: true,
 		rejectComplexEnum: true, rejectReferenceAllOf: true,
 	}
+	dashScopeStructuredOutputRules = structuredOutputSchemaRules{
+		provider: "DashScope", keywords: structuredOutputKeywords(
+			"$defs", "$ref", "additionalProperties", "anyOf", "const", "description", "enum", "exclusiveMaximum", "exclusiveMinimum", "format", "items",
+			"maxItems", "maximum", "minItems", "minimum", "pattern", "properties", "required", "title", "type",
+		),
+		formats: structuredOutputKeywords("email", "date"),
+	}
 )
 
 func structuredOutputKeywords(values ...string) map[string]struct{} {
@@ -128,9 +135,21 @@ func validateStructuredOutputRoute(model textModelDefinition, schema *structured
 		return validateStructuredOutputSchemaSubset(schema.document.(map[string]any), geminiStructuredOutputRules, true)
 	case textWireContractAnthropicMessages:
 		return validateStructuredOutputSchemaSubset(schema.document.(map[string]any), anthropicStructuredOutputRules, true)
+	case textWireContractDashScopeResponses:
+		if model.structuredOutput {
+			return validateStructuredOutputSchemaSubset(schema.document.(map[string]any), dashScopeStructuredOutputRules, true)
+		}
+		return errStructuredOutputUnsupported
 	default:
 		return errStructuredOutputUnsupported
 	}
+}
+
+func validateStructuredOutputMessages(model textModelDefinition, schema *structuredOutputSchema, messages chatMessages) error {
+	if schema != nil && model.wireContract == textWireContractDashScopeResponses && messages.mediaCount() != 0 {
+		return fmt.Errorf("%w: DashScope structured output requires text-only messages", errStructuredOutputUnsupported)
+	}
+	return nil
 }
 
 func validateStructuredOutputSchemaSubset(document map[string]any, rules structuredOutputSchemaRules, root bool) error {

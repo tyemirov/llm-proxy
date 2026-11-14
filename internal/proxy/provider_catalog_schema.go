@@ -235,9 +235,10 @@ type ProviderCatalogHeader struct {
 
 // ProviderCatalogOffering defines one exact model route inside its provider.
 type ProviderCatalogOffering struct {
-	Enabled     ModelActivation `yaml:"enabled,omitempty"`
-	Created     int64           `yaml:"created"`
-	CallerTools bool            `yaml:"caller_tools,omitempty"`
+	Enabled          ModelActivation `yaml:"enabled,omitempty"`
+	Created          int64           `yaml:"created"`
+	CallerTools      bool            `yaml:"caller_tools,omitempty"`
+	StructuredOutput bool            `yaml:"structured_output,omitempty"`
 
 	Model             string                     `yaml:"model"`
 	UpstreamModel     string                     `yaml:"upstream_model"`
@@ -920,6 +921,7 @@ func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string)
 				MediaExecutionLifecycle: composition.parameters.MediaExecutionLifecycle,
 				RequestProfile:          rawOffering.RequestProfile,
 				WebSearch:               rawOffering.WebSearch, CallerTools: rawOffering.CallerTools, Created: rawOffering.Created,
+				StructuredOutput: rawOffering.StructuredOutput,
 				OutputTokenLimit: rawOffering.OutputTokenLimit,
 				ReasoningEffort:  rawOffering.ReasoningEffort,
 				MediaInputs:      append([]string(nil), rawOffering.MediaInputs...),

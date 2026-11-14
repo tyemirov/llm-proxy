@@ -97,13 +97,14 @@ type PublicProviderOffering struct {
 // Public model capability identifiers are the stable filter vocabulary for the
 // generated public catalog.
 const (
-	PublicModelCapabilityText       = "text"
-	PublicModelCapabilityDictation  = "dictation"
-	PublicModelCapabilityWebSearch  = "web_search"
-	PublicModelCapabilityImageInput = "image_input"
-	PublicModelCapabilityAudioInput = "audio_input"
-	PublicModelCapabilityReasoning  = "reasoning"
-	PublicModelCapabilityVideo      = "video_generation"
+	PublicModelCapabilityText             = "text"
+	PublicModelCapabilityDictation        = "dictation"
+	PublicModelCapabilityWebSearch        = "web_search"
+	PublicModelCapabilityImageInput       = "image_input"
+	PublicModelCapabilityAudioInput       = "audio_input"
+	PublicModelCapabilityReasoning        = "reasoning"
+	PublicModelCapabilityStructuredOutput = "structured_output"
+	PublicModelCapabilityVideo            = "video_generation"
 )
 
 // Public capability domains are the first-class dashboard taxonomy buckets.
@@ -288,6 +289,9 @@ func publicProviderOffering(offering ProviderOffering) PublicProviderOffering {
 	capabilities := append([]string(nil), offering.Operations...)
 	if offering.CallerTools {
 		capabilities = append(capabilities, "caller_tools")
+	}
+	if offering.StructuredOutput {
+		capabilities = append(capabilities, PublicModelCapabilityStructuredOutput)
 	}
 	if offering.WebSearch {
 		capabilities = append(capabilities, PublicModelCapabilityWebSearch)

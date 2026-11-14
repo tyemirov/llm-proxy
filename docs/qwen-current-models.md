@@ -55,13 +55,15 @@ The model pages also list these input limits:
 Those model-level limits do not override the Responses-specific restriction.
 The catalog exposes the context window and the protocol output control.
 
-An error-free terminal `incomplete` response starts a new stateless continuation.
+For ordinary text, an error-free terminal `incomplete` response starts a new stateless continuation.
 The continuation includes the visible answer and the missing-suffix instruction.
 Provider reasoning remains private.
 Native usage totals include reasoning tokens without duplicate addition.
 The output limit applies to each provider response. A stateless continuation can add provider requests and charges.
-The route preserves the current text and image capability scope.
-Caller tools, structured output, video, and provider storage require separate contracts.
+Flash additionally declares [strict text-only JSON Schema generation](dashscope-responses.md#structured-generation).
+Structured incomplete responses fail without continuation; schema-plus-image requests fail before dispatch.
+The other Qwen offerings retain their text and declared image scope.
+Caller tools, video, and provider storage require separate contracts.
 
 ## Image limits
 
