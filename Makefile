@@ -259,6 +259,10 @@ test-live-local-gemini:
 live-test:
 	@./scripts/live_test.sh
 
+.PHONY: test-production-live-contract
+test-production-live-contract: frontend-dependencies
+	$(GO) test ./tests -run '^Test(OperationalProductionLiveTest|SystemOneLiveAcceptance)' -count=1
+
 build:
 	mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 $(GO) build -o $(BIN_DIR)/$(BINARY_NAME) ./cmd/cli
