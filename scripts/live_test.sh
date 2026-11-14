@@ -14,9 +14,11 @@ readonly LONG_COMPLETION_RESPONSE_MARKER="LLM_PROXY_LIVE_COMPLEX_OK"
 readonly LONG_COMPLETION_MAX_TOKENS=512
 readonly GEMINI_LONG_COMPLETION_MAX_TOKENS=32768
 readonly LONG_COMPLETION_MINIMUM_REQUEST_BYTES=16384
+readonly SYSTEM_ONE_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/system_one_live_acceptance.ts"
 
 LIVE_TEST_PROVIDERS=(openai anthropic meta gemini moonshot)
 LONG_COMPLETION_PROVIDERS=(openai anthropic meta gemini)
+SYSTEM_ONE_CASES=(text image)
 TEMPORARY_DIRECTORY=""
 ENCODED_TENANT_SECRET=""
 
@@ -32,7 +34,9 @@ usage() {
     'The command first validates managed client-key retrieval without calling a provider.' \
     'The command sends one echo-marker request to OpenAI, Anthropic, Meta, Gemini, and Moonshot,' \
     'then sends matching large-completion requests through OpenAI, Anthropic, Meta, and Gemini.' \
-    'The Gemini long case selects gemini-3.5-flash so OpenAI and Gemini prove server-owned background polling.'
+    'The Gemini long case selects gemini-3.5-flash so OpenAI and Gemini prove server-owned background polling.' \
+    'It also verifies Jev Choice, Score, Noul, and Box answers through POST /v1/systemone with the TypeScript SDK.' \
+    'The Default tenant must have a saved TypeSafe provider connection.'
 }
 
 fail() {
@@ -323,6 +327,8 @@ if [[ -z "${LLM_PROXY_EXPECTED_TENANT_ID:-}" ]]; then
 fi
 command -v curl >/dev/null 2>&1 || fail 'curl is required for make live-test'
 command -v python3 >/dev/null 2>&1 || fail 'python3 is required for make live-test'
+command -v node >/dev/null 2>&1 || fail 'Node.js is required for make live-test'
+node --experimental-strip-types "${SYSTEM_ONE_SCRIPT}" "${PRODUCTION_API_ORIGIN}" "${ECHO_REQUEST_TIMEOUT_SECONDS}" preflight || exit 1
 
 umask 077
 TEMPORARY_DIRECTORY="$(mktemp -d)"
@@ -379,11 +385,17 @@ for provider_identifier in "${LONG_COMPLETION_PROVIDERS[@]}"; do
   fi
 done
 
+for system_one_case in "${SYSTEM_ONE_CASES[@]}"; do
+  if ! node --experimental-strip-types "${SYSTEM_ONE_SCRIPT}" "${PRODUCTION_API_ORIGIN}" "${ECHO_REQUEST_TIMEOUT_SECONDS}" "${system_one_case}"; then
+    failed_case_count=$((failed_case_count + 1))
+  fi
+done
+
 if [[ "${failed_case_count}" -ne 0 ]]; then
   builtin printf 'live test failed: failed_cases=%s total_cases=%s\n' \
     "${failed_case_count}" \
-    "$(( ${#LIVE_TEST_PROVIDERS[@]} + ${#LONG_COMPLETION_PROVIDERS[@]} ))" >&2
+    "$(( ${#LIVE_TEST_PROVIDERS[@]} + ${#LONG_COMPLETION_PROVIDERS[@]} + ${#SYSTEM_ONE_CASES[@]} ))" >&2
   exit 1
 fi
 builtin printf 'live test passed: total_cases=%s\n' \
-  "$(( ${#LIVE_TEST_PROVIDERS[@]} + ${#LONG_COMPLETION_PROVIDERS[@]} ))"
+  "$(( ${#LIVE_TEST_PROVIDERS[@]} + ${#LONG_COMPLETION_PROVIDERS[@]} + ${#SYSTEM_ONE_CASES[@]} ))"
