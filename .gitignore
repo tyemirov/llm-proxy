@@ -1,5 +1,4 @@
 # Local planning scratch
-/_scratch/
 
 # OS and editor metadata
 .DS_Store
@@ -51,4 +50,5 @@ coverage.out
 
 # BEGIN MPRLAB-GOVERNANCE
 /.mprlab/*-PLAN.md
+/_scratch/
 # END MPRLAB-GOVERNANCE
