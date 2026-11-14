@@ -180,6 +180,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 					routeAdapter:            textRouteAdapters[routeCapabilities],
 					requestProfile:          modelRequestProfile(offering.RequestProfile),
 					supportsWebSearch:       offering.WebSearch, callerTools: offering.CallerTools,
+					structuredOutput:    offering.StructuredOutput,
 					outputTokenLimit:    offering.OutputTokenLimit,
 					hasOutputTokenLimit: offering.OutputTokenLimit > 0,
 					reasoningEffort:     configuredReasoningEffortCapability(offering.ReasoningEffort),

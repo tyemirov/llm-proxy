@@ -41,8 +41,14 @@ The browser reload test uses a controlled management API; deployed tenant accept
 ## Request and cost contract
 
 The selected route supports text and ordered image input.
-Caller tools, structured output, video, PDF input, and server-side conversation storage are outside this proxy offering.
+Strict JSON Schema generation is available for text-only requests through the native structured request lifecycle.
+Image inputs combined with a schema are rejected before provider work.
+Caller tools, video, PDF input, and server-side conversation storage are outside this proxy offering.
 Responses requests use `store: false`.
+
+Structured responses require completed provider status and valid JSON that conforms to the supplied supported schema.
+Output-limit responses fail without continuation, partial JSON repair, or another provider.
+See the [DashScope schema contract](dashscope-responses.md#structured-generation).
 
 Omitted reasoning effort uses Alibaba's `xhigh` default.
 Use explicit `none` for requests that should avoid reasoning work, subject to application quality requirements.
@@ -66,8 +72,10 @@ F095 tracks the remaining production operations. F050 records repository impleme
 The user selected the existing TellTale tenant under the signed-in Vadym Tyemirov account.
 The admin view directly verified the owner email, recorded here as `tem****@gmail.com`.
 The November 13 Chrome inspection confirmed tenant `managed-13f5fc612c3fac74f219d0bd483286be`, with two existing connections and an existing client key.
-The account currently has no Alibaba connection. The existing client key remains assigned to TellTale.
-The temporary inspection tab was closed. Resume at the production website in the existing Chrome `Vadym` profile.
+The approved operation subsequently saved `Alibaba Singapore` connection
+`connection-9cfa9a89de34a14a61c425d2f10d4871` and assigned it to TellTale.
+The existing client key remains assigned to TellTale; the deployed Story Service key resolves to that tenant.
+The temporary connection tab was closed after persistence verification.
 
 1. Complete repository validation and have the selected changes committed through the normal execution chain.
 2. Prepare and publish the immutable release through the repository lifecycle. Use `make release` and `make publish` only for their separately selected phases.
@@ -78,11 +86,23 @@ The temporary inspection tab was closed. Resume at the production website in the
 7. Run authenticated production text and image acceptance for this exact tenant and route, retaining safe request IDs and usage.
 8. Record the release identity, connection and tenant identifiers, selected default, and production acceptance results here or in a linked operational record.
 
-At completion of qualification, the selected local changes were uncommitted and no Flash release had been prepared or activated.
-The user subsequently approved Qwen/Alibaba source finalization, release preparation, and publication.
-The native lifecycle record under private Git storage retains the resulting immutable release and publication identity.
-Production rollout remains the operator's next phase.
-The existing TellTale client key is required for native API acceptance; no replacement was created during preparation.
+The approved `make deploy` operation activated LLM Proxy `v1.12.13` from
+`0d4853647a2953949610943466050aa71a37af37`.
+Six authenticated production Flash checks passed through TellTale's existing key:
+omitted effort, `none`, `low`, `medium`, `xhigh`, and ordered PNG/JPEG input.
+They consumed 657 input and 172 output tokens, with positive consistent usage and unique request identifiers.
+This evidence covers direct text and image requests; it does not qualify structured Story generation.
+The private operation record is `.git/llm-proxy-operations/F095.json`.
+Native lifecycle receipts retain the immutable release, publication, and deployment identities.
+
+F096 adds the strict text-only schema contract needed by TellTale.
+Deploy and qualify that dependency before activating the consumer's default route.
+TellTale's single automatic route controls new World, Plot, and Story operations.
+Use `dashscope`, `qwen3.8-flash`, and explicit `none` after application qualification.
+Existing operations retain their captured provider, model, reasoning effort, and work budget.
+Acceptance must complete a fresh synthetic World-to-Story flow, select an opening explicitly,
+and verify the completed Story and Reader with linked invocation and usage evidence.
+Preserve paused user work and inspect active paid work immediately before consumer activation.
 
 Read-only lifecycle preparation confirmed Gateway `v9.2.2`, lifecycle contract `4`, and GitHub actor `tyemirov` with administrator access to `tyemirov/llm-proxy`.
 Local and remote `master` both identified `cd32123b6c7508ce7dcde164e9a081679a27f0f5` before Git finalization.

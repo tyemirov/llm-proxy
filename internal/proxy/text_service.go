@@ -102,6 +102,10 @@ func prepareV2TextRequest(ctx context.Context, payload chatV2RequestPayload, que
 	if messageError != nil {
 		return chatRequestParameters{}, messageError
 	}
+	if structuredMediaError := validateStructuredOutputMessages(resolvedModel, structuredOutput, messages); structuredMediaError != nil {
+		messages.closeMedia()
+		return chatRequestParameters{}, &textValidationError{message: structuredMediaError.Error()}
+	}
 	if routeMessageError := validateMessagesForResolvedTextRoute(resolvedModel, messages); routeMessageError != nil {
 		messages.closeMedia()
 		return chatRequestParameters{}, routeMessageError

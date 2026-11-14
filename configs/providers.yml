@@ -2633,6 +2633,7 @@ providers:
         - model: qwen3.8-flash
           created: 1788566400
           upstream_model: qwen3.8-flash
+          structured_output: true
           transport: text
           operations:
             - text

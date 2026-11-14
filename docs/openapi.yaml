@@ -8472,6 +8472,7 @@ components:
               - typed_decision
               - dictation
               - caller_tools
+              - structured_output
               - web_search
               - image_input
               - audio_input
@@ -8560,6 +8561,7 @@ components:
               - typed_decision
               - dictation
               - caller_tools
+              - structured_output
               - web_search
               - image_input
               - audio_input

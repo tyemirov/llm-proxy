@@ -125,8 +125,9 @@ type ExactModel struct {
 
 // ProviderOffering declares one provider route for one exact model.
 type ProviderOffering struct {
-	Created     int64 `mapstructure:"created"`
-	CallerTools bool  `mapstructure:"caller_tools"`
+	Created          int64 `mapstructure:"created"`
+	CallerTools      bool  `mapstructure:"caller_tools"`
+	StructuredOutput bool  `mapstructure:"structured_output"`
 
 	Provider                string                     `mapstructure:"provider"`
 	Model                   string                     `mapstructure:"model"`
@@ -366,6 +367,12 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 		offeredOperations, operationError := validatedOperationSet(offering.Operations, fieldPrefix+".operations")
 		if operationError != nil {
 			return operationError
+		}
+		if offering.StructuredOutput {
+			_, textOperation := offeredOperations[ModelOperationText]
+			if !textOperation || offering.WireContract != CatalogProtocolDashScopeResponses || offering.ExecutionLifecycle != string(textExecutionLifecycleSynchronousCompletion) {
+				return fmt.Errorf("%w: field=%s.structured_output reason=unsupported_offering", ErrInvalidModelCatalog, fieldPrefix)
+			}
 		}
 		modelOperationSet, _ := validatedOperationSet(exactModel.Operations, "catalog.models.operations")
 		for operation := range offeredOperations {

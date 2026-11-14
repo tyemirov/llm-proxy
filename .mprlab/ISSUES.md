@@ -4422,6 +4422,18 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
 
 ## Features
 
+- [-] [F096] (P0) Add strict Qwen 3.8 Flash structured generation.
+  Goal: Support TellTale planning and Story contracts through the existing DashScope Responses route.
+  Requirements:
+  - Enable native strict JSON Schema for the exact `qwen3.8-flash` offering.
+  - Reject schema requests with media before dispatch because Alibaba downgrades multimodal schema enforcement.
+  - Preserve server schema validation, structured request identity, terminal incomplete failures, and measured usage.
+  - Keep other Qwen offerings and normal text continuation unchanged.
+  Validation: Public HTTP tests with a local provider protocol server, focused Make checks, and final CI.
+  Production qualification and consumer default activation are separate operations.
+
+
+
 - [!] [F095] (P0) Activate qualified Qwen 3.8 offerings in production.
   Goal:
   Complete production activation and exact-tenant acceptance independently from F050's repository implementation.

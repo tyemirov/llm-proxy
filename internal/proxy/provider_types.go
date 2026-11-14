@@ -323,7 +323,8 @@ func (capability *reasoningEffortCapability) supports(effort string) bool {
 }
 
 type textModelDefinition struct {
-	callerTools bool
+	callerTools      bool
+	structuredOutput bool
 
 	identifier              modelID
 	providerIdentifier      modelID

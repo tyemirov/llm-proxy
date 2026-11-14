@@ -47,6 +47,17 @@ The provider identifier, `dashscope_responses` codec, and `DASHSCOPE_*` environm
 The setup guide includes a separate procedure for US (Virginia).
 F064 tracks US East endpoint support and the regional model inventory.
 
+## DashScope structured output
+
+An offering can declare `structured_output: true` for a qualified synchronous
+DashScope Responses text route. The committed catalog declares it only for
+`qwen3.8-flash`; sharing that wire contract does not enable other offerings.
+Public discovery adds `structured_output` to that offering's capability list.
+The request boundary validates the provider schema subset and requires text-only
+messages. Image input and structured output are separate capabilities that cannot
+be combined on this route.
+See the [strict schema contract](dashscope-responses.md#structured-generation).
+
 ## Image formats and dimensions
 
 An offering can declare `image_mime_types` to restrict the protocol adapter's image formats.
