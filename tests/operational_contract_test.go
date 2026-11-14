@@ -1555,6 +1555,7 @@ func TestOperationalProductionLiveTestUsesDefaultTenantSecretOnly(testingInstanc
 	}
 
 	toolDirectory := filepath.Join(fixtureRoot, "tools")
+	installSystemOneLiveNodeFixture(testingInstance, fixtureRoot, toolDirectory)
 	captureDirectory := filepath.Join(fixtureRoot, "curl-capture")
 	if createCaptureDirectoryError := os.MkdirAll(captureDirectory, 0o755); createCaptureDirectoryError != nil {
 		testingInstance.Fatalf("create curl capture directory: %v", createCaptureDirectoryError)
@@ -1655,14 +1656,18 @@ builtin printf '%s' '200'
 	if strings.Contains(output, defaultTenantSecret) {
 		testingInstance.Fatalf("production live-test output exposed the tenant secret: %s", output)
 	}
-	if !strings.Contains(output, "live test passed: total_cases=9") {
+	if !strings.Contains(output, "live test passed: total_cases=11") {
 		testingInstance.Fatalf("production live-test did not report all cases: %s", output)
 	}
 	if !strings.Contains(output, "live test identity preflight passed: tenant=expected status=200") {
 		testingInstance.Fatalf("production live-test omitted the tenant identity preflight: %s", output)
 	}
-	if strings.Count(output, "request_id=AAAAAAAAAAAAAAAAAAAAAAAAAA") != 10 {
+	if strings.Count(output, " request_id=AAAAAAAAAAAAAAAAAAAAAAAAAA") != 12 {
 		testingInstance.Fatalf("production live-test did not report one validated request id per case: %s", output)
+	}
+	nodeCalls, nodeCallsError := os.ReadFile(filepath.Join(fixtureRoot, "system-one-calls"))
+	if nodeCallsError != nil || string(nodeCalls) != "preflight\ntext\nimage\n" {
+		testingInstance.Fatalf("production suite omitted or repeated Jev cases: calls=%s error=%v", nodeCalls, nodeCallsError)
 	}
 	preflightURLBytes, preflightURLError := os.ReadFile(filepath.Join(captureDirectory, "url-1"))
 	if preflightURLError != nil {
@@ -1673,6 +1678,8 @@ builtin printf '%s' '200'
 		testingInstance.Fatalf("production live-test used invalid preflight URL: %s error=%v", preflightURLBytes, preflightParseError)
 	}
 	for _, expectedCase := range []string{
+		"case=typesafe-text provider=typesafe status=200",
+		"case=typesafe-image provider=typesafe status=200",
 		"case=openai-background-polling provider=openai status=200",
 		"case=anthropic-long-completion provider=anthropic status=200",
 		"case=meta-long-completion provider=meta status=200",
@@ -1750,6 +1757,41 @@ builtin printf '%s' '200'
 			testingInstance.Fatalf("long completion call %d used unexpected request budget: %s", captureIndex, timeoutBytes)
 		}
 	}
+
+	testingInstance.Run("prerequisite-failure-before-provider-calls", func(testingInstance *testing.T) {
+		callCountPath := filepath.Join(captureDirectory, "call-count")
+		initialCalls, readError := os.ReadFile(callCountPath)
+		if readError != nil {
+			testingInstance.Fatal(readError)
+		}
+		command := exec.Command("make", "live-test")
+		command.Dir = fixtureRoot
+		command.Env = append(environment, "FAKE_JEV_FAIL_CASE=preflight")
+		output, commandError := command.CombinedOutput()
+		finalCalls, readError := os.ReadFile(callCountPath)
+		if commandError == nil || readError != nil || string(initialCalls) != string(finalCalls) {
+			testingInstance.Fatalf("prerequisite failure did not stop provider calls: error=%v initial=%s final=%s read=%v output=%s", commandError, initialCalls, finalCalls, readError, output)
+		}
+	})
+	for _, failedCase := range []string{"text", "image"} {
+		testingInstance.Run("independent-"+failedCase+"-failure", func(testingInstance *testing.T) {
+			if removeError := os.Remove(filepath.Join(fixtureRoot, "system-one-calls")); removeError != nil {
+				testingInstance.Fatal(removeError)
+			}
+			command := exec.Command("make", "live-test")
+			command.Dir = fixtureRoot
+			command.Env = append(environment, "FAKE_JEV_FAIL_CASE="+failedCase)
+			failureOutput, commandError := command.CombinedOutput()
+			if commandError == nil || !strings.Contains(string(failureOutput), "failed_cases=1") || !strings.Contains(string(failureOutput), "total_cases=11") {
+				testingInstance.Fatalf("Jev failure was not aggregated: error=%v output=%s", commandError, failureOutput)
+			}
+			calls, readError := os.ReadFile(filepath.Join(fixtureRoot, "system-one-calls"))
+			if readError != nil || string(calls) != "preflight\ntext\nimage\n" {
+				testingInstance.Fatalf("Jev failure prevented independent case: calls=%s error=%v", calls, readError)
+			}
+		})
+	}
+
 }
 
 func TestOperationalProductionLiveTestRequiresDefaultTenantSecret(testingInstance *testing.T) {
@@ -1799,6 +1841,7 @@ func TestOperationalProductionLiveTestStopsWhenClientKeyIsRejected(testingInstan
 	}
 
 	toolDirectory := filepath.Join(fixtureRoot, "tools")
+	installSystemOneLiveNodeFixture(testingInstance, fixtureRoot, toolDirectory)
 	callCountPath := filepath.Join(fixtureRoot, "curl-call-count")
 	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "curl"), `#!/usr/bin/env bash
 set -euo pipefail
@@ -1853,6 +1896,10 @@ builtin printf '%s' '403'
 	if commandError == nil {
 		testingInstance.Fatalf("make live-test accepted a rejected client key: %s", output)
 	}
+	nodeCalls, nodeCallsError := os.ReadFile(filepath.Join(fixtureRoot, "system-one-calls"))
+	if nodeCallsError != nil || string(nodeCalls) != "preflight\n" {
+		testingInstance.Fatalf("identity failure executed paid Jev cases: calls=%s error=%v", nodeCalls, nodeCallsError)
+	}
 	outputText := string(output)
 	if !strings.Contains(outputText, "live test identity preflight failed: client_key=rejected status=403") {
 		testingInstance.Fatalf("make live-test did not report the rejected client key: %s", outputText)
@@ -1879,6 +1926,7 @@ func TestOperationalProductionLiveTestStopsForUnexpectedTenant(testingInstance *
 	}
 
 	toolDirectory := filepath.Join(fixtureRoot, "tools")
+	installSystemOneLiveNodeFixture(testingInstance, fixtureRoot, toolDirectory)
 	callCountPath := filepath.Join(fixtureRoot, "curl-call-count")
 	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "curl"), `#!/usr/bin/env bash
 set -euo pipefail
@@ -1932,6 +1980,10 @@ builtin printf '%s' '200'
 	if commandError == nil {
 		testingInstance.Fatalf("make live-test accepted an unexpected tenant: %s", output)
 	}
+	nodeCalls, nodeCallsError := os.ReadFile(filepath.Join(fixtureRoot, "system-one-calls"))
+	if nodeCallsError != nil || string(nodeCalls) != "preflight\n" {
+		testingInstance.Fatalf("identity failure executed paid Jev cases: calls=%s error=%v", nodeCalls, nodeCallsError)
+	}
 	outputText := string(output)
 	if !strings.Contains(outputText, "live test identity preflight failed: client_key=unexpected_tenant status=200") {
 		testingInstance.Fatalf("make live-test did not report the unexpected tenant: %s", outputText)
@@ -1958,6 +2010,7 @@ func TestOperationalProductionLiveTestDoesNotInventRequestIDForTransportFailure(
 	}
 
 	toolDirectory := filepath.Join(fixtureRoot, "tools")
+	installSystemOneLiveNodeFixture(testingInstance, fixtureRoot, toolDirectory)
 	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "curl"), `#!/usr/bin/env bash
 exit 7
 `, 0o755)
@@ -1973,6 +2026,10 @@ exit 7
 	output, commandError := command.CombinedOutput()
 	if commandError == nil {
 		testingInstance.Fatalf("make live-test accepted transport failures: %s", output)
+	}
+	nodeCalls, nodeCallsError := os.ReadFile(filepath.Join(fixtureRoot, "system-one-calls"))
+	if nodeCallsError != nil || string(nodeCalls) != "preflight\n" {
+		testingInstance.Fatalf("identity failure executed paid Jev cases: calls=%s error=%v", nodeCalls, nodeCallsError)
 	}
 	outputText := string(output)
 	if strings.Count(outputText, "transport_error") != 1 || !strings.Contains(outputText, "live test identity preflight failed: client_key=transport_error") {
@@ -3593,4 +3650,25 @@ func TestOperationalLiveHarnessCatalogDefault(t *testing.T) {
 		t.Fatal("credential exposed")
 	}
 	assertOperationalProxyChildStopped(t, fixture.proxyPIDPath)
+}
+
+func installSystemOneLiveNodeFixture(testingInstance *testing.T, fixtureRoot, toolDirectory string) {
+	testingInstance.Helper()
+	writeOperationalFile(testingInstance, filepath.Join(fixtureRoot, "scripts", "system_one_live_acceptance.ts"), "// isolated wrapper fixture\n", 0o644)
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "node"), `#!/usr/bin/env bash
+set -euo pipefail
+[[ "$1" == "--experimental-strip-types" ]]
+shift
+[[ "$1" == *"scripts/system_one_live_acceptance.ts" ]]
+shift
+[[ "$#" == 3 ]]
+[[ "$1" == "https://llm-proxy-api.mprlab.com" ]]
+[[ "$2" =~ ^[0-9]+$ ]]
+case_name="$3"
+[[ "${case_name}" == preflight || "${case_name}" == text || "${case_name}" == image ]]
+builtin printf '%s\n' "${case_name}" >>system-one-calls
+if [[ "${FAKE_JEV_FAIL_CASE:-}" == "${case_name}" ]]; then exit 1; fi
+if [[ "${case_name}" == preflight ]]; then exit 0; fi
+builtin printf 'live test passed: case=typesafe-%s provider=typesafe status=200 request_id=AAAAAAAAAAAAAAAAAAAAAAAAAA typesafe_request_id=typesafe-fixture-request\n' "${case_name}"
+`, 0o755)
 }
