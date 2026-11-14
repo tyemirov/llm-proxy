@@ -103,7 +103,7 @@ const (
 
 var publicCapabilityValues = map[string]struct{}{
 	publicCapabilityAudioInput: {}, "dictation": {}, publicCapabilityImageInput: {}, "reasoning": {},
-	"typed_decision": {}, "text": {}, "image_generation": {}, "image_editing": {}, "video_generation": {}, "web_search": {}, "caller_tools": {},
+	"typed_decision": {}, "text": {}, "image_generation": {}, "image_editing": {}, "video_generation": {}, "web_search": {}, "caller_tools": {}, "structured_output": {},
 	"audio_transcription": {}, "audio_diarization": {}, "audio_alignment": {},
 	"subtitle_creation": {}, "speech_generation": {}, "speech_conversion": {}, "voice_extraction": {},
 }
