@@ -782,6 +782,7 @@ exec "${REAL_AWK_PATH:?}" "$@"
 		"LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY",
 		"LLM_PROXY_MANAGEMENT_API_ORIGIN",
 		"LLM_PROXY_MANAGEMENT_PROXY_ORIGIN",
+		"LLM_PROXY_QUALIFICATION_BUDGET",
 	})
 	assertOperationalEnvironmentKeys(testingInstance, filepath.Join(fixtureRoot, "configs", ".env.tauth.local"), []string{
 		"TAUTH_OAUTH_ES256_PRIVATE_KEY_BASE64",
