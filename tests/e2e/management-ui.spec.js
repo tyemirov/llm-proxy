@@ -287,6 +287,20 @@ let renderedSiteTempRoot = "";
 let renderedSiteRoot = "";
 let publicCapabilities;
 
+function publicCatalogRouteCounts() {
+  return `${publicCapabilities.families.length} families · ${publicCapabilities.models.length} exact models · ${publicCapabilities.offerings.length} offerings`;
+}
+
+/** @param {number} matchingModels */
+function publicCatalogResultCount(matchingModels) {
+  return `${matchingModels} of ${publicCapabilities.models.length} ${matchingModels === 1 ? "model" : "models"}`;
+}
+
+/** @param {string[]} capabilities */
+function publicCatalogModelsWithCapabilities(capabilities) {
+  return publicCapabilities.models.filter(model => capabilities.every(capability => model.capabilities.includes(capability)));
+}
+
 test.beforeAll(async () => {
   const capabilityBinaryPath = process.env[capabilityBinaryEnvironment];
   if (!capabilityBinaryPath) {
@@ -539,7 +553,7 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('<routing-tree class="routing-tree" data-enhanced="false" aria-label="Interactive LLM routing map">');
   expect(html).toContain("One integration. Choose the exact route.");
   expect(html).toContain('<canvas class="routing-tree__connectors" data-route-canvas aria-hidden="true"></canvas>');
-  expect(html).toContain('<output class="routing-tree__counts" aria-live="polite" data-route-counts>34 families · 88 exact models · 91 offerings</output>');
+  expect(html).toContain(`<output class="routing-tree__counts" aria-live="polite" data-route-counts>${publicCatalogRouteCounts()}</output>`);
   expect(html).toContain('data-route-family="deepseek-r1"');
   expect(html).toContain('data-route-family="muse-spark"');
   expect(html).toContain('data-route-model="muse-spark-1.2" data-route-model-family="muse-spark"');
@@ -555,11 +569,11 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).not.toContain("data-route-publisher");
   expect(html).not.toContain("llm-proxy-routing-tree");
   expect(html).toContain('<table class="catalog-table">');
-  expect(html).toContain('<strong>18</strong><span>Providers</span>');
-  expect(html).toContain('<strong>16</strong><span>Publishers</span>');
-  expect(html).toContain('<strong>34</strong><span>Families</span>');
-  expect(html).toContain('<strong>88</strong><span>Exact models</span>');
-  expect(html).toContain('<strong>91</strong><span>Offerings</span>');
+  expect(html).toContain(`<strong>${publicCapabilities.providers.length}</strong><span>Providers</span>`);
+  expect(html).toContain(`<strong>${publicCapabilities.publishers.length}</strong><span>Publishers</span>`);
+  expect(html).toContain(`<strong>${publicCapabilities.families.length}</strong><span>Families</span>`);
+  expect(html).toContain(`<strong>${publicCapabilities.models.length}</strong><span>Exact models</span>`);
+  expect(html).toContain(`<strong>${publicCapabilities.offerings.length}</strong><span>Offerings</span>`);
   expect(html).toContain('data-catalog-sort-header="publisher"');
   expect(html).toContain('data-catalog-sort-header="model"');
   expect(html).toContain('data-catalog-sort-header="capabilities"');
@@ -833,9 +847,18 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(page.locator("#routing-overview routing-tree")).toHaveCount(1);
   await expect(page.locator("#models > routing-tree")).toHaveCount(0);
   await expect(routingTree).toHaveAttribute("data-enhanced", "false");
-  await expect(routingTree.locator("[data-route-family]")).toHaveCount(34);
-  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(91);
-  await expect(routingTree.locator("[data-route-model]")).toHaveCount(88);
+  await expect(routingTree.locator("[data-route-family]")).toHaveCount(publicCapabilities.families.length);
+  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(publicCapabilities.offerings.length);
+  await expect(routingTree.locator("[data-route-model]")).toHaveCount(publicCapabilities.models.length);
+  for (const [attribute, entries] of [
+    ["data-route-family", publicCapabilities.families],
+    ["data-route-model", publicCapabilities.models],
+    ["data-route-offering", publicCapabilities.offerings],
+  ]) {
+    expect(await routingTree.locator(`[${attribute}]`).evaluateAll(
+      (elements, name) => elements.map(element => element.getAttribute(name)).sort(), attribute,
+    )).toEqual(entries.map(entry => entry.identifier).sort());
+  }
   await expect(routingTree.locator("[data-route-weight-access]")).toHaveCount(2);
   await expect(routingTree.locator("[data-route-capability]")).toHaveCount(8);
   await expect(routingTree.locator('[data-route-capability="images"]')).toHaveCount(1);
@@ -845,8 +868,8 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(routingTree.locator('[data-route-capability="all"]')).toHaveAttribute("aria-pressed", "true");
   await expect(routingTree.locator('[data-route-weight-access][aria-pressed="true"]')).toHaveCount(2);
   await expect(routingTree.locator('[data-route-capability][aria-pressed="true"]')).toHaveCount(1);
-  await expect(routingTree.locator('[data-route-family]:visible')).toHaveCount(34);
-  await expect(routingTree.locator("[data-route-counts]")).toHaveText("34 families · 88 exact models · 91 offerings");
+  await expect(routingTree.locator('[data-route-family]:visible')).toHaveCount(publicCapabilities.families.length);
+  await expect(routingTree.locator("[data-route-counts]")).toHaveText(publicCatalogRouteCounts());
   await expect(routingTree.locator('[data-route-family="claude-fable"]')).toHaveAttribute("aria-pressed", "true");
   await expect(routingTree.locator('[data-route-model-group="claude-fable"]')).toBeVisible();
   await expect(routingTree.locator('[data-route-model-group="grok"]')).toBeHidden();
@@ -859,7 +882,10 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(catalog).toHaveAttribute("data-enhanced", "false");
   await expect(catalog.locator("[data-catalog-toolbar]")).toBeHidden();
   await expect(catalog.getByRole("columnheader")).toHaveText(["Publisher", "Model", "Provider offerings and capabilities"]);
-  await expect(catalog.locator("[data-catalog-row]")).toHaveCount(88);
+  await expect(catalog.locator("[data-catalog-row]")).toHaveCount(publicCapabilities.models.length);
+  expect(await catalog.locator("[data-catalog-row]").evaluateAll(
+    elements => elements.map(element => element.getAttribute("data-model")).sort(),
+  )).toEqual(publicCapabilities.models.map(model => model.identifier).sort());
   await expect(catalog.locator('[data-model="gpt-transcribe"]')).toContainText("Dictation");
   await expect(catalog.locator('[data-model="gpt-4o-mini"]')).toContainText("Image input");
   await expect(catalog.locator('[data-model="claude-fable-5"]')).toContainText("Image input");
@@ -1186,8 +1212,8 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   const modelHeader = catalog.locator('[data-catalog-sort-header="model"]');
   const capabilitiesHeader = catalog.locator('[data-catalog-sort-header="capabilities"]');
   await expect(catalog).toHaveAttribute("data-enhanced", "true");
-  await expect(rows).toHaveCount(88);
-  await expect(resultCount).toHaveText("88 of 88 models");
+  await expect(rows).toHaveCount(publicCapabilities.models.length);
+  await expect(resultCount).toHaveText(publicCatalogResultCount(publicCapabilities.models.length));
   await expect(filterPanel).toBeHidden();
   await expect(searchSubmit).toHaveAttribute("aria-expanded", "false");
 
@@ -1207,63 +1233,76 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   await expect(searchSubmit).toHaveAttribute("aria-expanded", "false");
   await expect(catalog.locator('[data-catalog-search-text*="background"]')).toHaveCount(0);
   await expect(catalog.locator('[data-catalog-search-text*="synchronous"]')).toHaveCount(0);
+  const matchingFlashModelIDs = publicCapabilities.models.filter(model => (
+    model.identifier.includes("gemini-3.5-flash")
+    && publicCapabilities.offerings.some(offering => (
+      offering.model === model.identifier
+      && offering.wire_contract === "gemini_interactions"
+      && ["image_input", "audio_input"].every(capability => offering.capabilities.includes(capability))
+    ))
+  )).map(model => model.identifier).sort();
   await searchInput.fill("gemini-3.5-flash gemini_interactions image_input audio_input");
   await expect(filterPanel).toBeVisible();
-  await expect(resultCount).toHaveText("1 of 88 model");
-  await expect(visibleRows).toHaveAttribute("data-model", "gemini-3.5-flash");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(matchingFlashModelIDs.length));
+  expect(await visibleRows.evaluateAll(elements => elements.map(element => element.getAttribute("data-model")).sort()))
+    .toEqual(matchingFlashModelIDs);
 
   await searchInput.fill("muse-spark-1.3 max");
-  await expect(resultCount).toHaveText("1 of 88 model");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(1));
   await expect(visibleRows).toHaveAttribute("data-model", "muse-spark-1.3");
 
   await searchInput.fill("gpt-6-astra openai_responses max");
-  await expect(resultCount).toHaveText("1 of 88 model");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(1));
   await expect(visibleRows).toHaveAttribute("data-model", "gpt-6-astra");
 
   await searchInput.fill("gpt-5.5-pro openai_responses xhigh");
-  await expect(resultCount).toHaveText("1 of 88 model");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(1));
   await expect(visibleRows).toHaveAttribute("data-model", "gpt-5.5-pro");
 
   await searchInput.fill("claude-opus-4-1");
-  await expect(resultCount).toHaveText("0 of 88 models");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(0));
 
   for (const model of ["minimax-m3", "grok-4.6", "qwen3.8-max", "qwen3.8-max-0902", "qwen3.8-2.4t-a95b", "qwen3.8-27b", "glm-5.3", "glm-5.3-flash"]) {
+    const matchingModelIDs = publicCapabilities.models
+      .filter(entry => entry.identifier.includes(model)).map(entry => entry.identifier).sort();
     await searchInput.fill(model);
-    await expect(resultCount).toHaveText("0 of 88 models");
+    await expect(resultCount).toHaveText(publicCatalogResultCount(matchingModelIDs.length));
+    expect(await visibleRows.evaluateAll(elements => elements.map(element => element.getAttribute("data-model")).sort()))
+      .toEqual(matchingModelIDs);
   }
 
   for (const model of ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview"]) {
     await searchInput.fill(`${model} vertex_generate_content`);
-    await expect(resultCount).toHaveText("1 of 88 model");
+    await expect(resultCount).toHaveText(publicCatalogResultCount(1));
     await expect(visibleRows).toHaveAttribute("data-model", model);
   }
 
   for (const model of ["claude-fable-5-1", "claude-opus-5"]) {
     await searchInput.fill(`${model} 128000 xhigh`);
-    await expect(resultCount).toHaveText("1 of 88 model");
+    await expect(resultCount).toHaveText(publicCatalogResultCount(1));
     await expect(visibleRows).toHaveAttribute("data-model", model);
   }
 
   await searchInput.fill("qwen3.7-plus dashscope_responses image_input");
-  await expect(resultCount).toHaveText("1 of 88 model");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(1));
   await expect(visibleRows).toHaveAttribute("data-model", "qwen3.7-plus");
   await expect(visibleRows).toContainText("Alibaba Cloud");
 
   await searchInput.fill("qwen3.8-flash dashscope_responses image_input xhigh");
-  await expect(resultCount).toHaveText("1 of 88 model");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(1));
   await expect(visibleRows).toHaveAttribute("data-model", "qwen3.8-flash");
   await expect(visibleRows).toContainText("Alibaba Cloud");
 
   await searchInput.fill("grok-4.3 xai_responses");
-  await expect(resultCount).toHaveText("2 of 88 models");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(2));
 
   await searchInput.fill("glm-5.2 131072 token");
-  await expect(resultCount).toHaveText("1 of 88 model");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(1));
   await expect(visibleRows).toHaveAttribute("data-model", "glm-5.2");
 
   await catalog.getByRole("button", { name: "Reset" }).click();
   await searchInput.fill("dictation");
-  await expect(resultCount).toHaveText("6 of 88 models");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(publicCatalogModelsWithCapabilities(["dictation"]).length));
   for (const visibleRow of await visibleRows.all()) {
     await expect(visibleRow).toHaveAttribute("data-capabilities", "dictation");
   }
@@ -1271,28 +1310,28 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   await catalog.getByRole("button", { name: "Reset" }).click();
   await catalog.getByRole("checkbox", { name: "Image input" }).check();
   await catalog.getByRole("checkbox", { name: "Audio message input" }).check();
-  await expect(resultCount).toHaveText("7 of 88 models");
-  await expect(visibleRows).toHaveCount(7);
+  await expect(resultCount).toHaveText(publicCatalogResultCount(publicCatalogModelsWithCapabilities(["image_input", "audio_input"]).length));
+  await expect(visibleRows).toHaveCount(publicCatalogModelsWithCapabilities(["image_input", "audio_input"]).length);
 
   await searchSubmit.click();
   await expect(filterPanel).toBeHidden();
-  await expect(resultCount).toHaveText("7 of 88 models");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(publicCatalogModelsWithCapabilities(["image_input", "audio_input"]).length));
   await searchSubmit.click();
   await expect(filterPanel).toBeVisible();
   await expect(catalog.getByRole("checkbox", { name: "Image input" })).toBeChecked();
   await expect(catalog.getByRole("checkbox", { name: "Audio message input" })).toBeChecked();
 
   await catalog.getByRole("checkbox", { name: "Dictation" }).check();
-  await expect(resultCount).toHaveText("0 of 88 models");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(0));
   await expect(catalog.locator("[data-catalog-empty]")).toBeVisible();
 
   await catalog.getByRole("button", { name: "Reset" }).click();
-  await expect(resultCount).toHaveText("88 of 88 models");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(publicCapabilities.models.length));
   await searchInput.press("Escape");
   await catalog.getByRole("button", { name: "Filter by Dictation" }).first().click();
   await expect(filterPanel).toBeVisible();
   await expect(catalog.getByRole("checkbox", { name: "Dictation" })).toBeChecked();
-  await expect(resultCount).toHaveText("6 of 88 models");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(publicCatalogModelsWithCapabilities(["dictation"]).length));
 
   await catalog.getByRole("button", { name: "Reset" }).click();
   await expect(publisherHeader).toHaveAttribute("aria-sort", "ascending");
