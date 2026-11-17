@@ -141,7 +141,7 @@ func TestDashScopeResponsesContinuation(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if calls == 1 {
-			io.WriteString(w, `{"status":"incomplete","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"first "}]}],"usage":{"input_tokens":2,"output_tokens":3,"total_tokens":5}}`)
+			io.WriteString(w, `{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"first "}]}],"usage":{"input_tokens":2,"output_tokens":3,"total_tokens":5}}`)
 			return
 		}
 		input := payload["input"].([]any)

@@ -379,7 +379,7 @@ func TestProviderRoutingExpandsConfiguredContinuationTokenBudget(t *testing.T) {
 				}
 				if requestCount == 1 {
 					responseWriter.Header().Set("Content-Type", "application/json")
-					_, _ = responseWriter.Write([]byte(`{"status":"incomplete","output":[]}`))
+					_, _ = responseWriter.Write([]byte(`{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[]}`))
 					return
 				}
 				if unmarshalError := json.Unmarshal(requestBytes, &continuationPayload); unmarshalError != nil {

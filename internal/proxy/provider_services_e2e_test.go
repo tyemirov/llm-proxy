@@ -189,7 +189,7 @@ func TestProviderServicesAlignWithoutInventedModel(t *testing.T) {
 }
 
 // The fixture keeps real HTTP, storage, credentials, admission, and workers.
-func providerServicesFixture(t *testing.T, native http.HandlerFunc, changes ...func(*proxy.Configuration)) (llmproxyclient.Client, *gorm.DB, func() llmproxyclient.Client) {
+func providerServicesFixture(t *testing.T, native http.HandlerFunc, changes ...func(*proxy.Configuration)) (llmproxyclient.Client, *gorm.DB, func(...func()) llmproxyclient.Client) {
 	t.Helper()
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/v1/user/subscription" {
@@ -241,9 +241,12 @@ func providerServicesFixture(t *testing.T, native http.HandlerFunc, changes ...f
 	if err != nil {
 		t.Fatal(err)
 	}
-	return connect(router), database, func() llmproxyclient.Client {
+	return connect(router), database, func(beforeOpen ...func()) llmproxyclient.Client {
 		if err := router.Close(); err != nil {
 			t.Fatal(err)
+		}
+		for _, prepare := range beforeOpen {
+			prepare()
 		}
 		router = openRouter()
 		return connect(router)
@@ -297,21 +300,25 @@ func TestProviderServicesAlignmentRecoversAcceptedOutput(t *testing.T) {
 			t.Fatal("alignment did not retain its accepted output")
 		}
 	}
-	// Close the original runtime while publication is unavailable. A fresh runtime
-	// must use the receipt after the previous worker claim expires.
-	restart()
-	if err := database.Exec("DROP TRIGGER reject_alignment_publication").Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Table("media_operation_claim_records").Where("operation_id = ?", accepted.OperationID).Update("expires_at", time.Now().Add(-time.Hour)).Error; err != nil {
-		t.Fatal(err)
-	}
-	client = restart()
+	// Close the original runtime while publication is unavailable. Prepare recovery
+	// while no worker can claim the receipt, then start the replacement runtime once.
+	client = restart(func() {
+		if err := database.Exec("DROP TRIGGER reject_alignment_publication").Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := database.Table("media_operation_claim_records").Where("operation_id = ?", accepted.OperationID).Update("expires_at", time.Now().Add(-time.Hour)).Error; err != nil {
+			t.Fatal(err)
+		}
+	})
 	recoveryContext, recoveryCancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer recoveryCancel()
 	completed, err := client.WaitMediaOperation(recoveryContext, accepted.OperationID, time.Millisecond)
 	if err != nil || completed.State != "succeeded" || len(completed.Outputs) != 1 {
-		t.Fatalf("alignment recovery=%+v error=%v", completed, err)
+		code := ""
+		if completed.Error != nil {
+			code = completed.Error.Code
+		}
+		t.Fatalf("alignment recovery=%+v public_error_code=%q error=%v", completed, code, err)
 	}
 	for range 2 {
 		asset, err := client.GetAsset(t.Context(), completed.Outputs[0].AssetID)

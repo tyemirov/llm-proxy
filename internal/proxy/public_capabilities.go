@@ -290,7 +290,7 @@ func publicProviderOffering(offering ProviderOffering) PublicProviderOffering {
 	if offering.CallerTools {
 		capabilities = append(capabilities, "caller_tools")
 	}
-	if offering.StructuredOutput {
+	if offering.StructuredOutput != nil {
 		capabilities = append(capabilities, PublicModelCapabilityStructuredOutput)
 	}
 	if offering.WebSearch {

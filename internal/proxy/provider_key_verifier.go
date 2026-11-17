@@ -90,9 +90,12 @@ func newOperationalProviderKeyVerifier(httpClient HTTPDoer, endpoints *Endpoints
 	}
 }
 
-func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Context, provider providerDefinition, model textModelDefinition, apiKey string) error {
-	verificationContext, cancelVerification := context.WithTimeout(parentContext, verifier.timeout)
+func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Context, provider providerDefinition, model textModelDefinition, apiKey string) (verificationError error) {
+	verificationContext, cancelVerification := context.WithTimeout(qualificationLogicalContext(parentContext), verifier.timeout)
 	defer cancelVerification()
+	defer func() {
+		verificationError = errors.Join(verificationError, finishQualificationExecution(verificationContext))
+	}()
 	switch provider.activeTransport.requestCodec {
 	case CatalogProtocolDictatorSpeechV1:
 		return verifyDictatorConnection(verificationContext, provider.connectionValues, provider.activeTransport)

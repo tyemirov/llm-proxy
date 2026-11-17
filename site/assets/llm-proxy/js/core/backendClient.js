@@ -1,8 +1,8 @@
 // @ts-check
 
-import {assertManagementAccount, assertManagementTenantProfile, assertProviderCatalog, assertProviderField} from "./managementProfile.js?v=20260903f037";
+import {assertManagementAccount, assertManagementTenantProfile, assertProviderCatalog, assertProviderField} from "./managementProfile.js?v=20261116b323";
 
-import { APP_INTEGRITY_ERROR, MPR_UI, CAPABILITY_DOMAINS } from "../constants.js?v=20260903f037";
+import { APP_INTEGRITY_ERROR, MPR_UI, CAPABILITY_DOMAINS } from "../constants.js?v=20261116b323";
 
 const MANAGEMENT_BASE_PATH = "/api/management";
 const HEADER_CONTENT_TYPE = "Content-Type";
@@ -28,6 +28,22 @@ export class BackendClientError extends Error {
     this.status = status;
   }
 }
+
+/** A public configuration rate limit with its authoritative retry deadline. */
+export class FrontendConfigRateLimitError extends BackendClientError {
+  /** @param {string | null} retryAfter */
+  constructor(retryAfter) {
+    super(EMPTY_STRING, 429);
+    const seconds = retryAfter !== null && /^\d+$/.test(retryAfter.trim()) ? Number(retryAfter) : NaN;
+    const date = retryAfter === null ? NaN : Date.parse(retryAfter);
+    this.retryAt = Number.isSafeInteger(seconds) && seconds <= Number.MAX_SAFE_INTEGER / 1000
+      ? Date.now() + seconds * 1000
+      : Number.isFinite(date) ? Math.max(Date.now(), date) : Date.now();
+  }
+}
+
+/** @type {FrontendConfigRateLimitError | null} */
+let frontendConfigRateLimit = null;
 
 const MANAGEMENT_FAILURE_MESSAGES = new Map([
   ['funding_unavailable', 'Payments are unavailable. Try again later.'],
@@ -266,15 +282,27 @@ export async function generateSecret(tenantID, signal) {
  */
 export function loadFrontendRuntimeConfig() {
   if (!frontendRuntimeConfigPromise) {
+    if (frontendConfigRateLimit && Date.now() < frontendConfigRateLimit.retryAt) {
+      return Promise.reject(frontendConfigRateLimit);
+    }
     const configUrl = frontendConfigURL();
-    frontendRuntimeConfigPromise = fetch(configUrl, { credentials: "include" })
+    const request = fetch(configUrl, { credentials: "include" })
       .then(async (response) => {
+        if (response.status === 429) {
+          frontendConfigRateLimit = new FrontendConfigRateLimitError(response.headers.get("Retry-After"));
+          throw frontendConfigRateLimit;
+        }
         if (!response.ok) {
           throw new BackendClientError(await response.text(), response.status);
         }
         return response.text();
       })
       .then((configText) => createFrontendRuntimeConfig(parseFrontendConfig(configText), configUrl));
+    const cachedRequest = request.catch((requestError) => {
+      if (frontendRuntimeConfigPromise === cachedRequest) frontendRuntimeConfigPromise = null;
+      throw requestError;
+    });
+    frontendRuntimeConfigPromise = cachedRequest;
   }
   return frontendRuntimeConfigPromise;
 }

@@ -215,6 +215,7 @@ func cloneModelCatalog(catalog ModelCatalog) ModelCatalog {
 
 func cloneProviderOffering(offering ProviderOffering) ProviderOffering {
 	cloned := offering
+	cloned.StructuredOutput = cloneStructuredOutputPolicy(offering.StructuredOutput)
 	cloned.Operations = append([]string(nil), offering.Operations...)
 	cloned.DefaultOperations = append([]string(nil), offering.DefaultOperations...)
 	cloned.MediaInputs = append([]string(nil), offering.MediaInputs...)

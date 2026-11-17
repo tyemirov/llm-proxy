@@ -616,6 +616,7 @@ configure_live_management_environment() {
   LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY="$(python3 -c 'import base64, secrets; print(base64.b64encode(secrets.token_bytes(32)).decode("ascii"))')"
   export LLM_PROXY_MANAGEMENT_API_ORIGIN="${LIVE_ORIGIN}"
   export LLM_PROXY_MANAGEMENT_PROXY_ORIGIN="${LIVE_ORIGIN}"
+  export LLM_PROXY_QUALIFICATION_BUDGET=null
 }
 
 existing_local_origin_port() {

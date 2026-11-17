@@ -64,6 +64,13 @@ test: go-test python-test frontend-test test-openapi-pages-artifact test-managem
 go-test: frontend-dependencies
 	@GO="$(GO)" ./scripts/check_coverage.sh
 
+# Run one public-contract test group without the full coverage qualification lane.
+TEST_PATTERN ?= ^Test
+TEST_SKIP ?= ^$$
+.PHONY: test-go-focused
+test-go-focused: frontend-dependencies
+	$(GO) test ./... -run '$(TEST_PATTERN)' -skip '$(TEST_SKIP)' -count=1 $(GO_TEST_ARGS)
+
 .PHONY: test-hosted-admission-errors
 test-hosted-admission-errors:
 	$(GO) test ./internal/proxy -run='^TestHostedJournalAdmissionEntropyFailuresPreserveUnreservedFunds$$' -count=100 -race

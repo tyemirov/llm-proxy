@@ -48,7 +48,7 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20260903f037";
+const applicationModuleRevision = "20261116b323";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
@@ -234,9 +234,11 @@ async function expectRoutingHeaderSingleRow(routingTree) {
  * @returns {string[]}
  */
 function runtimeJavaScriptSpecifiers(moduleSource) {
-  return [...moduleSource.matchAll(/^\s*import(?:[\s\S]*?\sfrom\s+)?["']([^"']+\.js(?:\?v=[^"']+)*)["'];/gmu)]
-    .map((match) => match[1])
-    .filter((specifier) => specifier.startsWith("."));
+  const declarations = [
+    ...moduleSource.matchAll(/^\s*import\s+(?!["'])[^;]*?\sfrom\s+["']([^"']+)["'];/gmu),
+    ...moduleSource.matchAll(/^\s*import\s*["']([^"']+)["'];/gmu),
+  ];
+  return declarations.map(match => match[1]).filter(specifier => specifier.startsWith("."));
 }
 const tenantAccessDesktopMaxHeight = 64;
 const usageIntervals = Object.freeze([
@@ -789,6 +791,37 @@ test("public landing explains the product and exposes the generated capability c
   expect(appIconSVG).toContain("llm-proxy Icon");
   expect(appIconSVG).toContain("#ffd369");
   expect(appIconSVG).toContain("#0063b9");
+});
+
+test("rendered application module entries and their complete internal graph share one revision", async ({ request }) => {
+  const response = await request.get(`${baseURL}${applicationPath}`);
+  expect(response.status()).toBe(httpOK);
+  const html = await response.text();
+  const entries = [...html.matchAll(/<script\b[^>]*type="module"[^>]*src="([^"]+)"/gu)]
+    .map(match => new URL(match[1], `${baseURL}${applicationPath}`));
+  expect(entries.map(url => url.pathname).sort()).toEqual([
+    "/assets/llm-proxy/js/app.js", "/assets/llm-proxy/js/brandIconElement.js", "/assets/llm-proxy/js/startupGuard.js",
+  ]);
+  const pending = [...entries];
+  const visited = new Set();
+  while (pending.length) {
+    const url = pending.shift();
+    if (visited.has(url.href)) continue;
+    expect(url.origin).toBe(baseURL);
+    expect(url.search).toBe(`?v=${applicationModuleRevision}`);
+    visited.add(url.href);
+    const moduleResponse = await request.get(url.href);
+    expect(moduleResponse.status(), url.pathname).toBe(httpOK);
+    const source = await moduleResponse.text();
+    const specifiers = runtimeJavaScriptSpecifiers(source);
+    // The Alpine module is selected by a runtime URL in the canonical constants.
+    for (const match of source.matchAll(/["'](\/assets\/llm-proxy\/js\/[^"']+\.js\?v=[^"']+)["']/gu)) specifiers.push(match[1]);
+    for (const specifier of specifiers) pending.push(new URL(specifier, url));
+  }
+  expect([...visited].some(url => url.includes("/core/backendClient.js?"))).toBe(true);
+  expect([...visited].some(url => url.includes("/ui/authenticationLifecycle.js?"))).toBe(true);
+  expect([...visited].some(url => url.includes("/alpineRuntime.js?"))).toBe(true);
+  expect([...visited].some(url => url.includes("/ui/paymentHistory.js?"))).toBe(true);
 });
 
 test("the routing tree and capability catalog remain complete without JavaScript", async ({ browser }) => {
@@ -3110,7 +3143,7 @@ test("application startup waits for shared UI orchestration before DOMContentLoa
     await page.goto(baseURL + applicationPath, { waitUntil: "commit" });
     await expect(page.locator("html")).toHaveAttribute("data-llm-proxy-application", "ready");
     await page.evaluate(async () => {
-      const client = await import("/assets/llm-proxy/js/core/backendClient.js?v=20260903f037");
+      const client = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261116b323");
       await client.loadFrontendRuntimeConfig();
       await new Promise(requestAnimationFrame);
     });
@@ -3628,6 +3661,200 @@ test("incompatible cached application module becomes an actionable application e
   await expect.poll(() => page.evaluate(() => window.__llmProxyManagementReadyCount)).toBe(1);
   expect(accountRequests).toHaveLength(0);
 });
+
+test("dashboard recovers its rate-limited bootstrap after shared authentication without reloading", async ({ page }) => {
+  const accountRequests = [];
+  page.on("request", request => {
+    if (request.url() === `${baseURL}/api/management/account`) accountRequests.push(request);
+  });
+  await installAssetRoutes(page, { emitInitialAuthEvent: false });
+  await installManagementRoutes(page);
+  const clockStart = new Date("2026-11-17T06:00:00Z");
+  await page.clock.install({ time: clockStart });
+  await installBootstrapResponses(page, [429]);
+  await page.goto(`${baseURL}${applicationPath}`);
+  await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+  await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "authenticated");
+  expect(accountRequests).toHaveLength(0);
+  await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 100));
+  const remaining = await page.evaluate(() => window.__llmProxyBootstrapFetches[0] + 6000 - Date.now());
+  await page.evaluate(() => {
+    window.__llmProxyMprAuthenticate();
+    window.__llmProxyMprAuthenticate();
+    window.dispatchEvent(new Event("focus"));
+    window.dispatchEvent(new Event("online"));
+  });
+  expect(await page.evaluate(async () => {
+    const backend = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261116b323");
+    try { await backend.loadFrontendRuntimeConfig(); return 200; }
+    catch (error) { return error.status; }
+  })).toBe(429);
+  await page.clock.runFor(remaining - 1);
+  expect(await page.evaluate(() => window.__llmProxyBootstrapFetches.length)).toBe(1);
+  expect(accountRequests).toHaveLength(0);
+  await page.clock.runFor(50);
+  await expect(page.locator("llm-proxy-management-application")).toHaveAttribute("data-auth-state", "authenticated");
+  await expect(page.getByRole("heading", { name: "Tenants → connections → models" })).toBeVisible();
+  await expect.poll(() => accountRequests.length).toBe(2); // Bootstrap and the connection dashboard each load account once.
+  expect(await page.evaluate(() => window.__llmProxyBootstrapFetches.length)).toBe(2);
+  await page.evaluate(() => {
+    window.__llmProxyMprAuthenticate();
+    window.__llmProxyMprAuthenticate();
+  });
+  await page.clock.runFor(1000);
+  expect(accountRequests).toHaveLength(2);
+});
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {number[]} statuses
+ * @param {boolean} [holdRecovery]
+ */
+async function installBootstrapResponses(page, statuses, holdRecovery = false) {
+  await page.addInitScript(({ statuses, holdRecovery }) => {
+    const originalFetch = window.fetch.bind(window);
+    window.__llmProxyBootstrapFetches = [];
+    window.fetch = async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.endsWith("/config-ui.yaml") && init?.credentials === "include") {
+        const index = window.__llmProxyBootstrapFetches.length;
+        window.__llmProxyBootstrapFetches.push(Date.now());
+        if (statuses[index] === 429) return new Response("", { status: 429, headers: { "Retry-After": "6", Server: "Caddy" } });
+        if (statuses[index] === 200) return new Response("llmProxy: {}", { status: 200 });
+        if (holdRecovery) await new Promise(resolve => { window.__llmProxyReleaseBootstrap = resolve; });
+      }
+      return originalFetch(input, init);
+    };
+  }, { statuses, holdRecovery });
+}
+
+test("dashboard bootstrap stops after another rate limit until a new recovery event", async ({ page }) => {
+  await installAssetRoutes(page, { emitInitialAuthEvent: false });
+  await installManagementRoutes(page);
+  await page.clock.install();
+  await installBootstrapResponses(page, [429, 429]);
+  await page.goto(`${baseURL}${applicationPath}`);
+  await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+  await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 100));
+  await page.clock.runFor(6100);
+  await expect.poll(() => page.evaluate(() => window.__llmProxyBootstrapFetches.length)).toBe(2);
+  await page.clock.runFor(60000);
+  expect(await page.evaluate(() => window.__llmProxyBootstrapFetches.length)).toBe(2);
+  await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await page.clock.runFor(1);
+  await expect(page.locator("llm-proxy-management-application")).toHaveAttribute("data-auth-state", "authenticated");
+  expect(await page.evaluate(() => window.__llmProxyBootstrapFetches.length)).toBe(3);
+});
+
+test("dashboard bootstrap keeps malformed configuration terminal on recovery events", async ({ page }) => {
+  await installAssetRoutes(page, { emitInitialAuthEvent: false });
+  await installManagementRoutes(page);
+  await page.clock.install();
+  await installBootstrapResponses(page, [200]);
+  await page.goto(`${baseURL}${applicationPath}`);
+  await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+  await page.evaluate(() => {
+    window.__llmProxyMprAuthenticate();
+    window.dispatchEvent(new Event("focus"));
+    window.dispatchEvent(new Event("online"));
+  });
+  await page.clock.runFor(60000);
+  expect(await page.evaluate(() => window.__llmProxyBootstrapFetches.length)).toBe(1);
+  await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+});
+
+for (const phase of ["timer", "request"]) {
+  test(`dashboard bootstrap disposal invalidates pending recovery ${phase}`, async ({ page }) => {
+    await installAssetRoutes(page, { emitInitialAuthEvent: false });
+    await installManagementRoutes(page);
+    await page.clock.install();
+    await installBootstrapResponses(page, [429], phase === "request");
+    await page.goto(`${baseURL}${applicationPath}`);
+    await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+    await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 100));
+    if (phase === "request") {
+      await page.clock.runFor(6100);
+      await expect.poll(() => page.evaluate(() => typeof window.__llmProxyReleaseBootstrap)).toBe("function");
+    }
+    await page.evaluate(() => {
+      const application = document.body;
+      window.__llmProxyDisposedApplication = window.Alpine.$data(application);
+      application.remove();
+    });
+    await expect(page.locator("llm-proxy-management-application")).toHaveCount(0);
+    await page.evaluate(() => {
+      if (window.__llmProxyReleaseBootstrap) window.__llmProxyReleaseBootstrap();
+      window.dispatchEvent(new Event("focus"));
+      window.dispatchEvent(new Event("online"));
+    });
+    await page.clock.runFor(6100);
+    expect(await page.evaluate(() => window.__llmProxyBootstrapFetches.length)).toBe(phase === "timer" ? 1 : 2);
+    expect(await page.evaluate(() => window.__llmProxyDisposedApplication.account)).toBeNull();
+  });
+}
+
+for (const phase of ["timer", "request"]) {
+  test(`dashboard bootstrap signout cancels pending recovery ${phase}`, async ({ page }) => {
+    const accountRequests = [];
+    page.on("request", request => { if (request.url() === `${baseURL}/api/management/account`) accountRequests.push(request); });
+    await installAssetRoutes(page, { emitInitialAuthEvent: false });
+    await installManagementRoutes(page);
+    await page.clock.install();
+    await installBootstrapResponses(page, [429], phase === "request");
+    await page.goto(`${baseURL}${applicationPath}`);
+    await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+    await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 100));
+    if (phase === "request") {
+      await page.clock.runFor(6100);
+      await expect.poll(() => page.evaluate(() => typeof window.__llmProxyReleaseBootstrap)).toBe("function");
+    }
+    await page.evaluate(() => {
+      sessionStorage.setItem("llm-proxy-test-auth-status", "unauthenticated");
+      document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
+      if (window.__llmProxyReleaseBootstrap) window.__llmProxyReleaseBootstrap();
+    });
+    await expect(page).toHaveURL(`${baseURL}/`);
+    await page.clock.runFor(6100);
+    expect(accountRequests).toHaveLength(0);
+  });
+}
+
+for (const action of ["disposal", "signout"]) {
+  test(`dashboard bootstrap ${action} invalidates an in-flight account response`, async ({ page }) => {
+    await installAssetRoutes(page, { emitInitialAuthEvent: false });
+    await installManagementRoutes(page);
+    await page.clock.install();
+    await installBootstrapResponses(page, [429]);
+    let releaseAccount;
+    const accountBlocked = new Promise(resolve => { releaseAccount = resolve; });
+    let accountStarted = false;
+    await page.route(`${baseURL}/api/management/account`, async route => {
+      accountStarted = true;
+      await accountBlocked;
+      await route.fallback();
+    });
+    await page.goto(`${baseURL}${applicationPath}`);
+    await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+    await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 100));
+    await page.clock.runFor(6100);
+    await expect.poll(() => accountStarted).toBe(true);
+    await page.evaluate(action => {
+      window.__llmProxyDisposedApplication = window.Alpine.$data(document.body);
+      if (action === "disposal") document.body.remove();
+      else {
+        sessionStorage.setItem("llm-proxy-test-auth-status", "unauthenticated");
+        document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
+      }
+    }, action);
+    releaseAccount();
+    if (action === "signout") await expect(page).toHaveURL(`${baseURL}/`);
+    else {
+      await expect(page.locator("llm-proxy-management-application")).toHaveCount(0);
+      expect(await page.evaluate(() => window.__llmProxyDisposedApplication.account)).toBeNull();
+    }
+  });
+}
 
 test("tenant profile failures remain visible in the authenticated dashboard", async ({ page }) => {
   await installAssetRoutes(page);

@@ -45,24 +45,25 @@ type fileConfiguration struct {
 }
 
 type serverConfiguration struct {
-	Port                              int                                 `mapstructure:"port"`
-	LogLevel                          string                              `mapstructure:"log_level"`
-	UpstreamCapacity                  proxy.UpstreamCapacityConfiguration `mapstructure:"upstream_capacity"`
-	RequestTimeoutSeconds             *int                                `mapstructure:"request_timeout_seconds"`
-	MaxRequestTimeoutSeconds          *int                                `mapstructure:"max_request_timeout_seconds"`
-	MaxPromptBytes                    int64                               `mapstructure:"max_prompt_bytes"`
-	MaxAssetBytes                     int64                               `mapstructure:"max_asset_bytes"`
-	AssetRetentionSeconds             int                                 `mapstructure:"asset_retention_seconds"`
-	AssetStorePath                    string                              `mapstructure:"asset_store_path"`
-	MaxInputAudioBytes                int64                               `mapstructure:"max_input_audio_bytes"`
-	MediaOperationWorkers             *int                                `mapstructure:"media_operation_workers"`
-	DictatorMediaOperationWorkers     *int                                `mapstructure:"dictator_media_operation_workers"`
-	MediaOperationCapacity            *int                                `mapstructure:"media_operation_capacity"`
-	TenantMediaOperationCapacity      *int                                `mapstructure:"tenant_media_operation_capacity"`
-	MediaOperationLifetimeSeconds     *int                                `mapstructure:"media_operation_lifetime_seconds"`
-	MediaOperationClaimSeconds        *int                                `mapstructure:"media_operation_claim_seconds"`
-	MediaOperationClaimRenewalSeconds *int                                `mapstructure:"media_operation_claim_renewal_seconds"`
-	UpstreamRateLimits                []upstreamRateLimitConfiguration    `mapstructure:"upstream_rate_limits"`
+	QualificationBudget               *proxy.QualificationBudgetConfiguration `mapstructure:"qualification_budget"`
+	Port                              int                                     `mapstructure:"port"`
+	LogLevel                          string                                  `mapstructure:"log_level"`
+	UpstreamCapacity                  proxy.UpstreamCapacityConfiguration     `mapstructure:"upstream_capacity"`
+	RequestTimeoutSeconds             *int                                    `mapstructure:"request_timeout_seconds"`
+	MaxRequestTimeoutSeconds          *int                                    `mapstructure:"max_request_timeout_seconds"`
+	MaxPromptBytes                    int64                                   `mapstructure:"max_prompt_bytes"`
+	MaxAssetBytes                     int64                                   `mapstructure:"max_asset_bytes"`
+	AssetRetentionSeconds             int                                     `mapstructure:"asset_retention_seconds"`
+	AssetStorePath                    string                                  `mapstructure:"asset_store_path"`
+	MaxInputAudioBytes                int64                                   `mapstructure:"max_input_audio_bytes"`
+	MediaOperationWorkers             *int                                    `mapstructure:"media_operation_workers"`
+	DictatorMediaOperationWorkers     *int                                    `mapstructure:"dictator_media_operation_workers"`
+	MediaOperationCapacity            *int                                    `mapstructure:"media_operation_capacity"`
+	TenantMediaOperationCapacity      *int                                    `mapstructure:"tenant_media_operation_capacity"`
+	MediaOperationLifetimeSeconds     *int                                    `mapstructure:"media_operation_lifetime_seconds"`
+	MediaOperationClaimSeconds        *int                                    `mapstructure:"media_operation_claim_seconds"`
+	MediaOperationClaimRenewalSeconds *int                                    `mapstructure:"media_operation_claim_renewal_seconds"`
+	UpstreamRateLimits                []upstreamRateLimitConfiguration        `mapstructure:"upstream_rate_limits"`
 }
 
 type upstreamRateLimitConfiguration struct {
@@ -126,6 +127,9 @@ func loadRuntimeConfiguration(rawConfigPath string) (proxy.Configuration, error)
 	}
 
 	var parsedConfiguration fileConfiguration
+	if configReader.IsSet("server.qualification_budget") {
+		parsedConfiguration.Server.QualificationBudget = &proxy.QualificationBudgetConfiguration{}
+	}
 	if configReader.IsSet("payments") {
 		parsedConfiguration.Payments = &proxy.PaymentConfiguration{}
 	}
@@ -284,6 +288,7 @@ func (configuration fileConfiguration) toProxyConfiguration(providerCatalog *pro
 		return proxy.Configuration{}, mediaOperationClaimRenewalError
 	}
 	return proxy.NewConfiguration(proxy.Configuration{
+		QualificationBudget:               configuration.Server.QualificationBudget,
 		Management:                        managementProxyConfiguration(configuration.Management, usageQueueSize),
 		Payments:                          configuration.Payments,
 		Hosted:                            configuration.Hosted,

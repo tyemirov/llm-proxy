@@ -157,8 +157,10 @@ F070 development acceptance passed. Production activation and actual processor q
 See [hosted text identity](hosted-billing.md#hosted-text-identity) for replay and result expiry.
 
 The proxy compiles the schema and validates the selected provider subset before
-provider dispatch. It maps the schema to OpenAI Responses `text.format`, Gemini
-Interactions `response_format`, or Anthropic Messages `output_config.format`.
+provider dispatch. The offering declares the admitted subset in its catalog policy.
+The shared codec maps the schema to Chat Completions `response_format.json_schema`,
+OpenAI or DashScope Responses `text.format`, Gemini Interactions `response_format`,
+or Anthropic Messages `output_config.format`.
 The proxy validates the final JSON against the same schema before durable
 success. Other provider protocols reject structured requests before provider
 work.

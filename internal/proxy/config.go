@@ -60,6 +60,7 @@ const (
 
 // Configuration holds runtime settings.
 type Configuration struct {
+	QualificationBudget               *QualificationBudgetConfiguration
 	Management                        ManagementConfiguration
 	Payments                          *PaymentConfiguration
 	Hosted                            *HostedConfiguration
@@ -167,6 +168,9 @@ func NewConfiguration(configuration Configuration) (Configuration, error) {
 		return Configuration{}, hostedError
 	}
 	configuration.hosted = hostedSettings
+	if err := validateQualificationBudget(configuration.QualificationBudget, configuration.Management.DatabasePath); err != nil {
+		return Configuration{}, err
+	}
 	configuration.validated = true
 	return configuration, nil
 }

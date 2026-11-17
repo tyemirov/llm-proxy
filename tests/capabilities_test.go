@@ -127,13 +127,15 @@ func TestIntegration_OmitsDisallowedParameters(testingInstance *testing.T) {
 }
 
 func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance *testing.T) {
+	providerCatalog := testfixtures.ProviderCatalog(testingInstance)
+	runtimeCatalog := providerCatalog.ModelCatalog()
 	catalog, catalogError := proxy.NewPublicCapabilityCatalog(proxy.Configuration{
-		ProviderCatalog: testfixtures.ProviderCatalog(testingInstance),
+		ProviderCatalog: providerCatalog,
 	})
 	if catalogError != nil {
 		testingInstance.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
 	}
-	if catalog.Revision == "" || len(catalog.Operations) != 18 || len(catalog.Prices) != 112 || catalog.Counts.Providers != 18 || catalog.Counts.ModelPublishers != 16 || catalog.Counts.ModelFamilies != 34 || catalog.Counts.ModelFamilies != len(catalog.Families) || catalog.Counts.ExactModels != 88 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != 91 || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
+	if catalog.Revision == "" || len(catalog.Operations) != len(runtimeCatalog.Operations) || len(catalog.Prices) != len(runtimeCatalog.Prices) || catalog.Counts.Providers != len(runtimeCatalog.Providers) || catalog.Counts.ModelPublishers != len(runtimeCatalog.Publishers) || catalog.Counts.ModelFamilies != len(runtimeCatalog.Families) || catalog.Counts.ModelFamilies != len(catalog.Families) || catalog.Counts.ExactModels != len(runtimeCatalog.Models) || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != len(runtimeCatalog.Offerings) || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
 		testingInstance.Fatalf("catalog summary=%+v", catalog)
 	}
 	weightAccessFound := map[string]bool{}
@@ -147,16 +149,18 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 		testingInstance.Fatalf("public weight access classifications=%v", weightAccessFound)
 	}
 	expectedGeminiModels := map[string][]string{
-		proxy.ModelNameGemini36Flash: {proxy.PublicModelCapabilityAudioInput, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityReasoning, proxy.PublicModelCapabilityText},
-		proxy.ModelNameGemini37Flash: {proxy.PublicModelCapabilityAudioInput, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityReasoning, proxy.PublicModelCapabilityText},
+		proxy.ModelNameGemini36Flash: {proxy.PublicModelCapabilityAudioInput, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityReasoning, proxy.PublicModelCapabilityStructuredOutput, proxy.PublicModelCapabilityText},
+		proxy.ModelNameGemini37Flash: {proxy.PublicModelCapabilityAudioInput, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityReasoning, proxy.PublicModelCapabilityStructuredOutput, proxy.PublicModelCapabilityText},
 		proxy.ModelNameGemini35Flash: {
 			proxy.PublicModelCapabilityAudioInput,
 			proxy.PublicModelCapabilityImageInput,
+			proxy.PublicModelCapabilityStructuredOutput,
 			proxy.PublicModelCapabilityText,
 		},
 		"gemini-3-flash-preview": {
 			proxy.PublicModelCapabilityAudioInput,
 			proxy.PublicModelCapabilityImageInput,
+			proxy.PublicModelCapabilityStructuredOutput,
 			proxy.PublicModelCapabilityText,
 		},
 	}
@@ -243,12 +247,16 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 			}
 		}
 		if offering.Provider == proxy.ProviderNameGemini && slices.Contains(offering.Capabilities, proxy.ModelOperationText) {
+			expectedLifecycle := "pollable_resource"
+			if offering.Model == "gemini-3.5-flash-lite" {
+				expectedLifecycle = "synchronous_completion"
+			}
 			if !strings.HasPrefix(offering.Model, "gemini-3") || offering.WireContract != "gemini_interactions" ||
-				offering.ExecutionLifecycle != "pollable_resource" || offering.MediaExecutionLifecycle != "synchronous_completion" {
-				testingInstance.Fatalf("Gemini offering is not canonical 3.x pollable route=%+v", offering)
+				offering.ExecutionLifecycle != expectedLifecycle || offering.MediaExecutionLifecycle != "synchronous_completion" {
+				testingInstance.Fatalf("Gemini offering does not match its canonical lifecycle=%+v", offering)
 			}
 			expectedEfforts := []string{}
-			if offering.Model == proxy.ModelNameGemini36Flash {
+			if offering.Model == proxy.ModelNameGemini36Flash || offering.Model == "gemini-3.5-flash-lite" {
 				expectedEfforts = []string{"minimal", "low", "medium", "high"}
 			}
 			if offering.Model == proxy.ModelNameGemini37Flash {
@@ -370,11 +378,11 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 	}
 	expectedOfferingCounts := map[string]int{
 		proxy.ProviderNameTypeSafe:  1,
-		proxy.ProviderNameOpenAI:    12,
+		proxy.ProviderNameOpenAI:    13,
 		"vertex":                    4,
 		proxy.ProviderNameDashScope: 3,
-		proxy.ProviderNameGemini:    4,
-		proxy.ProviderNameAnthropic: 10,
+		proxy.ProviderNameGemini:    5,
+		proxy.ProviderNameAnthropic: 11,
 		proxy.ProviderNameMoonshot:  4,
 		proxy.ProviderNameXAI:       1,
 	}
@@ -409,9 +417,9 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 				expectedVerificationDate = "2026-09-07"
 			} else if offering.Provider == proxy.ProviderNameMoonshot {
 				expectedVerificationDate = "2026-08-13"
-			} else if offering.Provider == proxy.ProviderNameAnthropic && (offering.Model == "claude-fable-5-1" || offering.Model == "claude-opus-5") {
+			} else if offering.Provider == proxy.ProviderNameAnthropic && (offering.Model == "claude-fable-5-1" || offering.Model == "claude-opus-5" || offering.Model == "claude-haiku-5-5") {
 				expectedVerificationDate = "2026-09-05"
-			} else if offering.Provider == proxy.ProviderNameGemini && (limit.ID == proxy.CatalogMediaLimitIDInlineRequestBytes || offering.Model == proxy.ModelNameGemini36Flash || offering.Model == proxy.ModelNameGemini37Flash) {
+			} else if offering.Provider == proxy.ProviderNameGemini && (limit.ID == proxy.CatalogMediaLimitIDInlineRequestBytes || offering.Model == proxy.ModelNameGemini36Flash || offering.Model == proxy.ModelNameGemini37Flash || offering.Model == "gemini-3.5-flash-lite") {
 				expectedVerificationDate = "2026-09-05"
 			} else if offering.Provider == proxy.ProviderNameDashScope {
 				expectedVerificationDate = "2026-09-05"

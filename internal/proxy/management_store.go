@@ -398,6 +398,8 @@ func validDashScopeWorkspaceID(workspaceID string) bool {
 }
 
 type managedUsageEventRecord struct {
+	ReasoningTokens     *int
+	IncompleteReason    *string
 	ID                  uint   `gorm:"primaryKey;index:idx_managed_usage_disposition_page,priority:4,sort:desc"`
 	TenantID            string `gorm:"not null;index:idx_managed_usage_tenant_created,priority:1;index:idx_managed_usage_disposition_page,priority:1"`
 	Endpoint            string
@@ -692,6 +694,9 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 			return err
 		}
 		if err := migrateManagedTokenMeasurementEvidence(transaction); err != nil {
+			return err
+		}
+		if err := migrateManagedProviderDiagnostics(transaction); err != nil {
 			return err
 		}
 		if err := initializeHostedSchema(transaction); err != nil {
@@ -3952,6 +3957,19 @@ func migrateManagedTokenMeasurementEvidence(database *gorm.DB) error {
 	for _, row := range evidenceRows {
 		if err := row.MeasurementEvidence.validate(); err != nil {
 			return fmt.Errorf("%w: validate token measurement evidence: %w", errManagedTenantSchemaMigration, err)
+		}
+	}
+	return nil
+}
+
+// migrateManagedProviderDiagnostics adds nullable diagnostic fields once.
+// Existing rows remain unknown; their token totals establish no reasoning split.
+func migrateManagedProviderDiagnostics(database *gorm.DB) error {
+	for _, field := range []string{"ReasoningTokens", "IncompleteReason"} {
+		if !database.Migrator().HasColumn(&managedUsageEventRecord{}, field) {
+			if err := database.Migrator().AddColumn(&managedUsageEventRecord{}, field); err != nil {
+				return fmt.Errorf("%w: add provider diagnostic %s: %w", errManagedTenantSchemaMigration, field, err)
+			}
 		}
 	}
 	return nil

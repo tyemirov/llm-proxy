@@ -9,22 +9,23 @@ import {
   NOTICE_KINDS,
   NOTICE_SURFACES,
   PUBLIC_SITE_PATH,
-} from "../constants.js?v=20260903f037";
+} from "../constants.js?v=20261116b323";
 import {
   fetchAccount,
+  FrontendConfigRateLimitError,
   loadFrontendRuntimeConfig,
-} from "../core/backendClient.js?v=20260903f037";
+} from "../core/backendClient.js?v=20261116b323";
 import {
   emptyDefaults,
   isAbortError,
   profileFailureMessage,
-} from "../core/managementProfile.js?v=20260903f037";
+} from "../core/managementProfile.js?v=20261116b323";
 import {
   applyUserMenuItems,
   readMprUIAuthStatus,
   waitForMprUIAutoOrchestrationReady,
-} from "../core/mprShell.js?v=20260903f037";
-import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260903f037";
+} from "../core/mprShell.js?v=20261116b323";
+import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20261116b323";
 
 const EMPTY_STRING = "";
 
@@ -53,31 +54,90 @@ function authenticationLifecycleResponsibility(responsibility) {
 
 /** Create MPR UI authentication lifecycle, application hydration, and boundary cleanup. */
 export function createAuthenticationLifecycleResponsibility() {
+  /** @type {Promise<void> | null} */
+  let startupPromise = null;
+  /** @type {FrontendConfigRateLimitError | null} */
+  let bootstrapRateLimit = null;
+  /** @type {number | null} */
+  let recoveryTimer = null;
+  const lifetime = new AbortController();
   return authenticationLifecycleResponsibility({
     init() {
       document.addEventListener(EVENTS.AUTHENTICATED, () => {
-        void this.loadAuthenticatedApp();
-      });
+        void this.resumeAuthenticatedApp();
+      }, { signal: lifetime.signal });
       document.addEventListener(EVENTS.UNAUTHENTICATED, () => {
         this.setUnauthenticated();
-      });
+      }, { signal: lifetime.signal });
       document.addEventListener(EVENTS.AUTH_STATUS_CHANGE, (event) => {
         const customEvent = /** @type {CustomEvent<{ status?: string }>} */ (event);
         const status = customEvent.detail ? customEvent.detail.status : EMPTY_STRING;
         if (status === AUTH_STATES.UNAUTHENTICATED) {
           this.setUnauthenticated();
         }
-      });
+      }, { signal: lifetime.signal });
       document.addEventListener(EVENTS.USER_MENU_ITEM, (event) => {
         this.handleUserMenuItem(event);
-      });
+      }, { signal: lifetime.signal });
+      window.addEventListener("focus", () => void this.requestBootstrapRecovery(), { signal: lifetime.signal });
+      window.addEventListener("online", () => void this.requestBootstrapRecovery(), { signal: lifetime.signal });
       void this.start();
     },
 
-    async start() {
+    destroy() {
+      lifetime.abort();
+      this.clearAuthenticatedState();
+    },
+
+    async resumeAuthenticatedApp() {
+      if (startupPromise) await startupPromise;
+      if (lifetime.signal.aborted) return;
+      if (bootstrapRateLimit) {
+        await this.requestBootstrapRecovery();
+      } else if (this.authState !== AUTH_STATES.ERROR) {
+        await this.loadAuthenticatedApp();
+      }
+    },
+
+    async requestBootstrapRecovery() {
+      if (!bootstrapRateLimit || recoveryTimer !== null || lifetime.signal.aborted) return;
+      const appVersion = this.appVersion;
       try {
-        this.runtimeConfig = await loadFrontendRuntimeConfig();
         await waitForMprUIAutoOrchestrationReady();
+      } catch {
+        this.setPageNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+        return;
+      }
+      if (appVersion !== this.appVersion || !bootstrapRateLimit || recoveryTimer !== null || lifetime.signal.aborted ||
+          readMprUIAuthStatus() !== AUTH_STATES.AUTHENTICATED) return;
+      const wait = Math.max(0, bootstrapRateLimit.retryAt - Date.now());
+      recoveryTimer = window.setTimeout(() => {
+        recoveryTimer = null;
+        if (appVersion !== this.appVersion || lifetime.signal.aborted || readMprUIAuthStatus() !== AUTH_STATES.AUTHENTICATED) return;
+        bootstrapRateLimit = null;
+        void this.start("recovery");
+      }, Math.min(wait, 2147483647));
+    },
+
+    /** @param {"initial" | "recovery"} [origin] */
+    async start(origin = "initial") {
+      if (startupPromise) return startupPromise;
+      const attempt = this.startOnce(origin);
+      startupPromise = attempt;
+      try { await attempt; }
+      finally { if (startupPromise === attempt) startupPromise = null; }
+    },
+
+    /** @param {"initial" | "recovery"} origin */
+    async startOnce(origin) {
+      const appVersion = this.appVersion;
+      try {
+        const runtimeConfig = await loadFrontendRuntimeConfig();
+        await waitForMprUIAutoOrchestrationReady();
+        if (appVersion !== this.appVersion || lifetime.signal.aborted) return;
+        this.runtimeConfig = runtimeConfig;
+        if (origin === "recovery") this.authState = AUTH_STATES.LOADING;
+        this.clearNotice();
         const authStatus = readMprUIAuthStatus();
         if (authStatus === AUTH_STATES.AUTHENTICATED) {
           await this.loadAuthenticatedApp();
@@ -85,10 +145,15 @@ export function createAuthenticationLifecycleResponsibility() {
           this.setUnauthenticated();
         }
       } catch (requestError) {
+        if (appVersion !== this.appVersion || lifetime.signal.aborted) return;
         this.clearAuthenticatedState();
         this.authState = AUTH_STATES.ERROR;
         this.setPageNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
         dispatchManagementReady();
+        if (requestError instanceof FrontendConfigRateLimitError) {
+          bootstrapRateLimit = requestError;
+          if (origin === "initial") void this.requestBootstrapRecovery();
+        }
       }
     },
 
@@ -182,6 +247,11 @@ export function createAuthenticationLifecycleResponsibility() {
     },
 
     clearAuthenticatedState() {
+      bootstrapRateLimit = null;
+      if (recoveryTimer !== null) {
+        window.clearTimeout(recoveryTimer);
+        recoveryTimer = null;
+      }
       this.appVersion += 1;
       this.stopAutoRefresh();
       if (this.accountRequestController) {

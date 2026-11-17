@@ -5,7 +5,7 @@ The source review date is September 7, 2026.
 
 ## Scope and placement
 
-The provider catalog defines 18 API providers and 37 model families, including disabled candidates.
+The provider catalog defines 19 API providers and 37 model families, including disabled candidates.
 I237 separates API connection identities from model family identities.
 The icons keep that separation.
 
@@ -44,6 +44,7 @@ They identify the installed artwork. The collection is not an official asset pac
 | `elevenlabs` | ElevenLabs API | Explicit text-only presentation | No reviewed logo asset |
 | `heygen` | HeyGen API v3 | Explicit text-only presentation | No reviewed logo asset |
 | `typesafe` | TypeSafe System One | Explicit text-only presentation | No reviewed logo asset |
+| `cerebras` | Cerebras Inference | Explicit text-only presentation | No logo selected for this integration |
 
 Alibaba Cloud identifies the service behind the [Alibaba Cloud connection][model-studio].
 Baidu Cloud identifies the service organization behind the [Qianfan connection][baidu-cloud].
@@ -73,7 +74,7 @@ Versions, reasoning levels, and capabilities do not receive separate brand artwo
 | `reve` | Explicit text-only presentation | No reviewed logo asset |
 | `jev` | Explicit text-only presentation | No reviewed logo asset |
 
-The manifest contains 18 SVG assets, five explicit text-only providers, and six explicit text-only families.
+The manifest contains 18 SVG assets, six explicit text-only providers, and six explicit text-only families.
 The Meta and Z.AI choices represent the model publishers.
 They do not assert separate Muse or GLM product logos.
 

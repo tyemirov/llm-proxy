@@ -279,6 +279,7 @@ var reasoningEffortAdapterSupportedValues = map[reasoningEffortAdapter]map[strin
 		"max":     {},
 	},
 	reasoningEffortAdapterOpenAIChatCompletions: {
+		"none":    {},
 		"minimal": {},
 		"low":     {},
 		"medium":  {},
@@ -324,7 +325,7 @@ func (capability *reasoningEffortCapability) supports(effort string) bool {
 
 type textModelDefinition struct {
 	callerTools      bool
-	structuredOutput bool
+	structuredOutput *StructuredOutputPolicy
 
 	identifier              modelID
 	providerIdentifier      modelID

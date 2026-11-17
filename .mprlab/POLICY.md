@@ -118,17 +118,23 @@ Production operations outside the task do not remove code validation requirement
 
 ## Validation
 
+Full CI is the final validation gate before CI-dependent delivery or task completion.
+Finish all other authorized task work and all non-CI results and documentation first.
+This includes implementation, configuration, required account setup, focused tests,
+review fixes, live acceptance, benchmarks, and their analysis when applicable.
+Use focused checks while any work or required input remains.
+
 - Use repository-native `make` targets.
 - Do not run a pre-edit or per-issue `make ci` baseline.
 - Preserve reproduction results and any expected failing regression test as implementation evidence.
 - During the change, run the smallest public-entrypoint target that validates the changed contract.
-- Run full CI once at the end of the change.
+- Run full CI once at the final checkpoint, after absolutely all other authorized task work is finished.
 - Use successful full CI from the pull request when its workflow supplies all required checks.
-- Open the pull request after focused local checks pass. Let its workflow supply the final full CI result.
+- Open the pull request at the final checkpoint, after all other authorized task work and focused local checks are complete. Let its workflow supply the final full CI result.
 - Wait for that result before merge or completion.
-- When no pull request supplies full CI, run `make ci` locally after the final change.
+- When no pull request supplies full CI, run `make ci` locally only after all other authorized task work is complete.
 - Use focused checks to correct failures.
-- Repeat the selected full CI gate only at the next final checkpoint after corrections.
+- If final CI fails, make corrections with focused checks. Repeat full CI only after all corrections and other remaining work are complete.
 - Reuse successful CI results while the validated code remains unchanged.
 - Use equivalent CI results across local validation, pull requests, and release.
 - Keep separate release checks for additional artifact, signing, or platform coverage.

@@ -8,6 +8,7 @@ import (
 )
 
 type textGenerationResult struct {
+	incompleteReason               *string
 	toolCalls                      []functionCall
 	text                           string
 	usage                          *tokenUsage
@@ -56,6 +57,7 @@ func completeTokenUsage(usage *tokenUsage) *tokenUsage {
 }
 
 type tokenUsage struct {
+	ReasoningTokens     *int                      `json:"-"`
 	RequestTokens       int                       `json:"request_tokens"`
 	ResponseTokens      int                       `json:"response_tokens"`
 	TotalTokens         int                       `json:"total_tokens"`
@@ -63,6 +65,9 @@ type tokenUsage struct {
 }
 
 type upstreamTokenUsage struct {
+	OutputTokensDetails *struct {
+		ReasoningTokens *int `json:"reasoning_tokens"`
+	} `json:"output_tokens_details"`
 	InputTokens      *int `json:"input_tokens"`
 	OutputTokens     *int `json:"output_tokens"`
 	PromptTokens     *int `json:"prompt_tokens"`
@@ -100,7 +105,12 @@ func mergeTokenUsage(primaryUsage *tokenUsage, additionalUsage *tokenUsage) *tok
 		}
 		evidence |= tokenMeasurementEvidence(state) << shift
 	}
-	return &tokenUsage{RequestTokens: primaryUsage.RequestTokens + additionalUsage.RequestTokens, ResponseTokens: primaryUsage.ResponseTokens + additionalUsage.ResponseTokens, TotalTokens: primaryUsage.TotalTokens + additionalUsage.TotalTokens, MeasurementEvidence: &evidence}
+	var reasoningTokens *int
+	if primaryUsage.ReasoningTokens != nil && additionalUsage.ReasoningTokens != nil {
+		count := *primaryUsage.ReasoningTokens + *additionalUsage.ReasoningTokens
+		reasoningTokens = &count
+	}
+	return &tokenUsage{ReasoningTokens: reasoningTokens, RequestTokens: primaryUsage.RequestTokens + additionalUsage.RequestTokens, ResponseTokens: primaryUsage.ResponseTokens + additionalUsage.ResponseTokens, TotalTokens: primaryUsage.TotalTokens + additionalUsage.TotalTokens, MeasurementEvidence: &evidence}
 }
 
 func parseResponsesTokenUsage(responseBytes []byte) (*tokenUsage, error) {
@@ -113,14 +123,29 @@ func parseResponsesTokenUsage(responseBytes []byte) (*tokenUsage, error) {
 	if envelope.Usage == nil {
 		return nil, nil
 	}
-	return normalizeTokenUsage(envelope.Usage.InputTokens, envelope.Usage.OutputTokens, envelope.Usage.TotalTokens)
+	return normalizeResponsesTokenUsage(envelope.Usage)
 }
 
-func parseChatCompletionTokenUsage(usage *upstreamTokenUsage) (*tokenUsage, error) {
-	if usage == nil {
-		return nil, nil
+// normalizeResponsesTokenUsage preserves the provider's optional reasoning subset.
+// Reasoning is included in output tokens and must never be added to that total.
+func normalizeResponsesTokenUsage(source *upstreamTokenUsage) (*tokenUsage, error) {
+	usage, err := normalizeTokenUsage(source.InputTokens, source.OutputTokens, source.TotalTokens)
+	if err != nil {
+		return nil, err
 	}
-	return normalizeTokenUsage(usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens)
+	if source.OutputTokensDetails == nil || source.OutputTokensDetails.ReasoningTokens == nil {
+		return usage, nil
+	}
+	reasoning := *source.OutputTokensDetails.ReasoningTokens
+	if reasoning < 0 || (source.OutputTokens != nil && reasoning > *source.OutputTokens) {
+		return nil, fmt.Errorf("%w: invalid reasoning token count", ErrProviderAPI)
+	}
+	if usage == nil {
+		evidence := tokenMeasurementEvidence(0)
+		usage = &tokenUsage{MeasurementEvidence: &evidence}
+	}
+	usage.ReasoningTokens = &reasoning
+	return usage, nil
 }
 
 func normalizeTokenUsage(requestTokens *int, responseTokens *int, totalTokens *int) (*tokenUsage, error) {

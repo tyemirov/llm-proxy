@@ -184,7 +184,8 @@ local_orchestration_prepare_environment() {
     "LLM_PROXY_MANAGEMENT_DATABASE_PATH" \
     "LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY" \
     "LLM_PROXY_MANAGEMENT_API_ORIGIN" \
-    "LLM_PROXY_MANAGEMENT_PROXY_ORIGIN"
+    "LLM_PROXY_MANAGEMENT_PROXY_ORIGIN" \
+    "LLM_PROXY_QUALIFICATION_BUDGET"
   local_orchestration_write_scoped_environment "${source_environment_path}" "${scoped_tauth_environment_path}" \
     "TAUTH_OAUTH_ES256_PRIVATE_KEY_BASE64" \
     "LLM_PROXY_MANAGEMENT_PROXY_ORIGIN" \

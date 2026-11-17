@@ -28,6 +28,8 @@ mprlab_resources:
               variable: LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY
             - id: llm-proxy-management-provider-key-encryption-key
               variable: LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY
+            - id: llm-proxy-qualification-budget
+              variable: LLM_PROXY_QUALIFICATION_BUDGET
         source: .mprlab/deploy/.env
     lifecycle:
         ci:
@@ -165,6 +167,8 @@ mprlab_resources:
                           value: http://127.0.0.1:4179
                         - input: llm-proxy-management-provider-key-encryption-key
                           name: LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY
+                        - input: llm-proxy-qualification-budget
+                          name: LLM_PROXY_QUALIFICATION_BUDGET
                         - name: LLM_PROXY_MANAGEMENT_PROXY_ORIGIN
                           value: https://llm-proxy-api.mprlab.com
                         - name: LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN

@@ -1,8 +1,8 @@
 // @ts-check
-import * as backend from '../core/backendClient.js?v=20260903f037';
-import {openPaddleCheckout} from '../core/paddleCheckout.js?v=20260903f037';
-import {profileFailureMessage} from '../core/managementProfile.js?v=20260903f037';
-import {FUNDING_CHANGED_EVENT,FUNDING_RESUME_EVENT,APP_INTEGRITY_ERROR} from '../constants.js?v=20260903f037';
+import * as backend from '../core/backendClient.js?v=20261116b323';
+import {openPaddleCheckout} from '../core/paddleCheckout.js?v=20261116b323';
+import {profileFailureMessage} from '../core/managementProfile.js?v=20261116b323';
+import {FUNDING_CHANGED_EVENT,FUNDING_RESUME_EVENT,APP_INTEGRITY_ERROR} from '../constants.js?v=20261116b323';
 
 const INTENT_PREFIX='llm-proxy:funding-intent:';
 const POLL_MILLISECONDS=1000,POLL_LIMIT=30;

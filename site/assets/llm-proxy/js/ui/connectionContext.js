@@ -1,5 +1,5 @@
 // @ts-check
-import { MENU_ACTIONS } from '../constants.js?v=20260903f037';
+import { MENU_ACTIONS } from '../constants.js?v=20261116b323';
 
 /** @typedef {ReturnType<typeof import('./managementApplicationState.js').createManagementApplicationState> & {
  * openAdminDashboard:()=>Promise<void>,

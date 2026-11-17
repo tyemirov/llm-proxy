@@ -188,19 +188,24 @@ func TestClientProtocolsSharedAdapterExecution(t *testing.T) {
 func TestClientProtocolsResponsesIncompleteVariations(t *testing.T) {
 	catalog, fixtures := testfixtures.ProviderCatalogWithProtocolFixtures(t)
 	for _, scenario := range []struct {
-		codec string
-		calls int32
+		codec  string
+		reason string
+		calls  int32
 	}{
-		{proxy.CatalogProtocolXAIResponses, 1},
-		{proxy.CatalogProtocolDashScopeResponses, 2},
+		{proxy.CatalogProtocolXAIResponses, "max_output_tokens", 2},
+		{proxy.CatalogProtocolXAIResponses, "provider_limit", 1},
+		{proxy.CatalogProtocolXAIResponses, "", 1},
+		{proxy.CatalogProtocolDashScopeResponses, "max_output_tokens", 2},
+		{proxy.CatalogProtocolDashScopeResponses, "provider_limit", 1},
+		{proxy.CatalogProtocolDashScopeResponses, "", 1},
 	} {
-		t.Run(scenario.codec, func(t *testing.T) {
+		t.Run(scenario.codec+"/"+scenario.reason, func(t *testing.T) {
 			fixture := findProtocolFixture(t, fixtures, scenario.codec, proxy.ModelOperationText)
 			var calls atomic.Int32
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				if calls.Add(1) == 1 {
-					_, _ = io.WriteString(w, `{"status":"incomplete","incomplete_details":{"reason":"provider_limit"},"output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"partial "}]}],"usage":{"input_tokens":2,"output_tokens":3,"total_tokens":5}}`)
+					_, _ = io.WriteString(w, `{"status":"incomplete","incomplete_details":{"reason":"`+scenario.reason+`"},"output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"partial "}]}],"usage":{"input_tokens":2,"output_tokens":3,"total_tokens":5}}`)
 					return
 				}
 				writeProtocolFixtureResponse(t, w, fixture)
@@ -217,7 +222,7 @@ func TestClientProtocolsResponsesIncompleteVariations(t *testing.T) {
 			result, completionError := client.PostMessagesCompletion(context.Background(), request)
 			if scenario.calls == 1 {
 				if completionError == nil {
-					t.Fatal("xAI accepted incomplete result without max_output_tokens reason")
+					t.Fatal("accepted incomplete result without max_output_tokens reason")
 				}
 			} else {
 				if completionError != nil {

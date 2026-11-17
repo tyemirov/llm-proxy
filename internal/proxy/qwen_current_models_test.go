@@ -65,7 +65,7 @@ func TestQwenCurrentHTTP(t *testing.T) {
 					if len(input) != 1 || input[0].(map[string]any)["content"] != "test" {
 						t.Errorf("input=%v", input)
 					}
-					io.WriteString(w, `{"status":"incomplete","output":[{"type":"reasoning","summary":[{"type":"summary_text","text":"private"}]},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"visible "}]}],"usage":{"input_tokens":2,"output_tokens":7,"total_tokens":9,"output_tokens_details":{"reasoning_tokens":5}}}`)
+					io.WriteString(w, `{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"reasoning","summary":[{"type":"summary_text","text":"private"}]},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"visible "}]}],"usage":{"input_tokens":2,"output_tokens":7,"total_tokens":9,"output_tokens_details":{"reasoning_tokens":5}}}`)
 					return
 				}
 				if len(input) != 3 || input[1].(map[string]any)["content"] != "visible " {

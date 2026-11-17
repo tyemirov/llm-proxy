@@ -355,7 +355,7 @@ func TestGeminiCurrentModelsCatalog(t *testing.T) {
 	}
 }
 
-func TestGeminiCurrentModelsDisabledDiscovery(t *testing.T) {
+func TestGeminiCurrentModelsActivationDiscovery(t *testing.T) {
 	router, err := buildRouterWithCatalogs(t, proxy.Configuration{}, zap.NewNop().Sugar())
 	if err != nil {
 		t.Fatal(err)
@@ -368,12 +368,13 @@ func TestGeminiCurrentModelsDisabledDiscovery(t *testing.T) {
 	}
 	for _, model := range currentGeminiModels {
 		vertexFound := false
+		developerFound := false
 		for _, offering := range public.Offerings {
 			if offering.Model != model {
 				continue
 			}
 			if offering.Provider == "gemini" {
-				t.Fatalf("unqualified Developer offering is public: %s", model)
+				developerFound = true
 			}
 			if offering.Provider == "vertex" {
 				vertexFound = true
@@ -381,6 +382,9 @@ func TestGeminiCurrentModelsDisabledDiscovery(t *testing.T) {
 		}
 		if !vertexFound {
 			t.Fatalf("qualified Vertex offering is absent: %s", model)
+		}
+		if developerFound != (model == "gemini-3.5-flash-lite") {
+			t.Fatalf("Developer qualification activation for %s: present=%t", model, developerFound)
 		}
 	}
 }

@@ -44,6 +44,28 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
 
 ## BugFixes
 
+- [-] [B323] (P1) Recover dashboard bootstrap after a rate-limited configuration read.
+  Goal: Open the authenticated dashboard after a transient public configuration failure without a manual reload.
+  Evidence: The deployed configuration endpoint returned HTTP 429 with Retry-After 6; later configuration and shared authentication succeeded, but the application cached the rejected promise and never requested its account.
+  Requirements: Honor the server deadline across coalesced recovery events, retain terminal schema errors, cancel obsolete work on sign-out/disposal, and keep MPR UI as the authentication authority.
+  Validation: The focused real-page regression reproduced the permanent error state before the fix. Recovery, authentication, and rendered module-revision checks pass, including 14 final browser/renderer cases and 17 model-task cases. Independent review found no unresolved source issue. Final CI remains pending.
+
+- [x] [B322] (P2) Prepare alignment recovery fixtures before replacement workers start.
+  Goal: Make accepted-output recovery qualification deterministic.
+  Evidence: The recovery fixture starts a replacement worker before dropping its publication-failure trigger and expiring the prior claim; CI observed an unexpected terminal uncertain state.
+  Requirements: Change the trigger and claim only after the original router closes and before the replacement router starts. Preserve the five-second test deadline and all production recovery behavior.
+  Resolution: A test-only restart callback prepares the trigger and expired claim while the original router is closed, then starts one replacement runtime. Production recovery behavior and the five-second deadline are unchanged.
+  Validation: The recovery test passed 100 repetitions; the final non-hosted Go shard passed. Full `make ci` passed all 15 gates with 100.0% Go statement coverage in 781 seconds.
+
+- [x] [B321] (P1) Retain incomplete response reasons and reasoning-token diagnostics.
+  Goal: Diagnose Qwen incomplete responses without treating every interruption as output exhaustion.
+  Requirements:
+  - Continue ordinary text only when the provider reports `max_output_tokens`.
+  - Retain safe provider incomplete reasons and nullable reasoning-token counts in request logs and durable usage events.
+  - Preserve unknown measurements, reported zero, existing usage totals, and historical rows through startup migration.
+  Resolution: Reason-specific classification, safe incomplete reason codes, and nullable reasoning counts now survive provider-attempt logs and durable usage records. Startup migration preserves historical nulls; public API and SDK usage shapes are unchanged.
+  Validation: Public HTTP diagnostics, structured failures, continuation aggregation, database reopen, upgrade, and migration rollback checks passed. Full `make ci` passed all 15 gates with 100.0% Go statement coverage in 781 seconds.
+
 - [x] [B320] (P0) Match the API route configuration policy to its shared provider.
   Goal: Reconcile the API route with the current Caddy execution policy.
   Evidence: Gateway v9.2.0 rejects v1.12.9 with `deployment_graph.configuration_policy_conflict`.
@@ -2398,6 +2420,12 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
 
 ## Improvements
 
+- [-] [I322] (P1) {B323,F098,F099} Activate the TellTale tenant candidates and complete the quality-first benchmark.
+  Goal: Repair the live dashboard, configure the existing TellTale tenant, and select among quality-qualified candidate configurations using quality 50%, cost 35%, and generation time 15%.
+  Requirements: All provider operations pass through LLM Proxy. Clients receive only its origin and tenant key. Preserve the cumulative $5 spending cap and $0.644939 starting ledger; include failures, evaluations, continuations, and repairs. Keep full CI at the explicitly agreed final checkpoint.
+  Execution: The user explicitly selected Proxy prerequisites, Proxy full CI and deployment, then the live benchmark and final TellTale CI. Finish Proxy prerequisites and review before its CI. Retain the existing tenant, all-attempt spending guard requirements, and selected lifecycle.
+  Budget scope: The user clarified that the $5 cap covers the Story benchmark. The auxiliary release-version decision is separate and also uses the actual TellTale tenant through LLM Proxy. A task-scoped Gix configuration excludes direct-provider access and preserves the global user configuration.
+
 - [x] [I321] (P1) {F074} Add Jev to the production live test suite.
   Goal:
   Include repeatable TypeSafe System One checks in the existing `make live-test` command.
@@ -4448,6 +4476,28 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
   was required.
 
 ## Features
+
+- [-] [F099] (P1) Enforce operator-controlled qualification attempt budgets.
+  Goal: Bound catalog-priced qualification work for one existing tenant and retain every paid attempt without creating customer billing resources.
+  Requirements: Use an explicit operator policy and separate durable receipts. Reserve before each generation dispatch, including retries and continuations; settle complete usage and retain uncertain reservations. Isolate other tenants, explicitly attribute paid connection verification, freeze prices and policy identity, preserve state across restart or policy changes, and fail closed on missing initialized storage. Provide sanitized operator inspection and close only fully reconciled budgets. Keep credentials and content outside receipts.
+  Validation: Independent architecture reviews resolved actionable findings. Focused HTTP/CLI, concurrency, uncertainty, restart, pricing, attribution, race, and static checks pass; all new guard functions reach 100% statement coverage in the focused profile. Introduced executable wiring has no uncovered blocks. The exact five-route policy passes startup validation with explicit Singapore prices. Full CI remains pending.
+
+- [-] [F098] (P1) Declare current economical OpenAI and Anthropic candidates and activate qualified Cerebras support.
+  Goal: Prepare truthful catalog routes for the TellTale provider-selection experiment.
+  Requirements: Declare exact GPT-6 Luna and Haiku 5.5 for explicitly authorized qualification with context-dependent prices and current controls. Activate archived-qualified Cerebras Qwen 3.8 27B while explicitly keeping the Alibaba offering for that model disabled. Activate Gemini Developer Flash-Lite for its distinct existing-tenant qualification; retain separate live-unqualified status until acceptance passes. Preserve provider-owned credentials and generic codecs.
+  Validation: Focused catalog, price-boundary, protocol, activation, and public-projection checks pass. Updated stale discovery expectations to distinguish synchronous Developer Flash-Lite from pollable Gemini routes and include the newly enabled media declarations. Final CI remains pending.
+
+- [x] [F097] (P1) Add Cerebras Qwen 3.8 27B through the shared text boundary.
+  Goal: Support a matched TellTale Plot-to-Story benchmark through the official LLM Proxy client.
+  Requirements:
+  - Declare the exact Cerebras offering, current controls, limits, prices, and private connection inputs in the canonical catalog.
+  - Preserve supported strict JSON Schema output through Chat Completions and reject unsupported schemas before dispatch.
+  - Retain provider-reported input, output, and reasoning usage for successful and failed attempts; preserve unknown usage.
+  - Verify connections with the authenticated read-only model endpoint.
+  - Keep production activation and paid benchmark execution separate from implementation acceptance.
+  Validation: Real HTTP service and official-client qualification with local provider fixtures, negative controls, independent review, and final `make ci`.
+  Resolution: Added the data-defined offering and generic schema admission and Chat Completions encoding; local official-client and protocol checks pass. Independent reviews resolved actionable findings.
+  Validation passed: Final `CI=1 make ci` completed all 15 gates with 100.0% Go statement coverage after all benchmark analysis, documentation, review, and cleanup were complete. Two live Cerebras runs reached drafting but supplied no accepted Story; source activation remains disabled and separate from implementation acceptance.
 
 - [x] [F096] (P0) Add strict Qwen 3.8 Flash structured generation.
   Goal: Support TellTale planning and Story contracts through the existing DashScope Responses route.

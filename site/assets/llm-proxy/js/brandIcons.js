@@ -1,6 +1,6 @@
 // @ts-check
 
-import { brandIconManifest } from "./brandIconManifest.js?v=20260903f037";
+import { brandIconManifest } from "./brandIconManifest.js?v=20261116b323";
 
 export const brandAssetPath = "/assets/llm-proxy/img/brands/";
 

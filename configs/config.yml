@@ -1,4 +1,5 @@
 server:
+  qualification_budget: ${LLM_PROXY_QUALIFICATION_BUDGET}
   port: 8080
   log_level: info
   upstream_capacity:
@@ -24,6 +25,7 @@ server:
       - {origin: https://v3.fal.media, active: 4, queued: 24}
       - {origin: https://v3b.fal.media, active: 4, queued: 24}
       - {origin: https://api.openai.com, active: 8, queued: 24}
+      - {origin: https://api.cerebras.ai, active: 4, queued: 24}
       - {origin: https://api.deepseek.com, active: 4, queued: 24}
       - {origin: https://api.moonshot.ai, active: 4, queued: 24}
       - {origin: https://api.minimax.io, active: 4, queued: 24}

@@ -445,7 +445,7 @@ func (client *OpenAIClient) performResponsesRequest(httpRequest *http.Request, s
 			if responseError == nil {
 				return nil
 			}
-			if errors.Is(transportError, context.Canceled) || errors.Is(transportError, context.DeadlineExceeded) || errors.Is(transportError, errQueueFull) {
+			if errors.Is(transportError, context.Canceled) || errors.Is(transportError, context.DeadlineExceeded) || errors.Is(transportError, errQueueFull) || errors.Is(transportError, errQualificationBudget) {
 				return backoff.Permanent(responseError)
 			}
 			return responseError

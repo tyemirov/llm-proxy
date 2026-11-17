@@ -4,7 +4,7 @@ import {
   NOTICE_AUTO_DISMISS_MILLISECONDS,
   NOTICE_KINDS,
   NOTICE_SURFACES,
-} from "../constants.js?v=20260903f037";
+} from "../constants.js?v=20261116b323";
 
 const EMPTY_STRING = "";
 

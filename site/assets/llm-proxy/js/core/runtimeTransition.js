@@ -1,7 +1,7 @@
 // @ts-check
 
-import { EVENTS } from "../constants.js?v=20260903f037";
-import { waitForMprUIAutoOrchestrationReady } from "./mprShell.js?v=20260903f037";
+import { EVENTS } from "../constants.js?v=20261116b323";
+import { waitForMprUIAutoOrchestrationReady } from "./mprShell.js?v=20261116b323";
 
 /**
  * @returns {Promise<void>}

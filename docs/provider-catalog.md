@@ -8,7 +8,7 @@ model migrations, controls, limits, and prices.
 
 The loader reads `providers.yml` from the directory of the selected
 `config.yml`. It parses the provider catalog before it validates service
-configuration. The loader accepts only schema version 6.
+configuration. The loader accepts only schema version 7. Native structured output is declared by an explicit policy object on each capable offering.
 
 The catalog defines provider declarations, exact models, offerings, prices, and managed model migrations.
 Read the YAML for the complete inventory. Use public capability discovery for enabled routes.
@@ -16,12 +16,14 @@ Disabled entries remain validated source declarations. They do not establish run
 
 The two [GLM 5.3 candidates](zai-current-models.md) remain disabled during provider qualification.
 [Qwen 3.8 Flash](qwen-current-models.md) is enabled after live text, reasoning, image, and usage qualification.
-The other four Qwen 3.8 offerings remain disabled.
+The other four Alibaba Qwen 3.8 offerings remain disabled. The separate
+[Cerebras Qwen offering](cerebras.md) is enabled after native-body qualification.
 The two open models use the `qwen3-8` family with `open_weights` metadata.
 Gemini 3.5 Transcribe is enabled for file dictation. See the [transcription contract](gemini-transcription.md).
 Gemini 3.6 and 3.7 Flash are enabled. See [qualified Gemini models](gemini-qualified-models.md).
 Gemini 3.8 Flash and 3.5 Flash-Lite are enabled on Vertex after service-account qualification.
-Their Developer API offerings remain disabled.
+The Developer API Flash-Lite offering is enabled for the authorized TellTale
+qualification; Developer API Gemini 3.8 Flash remains disabled.
 See the [Vertex contract and cutover procedure](vertex-gemini.md).
 Their [candidate contract](gemini-current-models.md) records current limits, prices, effort levels, and acceptance requirements.
 The enabled [Muse Spark 1.3 offering](meta-current-model.md) adds Standard-tier text and six reasoning effort levels.
@@ -47,16 +49,26 @@ The provider identifier, `dashscope_responses` codec, and `DASHSCOPE_*` environm
 The setup guide includes a separate procedure for US (Virginia).
 F064 tracks US East endpoint support and the regional model inventory.
 
-## DashScope structured output
+## Structured output policies
 
-An offering can declare `structured_output: true` for a qualified synchronous
-DashScope Responses text route. The committed catalog declares it only for
-`qwen3.8-flash`; sharing that wire contract does not enable other offerings.
-Public discovery adds `structured_output` to that offering's capability list.
-The request boundary validates the provider schema subset and requires text-only
-messages. Image input and structured output are separate capabilities that cannot
-be combined on this route.
-See the [strict schema contract](dashscope-responses.md#structured-generation).
+An offering declares supported JSON Schema through its `structured_output` policy.
+Policy presence advertises the capability. Omission means unsupported. The old Boolean form is rejected.
+The selected shared codec must implement schema serialization; provider identity does not select a schema validator.
+A compatible provider needs catalog data, including its policy, rather than a provider-specific adapter.
+
+Each policy declares keyword and format allowlists; root, object, required-property,
+reference, enum, array-minimum, and reference-composition rules; text-only admission;
+and schema-size limits. Zero limits mean unbounded by this policy.
+YAML anchors reuse identical policies across offerings.
+The proxy rejects unsupported schema features before dispatch and validates the
+returned JSON against the admitted caller schema. It preserves reported usage when
+output validation fails. Structured output never starts a continuation or repair call.
+
+Existing OpenAI Responses, xAI Responses, Gemini, Anthropic, and qualified DashScope
+routes declare policies that preserve their prior schema contracts.
+Qwen 3.8 Flash keeps its text-only restriction. The other DashScope offerings remain
+without structured output. See the [Flash contract](dashscope-responses.md#structured-generation).
+The [Cerebras contract](cerebras.md) uses the existing Chat Completions codec.
 
 ## Image formats and dimensions
 
@@ -211,7 +223,7 @@ Provider rejection, rate limits, and transport errors use the existing connectio
 The Dictator binding uses its existing authenticated gRPC discovery check.
 New media-only providers do not require text offerings or paid generation for connection verification.
 
-Schema version 5 replaces version 4. The loader rejects the previous schema.
+Schema version 7 replaces version 6. It requires explicit structured-output policy objects instead of Boolean flags or implicit wire-protocol capabilities. The loader rejects the previous schema.
 Provider resource APIs remain separate from model offerings. F077 owns their typed catalog bindings.
 
 ## Provider transport mapping
@@ -323,6 +335,7 @@ Each item in `providers[].offerings` is one provider offering.
 | Supported operations | `offerings[].operations` | Declares the operations for this route. |
 | Provider defaults | `offerings[].default_operations` | Selects the default offering for each provider operation. |
 | Request profile | `offerings[].request_profile` | Selects one stable protocol-specific payload profile. |
+| Structured output policy | `offerings[].structured_output` | Declares the admitted JSON Schema subset and limits. |
 | Web search | `offerings[].web_search` | Declares route-specific web search support. |
 | Output boundary | `offerings[].output_token_limit` | Sets the public output-token boundary. |
 | Reasoning adapter | `offerings[].reasoning_effort.adapter` | Selects the reusable reasoning map. |
@@ -564,7 +577,9 @@ go run ./cmd/cli --config configs/config.yml --provider-catalog-only
 ## Gemini media request limits
 
 All six Gemini text offerings declare `inline_request_bytes` at 20,000,000 encoded bytes for image and audio requests.
-This includes the enabled `gemini-3.5-flash` and `gemini-3-flash-preview` offerings and the two disabled F047 candidates.
+This includes `gemini-3.5-flash`, `gemini-3-flash-preview`, and both F047
+declarations. Flash-Lite is enabled for authorized qualification; Gemini 3.8
+Flash remains disabled on the Developer API.
 Both the [image guide](https://ai.google.dev/gemini-api/docs/image-understanding) and [audio guide](https://ai.google.dev/gemini-api/docs/audio) state this total request bound.
 The [general file guide](https://ai.google.dev/gemini-api/docs/file-input-methods) lists 100 MB but states that limits can vary by file type and model.
 The catalog uses the media-specific bound for the input types that these routes support.
@@ -693,7 +708,9 @@ See [Opus 4.1 retirement](claude-retirement.md) for the bounded Opus 5 selection
 Gemini 3.6 and 3.7 Flash are enabled after their live reasoning and stored interaction checks passed.
 See [qualified Gemini models](gemini-qualified-models.md) for the exact route controls.
 Gemini 3.8 Flash and 3.5 Flash-Lite are enabled through Vertex after service-account qualification.
-Their Developer API offerings remain disabled.
+The Developer API Flash-Lite offering is enabled for authorized TellTale
+qualification; its exact-tenant live acceptance remains pending. Developer API
+Gemini 3.8 Flash remains disabled.
 See the [Vertex configuration and tenant cutover](vertex-gemini.md).
 See [current Gemini candidates](gemini-current-models.md) for their limits, prices, and acceptance checks.
 Grok 4.6 remains disabled until live qualification passes.

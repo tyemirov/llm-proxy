@@ -175,6 +175,8 @@ const (
 	logFieldCompletionSignal                = "completion_signal"
 	logFieldElapsedMilliseconds             = "elapsed_ms"
 	logFieldCurrentOutputBytes              = "current_output_bytes"
+	logFieldIncompleteReason                = "incomplete_reason"
+	logFieldReasoningTokens                 = "reasoning_tokens"
 	logFieldAccumulatedOutputBytes          = "accumulated_output_bytes"
 	logEventOpenAIRequestError              = "OpenAI request error"
 	logEventOpenAIResponse                  = "OpenAI API response"

@@ -111,7 +111,7 @@ func TestTokenPresenceNativeQuantities(t *testing.T) {
 		{intPointer(0), intPointer(0), intPointer(0), [3]tokenMeasurementState{tokenMeasurementComplete, tokenMeasurementComplete, tokenMeasurementComplete}},
 		{intPointer(10), nil, nil, [3]tokenMeasurementState{tokenMeasurementComplete, tokenMeasurementUnknown, tokenMeasurementUnknown}},
 	} {
-		usage, err := parseChatCompletionTokenUsage(&upstreamTokenUsage{PromptTokens: fixture.input, CompletionTokens: fixture.output, TotalTokens: fixture.total})
+		usage, err := normalizeChatCompletionTokenUsage(&chatCompletionTokenUsage{PromptTokens: fixture.input, CompletionTokens: fixture.output, TotalTokens: fixture.total})
 		if err != nil {
 			t.Fatal(err)
 		}
