@@ -44,6 +44,13 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
 
 ## BugFixes
 
+- [x] [B333] (P2) Disable prepaid balance actions during automatic refresh.
+  Goal: Make financial-history controls reflect whether their handler can accept input.
+  Evidence: PR 368 run 44064613419 passes all 188 frontend cases but fails the hosted payment browser flow at `hosted-payments.spec.js:64`. The history click occurs while the balance refresh sets `busy`; the existing button remains enabled and the handler drops the click.
+  Requirements: Synchronize existing controls and busy accessibility state during background reads, preserve edits and focus, and keep the current refresh interval and test deadlines.
+  Resolution: Automatic balance reads synchronize existing action buttons and accessibility busy state before awaiting the response, then restore controls without replacing focused inputs. The application module graph advances to `20261117b333`.
+  Validation: The controlled real-browser regression first failed with `Expected: disabled; Received: enabled`. The corrected refund flow preserves the spending-limit draft and focus. Final local `make ci` passed all 15 gates in 769 seconds with 100.0% Go statement coverage, 188 frontend browser cases, and all 13 authenticated browser cases. Hosted run 44064613419 remains failed on pre-patch commit `efba8181`; its backend jobs passed and the payment-history case was the sole root failure. Hosted validation of this patch requires a new run after publication.
+
 - [x] [B330] (P2) Keep qualification database mechanisms inside the persistence boundary.
   Goal: Apply the repository persistence contract to the qualification journal.
   Evidence: `TestPersistenceBoundaryOwnsDatabaseMechanisms` rejects its SQLite opener, integrity SQL, and no-op locks in qualification workflow files.
