@@ -472,8 +472,9 @@ management:
 	if capturedConfiguration.Port != 9191 || capturedConfiguration.LogLevel != proxy.LogLevelDebug {
 		t.Fatalf("public API server=%+v", capturedConfiguration)
 	}
-	if len(capturedConfiguration.Catalog.Providers) != 18 {
-		t.Fatalf("provider count=%d want=18", len(capturedConfiguration.Catalog.Providers))
+	expectedProviders := len(testfixtures.ProviderCatalog(t).Schema().Providers)
+	if len(capturedConfiguration.Catalog.Providers) != expectedProviders {
+		t.Fatalf("provider count=%d want=%d", len(capturedConfiguration.Catalog.Providers), expectedProviders)
 	}
 	if capturedConfiguration.Catalog.MaxPromptBytes != 3 || capturedConfiguration.Catalog.MaxInputAudioBytes != 25*1024*1024 {
 		t.Fatalf("public limits=%+v", capturedConfiguration.Catalog)
