@@ -77,10 +77,9 @@ credentials, network calls, or datastores.
    agreed final validation gates.
 
 The cumulative provider-spend ledger is $0.644939 against the existing $5 cap.
-The user clarified that this cap covers the Story experiment; the auxiliary
-release-version decision is separate. Gix uses the same TellTale tenant through
-LLM Proxy, with a task-scoped configuration that excludes direct-provider
-credentials and preserves global user settings.
+The user clarified that this cap covers the Story experiment. The installed
+application pipeline selects its release version deterministically and makes
+no LLM request. Deployment receives only its declared private inputs.
 This preparation phase dispatched no paid generation. The prior local diagnostic
 budget wrapper does not protect the deployed tenant; it must not be presented as
 the guard for this operation. Source preparation and focused tests do not establish

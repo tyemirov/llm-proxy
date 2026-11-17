@@ -46,12 +46,13 @@ type rateLimitRequestResult struct {
 
 func TestIntegrationSharedUpstreamRateLimitAppliesToTextAndDictationAndLogsDelay(testingInstance *testing.T) {
 	gin.SetMode(gin.TestMode)
+	clock := newRateLimitControlledClock()
 	var callMutex sync.Mutex
 	callTimes := make([]time.Time, 0, 2)
 	callPaths := make([]string, 0, 2)
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 		callMutex.Lock()
-		callTimes = append(callTimes, time.Now())
+		callTimes = append(callTimes, clock.Now())
 		callPaths = append(callPaths, httpRequest.URL.Path)
 		callMutex.Unlock()
 		writeRateLimitUpstreamResponse(responseWriter, httpRequest.URL.Path)
@@ -62,6 +63,7 @@ func TestIntegrationSharedUpstreamRateLimitAppliesToTextAndDictationAndLogsDelay
 	loggerInstance := zap.New(observedCore)
 	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
 	configuration := rateLimitIntegrationConfiguration(upstreamServer.URL)
+	configuration.UpstreamAdmissionClock = clock
 	configuration.UpstreamRateLimits = []proxy.UpstreamRateLimitConfiguration{{
 		Origin:      upstreamServer.URL,
 		MaxRequests: 1,
@@ -75,9 +77,31 @@ func TestIntegrationSharedUpstreamRateLimitAppliesToTextAndDictationAndLogsDelay
 	if textError != nil || textStatus != http.StatusOK {
 		testingInstance.Fatalf("text status=%d error=%v", textStatus, textError)
 	}
-	dictationStatus, dictationError := performRateLimitDictationRequest(applicationServer.Client(), applicationServer.URL)
-	if dictationError != nil || dictationStatus != http.StatusOK {
-		testingInstance.Fatalf("dictation status=%d error=%v", dictationStatus, dictationError)
+	// Freeze admission time while the second request traverses HTTP and SQLite.
+	// The rate-window advance follows the scheduler's observed wait, not wall time.
+	dictationDone := make(chan rateLimitRequestResult, 1)
+	go func() {
+		status, err := performRateLimitDictationRequest(applicationServer.Client(), applicationServer.URL)
+		dictationDone <- rateLimitRequestResult{statusCode: status, requestError: err}
+	}()
+	select {
+	case duration := <-clock.waiting:
+		if duration != rateLimitShortInterval {
+			testingInstance.Fatalf("rate wait=%s want=%s", duration, rateLimitShortInterval)
+		}
+	case result := <-dictationDone:
+		testingInstance.Fatalf("dictation completed before rate-window advance: status=%d error=%v", result.statusCode, result.requestError)
+	}
+	callMutex.Lock()
+	beforeAdvance := append([]string(nil), callPaths...)
+	callMutex.Unlock()
+	if len(beforeAdvance) != 1 || beforeAdvance[0] != rateLimitChatPath {
+		testingInstance.Fatalf("upstream before rate-window advance=%v", beforeAdvance)
+	}
+	clock.advance(rateLimitShortInterval)
+	result := <-dictationDone
+	if result.requestError != nil || result.statusCode != http.StatusOK {
+		testingInstance.Fatalf("dictation status=%d error=%v", result.statusCode, result.requestError)
 	}
 
 	callMutex.Lock()
@@ -87,9 +111,8 @@ func TestIntegrationSharedUpstreamRateLimitAppliesToTextAndDictationAndLogsDelay
 	if len(recordedTimes) != 2 || recordedPaths[0] != rateLimitChatPath || recordedPaths[1] != rateLimitDictationPath {
 		testingInstance.Fatalf("paths=%v times=%v", recordedPaths, recordedTimes)
 	}
-	minimumGap := rateLimitShortInterval - rateLimitTimingTolerance
-	if actualGap := recordedTimes[1].Sub(recordedTimes[0]); actualGap < minimumGap {
-		testingInstance.Fatalf("shared text/dictation gap=%s want>=%s", actualGap, minimumGap)
+	if actualGap := recordedTimes[1].Sub(recordedTimes[0]); actualGap != rateLimitShortInterval {
+		testingInstance.Fatalf("shared text/dictation admission gap=%s want=%s", actualGap, rateLimitShortInterval)
 	}
 
 	delayLogs := observedLogs.FilterMessage(constants.LogEventUpstreamRateLimitDelayed).All()
@@ -702,4 +725,55 @@ func writeRateLimitUpstreamResponse(responseWriter http.ResponseWriter, requestP
 	default:
 		http.Error(responseWriter, "unexpected upstream path", http.StatusNotFound)
 	}
+}
+
+// rateLimitControlledClock advances only after the integration test observes a wait.
+type rateLimitControlledClock struct {
+	mutex    sync.Mutex
+	now      time.Time
+	advanced chan struct{}
+	waiting  chan time.Duration
+}
+
+func newRateLimitControlledClock() *rateLimitControlledClock {
+	return &rateLimitControlledClock{now: time.Date(2026, time.November, 17, 0, 0, 0, 0, time.UTC), advanced: make(chan struct{}), waiting: make(chan time.Duration, 1)}
+}
+func (clock *rateLimitControlledClock) Now() time.Time {
+	clock.mutex.Lock()
+	defer clock.mutex.Unlock()
+	return clock.now
+}
+func (clock *rateLimitControlledClock) Wait(ctx context.Context, changed <-chan struct{}, duration time.Duration) error {
+	clock.mutex.Lock()
+	started := clock.now
+	advanced := clock.advanced
+	clock.mutex.Unlock()
+	select {
+	case clock.waiting <- duration:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-changed:
+			return nil
+		case <-advanced:
+			clock.mutex.Lock()
+			elapsed := clock.now.Sub(started)
+			advanced = clock.advanced
+			clock.mutex.Unlock()
+			if duration > 0 && elapsed >= duration {
+				return nil
+			}
+		}
+	}
+}
+func (clock *rateLimitControlledClock) advance(duration time.Duration) {
+	clock.mutex.Lock()
+	defer clock.mutex.Unlock()
+	clock.now = clock.now.Add(duration)
+	close(clock.advanced)
+	clock.advanced = make(chan struct{})
 }

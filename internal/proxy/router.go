@@ -115,7 +115,7 @@ func buildProxyApplication(configuration Configuration, structuredLogger *zap.Su
 	if structuredLogger == nil {
 		structuredLogger = zap.NewNop().Sugar()
 	}
-	admissionClient := newAdmissionHTTPDoer(HTTPClient, configuration.upstreamCapacity, configuration.upstreamRateLimits, structuredLogger, systemUpstreamAdmissionClock{})
+	admissionClient := newAdmissionHTTPDoer(HTTPClient, configuration.upstreamCapacity, configuration.upstreamRateLimits, structuredLogger, configuration.UpstreamAdmissionClock)
 	upstreamHTTPClient := &qualificationBudgetHTTPDoer{next: admissionClient}
 
 	providers := newProviderRegistry(configuration)

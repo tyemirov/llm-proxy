@@ -44,6 +44,18 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
 
 ## BugFixes
 
+- [-] [B325] (P2) Make shared rate-limit acceptance independent of incidental SQL time.
+  Goal: Verify one shared limiter across text and dictation through real HTTP without relying on both operations finishing inside a 120 ms wall-clock window.
+  Evidence: CI correctly admitted the second operation without delay after response and SQLite work consumed the interval. Holding the first provider response beyond that interval reproduced the same missing-log assertion.
+  Requirements: Inject the existing scheduler clock through an optional Go-only dependency, retain the system clock as the canonical default, and advance synchronized test time after observable rate-wait entry. Preserve production limits, context cancellation, and other real-clock coverage.
+  Validation: Independent review approved the timing seam. The selected real HTTP case passes 20 consecutive race runs; broader admission/rate race checks, changed-statement coverage, static analysis, and formatting pass. Final CI remains pending.
+
+- [-] [B324] (P1) Disable connection buttons while tenant data load.
+  Goal: Show connection selection as available only when its existing handler can accept the input.
+  Evidence: A controlled browser check clicked an enabled-looking ElevenLabs connection during hydration. The existing busy guard ignored the click; completion selected its normal first attached media connection and the expected speech task was absent.
+  Requirements: Make connection-name buttons follow busy state in rendered markup and updates to existing controls. Retain the existing handler guard, tenant ownership checks, and routing defaults.
+  Validation: The real-browser regression reproduces the enabled-state mismatch. Controlled busy-state selection, three related UI cases, 17 model-task cases, and static checks pass. Independent review is clear. Final CI remains pending.
+
 - [-] [B323] (P1) Recover dashboard bootstrap after a rate-limited configuration read.
   Goal: Open the authenticated dashboard after a transient public configuration failure without a manual reload.
   Evidence: The deployed configuration endpoint returned HTTP 429 with Retry-After 6; later configuration and shared authentication succeeded, but the application cached the rejected promise and never requested its account.
@@ -2420,11 +2432,11 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
 
 ## Improvements
 
-- [-] [I322] (P1) {B323,F098,F099} Activate the TellTale tenant candidates and complete the quality-first benchmark.
+- [-] [I322] (P1) {B323,B324,B325,F098,F099} Activate the TellTale tenant candidates and complete the quality-first benchmark.
   Goal: Repair the live dashboard, configure the existing TellTale tenant, and select among quality-qualified candidate configurations using quality 50%, cost 35%, and generation time 15%.
   Requirements: All provider operations pass through LLM Proxy. Clients receive only its origin and tenant key. Preserve the cumulative $5 spending cap and $0.644939 starting ledger; include failures, evaluations, continuations, and repairs. Keep full CI at the explicitly agreed final checkpoint.
   Execution: The user explicitly selected Proxy prerequisites, Proxy full CI and deployment, then the live benchmark and final TellTale CI. Finish Proxy prerequisites and review before its CI. Retain the existing tenant, all-attempt spending guard requirements, and selected lifecycle.
-  Budget scope: The user clarified that the $5 cap covers the Story benchmark. The auxiliary release-version decision is separate and also uses the actual TellTale tenant through LLM Proxy. A task-scoped Gix configuration excludes direct-provider access and preserves the global user configuration.
+  Budget scope: The user clarified that the $5 cap covers the Story benchmark. The installed application pipeline selects release versions deterministically and makes no LLM request. Deployment uses only its declared private inputs.
 
 - [x] [I321] (P1) {F074} Add Jev to the production live test suite.
   Goal:

@@ -170,7 +170,12 @@ export class ConnectionDashboard extends HTMLElement {
       }
     }
   }
-  setBusy() { this.setAttribute('aria-busy',String(this.busy)); }
+  setBusy() {
+    this.setAttribute('aria-busy',String(this.busy));
+    this.querySelectorAll('button[data-connection]').forEach(button => {
+      if (button instanceof HTMLButtonElement) button.disabled=this.busy;
+    });
+  }
   render() {
     this.setBusy();
     const dialog = this.querySelector('dialog[open]');
@@ -203,7 +208,7 @@ export class ConnectionDashboard extends HTMLElement {
       <section class="cw-column"><header><h3>Connections <span>${this.connections.length}</span></h3><button data-action="create-connection" ${disabled}>Create connection</button></header><div class="cw-list">
       ${this.connections.filter(c=>matches(c.name+' '+c.provider)).map(c=>{
         const assigned=c.tenant_ids.includes(this.tenantID); const occupied=this.assignments.some(assignment=>assignment.provider===c.provider);
-        return `<article class="cw-node ${c.id===this.connectionID?(assigned?'selected':'browsing'):''}" data-connection-node="${escapeHTML(c.id)}"><div class="cw-row"><button class="cw-name" data-connection="${escapeHTML(c.id)}">${providerIcon(c.provider)}<strong>${escapeHTML(c.name)}</strong></button>${this.tenantID ? assigned ? '<span class="cw-connected">✓ Connected</span>' : occupied ? '<span class="cw-muted">Provider already connected</span>' : `<button class="cw-connect" data-connect="${escapeHTML(c.id)}" ${disabled}>Connect</button>` : ''}</div><small>${escapeHTML(this.providers.find(p=>p.id===c.provider)?.api_service_label || c.provider)}</small><small>${c.tenant_ids.length ? `Used by ${c.tenant_ids.length} tenant${c.tenant_ids.length===1?'':'s'}`:'Unassigned'}</small>${connectionReady(c)?'':'<small>Credentials needed</small>'}</article>`;
+        return `<article class="cw-node ${c.id===this.connectionID?(assigned?'selected':'browsing'):''}" data-connection-node="${escapeHTML(c.id)}"><div class="cw-row"><button class="cw-name" data-connection="${escapeHTML(c.id)}" ${disabled}>${providerIcon(c.provider)}<strong>${escapeHTML(c.name)}</strong></button>${this.tenantID ? assigned ? '<span class="cw-connected">✓ Connected</span>' : occupied ? '<span class="cw-muted">Provider already connected</span>' : `<button class="cw-connect" data-connect="${escapeHTML(c.id)}" ${disabled}>Connect</button>` : ''}</div><small>${escapeHTML(this.providers.find(p=>p.id===c.provider)?.api_service_label || c.provider)}</small><small>${c.tenant_ids.length ? `Used by ${c.tenant_ids.length} tenant${c.tenant_ids.length===1?'':'s'}`:'Unassigned'}</small>${connectionReady(c)?'':'<small>Credentials needed</small>'}</article>`;
       }).join('') || '<p class="cw-empty">Create a connection to add provider credentials.</p>'}</div></section>
       <section class="cw-column"><header class="cw-model-header"><h3>Models</h3>${renderTaskPicker(this.availableTasks,this.taskIDs,this.busy)}</header><div class="cw-list">
       ${modelIDs.filter(matches).map(id=>{const saved=this.isDefaultModel(id);const offering=this.offerings.find(o=>o.provider===this.connection?.provider && o.model===id); const offeringTasks=offering ? tasksForOffering(offering) : [];return `<button class="cw-node ${saved?'selected':this.modelID===id?'preview':''}" data-model="${escapeHTML(id)}" ${disabled}><span class="cw-row"><brand-icon kind="family" identifier="${escapeHTML(this.modelFamilies[id])}"></brand-icon><code>${escapeHTML(id)}</code></span><span class="model-task-icons">${offeringTasks.map(renderTaskIcon).join('')}</span>${saved?'<small class="cw-connected">★ Default model</small>':''}</button>`;}).join('') || `<p class="cw-empty">${this.attached ? this.ready ? (this.provider?.capabilities.length===0 && this.provider.resources.length ? 'This connection provides account resources.' : 'No models for the selected tasks.') : 'Add credentials to choose models. Edit this connection to complete its setup.' : 'Connect to choose models.<br>Use a Connect button in the middle column.'}</p>`}</div></section>`;
