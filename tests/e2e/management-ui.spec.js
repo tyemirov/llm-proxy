@@ -48,7 +48,7 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20261116b323";
+const applicationModuleRevision = "20261117b333";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
@@ -3182,7 +3182,7 @@ test("application startup waits for shared UI orchestration before DOMContentLoa
     await page.goto(baseURL + applicationPath, { waitUntil: "commit" });
     await expect(page.locator("html")).toHaveAttribute("data-llm-proxy-application", "ready");
     await page.evaluate(async () => {
-      const client = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261116b323");
+      const client = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261117b333");
       await client.loadFrontendRuntimeConfig();
       await new Promise(requestAnimationFrame);
     });
@@ -3724,7 +3724,7 @@ test("dashboard recovers its rate-limited bootstrap after shared authentication 
     window.dispatchEvent(new Event("online"));
   });
   expect(await page.evaluate(async () => {
-    const backend = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261116b323");
+    const backend = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261117b333");
     try { await backend.loadFrontendRuntimeConfig(); return 200; }
     catch (error) { return error.status; }
   })).toBe(429);

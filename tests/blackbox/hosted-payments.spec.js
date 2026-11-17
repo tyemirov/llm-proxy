@@ -59,8 +59,25 @@ test('funding history and receipts follow verified payments and refund holds thr
   await row.getByRole('button',{name:'View receipt',exact:true}).click();
   await expect(receipt).toContainText('Pending credit reversal: $2.00');
   const funds=page.getByRole('region',{name:'Prepaid balance',exact:true});
-  await page.clock.fastForward(30_001);
-  await funds.getByRole('button',{name:'View financial history',exact:true}).click();
+  let releaseBalance, observeBalance;
+  const balanceHeld=new Promise(resolve=>{releaseBalance=resolve;});
+  const balanceStarted=new Promise(resolve=>{observeBalance=resolve;});
+  const holdBalance=async route=>{observeBalance();await balanceHeld;await route.continue();};
+  await page.route(root+'/balance',holdBalance);
+  const historyButton=funds.getByRole('button',{name:'View financial history',exact:true});
+  try {
+    await page.clock.fastForward(30_001);
+    await balanceStarted;
+    await expect(historyButton).toBeDisabled();
+    await expect(funds).toHaveAttribute('aria-busy','true');
+    await funds.getByLabel('Limit in USD').fill('19.25');
+  } finally {releaseBalance();}
+  await expect(historyButton).toBeEnabled();
+  await expect(funds).toHaveAttribute('aria-busy','false');
+  await expect(funds.getByLabel('Limit in USD')).toHaveValue('19.25');
+  await expect(funds.getByLabel('Limit in USD')).toBeFocused();
+  await page.unroute(root+'/balance',holdBalance);
+  await historyButton.click();
   await expect(funds).toContainText('payment-adjustment:');
   await expect(funds.getByRole('alert')).toHaveCount(0);
   const approved=processor.refund(order.id,'approved',2);
