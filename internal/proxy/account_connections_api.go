@@ -270,7 +270,7 @@ func (service *managementService) saveConnectionHandler(create bool) gin.Handler
 			}
 			provider.connectionValues = cloneStringMap(values)
 			provider, _ = provider.resolvedTransport(definition.verification.Transport)
-			if err := service.keyVerifier.verify(ctx.Request.Context(), provider, model, values[provider.activeTransport.authentication.Field]); err != nil {
+			if err := service.keyVerifier.verify(qualificationVerificationContext(ctx.Request.Context(), principal.userID, providerID.string(), name), provider, model, values[provider.activeTransport.authentication.Field]); err != nil {
 				writeProviderKeyVerificationError(ctx, err)
 				return
 			}

@@ -397,6 +397,7 @@ LLM_PROXY_MANAGEMENT_DATABASE_PATH=llm-proxy-management.sqlite
 LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 LLM_PROXY_MANAGEMENT_API_ORIGIN=https://llm-proxy-api.mprlab.com
 LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
+LLM_PROXY_QUALIFICATION_BUDGET=null
 `)
 
 	var capturedConfiguration proxy.Configuration
@@ -471,8 +472,9 @@ management:
 	if capturedConfiguration.Port != 9191 || capturedConfiguration.LogLevel != proxy.LogLevelDebug {
 		t.Fatalf("public API server=%+v", capturedConfiguration)
 	}
-	if len(capturedConfiguration.Catalog.Providers) != 18 {
-		t.Fatalf("provider count=%d want=18", len(capturedConfiguration.Catalog.Providers))
+	expectedProviders := len(testfixtures.ProviderCatalog(t).Schema().Providers)
+	if len(capturedConfiguration.Catalog.Providers) != expectedProviders {
+		t.Fatalf("provider count=%d want=%d", len(capturedConfiguration.Catalog.Providers), expectedProviders)
 	}
 	if capturedConfiguration.Catalog.MaxPromptBytes != 3 || capturedConfiguration.Catalog.MaxInputAudioBytes != 25*1024*1024 {
 		t.Fatalf("public limits=%+v", capturedConfiguration.Catalog)
@@ -538,7 +540,11 @@ func TestRootCommandPrintsCatalogDerivedLiveDiscovery(t *testing.T) {
 	baiduFound := false
 	dashScopeFound := false
 	metaFound := false
+	cerebrasFound := false
 	for _, provider := range discovery.Providers {
+		if provider.ID == "cerebras" {
+			cerebrasFound = len(provider.Fields) == 1 && provider.Fields[0].Environment == "CEREBRAS_API_KEY"
+		}
 		if provider.ID == proxy.ProviderNameMeta {
 			metaFound = len(provider.Fields) == 1 && provider.Fields[0].Environment == "MUSE_API_KEY"
 		}
@@ -553,10 +559,10 @@ func TestRootCommandPrintsCatalogDerivedLiveDiscovery(t *testing.T) {
 	if !metaFound {
 		t.Fatal("Meta live discovery must require MUSE_API_KEY")
 	}
-	if discovery.SchemaVersion != proxy.ProviderCatalogSchemaVersion || len(discovery.Providers) != 18 {
+	if discovery.SchemaVersion != proxy.ProviderCatalogSchemaVersion || len(discovery.Providers) != 19 {
 		t.Fatalf("provider discovery=%+v", discovery)
 	}
-	if !dashScopeFound || !baiduFound {
+	if !dashScopeFound || !baiduFound || !cerebrasFound {
 		t.Fatalf("DashScope discovery=%+v", discovery.Providers)
 	}
 	for _, privateCatalogFragment := range []string{"default_base_url", "authentication", "upstream_model"} {

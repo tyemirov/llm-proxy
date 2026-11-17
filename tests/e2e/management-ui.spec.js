@@ -48,7 +48,7 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20260903f037";
+const applicationModuleRevision = "20261117b333";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
@@ -234,9 +234,11 @@ async function expectRoutingHeaderSingleRow(routingTree) {
  * @returns {string[]}
  */
 function runtimeJavaScriptSpecifiers(moduleSource) {
-  return [...moduleSource.matchAll(/^\s*import(?:[\s\S]*?\sfrom\s+)?["']([^"']+\.js(?:\?v=[^"']+)*)["'];/gmu)]
-    .map((match) => match[1])
-    .filter((specifier) => specifier.startsWith("."));
+  const declarations = [
+    ...moduleSource.matchAll(/^\s*import\s+(?!["'])[^;]*?\sfrom\s+["']([^"']+)["'];/gmu),
+    ...moduleSource.matchAll(/^\s*import\s*["']([^"']+)["'];/gmu),
+  ];
+  return declarations.map(match => match[1]).filter(specifier => specifier.startsWith("."));
 }
 const tenantAccessDesktopMaxHeight = 64;
 const usageIntervals = Object.freeze([
@@ -284,6 +286,20 @@ let siteRoot = siteSourceRoot;
 let renderedSiteTempRoot = "";
 let renderedSiteRoot = "";
 let publicCapabilities;
+
+function publicCatalogRouteCounts() {
+  return `${publicCapabilities.families.length} families · ${publicCapabilities.models.length} exact models · ${publicCapabilities.offerings.length} offerings`;
+}
+
+/** @param {number} matchingModels */
+function publicCatalogResultCount(matchingModels) {
+  return `${matchingModels} of ${publicCapabilities.models.length} ${matchingModels === 1 ? "model" : "models"}`;
+}
+
+/** @param {string[]} capabilities */
+function publicCatalogModelsWithCapabilities(capabilities) {
+  return publicCapabilities.models.filter(model => capabilities.every(capability => model.capabilities.includes(capability)));
+}
 
 test.beforeAll(async () => {
   const capabilityBinaryPath = process.env[capabilityBinaryEnvironment];
@@ -537,7 +553,7 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('<routing-tree class="routing-tree" data-enhanced="false" aria-label="Interactive LLM routing map">');
   expect(html).toContain("One integration. Choose the exact route.");
   expect(html).toContain('<canvas class="routing-tree__connectors" data-route-canvas aria-hidden="true"></canvas>');
-  expect(html).toContain('<output class="routing-tree__counts" aria-live="polite" data-route-counts>34 families · 88 exact models · 91 offerings</output>');
+  expect(html).toContain(`<output class="routing-tree__counts" aria-live="polite" data-route-counts>${publicCatalogRouteCounts()}</output>`);
   expect(html).toContain('data-route-family="deepseek-r1"');
   expect(html).toContain('data-route-family="muse-spark"');
   expect(html).toContain('data-route-model="muse-spark-1.2" data-route-model-family="muse-spark"');
@@ -553,11 +569,11 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).not.toContain("data-route-publisher");
   expect(html).not.toContain("llm-proxy-routing-tree");
   expect(html).toContain('<table class="catalog-table">');
-  expect(html).toContain('<strong>18</strong><span>Providers</span>');
-  expect(html).toContain('<strong>16</strong><span>Publishers</span>');
-  expect(html).toContain('<strong>34</strong><span>Families</span>');
-  expect(html).toContain('<strong>88</strong><span>Exact models</span>');
-  expect(html).toContain('<strong>91</strong><span>Offerings</span>');
+  expect(html).toContain(`<strong>${publicCapabilities.providers.length}</strong><span>Providers</span>`);
+  expect(html).toContain(`<strong>${publicCapabilities.publishers.length}</strong><span>Publishers</span>`);
+  expect(html).toContain(`<strong>${publicCapabilities.families.length}</strong><span>Families</span>`);
+  expect(html).toContain(`<strong>${publicCapabilities.models.length}</strong><span>Exact models</span>`);
+  expect(html).toContain(`<strong>${publicCapabilities.offerings.length}</strong><span>Offerings</span>`);
   expect(html).toContain('data-catalog-sort-header="publisher"');
   expect(html).toContain('data-catalog-sort-header="model"');
   expect(html).toContain('data-catalog-sort-header="capabilities"');
@@ -791,6 +807,37 @@ test("public landing explains the product and exposes the generated capability c
   expect(appIconSVG).toContain("#0063b9");
 });
 
+test("rendered application module entries and their complete internal graph share one revision", async ({ request }) => {
+  const response = await request.get(`${baseURL}${applicationPath}`);
+  expect(response.status()).toBe(httpOK);
+  const html = await response.text();
+  const entries = [...html.matchAll(/<script\b[^>]*type="module"[^>]*src="([^"]+)"/gu)]
+    .map(match => new URL(match[1], `${baseURL}${applicationPath}`));
+  expect(entries.map(url => url.pathname).sort()).toEqual([
+    "/assets/llm-proxy/js/app.js", "/assets/llm-proxy/js/brandIconElement.js", "/assets/llm-proxy/js/startupGuard.js",
+  ]);
+  const pending = [...entries];
+  const visited = new Set();
+  while (pending.length) {
+    const url = pending.shift();
+    if (visited.has(url.href)) continue;
+    expect(url.origin).toBe(baseURL);
+    expect(url.search).toBe(`?v=${applicationModuleRevision}`);
+    visited.add(url.href);
+    const moduleResponse = await request.get(url.href);
+    expect(moduleResponse.status(), url.pathname).toBe(httpOK);
+    const source = await moduleResponse.text();
+    const specifiers = runtimeJavaScriptSpecifiers(source);
+    // The Alpine module is selected by a runtime URL in the canonical constants.
+    for (const match of source.matchAll(/["'](\/assets\/llm-proxy\/js\/[^"']+\.js\?v=[^"']+)["']/gu)) specifiers.push(match[1]);
+    for (const specifier of specifiers) pending.push(new URL(specifier, url));
+  }
+  expect([...visited].some(url => url.includes("/core/backendClient.js?"))).toBe(true);
+  expect([...visited].some(url => url.includes("/ui/authenticationLifecycle.js?"))).toBe(true);
+  expect([...visited].some(url => url.includes("/alpineRuntime.js?"))).toBe(true);
+  expect([...visited].some(url => url.includes("/ui/paymentHistory.js?"))).toBe(true);
+});
+
 test("the routing tree and capability catalog remain complete without JavaScript", async ({ browser }) => {
   const browserContext = await browser.newContext({ javaScriptEnabled: false });
   const page = await browserContext.newPage();
@@ -800,9 +847,18 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(page.locator("#routing-overview routing-tree")).toHaveCount(1);
   await expect(page.locator("#models > routing-tree")).toHaveCount(0);
   await expect(routingTree).toHaveAttribute("data-enhanced", "false");
-  await expect(routingTree.locator("[data-route-family]")).toHaveCount(34);
-  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(91);
-  await expect(routingTree.locator("[data-route-model]")).toHaveCount(88);
+  await expect(routingTree.locator("[data-route-family]")).toHaveCount(publicCapabilities.families.length);
+  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(publicCapabilities.offerings.length);
+  await expect(routingTree.locator("[data-route-model]")).toHaveCount(publicCapabilities.models.length);
+  for (const [attribute, entries] of [
+    ["data-route-family", publicCapabilities.families],
+    ["data-route-model", publicCapabilities.models],
+    ["data-route-offering", publicCapabilities.offerings],
+  ]) {
+    expect(await routingTree.locator(`[${attribute}]`).evaluateAll(
+      (elements, name) => elements.map(element => element.getAttribute(name)).sort(), attribute,
+    )).toEqual(entries.map(entry => entry.identifier).sort());
+  }
   await expect(routingTree.locator("[data-route-weight-access]")).toHaveCount(2);
   await expect(routingTree.locator("[data-route-capability]")).toHaveCount(8);
   await expect(routingTree.locator('[data-route-capability="images"]')).toHaveCount(1);
@@ -812,8 +868,8 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(routingTree.locator('[data-route-capability="all"]')).toHaveAttribute("aria-pressed", "true");
   await expect(routingTree.locator('[data-route-weight-access][aria-pressed="true"]')).toHaveCount(2);
   await expect(routingTree.locator('[data-route-capability][aria-pressed="true"]')).toHaveCount(1);
-  await expect(routingTree.locator('[data-route-family]:visible')).toHaveCount(34);
-  await expect(routingTree.locator("[data-route-counts]")).toHaveText("34 families · 88 exact models · 91 offerings");
+  await expect(routingTree.locator('[data-route-family]:visible')).toHaveCount(publicCapabilities.families.length);
+  await expect(routingTree.locator("[data-route-counts]")).toHaveText(publicCatalogRouteCounts());
   await expect(routingTree.locator('[data-route-family="claude-fable"]')).toHaveAttribute("aria-pressed", "true");
   await expect(routingTree.locator('[data-route-model-group="claude-fable"]')).toBeVisible();
   await expect(routingTree.locator('[data-route-model-group="grok"]')).toBeHidden();
@@ -826,7 +882,10 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(catalog).toHaveAttribute("data-enhanced", "false");
   await expect(catalog.locator("[data-catalog-toolbar]")).toBeHidden();
   await expect(catalog.getByRole("columnheader")).toHaveText(["Publisher", "Model", "Provider offerings and capabilities"]);
-  await expect(catalog.locator("[data-catalog-row]")).toHaveCount(88);
+  await expect(catalog.locator("[data-catalog-row]")).toHaveCount(publicCapabilities.models.length);
+  expect(await catalog.locator("[data-catalog-row]").evaluateAll(
+    elements => elements.map(element => element.getAttribute("data-model")).sort(),
+  )).toEqual(publicCapabilities.models.map(model => model.identifier).sort());
   await expect(catalog.locator('[data-model="gpt-transcribe"]')).toContainText("Dictation");
   await expect(catalog.locator('[data-model="gpt-4o-mini"]')).toContainText("Image input");
   await expect(catalog.locator('[data-model="claude-fable-5"]')).toContainText("Image input");
@@ -1153,8 +1212,8 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   const modelHeader = catalog.locator('[data-catalog-sort-header="model"]');
   const capabilitiesHeader = catalog.locator('[data-catalog-sort-header="capabilities"]');
   await expect(catalog).toHaveAttribute("data-enhanced", "true");
-  await expect(rows).toHaveCount(88);
-  await expect(resultCount).toHaveText("88 of 88 models");
+  await expect(rows).toHaveCount(publicCapabilities.models.length);
+  await expect(resultCount).toHaveText(publicCatalogResultCount(publicCapabilities.models.length));
   await expect(filterPanel).toBeHidden();
   await expect(searchSubmit).toHaveAttribute("aria-expanded", "false");
 
@@ -1174,63 +1233,76 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   await expect(searchSubmit).toHaveAttribute("aria-expanded", "false");
   await expect(catalog.locator('[data-catalog-search-text*="background"]')).toHaveCount(0);
   await expect(catalog.locator('[data-catalog-search-text*="synchronous"]')).toHaveCount(0);
+  const matchingFlashModelIDs = publicCapabilities.models.filter(model => (
+    model.identifier.includes("gemini-3.5-flash")
+    && publicCapabilities.offerings.some(offering => (
+      offering.model === model.identifier
+      && offering.wire_contract === "gemini_interactions"
+      && ["image_input", "audio_input"].every(capability => offering.capabilities.includes(capability))
+    ))
+  )).map(model => model.identifier).sort();
   await searchInput.fill("gemini-3.5-flash gemini_interactions image_input audio_input");
   await expect(filterPanel).toBeVisible();
-  await expect(resultCount).toHaveText("1 of 88 model");
-  await expect(visibleRows).toHaveAttribute("data-model", "gemini-3.5-flash");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(matchingFlashModelIDs.length));
+  expect(await visibleRows.evaluateAll(elements => elements.map(element => element.getAttribute("data-model")).sort()))
+    .toEqual(matchingFlashModelIDs);
 
   await searchInput.fill("muse-spark-1.3 max");
-  await expect(resultCount).toHaveText("1 of 88 model");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(1));
   await expect(visibleRows).toHaveAttribute("data-model", "muse-spark-1.3");
 
   await searchInput.fill("gpt-6-astra openai_responses max");
-  await expect(resultCount).toHaveText("1 of 88 model");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(1));
   await expect(visibleRows).toHaveAttribute("data-model", "gpt-6-astra");
 
   await searchInput.fill("gpt-5.5-pro openai_responses xhigh");
-  await expect(resultCount).toHaveText("1 of 88 model");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(1));
   await expect(visibleRows).toHaveAttribute("data-model", "gpt-5.5-pro");
 
   await searchInput.fill("claude-opus-4-1");
-  await expect(resultCount).toHaveText("0 of 88 models");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(0));
 
   for (const model of ["minimax-m3", "grok-4.6", "qwen3.8-max", "qwen3.8-max-0902", "qwen3.8-2.4t-a95b", "qwen3.8-27b", "glm-5.3", "glm-5.3-flash"]) {
+    const matchingModelIDs = publicCapabilities.models
+      .filter(entry => entry.identifier.includes(model)).map(entry => entry.identifier).sort();
     await searchInput.fill(model);
-    await expect(resultCount).toHaveText("0 of 88 models");
+    await expect(resultCount).toHaveText(publicCatalogResultCount(matchingModelIDs.length));
+    expect(await visibleRows.evaluateAll(elements => elements.map(element => element.getAttribute("data-model")).sort()))
+      .toEqual(matchingModelIDs);
   }
 
   for (const model of ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview"]) {
     await searchInput.fill(`${model} vertex_generate_content`);
-    await expect(resultCount).toHaveText("1 of 88 model");
+    await expect(resultCount).toHaveText(publicCatalogResultCount(1));
     await expect(visibleRows).toHaveAttribute("data-model", model);
   }
 
   for (const model of ["claude-fable-5-1", "claude-opus-5"]) {
     await searchInput.fill(`${model} 128000 xhigh`);
-    await expect(resultCount).toHaveText("1 of 88 model");
+    await expect(resultCount).toHaveText(publicCatalogResultCount(1));
     await expect(visibleRows).toHaveAttribute("data-model", model);
   }
 
   await searchInput.fill("qwen3.7-plus dashscope_responses image_input");
-  await expect(resultCount).toHaveText("1 of 88 model");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(1));
   await expect(visibleRows).toHaveAttribute("data-model", "qwen3.7-plus");
   await expect(visibleRows).toContainText("Alibaba Cloud");
 
   await searchInput.fill("qwen3.8-flash dashscope_responses image_input xhigh");
-  await expect(resultCount).toHaveText("1 of 88 model");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(1));
   await expect(visibleRows).toHaveAttribute("data-model", "qwen3.8-flash");
   await expect(visibleRows).toContainText("Alibaba Cloud");
 
   await searchInput.fill("grok-4.3 xai_responses");
-  await expect(resultCount).toHaveText("2 of 88 models");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(2));
 
   await searchInput.fill("glm-5.2 131072 token");
-  await expect(resultCount).toHaveText("1 of 88 model");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(1));
   await expect(visibleRows).toHaveAttribute("data-model", "glm-5.2");
 
   await catalog.getByRole("button", { name: "Reset" }).click();
   await searchInput.fill("dictation");
-  await expect(resultCount).toHaveText("6 of 88 models");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(publicCatalogModelsWithCapabilities(["dictation"]).length));
   for (const visibleRow of await visibleRows.all()) {
     await expect(visibleRow).toHaveAttribute("data-capabilities", "dictation");
   }
@@ -1238,28 +1310,28 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   await catalog.getByRole("button", { name: "Reset" }).click();
   await catalog.getByRole("checkbox", { name: "Image input" }).check();
   await catalog.getByRole("checkbox", { name: "Audio message input" }).check();
-  await expect(resultCount).toHaveText("7 of 88 models");
-  await expect(visibleRows).toHaveCount(7);
+  await expect(resultCount).toHaveText(publicCatalogResultCount(publicCatalogModelsWithCapabilities(["image_input", "audio_input"]).length));
+  await expect(visibleRows).toHaveCount(publicCatalogModelsWithCapabilities(["image_input", "audio_input"]).length);
 
   await searchSubmit.click();
   await expect(filterPanel).toBeHidden();
-  await expect(resultCount).toHaveText("7 of 88 models");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(publicCatalogModelsWithCapabilities(["image_input", "audio_input"]).length));
   await searchSubmit.click();
   await expect(filterPanel).toBeVisible();
   await expect(catalog.getByRole("checkbox", { name: "Image input" })).toBeChecked();
   await expect(catalog.getByRole("checkbox", { name: "Audio message input" })).toBeChecked();
 
   await catalog.getByRole("checkbox", { name: "Dictation" }).check();
-  await expect(resultCount).toHaveText("0 of 88 models");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(0));
   await expect(catalog.locator("[data-catalog-empty]")).toBeVisible();
 
   await catalog.getByRole("button", { name: "Reset" }).click();
-  await expect(resultCount).toHaveText("88 of 88 models");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(publicCapabilities.models.length));
   await searchInput.press("Escape");
   await catalog.getByRole("button", { name: "Filter by Dictation" }).first().click();
   await expect(filterPanel).toBeVisible();
   await expect(catalog.getByRole("checkbox", { name: "Dictation" })).toBeChecked();
-  await expect(resultCount).toHaveText("6 of 88 models");
+  await expect(resultCount).toHaveText(publicCatalogResultCount(publicCatalogModelsWithCapabilities(["dictation"]).length));
 
   await catalog.getByRole("button", { name: "Reset" }).click();
   await expect(publisherHeader).toHaveAttribute("aria-sort", "ascending");
@@ -3110,7 +3182,7 @@ test("application startup waits for shared UI orchestration before DOMContentLoa
     await page.goto(baseURL + applicationPath, { waitUntil: "commit" });
     await expect(page.locator("html")).toHaveAttribute("data-llm-proxy-application", "ready");
     await page.evaluate(async () => {
-      const client = await import("/assets/llm-proxy/js/core/backendClient.js?v=20260903f037");
+      const client = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261117b333");
       await client.loadFrontendRuntimeConfig();
       await new Promise(requestAnimationFrame);
     });
@@ -3628,6 +3700,200 @@ test("incompatible cached application module becomes an actionable application e
   await expect.poll(() => page.evaluate(() => window.__llmProxyManagementReadyCount)).toBe(1);
   expect(accountRequests).toHaveLength(0);
 });
+
+test("dashboard recovers its rate-limited bootstrap after shared authentication without reloading", async ({ page }) => {
+  const accountRequests = [];
+  page.on("request", request => {
+    if (request.url() === `${baseURL}/api/management/account`) accountRequests.push(request);
+  });
+  await installAssetRoutes(page, { emitInitialAuthEvent: false });
+  await installManagementRoutes(page);
+  const clockStart = new Date("2026-11-17T06:00:00Z");
+  await page.clock.install({ time: clockStart });
+  await installBootstrapResponses(page, [429]);
+  await page.goto(`${baseURL}${applicationPath}`);
+  await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+  await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "authenticated");
+  expect(accountRequests).toHaveLength(0);
+  await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 100));
+  const remaining = await page.evaluate(() => window.__llmProxyBootstrapFetches[0] + 6000 - Date.now());
+  await page.evaluate(() => {
+    window.__llmProxyMprAuthenticate();
+    window.__llmProxyMprAuthenticate();
+    window.dispatchEvent(new Event("focus"));
+    window.dispatchEvent(new Event("online"));
+  });
+  expect(await page.evaluate(async () => {
+    const backend = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261117b333");
+    try { await backend.loadFrontendRuntimeConfig(); return 200; }
+    catch (error) { return error.status; }
+  })).toBe(429);
+  await page.clock.runFor(remaining - 1);
+  expect(await page.evaluate(() => window.__llmProxyBootstrapFetches.length)).toBe(1);
+  expect(accountRequests).toHaveLength(0);
+  await page.clock.runFor(50);
+  await expect(page.locator("llm-proxy-management-application")).toHaveAttribute("data-auth-state", "authenticated");
+  await expect(page.getByRole("heading", { name: "Tenants → connections → models" })).toBeVisible();
+  await expect.poll(() => accountRequests.length).toBe(2); // Bootstrap and the connection dashboard each load account once.
+  expect(await page.evaluate(() => window.__llmProxyBootstrapFetches.length)).toBe(2);
+  await page.evaluate(() => {
+    window.__llmProxyMprAuthenticate();
+    window.__llmProxyMprAuthenticate();
+  });
+  await page.clock.runFor(1000);
+  expect(accountRequests).toHaveLength(2);
+});
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {number[]} statuses
+ * @param {boolean} [holdRecovery]
+ */
+async function installBootstrapResponses(page, statuses, holdRecovery = false) {
+  await page.addInitScript(({ statuses, holdRecovery }) => {
+    const originalFetch = window.fetch.bind(window);
+    window.__llmProxyBootstrapFetches = [];
+    window.fetch = async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.endsWith("/config-ui.yaml") && init?.credentials === "include") {
+        const index = window.__llmProxyBootstrapFetches.length;
+        window.__llmProxyBootstrapFetches.push(Date.now());
+        if (statuses[index] === 429) return new Response("", { status: 429, headers: { "Retry-After": "6", Server: "Caddy" } });
+        if (statuses[index] === 200) return new Response("llmProxy: {}", { status: 200 });
+        if (holdRecovery) await new Promise(resolve => { window.__llmProxyReleaseBootstrap = resolve; });
+      }
+      return originalFetch(input, init);
+    };
+  }, { statuses, holdRecovery });
+}
+
+test("dashboard bootstrap stops after another rate limit until a new recovery event", async ({ page }) => {
+  await installAssetRoutes(page, { emitInitialAuthEvent: false });
+  await installManagementRoutes(page);
+  await page.clock.install();
+  await installBootstrapResponses(page, [429, 429]);
+  await page.goto(`${baseURL}${applicationPath}`);
+  await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+  await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 100));
+  await page.clock.runFor(6100);
+  await expect.poll(() => page.evaluate(() => window.__llmProxyBootstrapFetches.length)).toBe(2);
+  await page.clock.runFor(60000);
+  expect(await page.evaluate(() => window.__llmProxyBootstrapFetches.length)).toBe(2);
+  await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await page.clock.runFor(1);
+  await expect(page.locator("llm-proxy-management-application")).toHaveAttribute("data-auth-state", "authenticated");
+  expect(await page.evaluate(() => window.__llmProxyBootstrapFetches.length)).toBe(3);
+});
+
+test("dashboard bootstrap keeps malformed configuration terminal on recovery events", async ({ page }) => {
+  await installAssetRoutes(page, { emitInitialAuthEvent: false });
+  await installManagementRoutes(page);
+  await page.clock.install();
+  await installBootstrapResponses(page, [200]);
+  await page.goto(`${baseURL}${applicationPath}`);
+  await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+  await page.evaluate(() => {
+    window.__llmProxyMprAuthenticate();
+    window.dispatchEvent(new Event("focus"));
+    window.dispatchEvent(new Event("online"));
+  });
+  await page.clock.runFor(60000);
+  expect(await page.evaluate(() => window.__llmProxyBootstrapFetches.length)).toBe(1);
+  await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+});
+
+for (const phase of ["timer", "request"]) {
+  test(`dashboard bootstrap disposal invalidates pending recovery ${phase}`, async ({ page }) => {
+    await installAssetRoutes(page, { emitInitialAuthEvent: false });
+    await installManagementRoutes(page);
+    await page.clock.install();
+    await installBootstrapResponses(page, [429], phase === "request");
+    await page.goto(`${baseURL}${applicationPath}`);
+    await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+    await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 100));
+    if (phase === "request") {
+      await page.clock.runFor(6100);
+      await expect.poll(() => page.evaluate(() => typeof window.__llmProxyReleaseBootstrap)).toBe("function");
+    }
+    await page.evaluate(() => {
+      const application = document.body;
+      window.__llmProxyDisposedApplication = window.Alpine.$data(application);
+      application.remove();
+    });
+    await expect(page.locator("llm-proxy-management-application")).toHaveCount(0);
+    await page.evaluate(() => {
+      if (window.__llmProxyReleaseBootstrap) window.__llmProxyReleaseBootstrap();
+      window.dispatchEvent(new Event("focus"));
+      window.dispatchEvent(new Event("online"));
+    });
+    await page.clock.runFor(6100);
+    expect(await page.evaluate(() => window.__llmProxyBootstrapFetches.length)).toBe(phase === "timer" ? 1 : 2);
+    expect(await page.evaluate(() => window.__llmProxyDisposedApplication.account)).toBeNull();
+  });
+}
+
+for (const phase of ["timer", "request"]) {
+  test(`dashboard bootstrap signout cancels pending recovery ${phase}`, async ({ page }) => {
+    const accountRequests = [];
+    page.on("request", request => { if (request.url() === `${baseURL}/api/management/account`) accountRequests.push(request); });
+    await installAssetRoutes(page, { emitInitialAuthEvent: false });
+    await installManagementRoutes(page);
+    await page.clock.install();
+    await installBootstrapResponses(page, [429], phase === "request");
+    await page.goto(`${baseURL}${applicationPath}`);
+    await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+    await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 100));
+    if (phase === "request") {
+      await page.clock.runFor(6100);
+      await expect.poll(() => page.evaluate(() => typeof window.__llmProxyReleaseBootstrap)).toBe("function");
+    }
+    await page.evaluate(() => {
+      sessionStorage.setItem("llm-proxy-test-auth-status", "unauthenticated");
+      document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
+      if (window.__llmProxyReleaseBootstrap) window.__llmProxyReleaseBootstrap();
+    });
+    await expect(page).toHaveURL(`${baseURL}/`);
+    await page.clock.runFor(6100);
+    expect(accountRequests).toHaveLength(0);
+  });
+}
+
+for (const action of ["disposal", "signout"]) {
+  test(`dashboard bootstrap ${action} invalidates an in-flight account response`, async ({ page }) => {
+    await installAssetRoutes(page, { emitInitialAuthEvent: false });
+    await installManagementRoutes(page);
+    await page.clock.install();
+    await installBootstrapResponses(page, [429]);
+    let releaseAccount;
+    const accountBlocked = new Promise(resolve => { releaseAccount = resolve; });
+    let accountStarted = false;
+    await page.route(`${baseURL}/api/management/account`, async route => {
+      accountStarted = true;
+      await accountBlocked;
+      await route.fallback();
+    });
+    await page.goto(`${baseURL}${applicationPath}`);
+    await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+    await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 100));
+    await page.clock.runFor(6100);
+    await expect.poll(() => accountStarted).toBe(true);
+    await page.evaluate(action => {
+      window.__llmProxyDisposedApplication = window.Alpine.$data(document.body);
+      if (action === "disposal") document.body.remove();
+      else {
+        sessionStorage.setItem("llm-proxy-test-auth-status", "unauthenticated");
+        document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
+      }
+    }, action);
+    releaseAccount();
+    if (action === "signout") await expect(page).toHaveURL(`${baseURL}/`);
+    else {
+      await expect(page.locator("llm-proxy-management-application")).toHaveCount(0);
+      expect(await page.evaluate(() => window.__llmProxyDisposedApplication.account)).toBeNull();
+    }
+  });
+}
 
 test("tenant profile failures remain visible in the authenticated dashboard", async ({ page }) => {
   await installAssetRoutes(page);

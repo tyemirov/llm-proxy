@@ -23,6 +23,8 @@ This file gives rules for browser frontends. Obey root `AGENTS.md` and `.mprlab/
 
 ## UI State
 
+Obey the binding [automatic data updates and persistence](AGENTS.PRODUCT.md#automatic-data-updates-and-persistence) principle.
+
 - Keep one source of truth for workflow state.
 - Derive display values instead of duplicating derived state.
 - Dispatch intent-specific events.
@@ -32,7 +34,7 @@ This file gives rules for browser frontends. Obey root `AGENTS.md` and `.mprlab/
 ## Production Hosting
 
 - Use GitHub Pages as the production host for each deployable browser frontend.
-- Declare the browser frontend with a `github_pages` resource in `.mprlab/deploy/resources.yml`.
+- Declare the browser frontend in `targets.github_pages.sites[]` in the selected manifest.
 - Use `gh-pages` as the publication branch.
 - The GitHub Pages repository can differ from the application repository.
 - Keep API and service routes on hostnames that differ from the website hostname.
@@ -41,7 +43,7 @@ This file gives rules for browser frontends. Obey root `AGENTS.md` and `.mprlab/
 
 ## Testing
 
-- For a behavior change, start with an integration test through the real page and browser entry point.
+- Apply the proportional test sequence in `.mprlab/POLICY.md`. Use integration tests for the changed public contract.
 - Use dependency injection for integration scenarios that are difficult to reproduce.
 - Keep the product logic under test real.
 - Prefer Playwright or the repo-standard browser harness.
@@ -56,3 +58,11 @@ Use `.mprlab/POLICY.md` for validation.
 During the change, run the smallest frontend target that validates the changed contract.
 
 Run build or browser tests when source changes affect generated or shipped assets.
+
+## Language Contract
+
+Apply the JavaScript Modules rules in `.mprlab/POLICY.md` together with these browser-specific requirements.
+
+- Components render validated state and emit intent.
+- Backend clients own request construction and response validation.
+- User-visible behavior belongs in browser or integration coverage.

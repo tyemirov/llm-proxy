@@ -3,6 +3,7 @@ package proxy
 import (
 	"encoding/json"
 	"errors"
+	"os"
 	"testing"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -110,7 +111,7 @@ func TestStructuredOutputValidationFailures(testingInstance *testing.T) {
 		testingInstance.Fatal(validRouteSchemaError)
 	}
 	for _, wireContract := range []textWireContract{textWireContractOpenAIResponses, textWireContractGeminiInteractions, textWireContractAnthropicMessages} {
-		if routeError := validateStructuredOutputRoute(textModelDefinition{wireContract: wireContract}, validRouteSchema); routeError != nil {
+		if routeError := validateStructuredOutputRoute(textModelDefinition{wireContract: wireContract, structuredOutput: existingStructuredPolicyForTest(testingInstance, wireContract)}, validRouteSchema); routeError != nil {
 			testingInstance.Fatalf("wire=%s error=%v", wireContract, routeError)
 		}
 	}
@@ -160,7 +161,7 @@ func TestStructuredOutputProviderSchemaAdmission(testingInstance *testing.T) {
 	for _, testCase := range validCases {
 		testingInstance.Run(testCase.name, func(subtest *testing.T) {
 			schema := mustStructuredOutputSchema(subtest, testCase.schema)
-			if routeError := validateStructuredOutputRoute(textModelDefinition{wireContract: testCase.wireContract}, schema); routeError != nil {
+			if routeError := validateStructuredOutputRoute(textModelDefinition{wireContract: testCase.wireContract, structuredOutput: existingStructuredPolicyForTest(subtest, testCase.wireContract)}, schema); routeError != nil {
 				subtest.Fatalf("route error=%v", routeError)
 			}
 		})
@@ -194,13 +195,13 @@ func TestStructuredOutputProviderSchemaAdmission(testingInstance *testing.T) {
 	for _, testCase := range invalidCases {
 		testingInstance.Run(testCase.name, func(subtest *testing.T) {
 			schema := mustStructuredOutputSchema(subtest, testCase.schema)
-			if routeError := validateStructuredOutputRoute(textModelDefinition{wireContract: testCase.wireContract}, schema); !errors.Is(routeError, errStructuredOutputUnsupported) {
+			if routeError := validateStructuredOutputRoute(textModelDefinition{wireContract: testCase.wireContract, structuredOutput: existingStructuredPolicyForTest(subtest, testCase.wireContract)}, schema); !errors.Is(routeError, errStructuredOutputUnsupported) {
 				subtest.Fatalf("route error=%v", routeError)
 			}
 		})
 	}
 	externalReferenceSchema := &structuredOutputSchema{document: map[string]any{"$ref": "https://example.com/schema"}}
-	if routeError := validateStructuredOutputRoute(textModelDefinition{wireContract: textWireContractAnthropicMessages}, externalReferenceSchema); !errors.Is(routeError, errStructuredOutputUnsupported) {
+	if routeError := validateStructuredOutputRoute(textModelDefinition{wireContract: textWireContractAnthropicMessages, structuredOutput: existingStructuredPolicyForTest(testingInstance, textWireContractAnthropicMessages)}, externalReferenceSchema); !errors.Is(routeError, errStructuredOutputUnsupported) {
 		testingInstance.Fatalf("external reference route error=%v", routeError)
 	}
 	if !structuredOutputTypeIncludes("object", "object") ||
@@ -226,4 +227,23 @@ func mustStructuredOutputSchema(testingInstance *testing.T, rawSchema string) *s
 		testingInstance.Fatalf("schema error=%v", schemaError)
 	}
 	return schema
+}
+
+func existingStructuredPolicyForTest(t *testing.T, wire textWireContract) *StructuredOutputPolicy {
+	t.Helper()
+	document, err := os.ReadFile("../../configs/providers.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := ParseProviderCatalog(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, offering := range catalog.ModelCatalog().Offerings {
+		if offering.WireContract == string(wire) && offering.StructuredOutput != nil {
+			return offering.StructuredOutput
+		}
+	}
+	t.Fatalf("no structured policy for %s", wire)
+	return nil
 }

@@ -136,3 +136,11 @@ func lockMediaOperationClaim(transaction *gorm.DB, operationID string, generatio
 	}
 	return nil
 }
+
+func lockQualificationBudgetRegistry(transaction *gorm.DB) *gorm.DB {
+	return lockManagedRows(transaction.Model(&qualificationBudgetRegistry{}).Where("1 = 1"), "closed")
+}
+
+func lockQualificationBudgetState(transaction *gorm.DB, budgetID string) *gorm.DB {
+	return lockManagedRows(transaction.Model(&qualificationBudgetState{}).Where("id = ?", budgetID), "remaining")
+}

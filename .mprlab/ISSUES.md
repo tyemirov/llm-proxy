@@ -31,7 +31,8 @@ Migration scope (2026-09-23):
 LLM Proxy owns all media-provider API access. MediaOps provides one API and processing service.
 TelePrompter is the separate timeline and prompt website. Frame Picker and other retained interfaces stay in MediaOps.
 Umbrellas coordinate executable dependencies. Complete dependency issues before closing their umbrella.
-Start with I274. MediaOps I093 owns its backend, I094 owns TelePrompter, and I092 owns final acceptance.
+The media migration sequence starts with I274.
+MediaOps I093 owns its backend, I094 owns TelePrompter, and I092 owns final acceptance.
 
 Provider priority (2026-11-13):
 The user selected Alibaba Model Studio access as the first provider priority.
@@ -42,6 +43,92 @@ Prioritize F095 Flash production activation and F094 production access. F093 is 
 Keep I038, I226, and F095 live qualification separate from regional implementation.
 
 ## BugFixes
+
+- [x] [B333] (P2) Disable prepaid balance actions during automatic refresh.
+  Goal: Make financial-history controls reflect whether their handler can accept input.
+  Evidence: PR 368 run 44064613419 passes all 188 frontend cases but fails the hosted payment browser flow at `hosted-payments.spec.js:64`. The history click occurs while the balance refresh sets `busy`; the existing button remains enabled and the handler drops the click.
+  Requirements: Synchronize existing controls and busy accessibility state during background reads, preserve edits and focus, and keep the current refresh interval and test deadlines.
+  Resolution: Automatic balance reads synchronize existing action buttons and accessibility busy state before awaiting the response, then restore controls without replacing focused inputs. The application module graph advances to `20261117b333`.
+  Validation: The controlled real-browser regression first failed with `Expected: disabled; Received: enabled`. The corrected refund flow preserves the spending-limit draft and focus. Final local `make ci` passed all 15 gates in 769 seconds with 100.0% Go statement coverage, 188 frontend browser cases, and all 13 authenticated browser cases. Hosted run 44064613419 remains failed on pre-patch commit `efba8181`; its backend jobs passed and the payment-history case was the sole root failure. Hosted validation of this patch requires a new run after publication.
+
+- [x] [B330] (P2) Keep qualification database mechanisms inside the persistence boundary.
+  Goal: Apply the repository persistence contract to the qualification journal.
+  Evidence: `TestPersistenceBoundaryOwnsDatabaseMechanisms` rejects its SQLite opener, integrity SQL, and no-op locks in qualification workflow files.
+  Requirements: Move mechanisms into existing connection and transaction helpers while preserving journal behavior and transaction ownership.
+  Resolution: Qualification connections and integrity SQL now use `managed_store_connections.go`; named registry and budget locks use `managed_store_transactions.go`. Workflow transactions and errors are preserved.
+  Validation: Persistence-boundary, complete qualification-budget, focused race, static-analysis, and formatting checks pass. Final `make ci` passed all 15 gates in 809 seconds with 100.0% Go statement coverage.
+
+- [x] [B331] (P2) Reconcile Gemini routing acceptance with current lifecycle declarations.
+  Evidence: The final Go shard failed `TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities`: `gemini-3.5-flash-lite` declares `synchronous_completion`, but the test requires `pollable_resource` for every Gemini offering.
+  Requirements: Verify synchronous Flash-Lite and stored background Gemini routes through real HTTP, including request flags and cleanup. Preserve runtime catalog activation.
+  Resolution: Route acceptance distinguishes Flash-Lite synchronous POST-only requests from stored background Gemini requests and verifies exact request flags and cleanup paths.
+  Validation: The focused routing test reproduced `synchronous_completion want=pollable_resource` before the correction. Routing and current Gemini acceptance pass with race detection. Final `make ci` passed all 15 gates in 809 seconds with 100.0% Go statement coverage.
+
+- [x] [B332] (P2) Scope Qwen acceptance to exact provider offerings.
+  Evidence: The final Go shard failed `TestQwenCurrentHTTP`, `TestQwenCurrentImages`, `TestQwenCurrentCatalog`, and `TestQwenCurrentFlashActivation` for `qwen3.8-27b`, including HTTP 400, unexpected reasoning efforts, and discovery of a model the tests classify as unqualified.
+  Requirements: Activate only the intended DashScope candidates in the isolated test catalog. Scope capability, price, and discovery assertions to exact provider/model pairs; preserve production activation and shared Cerebras discovery.
+  Resolution: The test catalog explicitly activates DashScope offerings. Capability and price lookups include the provider; discovery parses provider-qualified routes. An authorized Cerebras tenant preserves 27B discovery while a DashScope 27B request is rejected before dispatch.
+  Validation: `make test-qwen-current` reproduced all four failures, then passed after the corrections. Qwen, Gemini routing, and Cerebras client acceptance pass with race detection. Final `make ci` passed all 15 gates in 809 seconds with 100.0% Go statement coverage. Browser validation passed 188 frontend and 13 authentication cases.
+
+- [x] [B329] (P2) Validate public provider counts against the canonical catalog.
+  Goal: Keep CLI and real HTTP acceptance aligned with current provider discovery.
+  Evidence: Final CI failed with `root_test.go:476: provider count=19 want=18`; the HTTP/OpenAPI test also failed with `public capability providers=19 want=18`.
+  Requirements: Compare returned counts with the canonical fixture catalog, retaining response validation and public limit assertions.
+  Resolution: CLI and real HTTP assertions derive the expected provider count from the canonical catalog.
+  Validation: Both corrected public-entry-point checks pass with race detection. Final `make ci` passed all 15 gates in 809 seconds with 100.0% Go statement coverage.
+
+- [x] [B328] (P2) Supply the inactive qualification budget in the installed Gateway fixture.
+  Goal: Keep selected-manifest qualification self-contained after the budget input became part of the deployment contract.
+  Evidence: Final `make ci` failed at `TestOperationalInstalledGatewayPlansCurrentTrackedManifest` with `manifest.environment.private_inputs[5]: undefined environment reference LLM_PROXY_QUALIFICATION_BUDGET`.
+  Requirements: Clear inherited budget policy and supply the canonical `null` value in the synthetic fixture environment. Include the policy input in manifest and local API environment assertions.
+  Resolution: The fixture clears inherited policy and supplies `LLM_PROXY_QUALIFICATION_BUDGET=null` through its own environment file. Current manifest and scoped API environment assertions include that input.
+  Validation: `make test-installed-gateway` and the manifest/local-environment checks pass, including focused race runs. Final `make ci` passed all 15 gates in 809 seconds with 100.0% Go statement coverage.
+
+- [x] [B326] (P2) Release qualification reservations after proven admission rejection.
+  Goal: Preserve the allowance when the initial generation never reaches the provider.
+  Requirements: Release the reservation atomically, preserve the admission error, and avoid suspension. Retain reservations for failed observations of already dispatched work.
+  Resolution: Proven initial non-dispatch settles at zero cost and atomically restores the reservation. Failed polls retain existing work; failed release writes roll back and suspend.
+  Validation: Real-admission regressions first held 65,072 microUSD and suspended without provider work. Queue rejection, waiting expiry, subsequent generation, release-write rollback, and pending-poll checks pass with race detection. Final `make ci` passed all 15 gates in 809 seconds with 100.0% Go statement coverage.
+
+- [x] [B327] (P2) Inspect qualification accounting in one database snapshot.
+  Goal: Prevent concurrent reservations or settlements from appearing as journal corruption.
+  Requirements: Read and validate state and collect operator output in one consistent transaction.
+  Resolution: Operator actions validate state, accounting, and output within one journal transaction. Mutations obtain the write lock before reading.
+  Validation: Deterministic reservation and settlement commits reproduced false conservation errors and mixed output before the fix. Snapshot and operator rollback checks pass with race detection. Final `make ci` passed all 15 gates in 809 seconds with 100.0% Go statement coverage.
+
+- [-] [B325] (P2) Make shared rate-limit acceptance independent of incidental SQL time.
+  Goal: Verify one shared limiter across text and dictation through real HTTP without relying on both operations finishing inside a 120 ms wall-clock window.
+  Evidence: CI correctly admitted the second operation without delay after response and SQLite work consumed the interval. Holding the first provider response beyond that interval reproduced the same missing-log assertion.
+  Requirements: Inject the existing scheduler clock through an optional Go-only dependency, retain the system clock as the canonical default, and advance synchronized test time after observable rate-wait entry. Preserve production limits, context cancellation, and other real-clock coverage.
+  Validation: Independent review approved the timing seam. The selected real HTTP case passes 20 consecutive race runs; broader admission/rate race checks, changed-statement coverage, static analysis, and formatting pass. Final CI remains pending.
+
+- [-] [B324] (P1) Disable connection buttons while tenant data load.
+  Goal: Show connection selection as available only when its existing handler can accept the input.
+  Evidence: A controlled browser check clicked an enabled-looking ElevenLabs connection during hydration. The existing busy guard ignored the click; completion selected its normal first attached media connection and the expected speech task was absent.
+  Requirements: Make connection-name buttons follow busy state in rendered markup and updates to existing controls. Retain the existing handler guard, tenant ownership checks, and routing defaults.
+  Validation: The real-browser regression reproduces the enabled-state mismatch. Controlled busy-state selection, three related UI cases, 17 model-task cases, and static checks pass. Independent review is clear. Final CI remains pending.
+
+- [-] [B323] (P1) Recover dashboard bootstrap after a rate-limited configuration read.
+  Goal: Open the authenticated dashboard after a transient public configuration failure without a manual reload.
+  Evidence: The deployed configuration endpoint returned HTTP 429 with Retry-After 6; later configuration and shared authentication succeeded, but the application cached the rejected promise and never requested its account.
+  Requirements: Honor the server deadline across coalesced recovery events, retain terminal schema errors, cancel obsolete work on sign-out/disposal, and keep MPR UI as the authentication authority.
+  Validation: The focused real-page regression reproduced the permanent error state before the fix. Recovery, authentication, and rendered module-revision checks pass, including 14 final browser/renderer cases and 17 model-task cases. Independent review found no unresolved source issue. Final CI remains pending.
+
+- [x] [B322] (P2) Prepare alignment recovery fixtures before replacement workers start.
+  Goal: Make accepted-output recovery qualification deterministic.
+  Evidence: The recovery fixture starts a replacement worker before dropping its publication-failure trigger and expiring the prior claim; CI observed an unexpected terminal uncertain state.
+  Requirements: Change the trigger and claim only after the original router closes and before the replacement router starts. Preserve the five-second test deadline and all production recovery behavior.
+  Resolution: A test-only restart callback prepares the trigger and expired claim while the original router is closed, then starts one replacement runtime. Production recovery behavior and the five-second deadline are unchanged.
+  Validation: The recovery test passed 100 repetitions; the final non-hosted Go shard passed. Full `make ci` passed all 15 gates with 100.0% Go statement coverage in 781 seconds.
+
+- [x] [B321] (P1) Retain incomplete response reasons and reasoning-token diagnostics.
+  Goal: Diagnose Qwen incomplete responses without treating every interruption as output exhaustion.
+  Requirements:
+  - Continue ordinary text only when the provider reports `max_output_tokens`.
+  - Retain safe provider incomplete reasons and nullable reasoning-token counts in request logs and durable usage events.
+  - Preserve unknown measurements, reported zero, existing usage totals, and historical rows through startup migration.
+  Resolution: Reason-specific classification, safe incomplete reason codes, and nullable reasoning counts now survive provider-attempt logs and durable usage records. Startup migration preserves historical nulls; public API and SDK usage shapes are unchanged.
+  Validation: Public HTTP diagnostics, structured failures, continuation aggregation, database reopen, upgrade, and migration rollback checks passed. Full `make ci` passed all 15 gates with 100.0% Go statement coverage in 781 seconds.
 
 - [x] [B320] (P0) Match the API route configuration policy to its shared provider.
   Goal: Reconcile the API route with the current Caddy execution policy.
@@ -2397,6 +2484,38 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
 
 ## Improvements
 
+- [-] [I322] (P1) {B323,B324,B325,F098,F099} Activate the TellTale tenant candidates and complete the quality-first benchmark.
+  Goal: Repair the live dashboard, configure the existing TellTale tenant, and select among quality-qualified candidate configurations using quality 50%, cost 35%, and generation time 15%.
+  Requirements: All provider operations pass through LLM Proxy. Clients receive only its origin and tenant key. Preserve the cumulative $5 spending cap and $0.644939 starting ledger; include failures, evaluations, continuations, and repairs. Keep full CI at the explicitly agreed final checkpoint.
+  Execution: The user explicitly selected Proxy prerequisites, Proxy full CI and deployment, then the live benchmark and final TellTale CI. Finish Proxy prerequisites and review before its CI. Retain the existing tenant, all-attempt spending guard requirements, and selected lifecycle.
+  Budget scope: The user clarified that the $5 cap covers the Story benchmark. The installed application pipeline selects release versions deterministically and makes no LLM request. Deployment uses only its declared private inputs.
+
+- [x] [I321] (P1) {F074} Add Jev to the production live test suite.
+  Goal:
+  Include repeatable TypeSafe System One checks in the existing `make live-test` command.
+  Requirements:
+  - Use the production proxy and the verified Default tenant identity.
+  - Use only the existing tenant client key. Keep provider credentials in the saved connection.
+  - Use the official TypeScript SDK with automatic retries disabled.
+  - Exercise Choice, Score, Noul, image assets, and Box answers through `/v1/systemone`.
+  - Preserve the existing text cases and report each Jev case independently.
+  - Validate prerequisites before paid requests. Keep credentials and response bodies outside diagnostics.
+  Deliverables:
+  - Add a reusable SDK consumer, a valid image fixture, and live-suite integration.
+  - Add public-entry-point regression tests and command guidance.
+  Validation:
+  - Run the focused suite before and after the change.
+  - Run final `make ci` after the last stack change.
+  - Record actual provider execution separately from controlled regression evidence.
+  Resolution:
+  - Added two Jev SDK cases to `make live-test`. The command now runs eleven cases.
+  - Added a valid synthetic PNG, prerequisite checks, and public-entry-point regression tests.
+  - Confirmed the initial failure: the command reported nine cases instead of eleven.
+  - Passed `make test-production-live-contract` and final `make ci` with all 15 gates and 100.0 percent Go statement coverage.
+  - Independent review found no blocking issue.
+  - Governor structure checks passed. Eight existing managed-document differences remain.
+  - Live proxy qualification remains in the separate operational acceptance record.
+
 - [x] [I320] (P1) Audit the complete manifest against the installed Gateway contract.
   Goal: Resolve declaration mismatches together before another deployment attempt.
   Scope: Installed Gateway v9.2.1, the selected manifest, referenced application files, and current deployed state.
@@ -4422,6 +4541,29 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
 
 ## Features
 
+- [-] [F099] (P1) Enforce operator-controlled qualification attempt budgets.
+  Goal: Bound catalog-priced qualification work for one existing tenant and retain every paid attempt without creating customer billing resources.
+  Requirements: Use an explicit operator policy and separate durable receipts. Reserve before each generation dispatch, including retries and continuations; settle complete usage and retain uncertain reservations. Isolate other tenants, explicitly attribute paid connection verification, freeze prices and policy identity, preserve state across restart or policy changes, and fail closed on missing initialized storage. Provide sanitized operator inspection and close only fully reconciled budgets. Keep credentials and content outside receipts.
+  Validation: Independent architecture reviews resolved actionable findings. Focused HTTP/CLI, concurrency, uncertainty, restart, pricing, attribution, race, and static checks pass; all new guard functions reach 100% statement coverage in the focused profile. Introduced executable wiring has no uncovered blocks. The exact five-route policy passes startup validation with explicit Singapore prices. Full CI remains pending.
+
+- [-] [F098] (P1) Declare current economical OpenAI and Anthropic candidates and activate qualified Cerebras support.
+  Goal: Prepare truthful catalog routes for the TellTale provider-selection experiment.
+  Requirements: Declare exact GPT-6 Luna and Haiku 5.5 for explicitly authorized qualification with context-dependent prices and current controls. Activate archived-qualified Cerebras Qwen 3.8 27B while explicitly keeping the Alibaba offering for that model disabled. Activate Gemini Developer Flash-Lite for its distinct existing-tenant qualification; retain separate live-unqualified status until acceptance passes. Preserve provider-owned credentials and generic codecs.
+  Validation: Focused catalog, price-boundary, protocol, activation, and public-projection checks pass. Updated stale discovery expectations to distinguish synchronous Developer Flash-Lite from pollable Gemini routes and include the newly enabled media declarations. Final CI remains pending.
+  CI corrections: The first PR qualification found the canonical origin sum above global admitted capacity and a raw public-config placeholder mismatch. Capacity now reserves the exact 736-origin sum with global active unchanged at 32. Public rendering derives literal inactive budget configuration through one shared helper. The canonical HTTP capacity check, clean browser checks, Pages artifact, and real Docker Pages build pass; independent review is clear.
+
+- [x] [F097] (P1) Add Cerebras Qwen 3.8 27B through the shared text boundary.
+  Goal: Support a matched TellTale Plot-to-Story benchmark through the official LLM Proxy client.
+  Requirements:
+  - Declare the exact Cerebras offering, current controls, limits, prices, and private connection inputs in the canonical catalog.
+  - Preserve supported strict JSON Schema output through Chat Completions and reject unsupported schemas before dispatch.
+  - Retain provider-reported input, output, and reasoning usage for successful and failed attempts; preserve unknown usage.
+  - Verify connections with the authenticated read-only model endpoint.
+  - Keep production activation and paid benchmark execution separate from implementation acceptance.
+  Validation: Real HTTP service and official-client qualification with local provider fixtures, negative controls, independent review, and final `make ci`.
+  Resolution: Added the data-defined offering and generic schema admission and Chat Completions encoding; local official-client and protocol checks pass. Independent reviews resolved actionable findings.
+  Validation passed: Final `CI=1 make ci` completed all 15 gates with 100.0% Go statement coverage after all benchmark analysis, documentation, review, and cleanup were complete. Two live Cerebras runs reached drafting but supplied no accepted Story; source activation remains disabled and separate from implementation acceptance.
+
 - [x] [F096] (P0) Add strict Qwen 3.8 Flash structured generation.
   Goal: Support TellTale planning and Story contracts through the existing DashScope Responses route.
   Requirements:
@@ -4434,7 +4576,6 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
   Resolution: Added exact-offering schema admission, text-only validation, SDK discovery, and public capability rendering.
   Validation passed: both Flash targets, protocol acceptance, hosted clients, frontend lint, browser regression, and final hosted CI 43562093954.
   Independent design and final source reviews found no remaining actionable findings.
-
 
 
 - [!] [F095] (P0) Activate qualified Qwen 3.8 offerings in production.

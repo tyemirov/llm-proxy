@@ -277,8 +277,9 @@ func TestManagedUsageWriterKeepsPublicResponsesIndependentFromPersistence(t *tes
 		upstreamRateLimits:         upstreamRateLimits{rules: map[string]upstreamRateLimitRule{}},
 		managementSessionValidator: sessionValidator,
 		requestTimeoutPolicy:       timeoutPolicy,
-		validated:                  true,
 	}
+	configuration.ApplyTunables()
+	configuration.validated = true
 	configuration = withInternalUpstreamCapacity(t, configuration)
 	compiledCapacity, capacityError := newUpstreamCapacity(configuration.UpstreamCapacity, configuration.upstreamRateLimits)
 	if capacityError != nil {

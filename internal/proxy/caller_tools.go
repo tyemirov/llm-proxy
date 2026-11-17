@@ -46,6 +46,10 @@ func decodeStrictJSON(data []byte, target any) error {
 	return nil
 }
 
+var strictCallerToolSchemaRules = structuredOutputSchemaRules{
+	provider: "OpenAI", keywords: structuredOutputKeywords("$defs", "$ref", "additionalProperties", "anyOf", "const", "definitions", "description", "enum", "exclusiveMaximum", "exclusiveMinimum", "format", "items", "maxItems", "maximum", "minItems", "minimum", "multipleOf", "pattern", "properties", "required", "title", "type"), formats: structuredOutputKeywords("date-time", "time", "date", "duration", "email", "hostname", "ipv4", "ipv6", "uuid"), requireRootObject: true, requireClosedObjects: true, requireAllProperties: true,
+}
+
 func newCallerTools(declarations []functionDeclaration, selection *toolSelection, parallel *bool, model textModelDefinition, messages chatMessages) (*callerTools, error) {
 	hasHistory := messages.hasToolHistory()
 	if len(declarations) == 0 && selection == nil && parallel == nil && !hasHistory {
@@ -67,7 +71,7 @@ func newCallerTools(declarations []functionDeclaration, selection *toolSelection
 		}
 		document := schema.document.(map[string]any)
 		if declaration.Strict != nil && *declaration.Strict {
-			if err := validateStructuredOutputSchemaSubset(document, openAIStructuredOutputRules, true); err != nil {
+			if err := validateStructuredOutputSchemaSubset(document, strictCallerToolSchemaRules, true); err != nil {
 				return nil, fmt.Errorf("%w: strict tool parameters: %v", ErrInvalidChatMessages, err)
 			}
 		}

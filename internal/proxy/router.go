@@ -115,7 +115,8 @@ func buildProxyApplication(configuration Configuration, structuredLogger *zap.Su
 	if structuredLogger == nil {
 		structuredLogger = zap.NewNop().Sugar()
 	}
-	upstreamHTTPClient := newAdmissionHTTPDoer(HTTPClient, configuration.upstreamCapacity, configuration.upstreamRateLimits, structuredLogger, systemUpstreamAdmissionClock{})
+	admissionClient := newAdmissionHTTPDoer(HTTPClient, configuration.upstreamCapacity, configuration.upstreamRateLimits, structuredLogger, configuration.UpstreamAdmissionClock)
+	upstreamHTTPClient := &qualificationBudgetHTTPDoer{next: admissionClient}
 
 	providers := newProviderRegistry(configuration)
 	capabilityCatalog := newPublicCapabilityCatalog(configuration)
@@ -143,6 +144,22 @@ func buildProxyApplication(configuration Configuration, structuredLogger *zap.Su
 		return nil, storeError
 	}
 	application := &proxyApplication{router: router, database: managedTenants.database, address: fmt.Sprintf(":%d", configuration.Port), now: time.Now, closeStore: managedTenants.close}
+	budgetDatabase, _ := managedTenants.database.(*gormManagedTenantDatabase)
+	budget, budgetError := newQualificationBudget(configuration.QualificationBudget, budgetDatabase, configuration.ModelCatalog)
+	if budgetError != nil {
+		return nil, errors.Join(budgetError, application.close())
+	}
+	if budget != nil {
+		qualified, err := newQualificationSafeHTTPDoer(admissionClient)
+		if err != nil {
+			_ = budget.close()
+			return nil, errors.Join(err, application.close())
+		}
+		upstreamHTTPClient.budget, upstreamHTTPClient.qualified = budget, qualified
+		application.closeStore = func() error {
+			return errors.Join(budget.close(), managedTenants.close())
+		}
+	}
 	defer func() {
 		if buildError != nil {
 			buildError = errors.Join(buildError, application.close())

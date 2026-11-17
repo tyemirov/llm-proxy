@@ -1,7 +1,9 @@
 # Current Gemini Candidates
 
 F047 adds Developer API offerings for `gemini-3.8-flash` and `gemini-3.5-flash-lite`.
-These offerings remain disabled.
+The Flash-Lite offering is enabled in source for the explicitly authorized
+TellTale-tenant qualification. It remains live-unqualified until that Proxy
+operation passes. Gemini 3.8 Flash remains disabled for the Developer API.
 F060 enables both models through the separate [Vertex provider](vertex-gemini.md).
 The Gemini provider default remains `gemini-3.5-flash`.
 
@@ -57,7 +59,12 @@ Refresh the price records before the published change date.
 ## Qualification
 
 The existing repository key returned HTTP 200 metadata for both exact model IDs and token limits.
-Both candidates remain disabled until all applicable qualification checks pass.
+The November 16 operation explicitly activates Flash-Lite for qualification
+through the existing TellTale tenant. Local request/schema fixtures and consumer
+preflight pass; actual-tenant live acceptance remains pending. Catalog activation
+is global route availability, not a tenant-specific grant or a qualification
+result. Existing tenant assignments and defaults remain unchanged.
+Gemini 3.8 Flash remains disabled until its qualification passes.
 
 ### September 7 Vertex qualification
 

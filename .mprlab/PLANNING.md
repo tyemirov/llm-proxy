@@ -26,36 +26,21 @@ Use `/.mprlab/*-PLAN.md` as the canonical execution-plan rule in `.gitignore`.
 
 Keep durable decisions and requirements in the issue tracker or a source-controlled document.
 
-## Test-Driven Sequence
+## Validation Plan
 
-- For a behavior change, start with the integration test that represents the required public behavior.
-- Use dependency injection for integration scenarios that are difficult to reproduce.
-- Keep the product logic under test real.
-- Run the new or changed integration test before you change production code.
-- Confirm that the integration test fails because the required behavior is absent or incorrect.
-- After this failure, use focused unit tests to guide complex internal implementation when useful.
-- Change the minimum production code necessary to make the integration test pass.
-- Refactor only while the applicable integration tests pass.
-- For a refactor with no behavior change, run the applicable integration tests before you change production code.
-- If focused coverage is absent, add a characterization test before the refactor.
+Apply the proportional test sequence in `POLICY.md`.
+Record the changed contract, relevant public entry point, chosen checks, and any justified exception.
+For a bug fix, reproduce the failure before the fix and retain the result.
+For behavior changes or consequential refactors, protect the affected contract with appropriate coverage.
+Use focused checks during implementation and the selected final CI gate after the last change.
 
-Suggested shape:
-
-```text
-- [ ] Read repo guidance and target issue.
-- [ ] Inspect the current implementation and tests.
-- [ ] Use the initial validation result for application changes.
-- [ ] Add or change the focused integration test.
-- [ ] Confirm the expected test failure.
-- [ ] Add focused unit tests for complex internal logic when useful.
-- [ ] Make the smallest production code change.
-- [ ] Confirm that the focused integration test passes.
-- [ ] Refactor while the integration tests pass.
-- [ ] Complete the applicable validation after the last change.
-- [ ] Update issue notes or docs.
-```
+A short task can use the host's plan or a concise checklist.
+Use a temporary execution plan when multiple steps, an interruption, or a handoff needs durable local state.
 
 ## Completion
+
+Use [Issue Closure](POLICY.md#issue-closure) to determine implementation issue completion.
+Keep production operations in a separate operational record.
 
 Complete a change only after you complete all requested edits and necessary documentation updates.
 

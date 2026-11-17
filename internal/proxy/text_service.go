@@ -151,10 +151,13 @@ func textExecutionOutcome(ctx context.Context, err error) (int, managedUsageOutc
 func enqueueManagedUsage(managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, ctx context.Context, requestTenant tenant, endpoint string, statusCode int, outcome managedUsageOutcomeCode, usage *tokenUsage, requestStart time.Time) {
 	enqueueStartedAt := time.Now()
 	var route *managedUsageRoute
+	var incompleteReason *string
 	if telemetry := requestTelemetryFromContext(ctx); telemetry != nil {
 		route = telemetry.usageRoute()
+		incompleteReason = telemetry.terminalIncompleteReason()
 	}
 	managedTenants.usageWriter.submit(requestTenant, managedUsageEvent{
+		incompleteReason:    incompleteReason,
 		endpoint:            endpoint,
 		route:               route,
 		statusCode:          statusCode,

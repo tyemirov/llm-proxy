@@ -43,7 +43,7 @@ func TestProviderRequestCodecsRejectMalformedEndpointsBeforeDispatch(t *testing.
 			return err
 		}},
 		{"Chat Completions", func() error {
-			_, err := newOpenAICompatibleChatClient(doer).generateText(context.Background(), "key", malformed, model, messages, nil, chatCompletionTokenLimitMaxTokens, "", nil, nil, logger)
+			_, err := newOpenAICompatibleChatClient(doer).generateText(context.Background(), "key", malformed, model, messages, nil, chatCompletionTokenLimitMaxTokens, "", nil, nil, nil, logger)
 			return err
 		}},
 		{"Gemini", func() error {
@@ -115,7 +115,7 @@ func TestProviderImageSerializationAndLimitFailureContracts(t *testing.T) {
 	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, "", nil, logger); !errors.Is(requestError, errAssetStore) {
 		t.Fatalf("Anthropic serialization error=%v", requestError)
 	}
-	if _, requestError := chatClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, chatCompletionTokenLimitMaxTokens, "", nil, nil, logger); !errors.Is(requestError, errAssetStore) {
+	if _, requestError := chatClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, chatCompletionTokenLimitMaxTokens, "", nil, nil, nil, logger); !errors.Is(requestError, errAssetStore) {
 		t.Fatalf("Chat Completions serialization error=%v", requestError)
 	}
 
@@ -168,7 +168,7 @@ func TestProviderImageSerializationAndLimitFailureContracts(t *testing.T) {
 	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, "", nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("Anthropic media limit error=%v", requestError)
 	}
-	if _, requestError := chatClient.generateText(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, chatCompletionTokenLimitMaxTokens, "", nil, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+	if _, requestError := chatClient.generateText(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, chatCompletionTokenLimitMaxTokens, "", nil, nil, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("Chat Completions media limit error=%v", requestError)
 	}
 }

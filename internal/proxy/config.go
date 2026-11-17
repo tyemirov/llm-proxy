@@ -60,6 +60,8 @@ const (
 
 // Configuration holds runtime settings.
 type Configuration struct {
+	UpstreamAdmissionClock            UpstreamAdmissionClock
+	QualificationBudget               *QualificationBudgetConfiguration
 	Management                        ManagementConfiguration
 	Payments                          *PaymentConfiguration
 	Hosted                            *HostedConfiguration
@@ -167,6 +169,9 @@ func NewConfiguration(configuration Configuration) (Configuration, error) {
 		return Configuration{}, hostedError
 	}
 	configuration.hosted = hostedSettings
+	if err := validateQualificationBudget(configuration.QualificationBudget, configuration.Management.DatabasePath); err != nil {
+		return Configuration{}, err
+	}
 	configuration.validated = true
 	return configuration, nil
 }
@@ -220,6 +225,9 @@ var errQueueFull = errors.New(errorQueueFull)
 // ApplyTunables ensures tunable configuration values have sensible defaults.
 func (configuration *Configuration) ApplyTunables() {
 	configuration.Management.ApplyTunables()
+	if configuration.UpstreamAdmissionClock == nil {
+		configuration.UpstreamAdmissionClock = systemUpstreamAdmissionClock{}
+	}
 	if configuration.RequestTimeoutSeconds == 0 {
 		configuration.RequestTimeoutSeconds = DefaultRequestTimeoutSeconds
 	}

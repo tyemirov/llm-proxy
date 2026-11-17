@@ -1,0 +1,111 @@
+{
+  "status": "proxy_connection_approval_pending",
+  "date": "2026-11-11",
+  "organization": "Marco Polo Research Lab",
+  "sdk": "@typesafe-ai/sdk@0.7.0",
+  "sdk_retries": 0,
+  "proxy_release": "v1.12.12",
+  "proxy_origin": "https://llm-proxy-api.mprlab.com",
+  "provider_origin": "https://api.typesafe.ai",
+  "provider_models": {
+    "status": 200,
+    "request_id": "req_01a1ccecb2cf7729a0d042128a6c020d",
+    "advertised_names": [
+      "jev-latest",
+      "jev-preview"
+    ]
+  },
+  "direct_text": {
+    "status": 200,
+    "model": "jev-1.14.0",
+    "request_id": "req_01a1cceee5b274029ade5fe030cc5b97",
+    "answers": {
+      "color": {
+        "type": "choice",
+        "choice": "blue",
+        "confidence": 1,
+        "probabilities": {
+          "blue": 1,
+          "red": 0
+        }
+      },
+      "severity": {
+        "type": "score",
+        "score": 0.66,
+        "confidence": 0.32,
+        "legend": {
+          "0": "low",
+          "1": "high"
+        },
+        "probabilities": {
+          "0": 0.34,
+          "1": 0.66
+        }
+      },
+      "success": {
+        "type": "noul",
+        "noul": 0.88
+      }
+    },
+    "usage": {
+      "input_tokens": 375,
+      "output_tokens": 61
+    }
+  },
+  "direct_image": {
+    "status": 200,
+    "model": "jev-1.14.0",
+    "request_id": "req_01a1ccf2f4ab7493ab0be9cec4ad4442",
+    "answers": {
+      "rectangle": {
+        "type": "box",
+        "box": {
+          "top": 0.26,
+          "bottom": 0.75,
+          "left": 0.25,
+          "right": 0.75
+        },
+        "confidence": 0.87
+      }
+    },
+    "usage": {
+      "input_tokens": 1040,
+      "output_tokens": 20
+    },
+    "asset_sha256": "d46710820707b4ef3a9a913e08552b7e4448c437a212aed125417aa787274380"
+  },
+  "proxy_authentication": {
+    "invalid_bearer_status": 401,
+    "invalid_bearer_sdk_error": "AuthenticationError",
+    "default_tenant_key_status": 200,
+    "identity_status": 200,
+    "identity_tenant_id": "managed-60634d2470f31557462f52e319f07d07",
+    "management_selected_tenant_id": "managed-60634d2470f31557462f52e319f07d07",
+    "tenant_identity_matches": true
+  },
+  "proxy_discovery": {
+    "provider": "typesafe",
+    "model": "jev-1.14.0",
+    "present": true
+  },
+  "proxy_connection": {
+    "exists": false,
+    "prepared_name": "TypeSafe Jev",
+    "selected_tenant": "Default",
+    "approval": "pending"
+  },
+  "initial_image_rejection": {
+    "dimensions": [
+      256,
+      256
+    ],
+    "status": 400,
+    "request_id": "req_01a1ccf282d57f93882608b901c1308b",
+    "error": "Invalid image dimensions.",
+    "corrected_dimensions": [
+      512,
+      512
+    ]
+  },
+  "request_content": "Synthetic content; request bodies excluded."
+}

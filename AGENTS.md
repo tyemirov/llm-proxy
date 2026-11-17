@@ -75,7 +75,7 @@ All rules for validation, error handling, invariants, and “confident programmi
 - Use the repository `Makefile` for local automation. Invoke `make test`, `make lint`, `make ci`, or other documented targets instead of running ad-hoc tool commands.
 - `make test` runs the canonical test suite for the active stack.
 - `make lint` enforces linting rules before code review.
-- `make ci` mirrors the GitHub Actions workflow and should pass locally before opening a PR.
+- `make ci` mirrors the GitHub Actions workflow. Use the final validation gate in `.mprlab/POLICY.md`, including equivalent pull-request CI.
 - For application changes, use the validation sequence in `.mprlab/POLICY.md`.
 - Report each initial or last validation error with concrete output.
 
@@ -136,7 +136,7 @@ For agent executions launched by ISSUES Managing Director, completion is control
 - Begin every implementation with the execution plan that `.mprlab/PLANNING.md` specifies.
 - Do not touch `AGENTS.md` during normal work; treat it as read-only guidance.
 - `.mprlab/ISSUES.md` tracks issue status; mark items `[x]` with a concise resolution note once tests pass.
-- Keep each execution plan untracked. If Git tracks a plan, remove it with `git filter-repo --path-glob '.mprlab/*-PLAN.md' --invert-paths`.
+- Keep execution plans untracked. Remove an accidentally tracked plan through a forward-only change under `.mprlab/AGENTS.GIT.md`.
 - Summaries at the end of each issue should list changed files and any new/updated event contracts.
 
 ### Pre-Finish Checklist
@@ -155,7 +155,7 @@ If any checklist item is incomplete, do not claim completion. Complete the missi
 - Before planning, use the task-specific reading conditions in the MPR Lab Governance section.
 - For product or integration changes, read the relevant product documents and runbooks.
   References: `README.md`, `docs/`.
-- Keep working sequentially through the backlog—never parallelize issues.
+- Keep one active issue in backlog order. Delegate bounded independent work within that issue under the shared Runtime rules.
 - Add missing issues to `.mprlab/ISSUES.md` if you discover new work while investigating; plan and resolve them in order.
 
 ### Testing Philosophy
@@ -199,6 +199,9 @@ Read each selected guide in full before its first applicable action.
 
 - Before edits: `.mprlab/PLANNING.md`.
 - For technical prose: `.mprlab/AGENTS.DOCS.md` and `.mprlab/TERMINOLOGY.md`.
+- For explicitly required ASD-STE100 compliance: `.mprlab/AGENTS.STE.md`.
+- For application onboarding or user-interface behavior: `.mprlab/AGENTS.PRODUCT.md`.
+- For deployment manifests, release, publication, deployment, or native preparation: `.mprlab/AGENTS.DEPLOYMENT.md`.
 - For issue work: the selected issue and its dependencies in `.mprlab/ISSUES.md`.
 - For tracker edits: `.mprlab/issues-md-format.md`.
 - For Git operations: `.mprlab/AGENTS.GIT.md`.

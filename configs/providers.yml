@@ -1,4 +1,4 @@
-schema_version: 6
+schema_version: 7
 model_migrations:
     - managed_schema_version: 4
       provider: qwencloud
@@ -519,6 +519,15 @@ models:
         - text
       media_inputs:
         - image
+    - id: gpt-6-luna
+      enabled: true
+      publisher: openai
+      family: gpt-6
+      version: gpt-6-luna
+      operations:
+        - text
+      media_inputs:
+        - image
     - id: gpt-transcribe
       enabled: true
       publisher: openai
@@ -621,7 +630,7 @@ models:
         - text
       media_inputs: []
     - id: qwen3.8-27b
-      enabled: false
+      enabled: true
       publisher: alibaba
       family: qwen3-8
       version: qwen3.8-27b
@@ -933,6 +942,15 @@ models:
       publisher: anthropic
       family: claude-haiku
       version: claude-haiku-4-5
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: claude-haiku-5-5
+      enabled: true
+      publisher: anthropic
+      family: claude-haiku
+      version: claude-haiku-5-5
       operations:
         - text
       media_inputs:
@@ -1281,6 +1299,57 @@ providers:
           created: 1787853604
           upstream_model: gpt-6-astra
           transport: text
+          structured_output: &openai_schema
+            keywords:
+            - $defs
+            - $ref
+            - additionalProperties
+            - anyOf
+            - const
+            - definitions
+            - description
+            - enum
+            - exclusiveMaximum
+            - exclusiveMinimum
+            - format
+            - items
+            - maxItems
+            - maximum
+            - minItems
+            - minimum
+            - multipleOf
+            - pattern
+            - properties
+            - required
+            - title
+            - type
+            formats:
+            - date-time
+            - time
+            - date
+            - duration
+            - email
+            - hostname
+            - ipv4
+            - ipv6
+            - uuid
+            root: object
+            objects: closed
+            required_properties: all
+            references: local
+            enum_values: any
+            array_minimum: any
+            array_items: optional
+            const_values: any
+            reference_all_of: allow
+            text_only: false
+            limits:
+              nesting_depth: 0
+              object_properties: 0
+              enum_values: 0
+              counted_schema_characters: 0
+              large_enum_threshold: 0
+              large_enum_characters: 0
           operations:
             - text
           request_profile: openai_responses_reasoning_tools
@@ -1433,6 +1502,7 @@ providers:
           created: 1787276456
           upstream_model: gpt-4o-mini
           transport: text
+          structured_output: *openai_schema
           operations:
             - text
           request_profile: openai_responses_temperature
@@ -1475,6 +1545,7 @@ providers:
           created: 1787276456
           upstream_model: gpt-4o
           transport: text
+          structured_output: *openai_schema
           operations:
             - text
           request_profile: openai_responses_temperature_tools
@@ -1519,6 +1590,7 @@ providers:
           created: 1787276456
           upstream_model: gpt-4.1
           transport: text
+          structured_output: *openai_schema
           operations:
             - text
           default_operations:
@@ -1565,6 +1637,7 @@ providers:
           created: 1787276456
           upstream_model: gpt-5-mini
           transport: text
+          structured_output: *openai_schema
           operations:
             - text
           request_profile: openai_responses_reasoning_tools
@@ -1615,6 +1688,7 @@ providers:
           created: 1787276456
           upstream_model: gpt-5
           transport: text
+          structured_output: *openai_schema
           operations:
             - text
           request_profile: openai_responses_reasoning_tools
@@ -1696,6 +1770,7 @@ providers:
           created: 1787276456
           upstream_model: gpt-5.5
           transport: text
+          structured_output: *openai_schema
           operations:
             - text
           request_profile: openai_responses_reasoning_tools
@@ -1748,6 +1823,7 @@ providers:
           created: 1787276456
           upstream_model: gpt-5.5-pro
           transport: text
+          structured_output: *openai_schema
           operations:
             - text
           request_profile: openai_responses_reasoning_tools
@@ -1798,6 +1874,7 @@ providers:
           created: 1787276456
           upstream_model: gpt-5.6
           transport: text
+          structured_output: *openai_schema
           operations:
             - text
           request_profile: openai_responses_reasoning_tools
@@ -1851,6 +1928,7 @@ providers:
           created: 1787276456
           upstream_model: gpt-5.6-sol
           transport: text
+          structured_output: *openai_schema
           operations:
             - text
           request_profile: openai_responses_reasoning_tools
@@ -1904,6 +1982,7 @@ providers:
           created: 1787276456
           upstream_model: gpt-5.6-terra
           transport: text
+          structured_output: *openai_schema
           operations:
             - text
           request_profile: openai_responses_reasoning_tools
@@ -1957,6 +2036,7 @@ providers:
           created: 1787276456
           upstream_model: gpt-5.6-luna
           transport: text
+          structured_output: *openai_schema
           operations:
             - text
           request_profile: openai_responses_reasoning_tools
@@ -2006,6 +2086,155 @@ providers:
               source: https://developers.openai.com/api/docs/pricing
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gpt-6-luna
+          enabled: true
+          created: 1790035200
+          upstream_model: gpt-6-luna
+          transport: text
+          structured_output: *openai_schema
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          caller_tools: true
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+                - none
+                - low
+                - medium
+                - high
+                - xhigh
+                - max
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+          output_token_limit: 128000
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 128000
+          limits:
+            - id: context_tokens
+              value: 1050000
+              unit: tokens
+          prices:
+            - operation: text
+              available: true
+              source: https://developers.openai.com/api/docs/models/gpt-6-luna
+              last_verified: "2026-11-16"
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: '0.1'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    effective_from: 2026-11-16T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '0.5'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    effective_from: 2026-11-16T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.01'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    cache_class: read
+                    effective_from: 2026-11-16T00:00:00Z
+                - component: prompt_cache_write_tokens
+                  currency: USD
+                  rate: '0.125'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    cache_class: write
+                    effective_from: 2026-11-16T00:00:00Z
+                - component: input_tokens
+                  currency: USD
+                  rate: '0.2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      minimum: 272001
+                    effective_from: 2026-11-16T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '0.75'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      minimum: 272001
+                    effective_from: 2026-11-16T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.02'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      minimum: 272001
+                    cache_class: read
+                    effective_from: 2026-11-16T00:00:00Z
+                - component: prompt_cache_write_tokens
+                  currency: USD
+                  rate: '0.25'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      minimum: 272001
+                    cache_class: write
+                    effective_from: 2026-11-16T00:00:00Z
         - model: gpt-transcribe
           created: 1785168027
           upstream_model: gpt-transcribe
@@ -2633,7 +2862,48 @@ providers:
         - model: qwen3.8-flash
           created: 1788566400
           upstream_model: qwen3.8-flash
-          structured_output: true
+          structured_output: &dashscope_schema
+            keywords:
+            - $defs
+            - $ref
+            - additionalProperties
+            - anyOf
+            - const
+            - description
+            - enum
+            - exclusiveMaximum
+            - exclusiveMinimum
+            - format
+            - items
+            - maxItems
+            - maximum
+            - minItems
+            - minimum
+            - pattern
+            - properties
+            - required
+            - title
+            - type
+            formats:
+            - email
+            - date
+            root: any
+            objects: any
+            required_properties: explicit
+            references: local
+            enum_values: any
+            array_minimum: any
+            array_items: optional
+            const_values: any
+            reference_all_of: allow
+            text_only: true
+            limits:
+              nesting_depth: 0
+              object_properties: 0
+              enum_values: 0
+              counted_schema_characters: 0
+              large_enum_threshold: 0
+              large_enum_characters: 0
           transport: text
           operations:
             - text
@@ -2759,6 +3029,7 @@ providers:
                     region: singapore
                     effective_from: 2026-09-05T00:00:00Z
         - model: qwen3.8-27b
+          enabled: false
           created: 1788566400
           upstream_model: qwen3.8-27b
           transport: text
@@ -4046,6 +4317,46 @@ providers:
           created: 1788566400
           upstream_model: gemini-3.6-flash
           transport: text_pollable
+          structured_output: &gemini_schema
+            keywords:
+            - $defs
+            - $ref
+            - additionalProperties
+            - anyOf
+            - description
+            - enum
+            - format
+            - items
+            - maxItems
+            - maximum
+            - minItems
+            - minimum
+            - prefixItems
+            - properties
+            - required
+            - title
+            - type
+            formats:
+            - date-time
+            - date
+            - time
+            root: any
+            objects: any
+            required_properties: explicit
+            references: local
+            enum_values: any
+            array_minimum: any
+            array_items: optional
+            const_values: any
+            reference_all_of: allow
+            text_only: false
+            limits:
+              nesting_depth: 0
+              object_properties: 0
+              enum_values: 0
+              counted_schema_characters: 0
+              large_enum_threshold: 0
+              large_enum_characters: 0
           operations:
             - text
           output_token_limit: 65536
@@ -4156,6 +4467,7 @@ providers:
           created: 1788566400
           upstream_model: gemini-3.7-flash
           transport: text_pollable
+          structured_output: *gemini_schema
           operations:
             - text
           output_token_limit: 65536
@@ -4266,6 +4578,7 @@ providers:
           created: 1788307200
           upstream_model: gemini-3.8-flash
           transport: text_pollable
+          structured_output: *gemini_schema
           operations:
             - text
           output_token_limit: 65536
@@ -4372,10 +4685,11 @@ providers:
               source: https://ai.google.dev/gemini-api/docs/pricing
               last_verified: "2026-09-23"
         - model: gemini-3.5-flash-lite
-          enabled: false
+          enabled: true
           created: 1784592000
           upstream_model: gemini-3.5-flash-lite
           transport: text_synchronous
+          structured_output: *gemini_schema
           operations:
             - text
           output_token_limit: 65536
@@ -4482,6 +4796,7 @@ providers:
           created: 1787276456
           upstream_model: gemini-3.5-flash
           transport: text_pollable
+          structured_output: *gemini_schema
           operations:
             - text
           default_operations:
@@ -4545,6 +4860,7 @@ providers:
           created: 1787276456
           upstream_model: gemini-3-flash-preview
           transport: text_pollable
+          structured_output: *gemini_schema
           operations:
             - text
           output_token_limit: 65536
@@ -4680,6 +4996,54 @@ providers:
           created: 1787875200
           upstream_model: claude-fable-5-1
           transport: text
+          structured_output: &anthropic_schema
+            keywords:
+            - $defs
+            - $ref
+            - additionalProperties
+            - allOf
+            - anyOf
+            - const
+            - default
+            - definitions
+            - description
+            - enum
+            - format
+            - items
+            - minItems
+            - pattern
+            - properties
+            - required
+            - title
+            - type
+            formats:
+            - date-time
+            - time
+            - date
+            - duration
+            - email
+            - hostname
+            - uri
+            - ipv4
+            - ipv6
+            - uuid
+            root: any
+            objects: closed
+            required_properties: explicit
+            references: local_nonroot
+            enum_values: primitive
+            array_minimum: zero_or_one
+            array_items: optional
+            const_values: any
+            reference_all_of: reject
+            text_only: false
+            limits:
+              nesting_depth: 0
+              object_properties: 0
+              enum_values: 0
+              counted_schema_characters: 0
+              large_enum_threshold: 0
+              large_enum_characters: 0
           operations:
             - text
           output_token_limit: 128000
@@ -4779,10 +5143,179 @@ providers:
                     effective_from: 2026-09-05T00:00:00Z
               source: https://platform.claude.com/docs/en/about-claude/pricing
               last_verified: "2026-09-05"
+        - model: claude-haiku-5-5
+          enabled: true
+          created: 1791331200
+          upstream_model: claude-haiku-5-5
+          transport: text
+          structured_output: *anthropic_schema
+          operations:
+            - text
+          output_token_limit: 128000
+          reasoning_effort:
+            adapter: anthropic_messages
+            efforts:
+                - low
+                - medium
+                - high
+                - xhigh
+                - max
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 128000
+          limits:
+            - id: context_tokens
+              value: 1000000
+              unit: tokens
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 32000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-09-05"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 600
+              unit: files
+              scope: request
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-09-05"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 10000000
+              unit: bytes
+              scope: attachment_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-09-05"
+          prices:
+            - operation: text
+              available: true
+              source: https://platform.claude.com/docs/en/models/haiku-5-5/overview
+              last_verified: "2026-11-16"
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: '0.1'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      maximum_exclusive: 100001
+                    effective_from: 2026-11-16T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '0.5'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      maximum_exclusive: 100001
+                    effective_from: 2026-11-16T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.01'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      maximum_exclusive: 100001
+                    cache_class: read
+                    effective_from: 2026-11-16T00:00:00Z
+                - component: prompt_cache_write_tokens
+                  currency: USD
+                  rate: '0.125'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      maximum_exclusive: 100001
+                    cache_class: write_5m
+                    effective_from: 2026-11-16T00:00:00Z
+                - component: prompt_cache_write_tokens
+                  currency: USD
+                  rate: '0.2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      maximum_exclusive: 100001
+                    cache_class: write_1h
+                    effective_from: 2026-11-16T00:00:00Z
+                - component: input_tokens
+                  currency: USD
+                  rate: '0.5'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      minimum: 100001
+                    effective_from: 2026-11-16T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '2.5'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      minimum: 100001
+                    effective_from: 2026-11-16T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.05'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      minimum: 100001
+                    cache_class: read
+                    effective_from: 2026-11-16T00:00:00Z
+                - component: prompt_cache_write_tokens
+                  currency: USD
+                  rate: '0.625'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      minimum: 100001
+                    cache_class: write_5m
+                    effective_from: 2026-11-16T00:00:00Z
+                - component: prompt_cache_write_tokens
+                  currency: USD
+                  rate: '1'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    service_tier: standard
+                    input_tokens:
+                      minimum: 100001
+                    cache_class: write_1h
+                    effective_from: 2026-11-16T00:00:00Z
         - model: claude-opus-5
           created: 1784851200
           upstream_model: claude-opus-5
           transport: text
+          structured_output: *anthropic_schema
           operations:
             - text
           output_token_limit: 128000
@@ -4886,6 +5419,7 @@ providers:
           created: 1787276456
           upstream_model: claude-fable-5
           transport: text
+          structured_output: *anthropic_schema
           operations:
             - text
           output_token_limit: 128000
@@ -4929,6 +5463,7 @@ providers:
           created: 1787276456
           upstream_model: claude-sonnet-5
           transport: text
+          structured_output: *anthropic_schema
           operations:
             - text
           output_token_limit: 128000
@@ -4972,6 +5507,7 @@ providers:
           created: 1787276456
           upstream_model: claude-opus-4-8
           transport: text
+          structured_output: *anthropic_schema
           operations:
             - text
           output_token_limit: 128000
@@ -5015,6 +5551,7 @@ providers:
           created: 1787276456
           upstream_model: claude-sonnet-4-6
           transport: text
+          structured_output: *anthropic_schema
           operations:
             - text
           default_operations:
@@ -5060,6 +5597,7 @@ providers:
           created: 1787276456
           upstream_model: claude-haiku-4-5-20251001
           transport: text
+          structured_output: *anthropic_schema
           operations:
             - text
           output_token_limit: 64000
@@ -5103,6 +5641,7 @@ providers:
           created: 1787276456
           upstream_model: claude-haiku-4-5
           transport: text
+          structured_output: *anthropic_schema
           operations:
             - text
           output_token_limit: 64000
@@ -5146,6 +5685,7 @@ providers:
           created: 1787276456
           upstream_model: claude-sonnet-4-5-20250929
           transport: text
+          structured_output: *anthropic_schema
           operations:
             - text
           output_token_limit: 64000
@@ -5189,6 +5729,7 @@ providers:
           created: 1787276456
           upstream_model: claude-sonnet-4-5
           transport: text
+          structured_output: *anthropic_schema
           operations:
             - text
           output_token_limit: 64000
@@ -5464,6 +6005,7 @@ providers:
           created: 1787276456
           upstream_model: grok-4.3
           transport: text_responses
+          structured_output: *openai_schema
           operations:
             - text
           default_operations:
@@ -5482,6 +6024,7 @@ providers:
           created: 1787276456
           upstream_model: grok-4.3-latest
           transport: text_responses
+          structured_output: *openai_schema
           operations:
             - text
           reasoning_effort:
@@ -5498,6 +6041,7 @@ providers:
           created: 1786492800
           upstream_model: grok-4.6
           transport: text_responses
+          structured_output: *openai_schema
           operations:
             - text
           caller_tools: true
@@ -5612,6 +6156,7 @@ providers:
           created: 1787276456
           upstream_model: grok-4.5
           transport: text_responses
+          structured_output: *openai_schema
           operations:
             - text
           media_inputs:
@@ -5652,6 +6197,7 @@ providers:
           created: 1787276456
           upstream_model: grok-4.20-0309-reasoning
           transport: text_responses
+          structured_output: *openai_schema
           operations:
             - text
           prices:
@@ -5664,6 +6210,7 @@ providers:
           created: 1787276456
           upstream_model: grok-4.20-0309-non-reasoning
           transport: text_responses
+          structured_output: *openai_schema
           operations:
             - text
           prices:
@@ -5676,6 +6223,7 @@ providers:
           created: 1787276456
           upstream_model: grok-latest
           transport: text_responses
+          structured_output: *openai_schema
           operations:
             - text
           prices:
@@ -5688,6 +6236,7 @@ providers:
           created: 1787276456
           upstream_model: grok-build-0.1
           transport: text_responses
+          structured_output: *openai_schema
           operations:
             - text
           prices:
@@ -5700,6 +6249,7 @@ providers:
           created: 1787276456
           upstream_model: grok-code-fast
           transport: text_responses
+          structured_output: *openai_schema
           operations:
             - text
           prices:
@@ -5712,6 +6262,7 @@ providers:
           created: 1787276456
           upstream_model: grok-code-fast-1
           transport: text_responses
+          structured_output: *openai_schema
           operations:
             - text
           prices:
@@ -5724,6 +6275,7 @@ providers:
           created: 1787276456
           upstream_model: grok-code-fast-1-0825
           transport: text_responses
+          structured_output: *openai_schema
           operations:
             - text
           prices:
@@ -6042,6 +6594,7 @@ providers:
           created: 1788307200
           upstream_model: gemini-3.8-flash
           transport: generate_content
+          structured_output: *gemini_schema
           operations:
             - text
           output_token_limit: 65536
@@ -6114,6 +6667,7 @@ providers:
           created: 1784592000
           upstream_model: gemini-3.5-flash-lite
           transport: generate_content
+          structured_output: *gemini_schema
           operations:
             - text
           output_token_limit: 65536
@@ -6187,6 +6741,7 @@ providers:
           created: 1787276456
           upstream_model: gemini-3.5-flash
           transport: generate_content
+          structured_output: *gemini_schema
           operations:
             - text
           default_operations:
@@ -6251,6 +6806,7 @@ providers:
           created: 1771459200
           upstream_model: gemini-3.1-pro-preview
           transport: generate_content
+          structured_output: *gemini_schema
           operations:
             - text
           output_token_limit: 65536
@@ -7259,3 +7815,140 @@ providers:
                   currency: USD
                   rate: '0'
                   unit: USD/1M_tokens
+    - id: cerebras
+      enabled: true
+      verification:
+        transport: models
+      connection_ownership: tenant
+      label: Cerebras
+      api_service_label: Cerebras Inference
+      key_acquisition_url: https://cloud.cerebras.ai/
+      fields:
+        - id: api_key
+          label: Cerebras API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation:
+            minimum_length: 1
+          environment: CEREBRAS_API_KEY
+      transports:
+        - id: text
+          endpoint:
+            protocol: http
+            method: POST
+            default_base_url: https://api.cerebras.ai/v1
+            path: /chat/completions
+          components:
+            request_codec:
+              id: openai_chat_completions
+              variation: max_completion_tokens
+            response_codec:
+              id: openai_chat_completions
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
+        - id: models
+          endpoint:
+            protocol: http
+            method: GET
+            default_base_url: https://api.cerebras.ai/v1
+            path: /models
+          components:
+            request_codec:
+              id: json_resource
+            response_codec:
+              id: json_resource
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: read_only
+      offerings:
+        - model: qwen3.8-27b
+          created: 1794787200
+          upstream_model: qwen-3.8-27b
+          transport: text
+          default_operations: [text]
+          structured_output: &cerebras_schema
+            keywords:
+            - $defs
+            - $ref
+            - $schema
+            - additionalProperties
+            - anyOf
+            - const
+            - default
+            - description
+            - enum
+            - exclusiveMaximum
+            - exclusiveMinimum
+            - items
+            - maximum
+            - minimum
+            - multipleOf
+            - properties
+            - required
+            - title
+            - type
+            formats: []
+            root: object_with_properties
+            objects: closed
+            required_properties: explicit
+            references: local_nonrecursive
+            enum_values: primitive
+            array_minimum: any
+            array_items: required
+            const_values: primitive
+            reference_all_of: allow
+            text_only: true
+            limits:
+              nesting_depth: 10
+              object_properties: 500
+              enum_values: 500
+              counted_schema_characters: 5000
+              large_enum_threshold: 250
+              large_enum_characters: 7500
+          operations:
+            - text
+          output_token_limit: 32768
+          reasoning_effort:
+            adapter: openai_chat_completions
+            efforts: [none, low, medium, high]
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 32768
+          limits:
+            - id: context_tokens
+              value: 65536
+              unit: tokens
+          prices:
+            - operation: text
+              available: true
+              source: https://inference-docs.cerebras.ai/models/qwen-3.8-27b
+              last_verified: "2026-11-16"
+              rates:
+                - component: input_tokens
+                  rate: '0.99'
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+                    effective_from: 2026-11-16T00:00:00Z
+                - component: output_tokens
+                  rate: '1.49'
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+                    effective_from: 2026-11-16T00:00:00Z

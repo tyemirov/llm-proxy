@@ -37,7 +37,8 @@ var (
 	errUpstreamNotDispatched = errors.New("upstream_request_not_dispatched")
 )
 
-type upstreamAdmissionClock interface {
+// UpstreamAdmissionClock supplies time and cancellation-aware waits for shared upstream admission.
+type UpstreamAdmissionClock interface {
 	Now() time.Time
 	Wait(context.Context, <-chan struct{}, time.Duration) error
 }
@@ -66,7 +67,7 @@ func (systemUpstreamAdmissionClock) Wait(ctx context.Context, changed <-chan str
 type admissionHTTPDoer struct {
 	next      HTTPDoer
 	scheduler *upstreamAdmissionScheduler
-	clock     upstreamAdmissionClock
+	clock     UpstreamAdmissionClock
 	logger    *zap.SugaredLogger
 }
 
@@ -79,7 +80,7 @@ func (doer scopedUpstreamHTTPDoer) Do(request *http.Request) (*http.Response, er
 	return doer.next.Do(request.Clone(requestContextWithUpstreamScope(request.Context(), doer.scope)))
 }
 
-func newAdmissionHTTPDoer(next HTTPDoer, capacity upstreamCapacity, rates upstreamRateLimits, logger *zap.SugaredLogger, clock upstreamAdmissionClock) HTTPDoer {
+func newAdmissionHTTPDoer(next HTTPDoer, capacity upstreamCapacity, rates upstreamRateLimits, logger *zap.SugaredLogger, clock UpstreamAdmissionClock) HTTPDoer {
 	return &admissionHTTPDoer{next: next, scheduler: newUpstreamAdmissionScheduler(capacity, rates), clock: clock, logger: logger}
 }
 

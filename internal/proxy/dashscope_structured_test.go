@@ -215,23 +215,18 @@ func TestDashScopeResponsesStructuredOutputClientProtocols(t *testing.T) {
 }
 
 func TestDashScopeResponsesStructuredOutputCatalogAdmission(t *testing.T) {
-	for _, model := range []string{proxy.ModelNameGPT55, dashScopeFlashStructuredModel} {
+	for _, model := range []string{dashScopeFlashStructuredModel} {
 		schema := testfixtures.ProviderCatalog(t).Schema()
 		for providerIndex := range schema.Providers {
 			for offeringIndex := range schema.Providers[providerIndex].Offerings {
 				offering := &schema.Providers[providerIndex].Offerings[offeringIndex]
 				if offering.Model == model {
-					offering.StructuredOutput = model == proxy.ModelNameGPT55
+					offering.StructuredOutput = nil
 				}
 			}
 		}
 		catalog, err := proxy.NewProviderCatalog(schema)
-		if model == proxy.ModelNameGPT55 {
-			if err == nil || !strings.Contains(err.Error(), ".structured_output") {
-				t.Fatalf("unqualified offering should reject structured declaration: %v", err)
-			}
-			continue
-		}
+
 		if err != nil {
 			t.Fatal(err)
 		}

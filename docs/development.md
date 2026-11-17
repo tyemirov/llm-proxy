@@ -53,7 +53,8 @@ A failed, cancelled, skipped, or missing job result prevents success.
 | `make test-live-provider-candidate-media` | Qualify image input for one disabled model through a copied catalog. Set `LIVE_CANDIDATE_MODEL=provider/model` and `LIVE_ENV_FILE`. |
 | `make test-live-local-providers` | Build an isolated local Compose project, verify selected provider keys, and send paid `POST /v2` requests through its Dockerized API. |
 | `make test-live-local-gemini` | Run every registered Gemini model and reasoning level through the isolated local Compose API. |
-| `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_DEFAULT_TENANT_KEY`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus large completion cases for OpenAI, Anthropic, Meta, and Gemini. |
+| `make live-test` | Run eleven paid production cases through the Default tenant. Includes five echo cases, four large completion cases, and two Jev TypeScript SDK cases. |
+| `make test-production-live-contract` | Examine the production live command and Jev SDK consumer against controlled local HTTP responses. |
 | `make release` | Delegate the validated application checkout to the installed Gateway. The transaction validates its exact prepared or reused decision before CI. |
 | `make publish` | Publish the exact sealed release through the installed Gateway. |
 | `make deploy` | Converge the declared application resources through the installed Gateway. |
@@ -243,11 +244,11 @@ loads a dotenv file nor reads, accepts, or sends a local upstream-provider key.
 The saved provider credentials and per-provider default models remain entirely
 on the production tenant.
 
-Before any paid provider call, the command sends an intentionally incomplete
-`POST /v2` request with `LLM_PROXY_DEFAULT_TENANT_KEY`. A valid client key must reach normal
-request validation and return `400` with a proxy request ID. A missing,
-rejected, or unreachable client key stops the command before the provider
-matrix starts.
+Before any paid provider call, the command checks Node.js, the installed
+TypeScript SDK, the synthetic image fixture, and the request budget. It then
+verifies the Default tenant through authenticated `GET /v2/identity`.
+A missing prerequisite, rejected client key, unreachable service, or tenant
+mismatch stops the command before the provider matrix starts.
 
 The command then sends canonical `POST /v2` requests with an explicit provider.
 Its echo cases omit `model`, so they exercise each saved Default-tenant provider
@@ -255,17 +256,31 @@ model. It runs echo markers for OpenAI, Anthropic, Meta, Gemini, and Moonshot.
 It sends the same deterministic request larger than 16 KiB through OpenAI,
 Anthropic, Meta, and Gemini. The long Gemini case explicitly selects
 `gemini-3.5-flash`. This selection proves the default background Interactions
-path. The long request requires normalized output for every portfolio record before its
+path.
+
+The long request requires normalized output for every portfolio record before its
 final marker and uses a 900-second request budget. OpenAI and Gemini 3.5 keep
 the blocking caller request open while their resource adapters own background
 polling. Anthropic and Meta use their canonical
 synchronous completion paths, including shared output-continuation work when
 needed. The test client never polls a provider or llm-proxy itself.
+
 Each case verifies HTTP `200`, the echoed request budget, a validated proxy
 request ID, and a completion marker. Its result line prints that request ID for
 log correlation without printing the response body or tenant secret. A
-transport failure with no response prints no request ID. The command runs all
-nine cases before returning nonzero for any failed case.
+transport failure with no response prints no request ID.
+
+Two Jev cases call `POST /v1/systemone` through the official TypeScript SDK
+`0.7.0`, with automatic retries disabled and model `jev-1.14.0`.
+The text case checks typed Choice, Score, and Noul answers.
+The image case sends a synthetic 512 × 512 PNG and checks the Box coordinates
+within a tolerance of 0.1 on the normalized axes.
+Each case checks model identity, usage, the proxy request ID, and the TypeSafe
+request ID. Unknown token counts remain `null`.
+Diagnostics exclude credentials and response bodies.
+
+The Default tenant must have a saved TypeSafe connection.
+The command attempts all eleven cases and returns nonzero if any case fails.
 
 Set the Default-tenant client secret and its exact tenant identifier before
 you invoke the target:

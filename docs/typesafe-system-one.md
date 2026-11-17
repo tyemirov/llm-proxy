@@ -113,7 +113,13 @@ The SDK consumer version is `0.7.0`.
 
 ## Operational acceptance
 
-The [operational acceptance record](typesafe-live-acceptance.md) tracks pending live TypeSafe qualification.
+Run `make live-test` for the repeatable paid production suite.
+It includes Jev text and image cases through the official TypeScript SDK.
+The command verifies the Default tenant identity before provider requests.
+It uses the tenant client key and the saved TypeSafe connection.
+See [production live test guidance](development.md#production-default-tenant-live-test) for inputs and checks.
+
+The [operational acceptance record](typesafe-live-acceptance.md) records successful production Jev qualification on November 12, 2026.
 It contains the required inputs, live checks, and evidence fields.
 F074 is closed on completed implementation and deterministic CI evidence.
 

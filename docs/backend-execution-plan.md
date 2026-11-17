@@ -314,7 +314,9 @@ Inventory membership does not establish permission to generate through every ret
 The first proxy smoke stopped before dispatch because the workspace origin lacked an explicit admission allocation.
 The reviewed configuration adds four active slots and 24 queued slots for that exact origin.
 
-Global admitted capacity is 708. The global active limit remains 32.
+That smoke used a global admitted capacity of 708. The current Cerebras
+qualification adds four active and 24 queued origin slots, bringing global
+admitted capacity to 736. The global active limit remains 32.
 
 The repeated proxy verification and Qwen 3.8 Flash text smoke both returned HTTP 200.
 The live command used `make test-live-provider-candidate` with `LIVE_CANDIDATE_MODEL=dashscope/qwen3.8-flash`.

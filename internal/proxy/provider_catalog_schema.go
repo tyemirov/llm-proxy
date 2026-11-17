@@ -20,7 +20,7 @@ import (
 
 const (
 	// ProviderCatalogSchemaVersion is the only accepted providers.yml schema.
-	ProviderCatalogSchemaVersion = 6
+	ProviderCatalogSchemaVersion = 7
 
 	CatalogProviderFieldKindCredential = "credential"
 	CatalogProviderFieldKindSetting    = "setting"
@@ -235,10 +235,10 @@ type ProviderCatalogHeader struct {
 
 // ProviderCatalogOffering defines one exact model route inside its provider.
 type ProviderCatalogOffering struct {
-	Enabled          ModelActivation `yaml:"enabled,omitempty"`
-	Created          int64           `yaml:"created"`
-	CallerTools      bool            `yaml:"caller_tools,omitempty"`
-	StructuredOutput bool            `yaml:"structured_output,omitempty"`
+	Enabled          ModelActivation         `yaml:"enabled,omitempty"`
+	Created          int64                   `yaml:"created"`
+	CallerTools      bool                    `yaml:"caller_tools,omitempty"`
+	StructuredOutput *StructuredOutputPolicy `yaml:"structured_output,omitempty"`
 
 	Model             string                     `yaml:"model"`
 	UpstreamModel     string                     `yaml:"upstream_model"`
@@ -921,7 +921,7 @@ func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string)
 				MediaExecutionLifecycle: composition.parameters.MediaExecutionLifecycle,
 				RequestProfile:          rawOffering.RequestProfile,
 				WebSearch:               rawOffering.WebSearch, CallerTools: rawOffering.CallerTools, Created: rawOffering.Created,
-				StructuredOutput: rawOffering.StructuredOutput,
+				StructuredOutput: cloneStructuredOutputPolicy(rawOffering.StructuredOutput),
 				OutputTokenLimit: rawOffering.OutputTokenLimit,
 				ReasoningEffort:  rawOffering.ReasoningEffort,
 				MediaInputs:      append([]string(nil), rawOffering.MediaInputs...),
@@ -983,12 +983,13 @@ func cloneProviderCatalogSchema(schema ProviderCatalogSchema) ProviderCatalogSch
 		copy.Offerings = slices.Clone(provider.Offerings)
 		for offeringIndex, offering := range provider.Offerings {
 			projection := cloneProviderOffering(ProviderOffering{
-				Operations: offering.Operations, DefaultOperations: offering.DefaultOperations,
+				StructuredOutput: offering.StructuredOutput, Operations: offering.Operations, DefaultOperations: offering.DefaultOperations,
 				ReasoningEffort: offering.ReasoningEffort, MediaInputs: offering.MediaInputs,
 				ImageMIMETypes: offering.ImageMIMETypes, MediaLimits: offering.MediaLimits,
 				Controls: offering.Controls, Limits: offering.Limits,
 			})
 			route := &copy.Offerings[offeringIndex]
+			route.StructuredOutput = projection.StructuredOutput
 			route.Operations = projection.Operations
 			route.DefaultOperations = projection.DefaultOperations
 			route.ReasoningEffort = projection.ReasoningEffort

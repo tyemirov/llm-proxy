@@ -16,7 +16,12 @@ import (
 	"go.uber.org/zap"
 )
 
-var currentQwenModels = []string{"qwen3.8-max", "qwen3.8-max-0902", "qwen3.8-flash", "qwen3.8-2.4t-a95b", "qwen3.8-27b"}
+const (
+	currentQwenSharedModel      = "qwen3.8-27b"
+	currentQwenCerebrasProvider = "cerebras"
+)
+
+var currentQwenModels = []string{"qwen3.8-max", "qwen3.8-max-0902", "qwen3.8-flash", "qwen3.8-2.4t-a95b", currentQwenSharedModel}
 
 func currentQwenCatalog(t *testing.T) *proxy.ProviderCatalog {
 	t.Helper()
@@ -24,6 +29,18 @@ func currentQwenCatalog(t *testing.T) *proxy.ProviderCatalog {
 	for index := range schema.Models {
 		if slices.Contains(currentQwenModels, schema.Models[index].ID) {
 			schema.Models[index].Enabled = proxy.ModelEnabled
+		}
+	}
+	for providerIndex := range schema.Providers {
+		provider := &schema.Providers[providerIndex]
+		if provider.ID != proxy.ProviderNameDashScope {
+			continue
+		}
+		for offeringIndex := range provider.Offerings {
+			offering := &provider.Offerings[offeringIndex]
+			if slices.Contains(currentQwenModels, offering.Model) {
+				offering.Enabled = proxy.ModelEnabled
+			}
 		}
 	}
 	catalog, err := proxy.NewProviderCatalog(schema)
@@ -65,7 +82,7 @@ func TestQwenCurrentHTTP(t *testing.T) {
 					if len(input) != 1 || input[0].(map[string]any)["content"] != "test" {
 						t.Errorf("input=%v", input)
 					}
-					io.WriteString(w, `{"status":"incomplete","output":[{"type":"reasoning","summary":[{"type":"summary_text","text":"private"}]},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"visible "}]}],"usage":{"input_tokens":2,"output_tokens":7,"total_tokens":9,"output_tokens_details":{"reasoning_tokens":5}}}`)
+					io.WriteString(w, `{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"reasoning","summary":[{"type":"summary_text","text":"private"}]},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"visible "}]}],"usage":{"input_tokens":2,"output_tokens":7,"total_tokens":9,"output_tokens_details":{"reasoning_tokens":5}}}`)
 					return
 				}
 				if len(input) != 3 || input[1].(map[string]any)["content"] != "visible " {
@@ -189,7 +206,9 @@ func TestQwenCurrentCatalog(t *testing.T) {
 		t.Fatal(err)
 	}
 	for index, model := range currentQwenModels {
-		offeringIndex := slices.IndexFunc(public.Offerings, func(offering proxy.PublicProviderOffering) bool { return offering.Model == model })
+		offeringIndex := slices.IndexFunc(public.Offerings, func(offering proxy.PublicProviderOffering) bool {
+			return offering.Provider == proxy.ProviderNameDashScope && offering.Model == model
+		})
 		if offeringIndex < 0 {
 			t.Fatalf("missing %s", model)
 		}
@@ -215,7 +234,9 @@ func TestQwenCurrentCatalog(t *testing.T) {
 				t.Errorf("URI=%+v", limit)
 			}
 		}
-		priceIndex := slices.IndexFunc(public.Prices, func(price proxy.CatalogPriceDescriptor) bool { return price.Model == model })
+		priceIndex := slices.IndexFunc(public.Prices, func(price proxy.CatalogPriceDescriptor) bool {
+			return price.Provider == proxy.ProviderNameDashScope && price.Model == model && price.Operation == proxy.ModelOperationText
+		})
 		if priceIndex < 0 {
 			t.Fatalf("missing price %s", model)
 		}
@@ -244,14 +265,29 @@ func TestQwenCurrentCatalog(t *testing.T) {
 	}
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest("GET", proxy.PublicCapabilitiesPath, nil))
+	var discovered proxy.PublicCapabilityCatalog
+	if err := json.Unmarshal(response.Body.Bytes(), &discovered); err != nil {
+		t.Fatal(err)
+	}
+	var identifiers []string
+	for _, offering := range discovered.Offerings {
+		identifiers = append(identifiers, offering.Provider+"/"+offering.Model)
+	}
+	assertCurrentQwenProductionDiscovery(t, identifiers, proxy.PublicCapabilitiesPath)
+}
+
+func assertCurrentQwenProductionDiscovery(t *testing.T, identifiers []string, path string) {
+	t.Helper()
 	for _, model := range currentQwenModels {
-		if model == "qwen3.8-flash" {
-			if !strings.Contains(response.Body.String(), model) {
-				t.Error("qualified Flash offering is absent from public discovery")
-			}
-		} else if strings.Contains(response.Body.String(), model) {
-			t.Errorf("unqualified model is public: %s", model)
+		identifier := proxy.ProviderNameDashScope + "/" + model
+		expected := model == "qwen3.8-flash"
+		if slices.Contains(identifiers, identifier) != expected {
+			t.Errorf("offering=%s discovery=%s want present=%t", identifier, path, expected)
 		}
+	}
+	identifier := currentQwenCerebrasProvider + "/" + currentQwenSharedModel
+	if !slices.Contains(identifiers, identifier) {
+		t.Errorf("qualified shared-model offering %s is absent from %s", identifier, path)
 	}
 }
 
@@ -270,7 +306,10 @@ func TestQwenCurrentFlashActivation(t *testing.T) {
 		io.WriteString(w, `{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"OK"}]}],"usage":{"input_tokens":2,"output_tokens":3,"total_tokens":5}}`)
 	}))
 	defer upstream.Close()
-	router, err := buildRouterWithCatalogs(t, proxy.Configuration{Endpoints: providerEndpointOverrides(map[string]string{"dashscope": upstream.URL}, nil)}, zap.NewNop().Sugar())
+	tenant := proxy.StandardManagedTenantTestConfiguration(TestSecret)
+	tenant.ProviderKeys[currentQwenCerebrasProvider] = "shared-model-discovery-fixture"
+	tenant.ProviderTextModels = map[string]string{currentQwenCerebrasProvider: currentQwenSharedModel}
+	router, err := buildRouterWithManagedTenant(t, proxy.Configuration{Endpoints: providerEndpointOverrides(map[string]string{proxy.ProviderNameDashScope: upstream.URL, currentQwenCerebrasProvider: upstream.URL}, nil)}, zap.NewNop().Sugar(), tenant)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,14 +327,33 @@ func TestQwenCurrentFlashActivation(t *testing.T) {
 		}
 		body, readErr := io.ReadAll(response.Body)
 		response.Body.Close()
-		if readErr != nil || response.StatusCode != http.StatusOK || !strings.Contains(string(body), "qwen3.8-flash") {
+		if readErr != nil || response.StatusCode != http.StatusOK {
 			t.Fatalf("Flash discovery path=%s status=%d read_error=%v", path, response.StatusCode, readErr)
 		}
-		for _, model := range currentQwenModels {
-			if model != "qwen3.8-flash" && strings.Contains(string(body), model) {
-				t.Errorf("unqualified model %s in %s", model, path)
+		var identifiers []string
+		switch path {
+		case proxy.PublicCapabilitiesPath:
+			var catalog proxy.PublicCapabilityCatalog
+			if err := json.Unmarshal(body, &catalog); err != nil {
+				t.Fatal(err)
+			}
+			for _, offering := range catalog.Offerings {
+				identifiers = append(identifiers, offering.Provider+"/"+offering.Model)
+			}
+		case "/v1/models":
+			var catalog struct {
+				Data []struct {
+					ID string `json:"id"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(body, &catalog); err != nil {
+				t.Fatal(err)
+			}
+			for _, model := range catalog.Data {
+				identifiers = append(identifiers, model.ID)
 			}
 		}
+		assertCurrentQwenProductionDiscovery(t, identifiers, path)
 	}
 	for _, selection := range []string{"&model=qwen3.8-flash", ""} {
 		response, err := server.Client().Get(server.URL + "/?key=" + TestSecret + "&provider=dashscope&prompt=test&max_tokens=32" + selection)
@@ -307,6 +365,14 @@ func TestQwenCurrentFlashActivation(t *testing.T) {
 		if readErr != nil || response.StatusCode != http.StatusOK || string(body) != "OK" || response.Header.Get("X-LLM-Proxy-Total-Tokens") != "5" {
 			t.Fatalf("Flash selection=%s status=%d read_error=%v", selection, response.StatusCode, readErr)
 		}
+	}
+	response, err := server.Client().Get(server.URL + "/?key=" + TestSecret + "&provider=dashscope&model=" + currentQwenSharedModel + "&prompt=test&max_tokens=32")
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("unqualified DashScope offering status=%d", response.StatusCode)
 	}
 	if !reflect.DeepEqual(dispatched, []string{"qwen3.8-flash", "qwen-plus"}) {
 		t.Fatalf("explicit Flash selection changed provider default: %v", dispatched)

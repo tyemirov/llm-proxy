@@ -86,7 +86,7 @@ for (const authRouting of ["frontend", "direct"]) {
             });
           }
           const result = await page.evaluate(async tenantName => {
-            const client = await import("/assets/llm-proxy/js/core/backendClient.js?v=20260903f037");
+            const client = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261117b333");
             const before = await client.fetchAccount();
             const created = await client.createTenant(tenantName);
             const after = await client.fetchAccount();

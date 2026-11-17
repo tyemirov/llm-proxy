@@ -174,8 +174,8 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 		`href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css"`,
 		`src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"`,
 		`data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"`,
-		`src="/assets/llm-proxy/js/startupGuard.js?v=20260903f037"`,
-		`src="/assets/llm-proxy/js/app.js?v=20260903f037"`,
+		`src="/assets/llm-proxy/js/startupGuard.js?v=20261117b333"`,
+		`src="/assets/llm-proxy/js/app.js?v=20261117b333"`,
 		`data-config-url="/config-ui.yaml"`,
 		`<mpr-user`,
 		`<mpr-footer`,
@@ -1490,7 +1490,7 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 		}
 	}
 	expectedModels := map[string][]string{
-		proxy.ProviderNameOpenAI:    {"gpt-6-astra", "gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
+		proxy.ProviderNameOpenAI:    {"gpt-6-astra", "gpt-6-luna", "gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
 		proxy.ProviderNameDashScope: {proxy.ModelNameDashScopeQwenPlus, proxy.ModelNameDashScopeQwen36Flash, proxy.ModelNameDashScopeQwen37Max, proxy.ModelNameDashScopeQwen37Plus, "qwen3.8-flash"},
 		proxy.ProviderNameMoonshot:  {proxy.ModelNameMoonshotKimiK26, proxy.ModelNameMoonshotKimiK27Code, proxy.ModelNameMoonshotKimiK27CodeHighSpeed, proxy.ModelNameMoonshotKimiK3},
 		proxy.ProviderNameMiniMax: {
@@ -1503,8 +1503,9 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 			proxy.ModelNameMiniMaxM27HighSpeed,
 		},
 		proxy.ProviderNameZAI:       {"glm-5.2"},
-		proxy.ProviderNameGemini:    {"gemini-3-flash-preview", proxy.ModelNameGemini35Flash, proxy.ModelNameGemini36Flash, proxy.ModelNameGemini37Flash},
-		proxy.ProviderNameAnthropic: {"claude-fable-5", "claude-sonnet-5"},
+		proxy.ProviderNameGemini:    {"gemini-3-flash-preview", proxy.ModelNameGemini35Flash, "gemini-3.5-flash-lite", proxy.ModelNameGemini36Flash, proxy.ModelNameGemini37Flash},
+		proxy.ProviderNameAnthropic: {"claude-fable-5", "claude-sonnet-5", "claude-haiku-5-5"},
+		"cerebras":                  {"qwen3.8-27b"},
 		proxy.ProviderNameXAI:       {"grok-4.5", "grok-4.20-0309-reasoning", "grok-4.20-0309-non-reasoning"},
 	}
 	for providerIdentifier, expectedProviderModels := range expectedModels {

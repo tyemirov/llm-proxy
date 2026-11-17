@@ -52,6 +52,7 @@ type requestTelemetry struct {
 	geminiDeleteCount        int
 	continuationAttemptCount int
 	completedOutputBytes     int
+	incompleteReason         *string
 }
 
 type requestTelemetrySnapshot struct {
@@ -332,6 +333,7 @@ func recordContinuationProgress(requestContext context.Context, structuredLogger
 	telemetry.continuationAttemptCount++
 	attemptCount := telemetry.continuationAttemptCount
 	telemetry.completedOutputBytes = accumulatedOutputBytes
+	telemetry.incompleteReason = generation.incompleteReason
 	requestID := telemetry.requestID
 	provider := telemetry.route.providerIdentifier.string()
 	model := telemetry.route.modelIdentifier.string()
@@ -347,8 +349,7 @@ func recordContinuationProgress(requestContext context.Context, structuredLogger
 	case generationError != nil:
 		completionSignal = telemetryCompletionFailure
 	}
-	structuredLogger.Infow(
-		logEventProviderProgress,
+	fields := []any{
 		logFieldRequestID, requestID,
 		logFieldProvider, provider,
 		logFieldModel, model,
@@ -358,7 +359,14 @@ func recordContinuationProgress(requestContext context.Context, structuredLogger
 		logFieldElapsedMilliseconds, elapsedMilliseconds,
 		logFieldCurrentOutputBytes, len([]byte(generation.text)),
 		logFieldAccumulatedOutputBytes, accumulatedOutputBytes,
-	)
+	}
+	if generation.incompleteReason != nil {
+		fields = append(fields, logFieldIncompleteReason, *generation.incompleteReason)
+	}
+	if generation.usage != nil && generation.usage.ReasoningTokens != nil {
+		fields = append(fields, logFieldReasoningTokens, *generation.usage.ReasoningTokens)
+	}
+	structuredLogger.Infow(logEventProviderProgress, fields...)
 }
 
 func (telemetry *requestTelemetry) snapshot() (requestTelemetrySnapshot, bool) {
@@ -410,4 +418,15 @@ func emitRequestTelemetrySummary(requestContext context.Context, structuredLogge
 		logFieldResponseFormattingMilliseconds, snapshot.responseFormatting.Milliseconds(),
 		logFieldManagedUsageEnqueueMilliseconds, snapshot.managedUsageEnqueue.Milliseconds(),
 	)
+}
+
+// terminalIncompleteReason returns the last provider attempt's validated reason.
+func (telemetry *requestTelemetry) terminalIncompleteReason() *string {
+	telemetry.mutex.Lock()
+	defer telemetry.mutex.Unlock()
+	if telemetry.incompleteReason == nil {
+		return nil
+	}
+	reason := *telemetry.incompleteReason
+	return &reason
 }

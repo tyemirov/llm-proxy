@@ -2,7 +2,10 @@
 
 F050 adds five models to the Singapore DashScope provider.
 Qwen 3.8 Flash passed live qualification on November 13, 2026 and is enabled in the source catalog.
-The other four offerings remain disabled pending their model grants and qualification.
+The other four DashScope offerings remain disabled pending their model grants and qualification.
+The shared `qwen3.8-27b` model is enabled for [Cerebras](cerebras.md).
+That activation does not enable its DashScope offering. Discovery and acceptance
+checks use the exact provider/model pair.
 Release, deployment, and tenant acceptance are tracked in the [production runbook](qwen-flash-production.md).
 The current `qwen-plus` default remains unchanged.
 The catalog creation date for these records is September 5, 2026.

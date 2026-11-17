@@ -212,12 +212,17 @@ func TestModelActivationValidatesRetainedMetadataAndMigrationTargets(t *testing.
 }
 
 func TestModelActivationExcludesDisabledRoutesFromHTTP(t *testing.T) {
-	document := strings.Replace(modelActivationDocument(t), "    - id: "+activationDisabledTextModel+"\n      enabled: true", "    - id: "+activationDisabledTextModel+"\n      enabled: false", 1)
+	baselineDocument := modelActivationDocument(t)
+	baseline, baselineError := proxy.ParseProviderCatalog([]byte(baselineDocument))
+	if baselineError != nil {
+		t.Fatal(baselineError)
+	}
+	document := strings.Replace(baselineDocument, "    - id: "+activationDisabledTextModel+"\n      enabled: true", "    - id: "+activationDisabledTextModel+"\n      enabled: false", 1)
 	catalog, err := proxy.ParseProviderCatalog([]byte(document))
 	if err != nil {
 		t.Fatalf("disabled nondefault catalog must load: %v", err)
 	}
-	if len(catalog.Schema().Models) != len(catalog.ModelCatalog().Models)+1 {
+	if len(catalog.Schema().Models) != len(baseline.Schema().Models) || len(catalog.ModelCatalog().Models) != len(baseline.ModelCatalog().Models)-1 {
 		t.Fatal("private catalog must retain the disabled model while runtime discovery excludes it")
 	}
 	for _, offering := range catalog.ModelCatalog().Offerings {

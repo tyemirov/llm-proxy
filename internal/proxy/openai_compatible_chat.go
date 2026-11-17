@@ -40,22 +40,50 @@ const (
 	reasoningEffortNone            = "none"
 )
 
+type chatCompletionResponseFormat struct {
+	Type       string                   `json:"type"`
+	JSONSchema chatCompletionJSONSchema `json:"json_schema"`
+}
+
+type chatCompletionJSONSchema struct {
+	Name   string `json:"name"`
+	Strict bool   `json:"strict"`
+	Schema any    `json:"schema"`
+}
+
 type chatCompletionRequest struct {
-	ReasoningSplit      bool                    `json:"reasoning_split,omitempty"`
-	Thinking            *chatCompletionThinking `json:"thinking,omitempty"`
-	Tools               []map[string]any        `json:"tools,omitempty"`
-	ToolChoice          any                     `json:"tool_choice,omitempty"`
-	ParallelToolCalls   *bool                   `json:"parallel_tool_calls,omitempty"`
-	Model               string                  `json:"model"`
-	Messages            []chatCompletionMessage `json:"messages"`
-	MaxTokens           *int                    `json:"max_tokens,omitempty"`
-	MaxCompletionTokens *int                    `json:"max_completion_tokens,omitempty"`
-	ReasoningEffort     string                  `json:"reasoning_effort,omitempty"`
+	ResponseFormat      *chatCompletionResponseFormat `json:"response_format,omitempty"`
+	ReasoningSplit      bool                          `json:"reasoning_split,omitempty"`
+	Thinking            *chatCompletionThinking       `json:"thinking,omitempty"`
+	Tools               []map[string]any              `json:"tools,omitempty"`
+	ToolChoice          any                           `json:"tool_choice,omitempty"`
+	ParallelToolCalls   *bool                         `json:"parallel_tool_calls,omitempty"`
+	Model               string                        `json:"model"`
+	Messages            []chatCompletionMessage       `json:"messages"`
+	MaxTokens           *int                          `json:"max_tokens,omitempty"`
+	MaxCompletionTokens *int                          `json:"max_completion_tokens,omitempty"`
+	ReasoningEffort     string                        `json:"reasoning_effort,omitempty"`
 }
 
 type chatCompletionResponse struct {
-	Choices []chatCompletionChoice `json:"choices"`
-	Usage   *upstreamTokenUsage    `json:"usage"`
+	Choices []chatCompletionChoice    `json:"choices"`
+	Usage   *chatCompletionTokenUsage `json:"usage"`
+}
+
+type chatCompletionTokenUsage struct {
+	PromptTokens            *int `json:"prompt_tokens"`
+	CompletionTokens        *int `json:"completion_tokens"`
+	TotalTokens             *int `json:"total_tokens"`
+	CompletionTokensDetails *struct {
+		ReasoningTokens *int `json:"reasoning_tokens"`
+	} `json:"completion_tokens_details"`
+}
+
+func normalizeChatCompletionTokenUsage(source *chatCompletionTokenUsage) (*tokenUsage, error) {
+	if source == nil {
+		return nil, nil
+	}
+	return normalizeResponsesTokenUsage(&upstreamTokenUsage{InputTokens: source.PromptTokens, OutputTokens: source.CompletionTokens, TotalTokens: source.TotalTokens, OutputTokensDetails: source.CompletionTokensDetails})
 }
 
 type chatCompletionChoice struct {
@@ -76,7 +104,7 @@ func newOpenAICompatibleChatClient(httpClient HTTPDoer) *openAICompatibleChatCli
 	}
 }
 
-func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, endpointURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, tokenLimitParameter chatCompletionTokenLimitParameter, reasoningEffort string, continuation *chatCompletionContinuation, tools *callerTools, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, endpointURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, tokenLimitParameter chatCompletionTokenLimitParameter, reasoningEffort string, continuation *chatCompletionContinuation, tools *callerTools, structuredOutput *structuredOutputSchema, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
 		return textGenerationResult{}, mediaLimitError
 	}
@@ -94,6 +122,9 @@ func (client *openAICompatibleChatClient) generateText(parentContext context.Con
 		ReasoningSplit: modelIdentifier.requestProfile == requestProfileMiniMaxChatCompletions,
 		Model:          modelIdentifier.providerString(),
 		Messages:       providerMessages,
+	}
+	if structuredOutput != nil {
+		payload.ResponseFormat = &chatCompletionResponseFormat{Type: "json_schema", JSONSchema: chatCompletionJSONSchema{Name: structuredOutputSchemaName, Strict: true, Schema: structuredOutput.document}}
 	}
 	if modelIdentifier.reasoningEffort != nil && modelIdentifier.reasoningEffort.adapter == reasoningEffortAdapterOpenAIChatCompletions {
 		payload.ReasoningEffort = reasoningEffort
@@ -162,7 +193,7 @@ func parseChatCompletionResponse(responseBytes []byte, policy chatCompletionResp
 	if decodeError := json.Unmarshal(responseBytes, &response); decodeError != nil {
 		return textGenerationResult{}, decodeError
 	}
-	usage, usageError := parseChatCompletionTokenUsage(response.Usage)
+	usage, usageError := normalizeChatCompletionTokenUsage(response.Usage)
 	if usageError != nil {
 		return textGenerationResult{}, usageError
 	}

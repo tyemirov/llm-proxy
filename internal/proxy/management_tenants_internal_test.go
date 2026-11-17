@@ -615,8 +615,10 @@ func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *te
 		UpstreamCapacity: testUpstreamCapacity(1, 1), MaxPromptBytes: 1024,
 		Endpoints: endpoints, ProviderCatalog: internalCanonicalProviderCatalog(),
 		upstreamRateLimits:   upstreamRateLimits{rules: map[string]upstreamRateLimitRule{}},
-		requestTimeoutPolicy: timeoutPolicy, validated: true,
+		requestTimeoutPolicy: timeoutPolicy,
 	}
+	configuration.ApplyTunables()
+	configuration.validated = true
 	configuration = withInternalUpstreamCapacity(t, configuration)
 	compiledCapacity, capacityError := newUpstreamCapacity(configuration.UpstreamCapacity, configuration.upstreamRateLimits)
 	if capacityError != nil {

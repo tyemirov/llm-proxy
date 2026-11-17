@@ -126,6 +126,7 @@ func loggerForLevel(logLevel string) *zap.Logger {
 }
 
 func init() {
+	rootCmd.AddCommand(newQualificationBudgetCommand())
 	rootCmd.Flags().String(flagConfig, defaultConfigPath, "path to authoritative config.yml")
 	rootCmd.Flags().Bool(flagPublicCapabilitiesOnly, false, "serve only the public capability REST resource")
 	rootCmd.Flags().Bool(flagProviderCatalogOnly, false, "print provider field discovery data and exit")

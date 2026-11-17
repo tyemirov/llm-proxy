@@ -15,7 +15,8 @@ A different runtime database requires a persistence implementation and integrati
 
 ## Connections And Constraints
 
-`managed_store_connections.go` selects the runtime connection and opens the financial snapshot connection.
+`managed_store_connections.go` selects the runtime connection and opens the financial snapshot and qualification journal connections.
+It also owns the qualification journal integrity query.
 The runtime connection retains WAL, foreign-key enforcement, and the configured busy timeout.
 The financial snapshot connection opens the existing file for read access without migrations.
 
@@ -28,7 +29,7 @@ Recovery preparation and preview retain read access. Apply and finalize retain w
 
 ## Transaction Coordination
 
-`managed_store_transactions.go` owns named lock operations for billing accounts, tenant assignments, journal records, and media operations.
+`managed_store_transactions.go` owns named lock operations for billing accounts, tenant assignments, journal records, qualification budgets, and media operations.
 This file also owns the SQL statement that retains the payment reconciliation scope.
 Each operation uses the transaction supplied by its caller.
 Account operations serialize financial effects across tenants that share an account.

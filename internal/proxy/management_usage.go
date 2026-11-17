@@ -76,6 +76,7 @@ type managedUsageRoute struct {
 }
 
 type managedUsageEvent struct {
+	incompleteReason    *string
 	endpoint            string
 	route               *managedUsageRoute
 	statusCode          int
@@ -448,6 +449,7 @@ func (store *managedTenantStore) newManagedUsageRecord(requestTenant tenant, eve
 	unknownEvidence := tokenMeasurementEvidence(0)
 	usageRecord := managedUsageEventRecord{
 		MeasurementEvidence: &unknownEvidence,
+		IncompleteReason:    event.incompleteReason,
 		TenantID:            requestTenant.identifier.string(),
 		Endpoint:            event.endpoint,
 		ProviderID:          providerIdentifier,
@@ -459,6 +461,7 @@ func (store *managedTenantStore) newManagedUsageRecord(requestTenant tenant, eve
 		CreatedAt:           timestamp,
 	}
 	if event.usage != nil {
+		usageRecord.ReasoningTokens = event.usage.ReasoningTokens
 		usageRecord.RequestTokens = event.usage.RequestTokens
 		usageRecord.ResponseTokens = event.usage.ResponseTokens
 		usageRecord.TotalTokens = event.usage.TotalTokens

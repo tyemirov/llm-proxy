@@ -146,13 +146,18 @@ Gateway gives the validated configuration to all subsequent lifecycle operations
 A missing necessary input stops the lifecycle operation.
 Gateway generates one service environment from the validated configuration.
 
-The manifest has these five consumed private inputs:
+The manifest has these six consumed private inputs:
 
 - `LLM_PROXY_MANAGEMENT_ADMIN_EMAILS`
 - `LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID`
 - `LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY`
 - `LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY`
+- `LLM_PROXY_QUALIFICATION_BUDGET`
 - `DEPLOY_SUDO_PASSWORD_TUTOSH`
+
+`LLM_PROXY_QUALIFICATION_BUDGET` is `null` during ordinary operation. An active
+qualification supplies the bounded policy described in
+[operator qualification budgets](qualification-budgets.md).
 
 Gateway resolves the Pages origin and declared endpoint references.
 The runtime environment explicitly supplies the TAuth client configuration.

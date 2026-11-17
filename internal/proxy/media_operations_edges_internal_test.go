@@ -388,6 +388,7 @@ func TestMediaOperationServiceRejectsInvalidAdapterCatalog(testingInstance *test
 		MediaOperationWorkers: 1, MediaOperationCapacity: 1, TenantMediaOperationCapacity: 1,
 		MediaOperationLifetimeSeconds: 60, MediaOperationClaimSeconds: 10, MediaOperationClaimRenewalSeconds: 1, AssetRetentionSeconds: 60,
 	}
+	configuration.ApplyTunables()
 	configuration.validated = true
 	configuration.Endpoints = NewEndpoints()
 	configuration.ProviderCatalog = internalCanonicalProviderCatalog()

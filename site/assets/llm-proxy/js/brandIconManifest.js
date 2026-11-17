@@ -116,6 +116,7 @@ export const brandIconManifest = {
     }
   },
   "providers": {
+    "cerebras": null,
     "typesafe": null,
     "heygen": null,
     "fal": null,

@@ -6,8 +6,10 @@ I259 uses the shared Responses codec with the DashScope protocol variation.
 The catalog selects this variation through `dashscope_responses`.
 The shared code owns common message serialization, response items, and usage translation.
 The DashScope variation omits image detail and caller tools.
-An error-free terminal `incomplete` result starts continuation for ordinary text.
-Structured generation fails at an incomplete result and never continues partial JSON.
+An error-free terminal `incomplete` result starts continuation for ordinary text only
+when `incomplete_details.reason` is `max_output_tokens`. Other or absent reasons
+return a failure without another provider call. Structured generation fails at any
+incomplete result and never continues partial JSON.
 
 Its execution remains synchronous. Requests use `store:false` and omit `background`.
 Local protocol tests establish code behavior. The live acceptance requirements below remain separate.
@@ -48,10 +50,25 @@ The total request bound remains unknown in the catalog.
 B195 applies these limits to all three active DashScope image offerings.
 
 The codec reads assistant `output_text` content and native usage totals.
-Reasoning details remain private. Reasoning tokens are part of the output
-breakdown and are not added again. An error-free terminal `incomplete` result
-starts the shared missing-suffix continuation. Each continuation is a new
-stateless POST. Nonterminal results and provider errors return safe failures.
+It retains the optional `usage.output_tokens_details.reasoning_tokens` count;
+reasoning text remains private. The count is part of output usage and is never
+added again. Missing counts remain unknown; a reported zero remains zero.
+The shared missing-suffix continuation uses a new stateless POST only for the
+provider's `max_output_tokens` reason. Nonterminal results and provider errors
+return safe failures.
+
+Provider-attempt progress logs retain `incomplete_reason` and `reasoning_tokens`
+when reported, together with the request ID. Reason codes must contain at most
+128 ASCII letters, digits, underscores, hyphens, periods, or colons. Invalid
+reason text returns a failure without recording the unsafe value. Other valid
+reason codes retain their exact value and never trigger output-limit continuation.
+
+Durable usage events retain nullable `reasoning_tokens` and `incomplete_reason`
+columns. The reason describes the terminal provider attempt; a successful
+continuation clears it. A multi-attempt reasoning total is known only when every
+attempt supplies a count; individual known counts remain in attempt logs.
+Startup adds these columns transactionally and leaves historical rows null.
+These diagnostics do not change public response or SDK usage representations.
 
 ## Structured generation
 

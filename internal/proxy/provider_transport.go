@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -12,6 +13,7 @@ type providerTransportHTTPDoer struct {
 	transport       providerTransportDefinition
 	credentialValue string
 	scope           upstreamRequestScope
+	provider        string
 }
 
 func newProviderTransportHTTPDoer(next HTTPDoer, provider providerDefinition, credentialValue string) HTTPDoer {
@@ -20,11 +22,13 @@ func newProviderTransportHTTPDoer(next HTTPDoer, provider providerDefinition, cr
 		transport:       provider.activeTransport,
 		credentialValue: strings.TrimSpace(credentialValue),
 		scope:           provider.upstreamScope,
+		provider:        provider.identifier.string(),
 	}
 }
 
 func (doer providerTransportHTTPDoer) Do(request *http.Request) (*http.Response, error) {
 	authorizedRequest := request.Clone(requestContextWithUpstreamScope(request.Context(), doer.scope))
+	authorizedRequest = authorizedRequest.WithContext(context.WithValue(authorizedRequest.Context(), qualificationTransportKey{}, qualificationTransportIdentity{provider: doer.provider, scope: doer.scope, transport: doer.transport}))
 	authentication := doer.transport.authentication
 	authorizedRequest.Header.Set(authentication.Header, authentication.Prefix+doer.credentialValue)
 	for _, header := range doer.transport.headers {

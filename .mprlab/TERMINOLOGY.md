@@ -2,7 +2,7 @@
 
 This file contains approved technical nouns and technical verbs for repository documentation.
 
-Use this file with ASD-STE100 Simplified Technical English, Issue 9.
+Use this file with `.mprlab/AGENTS.DOCS.md`. Apply the ASD-STE100 dictionary only within explicitly selected formal STE scope.
 Give each term one meaning. Use the same term for the same concept in all documents.
 
 - `integration record`: A dated record of a consumer, its protocol, source revisions, test results, and required updates.

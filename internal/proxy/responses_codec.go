@@ -88,14 +88,21 @@ func (client responsesCodec) parse(body []byte) (textGenerationResult, error) {
 	}
 	generation := textGenerationResult{}
 	if response.Usage != nil {
-		usage, err := normalizeTokenUsage(response.Usage.InputTokens, response.Usage.OutputTokens, response.Usage.TotalTokens)
+		usage, err := normalizeResponsesTokenUsage(response.Usage)
 		if err != nil {
 			return generation, err
 		}
 		generation.usage = usage
 	}
+	if response.Status == statusIncomplete && response.IncompleteDetails.Reason != "" {
+		reason, err := newProviderIncompleteReason(response.IncompleteDetails.Reason)
+		if err != nil {
+			return generation, err
+		}
+		generation.incompleteReason = &reason
+	}
 	fail := func(reason string) (textGenerationResult, error) {
-		return textGenerationResult{usage: generation.usage}, fmt.Errorf("%w: %s response %s", ErrProviderAPI, client.variation.label(), reason)
+		return textGenerationResult{usage: generation.usage, incompleteReason: generation.incompleteReason}, fmt.Errorf("%w: %s response %s", ErrProviderAPI, client.variation.label(), reason)
 	}
 	if len(response.Error) > 0 && string(response.Error) != "null" {
 		return fail("contains an error")
@@ -134,7 +141,7 @@ func (client responsesCodec) parse(body []byte) (textGenerationResult, error) {
 		}
 		return generation, nil
 	case "incomplete":
-		if client.variation == responsesDashScope || (response.IncompleteDetails.Reason == "max_output_tokens" && len(generation.toolCalls) == 0) {
+		if response.IncompleteDetails.Reason == providerIncompleteOutputLimitReason && len(generation.toolCalls) == 0 {
 			return generation, errProviderOutputLimitReached
 		}
 		return fail("is incomplete")

@@ -65,6 +65,8 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 		}
 		defer func() { executionError = errors.Join(executionError, execution.finish(requestContext, executionError)) }()
 	}
+	requestContext = qualificationLogicalContext(requestContext)
+	defer func() { executionError = errors.Join(executionError, finishQualificationExecution(requestContext)) }()
 	originalMessages := request.messages
 	accumulatedText := strings.Builder{}
 	var accumulatedUsage *tokenUsage
@@ -171,6 +173,7 @@ func (openAIChatCompletionsTextRouteAdapter) generateText(requestContext context
 		request.reasoningEffort,
 		request.chatCompletionContinuation,
 		request.tools,
+		request.structuredOutput,
 		structuredLogger,
 	)
 }
