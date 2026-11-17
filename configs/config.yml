@@ -3,7 +3,7 @@ server:
   port: 8080
   log_level: info
   upstream_capacity:
-    global: {active: 32, admitted: 708}
+    global: {active: 32, admitted: 736}
     tenant: {active: 8, admitted: 32}
     account: {active: 8, admitted: 32}
     media: {active: 24, admitted: 256}

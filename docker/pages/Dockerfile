@@ -17,8 +17,11 @@ WORKDIR /workspace
 COPY --from=backend-builder /usr/local/bin/llm-proxy /usr/local/bin/llm-proxy
 COPY . .
 RUN set -eu; \
-    capabilities_url="http://127.0.0.1:8080/api/public/capabilities"; \
-    /usr/local/bin/llm-proxy --config configs/config.yml --public-capabilities-only >/tmp/capability-api.log 2>&1 & \
+    mkdir /tmp/public-capabilities; \
+    capability_config_path="/tmp/public-capabilities/config.yml"; \
+    capability_port="$(node scripts/create_public_capability_test_config.mjs configs/config.yml "${capability_config_path}")"; \
+    capabilities_url="http://127.0.0.1:${capability_port}/api/public/capabilities"; \
+    /usr/local/bin/llm-proxy --config "${capability_config_path}" --public-capabilities-only >/tmp/capability-api.log 2>&1 & \
     capability_api_pid="$!"; \
     trap 'kill "${capability_api_pid}" 2>/dev/null || true; wait "${capability_api_pid}" 2>/dev/null || true' EXIT; \
     capability_api_ready=false; \

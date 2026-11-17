@@ -6,6 +6,7 @@ import path from "node:path";
 
 const loopbackHost = "127.0.0.1";
 const sourcePortLine = "  port: 8080";
+const sourceBudgetLine = "  qualification_budget: ${LLM_PROXY_QUALIFICATION_BUDGET}";
 const privateConfigMode = 0o600;
 const providerCatalogFileName = "providers.yml";
 
@@ -21,7 +22,12 @@ const providerCatalog = await readFile(sourceProviderCatalogPath);
 if (sourceConfig.split(sourcePortLine).length !== 2) {
   throw new Error(`public_capability_test_config_port_source_invalid: ${sourceConfigPath}`);
 }
-const capabilityConfig = sourceConfig.replace(sourcePortLine, `  port: ${capabilityPort}`);
+if (sourceConfig.split(sourceBudgetLine).length !== 2) {
+  throw new Error(`public_capability_test_config_budget_source_invalid: ${sourceConfigPath}`);
+}
+const capabilityConfig = sourceConfig
+  .replace(sourcePortLine, `  port: ${capabilityPort}`)
+  .replace(sourceBudgetLine, "  qualification_budget: null");
 await writeFile(outputConfigPath, capabilityConfig, {
   encoding: "utf8",
   flag: "wx",
