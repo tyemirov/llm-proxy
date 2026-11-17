@@ -44,6 +44,51 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
 
 ## BugFixes
 
+- [x] [B330] (P2) Keep qualification database mechanisms inside the persistence boundary.
+  Goal: Apply the repository persistence contract to the qualification journal.
+  Evidence: `TestPersistenceBoundaryOwnsDatabaseMechanisms` rejects its SQLite opener, integrity SQL, and no-op locks in qualification workflow files.
+  Requirements: Move mechanisms into existing connection and transaction helpers while preserving journal behavior and transaction ownership.
+  Resolution: Qualification connections and integrity SQL now use `managed_store_connections.go`; named registry and budget locks use `managed_store_transactions.go`. Workflow transactions and errors are preserved.
+  Validation: Persistence-boundary, complete qualification-budget, focused race, static-analysis, and formatting checks pass. Final `make ci` passed all 15 gates in 809 seconds with 100.0% Go statement coverage.
+
+- [x] [B331] (P2) Reconcile Gemini routing acceptance with current lifecycle declarations.
+  Evidence: The final Go shard failed `TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities`: `gemini-3.5-flash-lite` declares `synchronous_completion`, but the test requires `pollable_resource` for every Gemini offering.
+  Requirements: Verify synchronous Flash-Lite and stored background Gemini routes through real HTTP, including request flags and cleanup. Preserve runtime catalog activation.
+  Resolution: Route acceptance distinguishes Flash-Lite synchronous POST-only requests from stored background Gemini requests and verifies exact request flags and cleanup paths.
+  Validation: The focused routing test reproduced `synchronous_completion want=pollable_resource` before the correction. Routing and current Gemini acceptance pass with race detection. Final `make ci` passed all 15 gates in 809 seconds with 100.0% Go statement coverage.
+
+- [x] [B332] (P2) Scope Qwen acceptance to exact provider offerings.
+  Evidence: The final Go shard failed `TestQwenCurrentHTTP`, `TestQwenCurrentImages`, `TestQwenCurrentCatalog`, and `TestQwenCurrentFlashActivation` for `qwen3.8-27b`, including HTTP 400, unexpected reasoning efforts, and discovery of a model the tests classify as unqualified.
+  Requirements: Activate only the intended DashScope candidates in the isolated test catalog. Scope capability, price, and discovery assertions to exact provider/model pairs; preserve production activation and shared Cerebras discovery.
+  Resolution: The test catalog explicitly activates DashScope offerings. Capability and price lookups include the provider; discovery parses provider-qualified routes. An authorized Cerebras tenant preserves 27B discovery while a DashScope 27B request is rejected before dispatch.
+  Validation: `make test-qwen-current` reproduced all four failures, then passed after the corrections. Qwen, Gemini routing, and Cerebras client acceptance pass with race detection. Final `make ci` passed all 15 gates in 809 seconds with 100.0% Go statement coverage. Browser validation passed 188 frontend and 13 authentication cases.
+
+- [x] [B329] (P2) Validate public provider counts against the canonical catalog.
+  Goal: Keep CLI and real HTTP acceptance aligned with current provider discovery.
+  Evidence: Final CI failed with `root_test.go:476: provider count=19 want=18`; the HTTP/OpenAPI test also failed with `public capability providers=19 want=18`.
+  Requirements: Compare returned counts with the canonical fixture catalog, retaining response validation and public limit assertions.
+  Resolution: CLI and real HTTP assertions derive the expected provider count from the canonical catalog.
+  Validation: Both corrected public-entry-point checks pass with race detection. Final `make ci` passed all 15 gates in 809 seconds with 100.0% Go statement coverage.
+
+- [x] [B328] (P2) Supply the inactive qualification budget in the installed Gateway fixture.
+  Goal: Keep selected-manifest qualification self-contained after the budget input became part of the deployment contract.
+  Evidence: Final `make ci` failed at `TestOperationalInstalledGatewayPlansCurrentTrackedManifest` with `manifest.environment.private_inputs[5]: undefined environment reference LLM_PROXY_QUALIFICATION_BUDGET`.
+  Requirements: Clear inherited budget policy and supply the canonical `null` value in the synthetic fixture environment. Include the policy input in manifest and local API environment assertions.
+  Resolution: The fixture clears inherited policy and supplies `LLM_PROXY_QUALIFICATION_BUDGET=null` through its own environment file. Current manifest and scoped API environment assertions include that input.
+  Validation: `make test-installed-gateway` and the manifest/local-environment checks pass, including focused race runs. Final `make ci` passed all 15 gates in 809 seconds with 100.0% Go statement coverage.
+
+- [x] [B326] (P2) Release qualification reservations after proven admission rejection.
+  Goal: Preserve the allowance when the initial generation never reaches the provider.
+  Requirements: Release the reservation atomically, preserve the admission error, and avoid suspension. Retain reservations for failed observations of already dispatched work.
+  Resolution: Proven initial non-dispatch settles at zero cost and atomically restores the reservation. Failed polls retain existing work; failed release writes roll back and suspend.
+  Validation: Real-admission regressions first held 65,072 microUSD and suspended without provider work. Queue rejection, waiting expiry, subsequent generation, release-write rollback, and pending-poll checks pass with race detection. Final `make ci` passed all 15 gates in 809 seconds with 100.0% Go statement coverage.
+
+- [x] [B327] (P2) Inspect qualification accounting in one database snapshot.
+  Goal: Prevent concurrent reservations or settlements from appearing as journal corruption.
+  Requirements: Read and validate state and collect operator output in one consistent transaction.
+  Resolution: Operator actions validate state, accounting, and output within one journal transaction. Mutations obtain the write lock before reading.
+  Validation: Deterministic reservation and settlement commits reproduced false conservation errors and mixed output before the fix. Snapshot and operator rollback checks pass with race detection. Final `make ci` passed all 15 gates in 809 seconds with 100.0% Go statement coverage.
+
 - [-] [B325] (P2) Make shared rate-limit acceptance independent of incidental SQL time.
   Goal: Verify one shared limiter across text and dictation through real HTTP without relying on both operations finishing inside a 120 ms wall-clock window.
   Evidence: CI correctly admitted the second operation without delay after response and SQLite work consumed the interval. Holding the first provider response beyond that interval reproduced the same missing-log assertion.
