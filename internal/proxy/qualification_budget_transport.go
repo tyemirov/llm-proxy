@@ -256,6 +256,13 @@ func containsQualificationBillableFeature(value any) bool {
 func (doer *qualificationBudgetHTTPDoer) observe(request *http.Request, logical *qualificationExecution, attempt qualificationBudgetAttempt, offering qualificationFrozenOffering) (*http.Response, error) {
 	response, err := doer.qualified.Do(request)
 	if err != nil {
+		if request.Method == http.MethodPost && errors.Is(err, errUpstreamNotDispatched) {
+			if releaseErr := doer.budget.releaseNotDispatched(attempt); releaseErr != nil {
+				return response, backoff.Permanent(errors.Join(errQualificationBudget, err, releaseErr, doer.budget.suspend()))
+			}
+			logical.active = nil
+			return response, backoff.Permanent(err)
+		}
 		return response, backoff.Permanent(errors.Join(errQualificationBudget, doer.budget.suspend()))
 	}
 	body, readErr := io.ReadAll(io.LimitReader(response.Body, MaxV2RequestBytes+1))

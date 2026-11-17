@@ -1,7 +1,9 @@
 package proxy
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -333,7 +335,7 @@ func TestQualificationBudgetFaultsOperatorTransactions(t *testing.T) {
 		pending, active                 bool
 	}{
 		{name: "close unresolved", action: "close", pending: true, fragment: "unresolved reservations"},
-		{name: "close journal persistence", action: "close", trigger: `CREATE TRIGGER reject_close BEFORE UPDATE ON qualification_budget_states BEGIN SELECT RAISE(ABORT,'controlled_close_failure'); END`, fragment: "controlled_close_failure"},
+		{name: "close journal persistence", action: "close", trigger: `CREATE TRIGGER reject_close BEFORE UPDATE OF closed ON qualification_budget_states BEGIN SELECT RAISE(ABORT,'controlled_close_failure'); END`, fragment: "controlled_close_failure"},
 		{name: "reconcile missing attempt", action: "reconcile", fragment: "attempt unavailable"},
 		{name: "reconcile active dispatch", action: "reconcile", pending: true, active: true, fragment: "active dispatch cannot be reconciled"},
 		{name: "reconcile lock write", action: "reconcile", pending: true, trigger: `CREATE TRIGGER reject_reconcile BEFORE UPDATE ON qualification_budget_states BEGIN SELECT RAISE(ABORT,'controlled_reconcile_failure'); END`, fragment: "controlled_reconcile_failure"},
@@ -816,5 +818,83 @@ func TestQualificationBudgetFaultsSettlementSQLBoundaries(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func TestQualificationBudgetInspectSnapshot(t *testing.T) {
+	for _, change := range []string{"reservation", "settlement"} {
+		for _, phase := range []string{"state-read", "accounting-read"} {
+			t.Run(change+"/"+phase, func(t *testing.T) {
+				fixture := newQualificationFaultFixture(t)
+				fixture.initialize(t)
+				budget := fixture.budget
+				qualificationFaultExec(t, budget.database, "PRAGMA journal_mode=WAL")
+				offering := budget.frozen[0]
+				logical := &qualificationExecution{id: "snapshot-request", requestID: "snapshot-origin"}
+				var attempt qualificationBudgetAttempt
+				expectedRemaining := fixture.policy.RemainingMicroUSD
+				expectedAttempts := 0
+				if change == "settlement" {
+					var err error
+					attempt, err = budget.reserve(logical, offering, "snapshot-connection")
+					if err != nil {
+						t.Fatal(err)
+					}
+					expectedRemaining -= attempt.Reserved
+					expectedAttempts = 1
+				}
+				committed := false
+				installQualificationFaultOpenHook(t, fixture.policy.ReceiptDatabasePath, func(database *gorm.DB) {
+					if err := database.Callback().Query().After("gorm:query").Register("commit_between_inspection_reads", func(tx *gorm.DB) {
+						target := "qualification_budget_states"
+						if phase == "accounting-read" {
+							target = "qualification_budget_attempts"
+						}
+						if committed || tx.Statement.Table != target {
+							return
+						}
+						committed = true
+						var err error
+						if change == "reservation" {
+							attempt, err = budget.reserve(logical, offering, "snapshot-connection")
+						} else {
+							err = budget.settle(attempt, offering, journalUsageEvidenceInput{Quantities: []journalQuantity{{Dimension: "input_tokens", Value: "2"}, {Dimension: "output_tokens", Value: "3"}}})
+						}
+						if err != nil {
+							t.Fatalf("concurrent commit: %v", err)
+						}
+					}); err != nil {
+						t.Fatal(err)
+					}
+				})
+				var output bytes.Buffer
+				if err := OperateQualificationBudget(fixture.managementPath, fixture.policy.BudgetID, "inspect", &output); err != nil {
+					t.Fatalf("healthy journal rejected: %v", err)
+				}
+				var receipt struct {
+					Remaining int64                        `json:"remaining_micro_usd"`
+					Attempts  []qualificationBudgetAttempt `json:"attempts"`
+				}
+				if err := json.Unmarshal(output.Bytes(), &receipt); err != nil {
+					t.Fatal(err)
+				}
+				if !committed || receipt.Remaining != expectedRemaining || len(receipt.Attempts) != expectedAttempts {
+					t.Fatalf("mixed inspection snapshot: %s", output.String())
+				}
+				if change == "settlement" && receipt.Attempts[0].State != "dispatched" {
+					t.Fatalf("new settlement mixed with old balance: %s", output.String())
+				}
+				output.Reset()
+				if err := OperateQualificationBudget(fixture.managementPath, fixture.policy.BudgetID, "inspect", &output); err != nil {
+					t.Fatal(err)
+				}
+				if err := json.Unmarshal(output.Bytes(), &receipt); err != nil {
+					t.Fatal(err)
+				}
+				if len(receipt.Attempts) != 1 || change == "reservation" && receipt.Remaining != fixture.policy.RemainingMicroUSD-attempt.Reserved || change == "settlement" && (receipt.Attempts[0].State != "settled" || receipt.Remaining != fixture.policy.RemainingMicroUSD-receipt.Attempts[0].Cost) {
+					t.Fatalf("next inspection missed committed work: %s", output.String())
+				}
+			})
+		}
 	}
 }

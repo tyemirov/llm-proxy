@@ -17,6 +17,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/tyemirov/llm-proxy/internal/openapitest"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 	"github.com/tyemirov/utils/billing"
 	"gopkg.in/yaml.v3"
@@ -512,8 +513,9 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	if decodeError := json.Unmarshal(capabilitiesResponse.Body.Bytes(), &capabilityCatalog); decodeError != nil {
 		t.Fatalf("decode public capability catalog: %v", decodeError)
 	}
-	if len(capabilityCatalog.Providers) != 18 {
-		t.Fatalf("public capability providers=%d want=18", len(capabilityCatalog.Providers))
+	expectedProviders := len(testfixtures.ProviderCatalog(t).Schema().Providers)
+	if len(capabilityCatalog.Providers) != expectedProviders {
+		t.Fatalf("public capability providers=%d want=%d", len(capabilityCatalog.Providers), expectedProviders)
 	}
 
 	configRequest := httptest.NewRequest(http.MethodGet, proxy.ManagementConfigUIPath, nil)

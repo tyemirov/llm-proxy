@@ -115,3 +115,17 @@ func initializeWithHostedQuoteBoundary(database *gorm.DB, initialize func(*gorm.
 		})
 	})
 }
+
+const qualificationSQLiteRuntimeQuery = "?_pragma=busy_timeout(5000)&_pragma=synchronous(FULL)"
+
+var openQualificationSQLite = func(path string) (*gorm.DB, error) {
+	return gorm.Open(sqlite.Open(path+qualificationSQLiteRuntimeQuery), &gorm.Config{TranslateError: true})
+}
+
+func validateQualificationJournalIntegrity(database *gorm.DB) error {
+	var result string
+	if err := database.Raw("PRAGMA integrity_check").Scan(&result).Error; err != nil || result != "ok" {
+		return fmt.Errorf("%w: journal integrity", errQualificationBudget)
+	}
+	return nil
+}

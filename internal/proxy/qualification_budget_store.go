@@ -13,15 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
-
-const qualificationSQLiteRuntimeQuery = "?_pragma=busy_timeout(5000)&_pragma=synchronous(FULL)"
-
-var openQualificationSQLite = func(path string) (*gorm.DB, error) {
-	return gorm.Open(sqlite.Open(path+qualificationSQLiteRuntimeQuery), &gorm.Config{TranslateError: true})
-}
 
 type qualificationBudgetRegistry struct {
 	ID           string `gorm:"primaryKey"`
@@ -139,7 +132,7 @@ func newQualificationBudget(configuration *QualificationBudgetConfiguration, dat
 		// Publish the durable initialization marker before creating the receipt store.
 		frozenDocument, _ := json.Marshal(prepared)
 		if err := database.database.Transaction(func(tx *gorm.DB) error {
-			if err := tx.Model(&qualificationBudgetRegistry{}).Where("1 = 1").UpdateColumn("closed", gorm.Expr("closed")).Error; err != nil {
+			if err := lockQualificationBudgetRegistry(tx).Error; err != nil {
 				return err
 			}
 			var active int64
@@ -178,9 +171,8 @@ func newQualificationBudget(configuration *QualificationBudgetConfiguration, dat
 	sqlDB.SetMaxOpenConns(1)
 	fail := func(err error) (*qualificationBudget, error) { _ = sqlDB.Close(); return nil, err }
 	if initialized {
-		var result string
-		if err := receiptDB.Raw("PRAGMA integrity_check").Scan(&result).Error; err != nil || result != "ok" {
-			return fail(fmt.Errorf("%w: journal integrity", errQualificationBudget))
+		if err := validateQualificationJournalIntegrity(receiptDB); err != nil {
+			return fail(err)
 		}
 	} else if err := receiptDB.AutoMigrate(&qualificationBudgetState{}, &qualificationBudgetAttempt{}); err != nil {
 		return fail(err)
@@ -347,7 +339,7 @@ func (budget *qualificationBudget) reserve(logical *qualificationExecution, offe
 	var attempt qualificationBudgetAttempt
 	err := budget.database.Transaction(func(tx *gorm.DB) error {
 		// Obtain the SQLite write lock before reading available funds.
-		if err := tx.Model(&qualificationBudgetState{}).Where("id = ?", budget.policy.BudgetID).UpdateColumn("remaining", gorm.Expr("remaining")).Error; err != nil {
+		if err := lockQualificationBudgetState(tx, budget.policy.BudgetID).Error; err != nil {
 			return err
 		}
 		var state qualificationBudgetState
@@ -390,6 +382,20 @@ func (budget *qualificationBudget) reserve(logical *qualificationExecution, offe
 		return tx.Model(&state).Update("remaining", state.Remaining-maximum).Error
 	})
 	return attempt, err
+}
+
+// releaseNotDispatched settles a proven unsubmitted generation at zero cost.
+func (budget *qualificationBudget) releaseNotDispatched(attempt qualificationBudgetAttempt) error {
+	return budget.database.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&qualificationBudgetAttempt{}).Where("id = ? AND state = ? AND resource_id = ?", attempt.ID, "dispatched", "").Updates(map[string]any{"state": "settled", "active": false, "cost": 0})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("%w: attempt cannot be released before dispatch", errQualificationBudget)
+		}
+		return tx.Model(&qualificationBudgetState{}).Where("id = ?", budget.policy.BudgetID).UpdateColumn("remaining", gorm.Expr("remaining + ?", attempt.Reserved)).Error
+	})
 }
 
 func (budget *qualificationBudget) suspend() error {

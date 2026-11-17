@@ -3,12 +3,14 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -350,5 +352,138 @@ func TestQualificationBudgetMeasurementBoundaryRetainsReservation(t *testing.T) 
 				t.Fatalf("invalid observation refunded funds: %+v", state)
 			}
 		})
+	}
+}
+
+func TestQualificationBudgetAdmissionNonDispatch(t *testing.T) {
+	for _, scenario := range []string{"queue-full", "deadline"} {
+		t.Run(scenario, func(t *testing.T) {
+			harness := newQualificationBoundaryHarness(t)
+			origin := upstreamRequestOrigin(harness.request.URL)
+			admission := admissionTestHTTPDoer(t, origin, admissionOriginB, upstreamRateLimits{})
+			admission.next = harness.doer.qualified
+			harness.doer.qualified = admission
+			scope := harness.identity.scope
+			blocker := admitTestRequest(t, admission.scheduler, origin, scope.tenant, scope.account, scope.class, time.Now())
+			if err := admission.acquire(blocker, origin); err != nil {
+				t.Fatal(err)
+			}
+			releaseBlocker := sync.OnceFunc(func() { admission.release(blocker) })
+			t.Cleanup(releaseBlocker)
+			var releaseQueued []func()
+			if scenario == "queue-full" {
+				for range 2 {
+					queued := admitTestRequest(t, admission.scheduler, origin, scope.tenant, scope.account, scope.class, time.Now())
+					release := sync.OnceFunc(func() { admission.release(queued) })
+					releaseQueued = append(releaseQueued, release)
+					t.Cleanup(release)
+				}
+			}
+			ctx := requestContextWithUpstreamScope(harness.request.Context(), scope)
+			expected := errQueueFull
+			if scenario == "deadline" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, 30*time.Millisecond)
+				defer cancel()
+				expected = context.DeadlineExceeded
+			}
+			_, err := harness.doer.Do(harness.request.WithContext(ctx))
+			if harness.calls.Load() != 0 {
+				t.Fatal("rejected request reached provider")
+			}
+			if !errors.Is(err, expected) {
+				t.Errorf("admission error lost: %v", err)
+			}
+			if err := finishQualificationExecution(ctx); err != nil {
+				t.Errorf("non-dispatch finalizer: %v", err)
+			}
+			var output bytes.Buffer
+			if err := OperateQualificationBudget(harness.fixture.managementPath, harness.fixture.policy.BudgetID, "inspect", &output); err != nil {
+				t.Fatal(err)
+			}
+			var receipt struct {
+				Remaining int64                        `json:"remaining_micro_usd"`
+				Suspended bool                         `json:"suspended"`
+				Attempts  []qualificationBudgetAttempt `json:"attempts"`
+			}
+			if err := json.Unmarshal(output.Bytes(), &receipt); err != nil {
+				t.Fatal(err)
+			}
+			if receipt.Remaining != harness.fixture.policy.RemainingMicroUSD || receipt.Suspended || len(receipt.Attempts) != 1 || receipt.Attempts[0].Active || receipt.Attempts[0].Cost != 0 {
+				t.Fatalf("non-dispatch consumed allowance: %s", output.String())
+			}
+			releaseBlocker()
+			for _, release := range releaseQueued {
+				release()
+			}
+			harness.request.Body = io.NopCloser(strings.NewReader(`{"model":"qwen-3.8-27b","max_completion_tokens":128,"messages":[]}`))
+			response, err := harness.doer.Do(harness.request.Clone(requestContextWithUpstreamScope(context.WithValue(harness.request.Context(), qualificationExecutionKey{}, &qualificationExecution{id: "next-logical", requestID: "next-origin"}), scope)))
+			if err != nil {
+				t.Fatalf("subsequent generation blocked: %v", err)
+			}
+			_ = response.Body.Close()
+		})
+	}
+}
+
+func TestQualificationBudgetNonDispatchReleaseFailure(t *testing.T) {
+	for _, phase := range []string{"attempt-write", "allowance-write", "unavailable-attempt"} {
+		t.Run(phase, func(t *testing.T) {
+			harness := newQualificationBoundaryHarness(t)
+			origin := upstreamRequestOrigin(harness.request.URL)
+			harness.doer.qualified = admissionTestHTTPDoer(t, origin, admissionOriginB, upstreamRateLimits{})
+			statement := `CREATE TRIGGER release_failure BEFORE UPDATE ON qualification_budget_attempts BEGIN SELECT RAISE(ABORT, 'controlled_release'); END`
+			if phase == "allowance-write" {
+				statement = `CREATE TRIGGER release_failure BEFORE UPDATE OF remaining ON qualification_budget_states WHEN NEW.remaining > OLD.remaining BEGIN SELECT RAISE(ABORT, 'controlled_release'); END`
+			} else if phase == "unavailable-attempt" {
+				statement = `CREATE TRIGGER release_failure BEFORE UPDATE ON qualification_budget_attempts WHEN NEW.state = 'settled' BEGIN SELECT RAISE(IGNORE); END`
+			}
+			qualificationFaultExec(t, harness.fixture.budget.database, statement)
+			_, err := harness.doer.Do(harness.request)
+			if !errors.Is(err, errQualificationBudget) || !errors.Is(err, errUpstreamNotDispatched) {
+				t.Fatalf("release error: %v", err)
+			}
+			var state qualificationBudgetState
+			var attempt qualificationBudgetAttempt
+			if err := harness.fixture.budget.database.First(&state).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := harness.fixture.budget.database.First(&attempt).Error; err != nil {
+				t.Fatal(err)
+			}
+			if !state.Suspended || state.Remaining != harness.fixture.policy.RemainingMicroUSD-attempt.Reserved || attempt.State != "dispatched" || harness.logical.active == nil {
+				t.Fatalf("failed release lost reservation: state=%+v attempt=%+v", state, attempt)
+			}
+			if err := OperateQualificationBudget(harness.fixture.managementPath, harness.fixture.policy.BudgetID, "inspect", io.Discard); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestQualificationBudgetPollNonDispatchRetainsReservation(t *testing.T) {
+	harness := newQualificationBoundaryHarness(t)
+	budget := harness.fixture.budget
+	offering := budget.frozen[0]
+	attempt, err := budget.reserve(harness.logical, offering, harness.identity.scope.account)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt.ResourceID = "existing-work"
+	qualificationFaultExec(t, budget.database, `UPDATE qualification_budget_attempts SET state = 'pending', resource_id = ? WHERE id = ?`, attempt.ResourceID, attempt.ID)
+	harness.logical.active = &attempt
+	harness.logical.offering = offering
+	harness.request.Method = http.MethodGet
+	harness.request.URL.Path = "/responses/" + attempt.ResourceID
+	harness.doer.qualified = admissionTestHTTPDoer(t, upstreamRequestOrigin(harness.request.URL), admissionOriginB, upstreamRateLimits{})
+	if _, err := harness.doer.Do(harness.request); !errors.Is(err, errQualificationBudget) {
+		t.Fatalf("poll failure: %v", err)
+	}
+	var state qualificationBudgetState
+	if err := budget.database.First(&state).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !state.Suspended || state.Remaining != budget.policy.RemainingMicroUSD-attempt.Reserved || harness.logical.active == nil {
+		t.Fatalf("poll failure refunded existing work: %+v", state)
 	}
 }

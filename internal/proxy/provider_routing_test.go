@@ -110,6 +110,7 @@ func TestProviderRoutingUsesConfiguredOpenAIURLsForTextAndDictation(t *testing.T
 }
 
 func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) {
+	const synchronousGeminiModel = "gemini-3.5-flash-lite"
 	providerOrder := []string{
 		proxy.ProviderNameOpenAI,
 		proxy.ProviderNameDeepSeek,
@@ -204,8 +205,13 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 		case "/v1/messages":
 			_, _ = responseWriter.Write([]byte(`{"id":"capability-message","type":"message","role":"assistant","content":[{"type":"text","text":"route ok"}],"stop_reason":"end_turn"}`))
 		case testGeminiInteractionsPath:
-			if !payload.Background || !payload.Store {
-				t.Fatalf("Gemini model=%s payload=%v", modelIdentifier, payload)
+			background := modelIdentifier != synchronousGeminiModel
+			if payload.Background != background || payload.Store != background {
+				t.Errorf("Gemini model=%s background=%t store=%t want=%t", modelIdentifier, payload.Background, payload.Store, background)
+			}
+			if !background {
+				writeGeminiInteractionSnapshot(t, responseWriter, "", "completed", "route ok", nil)
+				return
 			}
 			interactionIdentifier := "capability-gemini-" + modelIdentifier
 			geminiModelsByInteraction[interactionIdentifier] = modelIdentifier
@@ -252,6 +258,9 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 			if providerName == proxy.ProviderNameGemini {
 				expected.wireContract = "gemini_interactions"
 				expected.executionLifecycle = "pollable_resource"
+				if offering.Model == synchronousGeminiModel {
+					expected.executionLifecycle = "synchronous_completion"
+				}
 			}
 			if providerName == proxy.ProviderNameXAI {
 				expected.wireContract = "xai_responses"
@@ -275,8 +284,15 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 			if offering.Model == pollModel {
 				expectedRequestCount = 2
 			}
-			if providerName == proxy.ProviderNameGemini && offering.ExecutionLifecycle == "pollable_resource" {
-				expectedRequestCount = 2
+			if providerName == proxy.ProviderNameGemini {
+				expectedPaths := []string{http.MethodPost + " " + testGeminiInteractionsPath}
+				if offering.Model != synchronousGeminiModel {
+					expectedPaths = append(expectedPaths, http.MethodDelete+" "+testGeminiInteractionsPath+"/capability-gemini-"+offering.Model)
+				}
+				if !reflect.DeepEqual(observedPaths[routeKey], expectedPaths) {
+					t.Fatalf("Gemini model=%s upstream=%v want=%v", offering.Model, observedPaths[routeKey], expectedPaths)
+				}
+				expectedRequestCount = len(expectedPaths)
 			}
 			if len(observedPaths[routeKey]) != expectedRequestCount {
 				t.Fatalf("provider=%s model=%s upstream=%v want requests=%d", providerName, offering.Model, observedPaths[routeKey], expectedRequestCount)
