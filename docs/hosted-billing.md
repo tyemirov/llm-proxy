@@ -1497,7 +1497,7 @@ The browser must open this URL directly, without an iframe.
 ### Browser Payment History
 
 The billing dashboard shows funding orders and verified receipts for the owned account.
-The customer can refresh payment records and request each additional page.
+The view refreshes payment records automatically. The customer can request each additional page.
 Each order shows its state, credit amount, environment, identifier, and creation time.
 Pending orders have no receipt. A browser return URL cannot grant funds.
 
@@ -1506,6 +1506,8 @@ The browser keeps cent amounts as decimal strings and formats them with integer 
 It rejects invalid amounts, currencies, and receipt identities before display.
 A failed refresh removes the affected records and shows a retry message.
 Financial history accepts opaque Ledger reservation identifiers, including payment refund holds.
+A balance refresh disables its actions in place and exposes its busy state.
+The refresh preserves focused inputs and unsaved spending-limit text.
 
 The invoice button creates a temporary Paddle portal session and opens it in a separate tab.
 The browser does not retain the session URL. A failed session request closes the empty tab.
