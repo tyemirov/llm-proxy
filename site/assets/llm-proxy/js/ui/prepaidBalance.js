@@ -1,8 +1,8 @@
 // @ts-check
-import {startAutomaticUpdates, updateManagementData, reloadVisibleCollection} from '../core/automaticUpdates.js?v=20261116b323';
-import {FUNDING_CHANGED_EVENT} from '../constants.js?v=20261116b323';
-import * as backend from '../core/backendClient.js?v=20261116b323';
-import {profileFailureMessage} from '../core/managementProfile.js?v=20261116b323';
+import {startAutomaticUpdates, updateManagementData, reloadVisibleCollection} from '../core/automaticUpdates.js?v=20261117b333';
+import {FUNDING_CHANGED_EVENT} from '../constants.js?v=20261117b333';
+import * as backend from '../core/backendClient.js?v=20261117b333';
+import {profileFailureMessage} from '../core/managementProfile.js?v=20261117b333';
 
 /** @param {unknown} value */
 function escapeHTML(value) { return String(value).replace(/[&<>"']/g, character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character] || character)); }
@@ -76,7 +76,7 @@ class PrepaidBalance extends HTMLElement {
     }
   }
   async updateLiveData() {
-    await updateManagementData(this,async()=>{
+    const updating=updateManagementData(this,async()=>{
       const [balance,limit]=await Promise.all([
         backend.fetchFundsBalance(this.accountID,this.controller.signal),
         this.tenantID?backend.fetchFundsTenantLimit(this.accountID,this.tenantID,this.controller.signal):Promise.resolve(null),
@@ -94,7 +94,14 @@ class PrepaidBalance extends HTMLElement {
       const dirty=this.limitDraft!==savedDraft || Boolean(this.limitFailure);
       this.balance=balance;if(limit && !dirty)this.setTenantLimit(limit);this.failure='';
     },()=>this.render(),error=>{this.balance=null;this.clearHistory();this.failure=error instanceof backend.BackendClientError?backend.managementFailureMessage(error):profileFailureMessage(error);});
+    this.renderBusyState();
+    await updating;
+    this.renderBusyState();
     if(this.refreshRequested && !this.controller.signal.aborted){this.refreshRequested=false;void this.updateLiveData();}
+  }
+  renderBusyState() {
+    this.querySelector('[aria-busy]')?.setAttribute('aria-busy',String(this.busy));
+    for(const button of this.querySelectorAll('button'))button.disabled=this.busy;
   }
   async loadBalance() {
     this.balance=null;this.tenantLimit=null;this.clearHistory();

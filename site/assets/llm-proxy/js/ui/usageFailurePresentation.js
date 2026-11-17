@@ -6,7 +6,7 @@ import {
   USAGE_ENDPOINT_LABELS,
   USAGE_OUTCOME_LABELS,
   USAGE_STATUS_LABELS,
-} from "../constants.js?v=20261116b323";
+} from "../constants.js?v=20261117b333";
 
 const EMPTY_STRING = "";
 const FAILURE_OUTCOMES = new Set(["rate_limited", "service_unavailable", "request_timeout", "upstream_error", "proxy_error"]);
