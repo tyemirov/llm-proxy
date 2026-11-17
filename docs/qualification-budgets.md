@@ -43,8 +43,11 @@ cache controls, and service-tier overrides are outside this qualification policy
 Lost or malformed responses, contradictory usage, abandoned pending work, and
 journal failures after dispatch retain reservations and suspend further paid
 dispatch. Admission or persistence failures before dispatch stop the request
-before network execution. A
-restart marks interrupted attempts inactive and preserves the suspension.
+before network execution. When admission proves an initial generation was not
+sent, its receipt settles at zero cost and the full reservation returns to the
+allowance without suspension. A rejected status poll retains the existing
+reservation because the generation already started. A restart marks interrupted
+attempts inactive and preserves the suspension.
 The allowance and expiry fail closed. Keep the active operation on a Gateway
 release that implements this policy; database schema versioning alone does not
 enforce that deployment floor.
@@ -52,7 +55,9 @@ enforce that deployment floor.
 ## Operator inspection and reconciliation
 
 Run the deployed CLI against its existing management database. Inspection
-emits metadata and cost evidence without prompts, answers, or credentials:
+emits metadata and cost evidence without prompts, answers, or credentials.
+Each inspection validates accounting and collects its output within one database
+snapshot, so concurrent reservations and settlements cannot mix receipt states:
 
 ```sh
 llm-proxy qualification-budget inspect \
