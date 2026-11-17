@@ -35,8 +35,10 @@ func TestPublicHealthChecksDatastoreWithoutUsage(t *testing.T) {
 		Endpoints: NewEndpoints(), ProviderCatalog: internalTestProviderCatalog(models),
 		ModelCatalog: models, LogLevel: LogLevelInfo, AssetStorePath: t.TempDir(),
 		upstreamRateLimits:         upstreamRateLimits{rules: map[string]upstreamRateLimitRule{}},
-		managementSessionValidator: validator, requestTimeoutPolicy: policy, validated: true,
+		managementSessionValidator: validator, requestTimeoutPolicy: policy,
 	}
+	config.ApplyTunables()
+	config.validated = true
 	invalidConfig := config
 	invalidConfig.Management.TAuthURL = ""
 	if _, err := buildRouterWithStoreForTest(t, invalidConfig, zap.NewNop().Sugar(), newManagedTenantStore); err == nil || !strings.Contains(err.Error(), "mcp.configure") {

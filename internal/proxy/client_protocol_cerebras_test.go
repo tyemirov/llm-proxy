@@ -26,21 +26,14 @@ const cerebrasQualifiedSchema = `{"type":"object","properties":{"answer":{"type"
 
 func cerebrasCandidateCatalog(t *testing.T, provider string) *proxy.ProviderCatalog {
 	t.Helper()
-	schema := testfixtures.ProviderCatalog(t).Schema()
-	for index := range schema.Models {
-		if schema.Models[index].ID == cerebrasQualifiedModel {
-			schema.Models[index].Enabled = proxy.ModelEnabled
-		}
+	canonical := testfixtures.ProviderCatalog(t)
+	if provider == "cerebras" {
+		return canonical
 	}
+	schema := canonical.Schema()
 	for index := range schema.Providers {
-		candidate := &schema.Providers[index]
-		if candidate.ID == "cerebras" {
-			candidate.ID = provider
-			candidate.Enabled = proxy.ModelEnabled
-			for oi := range candidate.Offerings {
-				candidate.Offerings[oi].Enabled = proxy.ModelEnabled
-				candidate.Offerings[oi].DefaultOperations = []string{"text"}
-			}
+		if schema.Providers[index].ID == "cerebras" {
+			schema.Providers[index].ID = provider
 		}
 	}
 	catalog, err := proxy.NewProviderCatalog(schema)
@@ -114,7 +107,7 @@ func TestClientProtocolsCerebrasOfficialClientAndArbitraryProvider(t *testing.T)
 					t.Errorf("schema changed %s", observed)
 				}
 				w.Header().Set("Content-Type", "application/json")
-				io.WriteString(w, `{"choices":[{"message":{"content":"{\"answer\":\"yes\"}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":9,"completion_tokens":5,"total_tokens":14,"completion_tokens_details":{"reasoning_tokens":3}}}`)
+				io.WriteString(w, `{"choices":[{"message":{"content":" {\"answer\" : \"yes\"} "},"finish_reason":"stop"}],"usage":{"prompt_tokens":9,"completion_tokens":5,"total_tokens":14,"completion_tokens_details":{"reasoning_tokens":3}}}`)
 			}))
 			defer upstream.Close()
 			server := cerebrasHTTPServer(t, upstream.URL, provider)
@@ -172,6 +165,8 @@ func TestClientProtocolsCerebrasAdmissionAndFailureUsage(t *testing.T) {
 		status                      int
 	}{
 		{"success", "stop", `{"answer":"yes"}`, `,"usage":{"prompt_tokens":9,"completion_tokens":5,"total_tokens":14}`, 200},
+		{"reasoning-included-in-output", "stop", `{"answer":"yes"}`, `,"usage":{"prompt_tokens":9,"completion_tokens":5,"total_tokens":14,"completion_tokens_details":{"reasoning_tokens":3}}`, 200},
+		{"failed-reasoning-included-in-output", "length", `{"answer":"yes"}`, `,"usage":{"prompt_tokens":9,"completion_tokens":5,"total_tokens":14,"completion_tokens_details":{"reasoning_tokens":3}}`, 502},
 		{"truncated", "length", `{"answer":"yes"}`, `,"usage":{"prompt_tokens":9,"completion_tokens":5,"total_tokens":14}`, 502},
 		{"invalid-schema", "stop", `{"answer":"no"}`, `,"usage":{"prompt_tokens":9,"completion_tokens":5,"total_tokens":14}`, 502},
 		{"missing-usage", "stop", `{"answer":"yes"}`, ``, 200},
@@ -213,7 +208,7 @@ func TestClientProtocolsCerebrasAdmissionAndFailureUsage(t *testing.T) {
 			if scenario.usage == "" {
 				expected = 0
 			}
-			if usage.Totals.TotalTokens != expected || usage.Totals.ResponseTokens != map[bool]int{true: 5, false: 0}[scenario.usage != ""] {
+			if usage.Totals.FailedRequests != map[bool]int{true: 0, false: 1}[scenario.status == http.StatusOK] || usage.Totals.TotalTokens != expected || usage.Totals.ResponseTokens != map[bool]int{true: 5, false: 0}[scenario.usage != ""] {
 				t.Fatalf("operational usage=%+v", usage.Totals)
 			}
 
