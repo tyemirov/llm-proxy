@@ -5122,7 +5122,7 @@ components:
       name: max_tokens
       in: query
       required: false
-      description: Initial per-attempt output budget. A transport that declares continuation actions reuses this budget for a missing suffix.
+      description: Optional output allowance. Omission selects the catalog output ceiling when known and otherwise preserves the upstream default. Explicit values must fit the selected offering.
       schema:
         type: integer
         minimum: 1
@@ -11037,7 +11037,7 @@ components:
         max_tokens:
           type: integer
           minimum: 1
-          description: Initial output budget. A transport that declares continuation actions reuses it for missing-suffix attempts.
+          description: Optional output allowance. Omission selects the catalog output ceiling when known and otherwise preserves the upstream default. Explicit values must fit the selected offering.
         reasoning_effort:
           type: string
           minLength: 1
@@ -11081,7 +11081,7 @@ components:
         max_tokens:
           type: integer
           minimum: 1
-          description: Initial output budget. A transport that declares continuation actions reuses it for missing-suffix attempts.
+          description: Optional output allowance. Omission selects the catalog output ceiling when known and otherwise preserves the upstream default. Explicit values must fit the selected offering.
         reasoning_effort:
           type: string
           minLength: 1

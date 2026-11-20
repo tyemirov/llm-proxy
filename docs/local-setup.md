@@ -38,7 +38,10 @@ tenant inputs, including the signing key it shares with the API. Only llm-proxy
 receives the provider-key encryption configuration; aggregate dotenv files and
 live provider smoke-test credentials are not injected into auxiliary
 containers. The API image is built from the current source and runs the
-canonical `configs/config.yml` configuration.
+generated `configs/config.local.yml` configuration. Each preparation regenerates
+that ignored file from `configs/config.yml` with `payments: null`. All other
+configuration stays unchanged. The local stack requires no Paddle inputs.
+Invalid source configuration stops preparation before container startup.
 
 Local and production orchestration do not bind an Alibaba Cloud URL. Each Alibaba Cloud connection
 stores its Singapore Model Studio workspace URL and API key.
