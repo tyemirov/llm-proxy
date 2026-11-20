@@ -30,6 +30,12 @@ mprlab_resources:
               variable: LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY
             - id: llm-proxy-qualification-budget
               variable: LLM_PROXY_QUALIFICATION_BUDGET
+            - id: llm-proxy-paddle-api-key
+              variable: PADDLE_API_KEY
+            - id: llm-proxy-paddle-client-token
+              variable: PADDLE_CLIENT_TOKEN
+            - id: llm-proxy-paddle-webhook-secret
+              variable: PADDLE_WEBHOOK_SECRET
         source: .mprlab/deploy/.env
     lifecycle:
         ci:
@@ -169,6 +175,12 @@ mprlab_resources:
                           name: LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY
                         - input: llm-proxy-qualification-budget
                           name: LLM_PROXY_QUALIFICATION_BUDGET
+                        - input: llm-proxy-paddle-api-key
+                          name: PADDLE_API_KEY
+                        - input: llm-proxy-paddle-client-token
+                          name: PADDLE_CLIENT_TOKEN
+                        - input: llm-proxy-paddle-webhook-secret
+                          name: PADDLE_WEBHOOK_SECRET
                         - name: LLM_PROXY_MANAGEMENT_PROXY_ORIGIN
                           value: https://llm-proxy-api.mprlab.com
                         - name: LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN
