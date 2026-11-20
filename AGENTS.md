@@ -119,7 +119,7 @@ For agent executions launched by ISSUES Managing Director, completion is control
 
 ### Testing & Tooling
 
-- Use `Makefile` targets (`make test`, `make lint`, `make ci`) when local diagnostics are explicitly needed.
+- Use focused `Makefile` targets such as `make test` and `make lint` for local diagnostics. Apply `.mprlab/POLICY.md` to select and schedule full CI.
 - During the change, use the smallest target that validates the changed contract.
 - Complete the applicable validation after the last change.
 - Run stack-specific formatters only when the issue requires local validation output or explicit formatting changes.
@@ -198,7 +198,7 @@ Read the following files only when their condition applies.
 Read each selected guide in full before its first applicable action.
 
 - Before edits: `.mprlab/PLANNING.md`.
-- For technical prose: `.mprlab/AGENTS.DOCS.md` and `.mprlab/TERMINOLOGY.md`.
+- Before editing repository technical prose: `.mprlab/AGENTS.DOCS.md` and `.mprlab/TERMINOLOGY.md`.
 - For explicitly required ASD-STE100 compliance: `.mprlab/AGENTS.STE.md`.
 - For application onboarding or user-interface behavior: `.mprlab/AGENTS.PRODUCT.md`.
 - For deployment manifests, release, publication, deployment, or native preparation: `.mprlab/AGENTS.DEPLOYMENT.md`.
