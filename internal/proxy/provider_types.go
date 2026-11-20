@@ -266,7 +266,7 @@ type reasoningEffortCapability struct {
 // reasoningEffortAdapterSupportedValues is the adapter's accepted vocabulary;
 // each configured text route owns the ordered subset it exposes.
 var reasoningEffortAdapterSupportedValues = map[reasoningEffortAdapter]map[string]struct{}{
-	reasoningEffortAdapterVertexGenerateContent: {"minimal": {}, "low": {}, "medium": {}, "high": {}},
+	reasoningEffortAdapterVertexGenerateContent: {"minimal": {}, "low": {}, "medium": {}, "high": {}, "xhigh": {}},
 	reasoningEffortAdapterDashScopeResponses:    {"none": {}, "low": {}, "medium": {}, "xhigh": {}},
 	reasoningEffortAdapterXAIResponses:          {"none": {}, "low": {}, "medium": {}, "high": {}, "xhigh": {}},
 	reasoningEffortAdapterOpenAIResponses: {

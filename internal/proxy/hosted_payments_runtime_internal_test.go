@@ -24,7 +24,7 @@ func TestHostedPaymentsRuntimeProcessesFundingThroughNormalService(t *testing.T)
 		t.Fatal(err)
 	}
 	configuration := withInternalUpstreamCapacity(t, Configuration{Management: service.configuration, ProviderCatalog: internalCanonicalProviderCatalog(), AssetStorePath: t.TempDir(), Payments: &PaymentConfiguration{
-		Environment: "sandbox", ClientToken: "test_browserfixture", ProcessorAccountID: "processor-fixture", SupplierID: "supplier-fixture", APIKey: "checkout-fixture-key", APIBaseURL: processor.server.URL, WebhookSecret: paymentInboxTestSecret,
+		Environment: "sandbox", CheckoutURL: "https://checkout.example/app/", ClientToken: "test_browserfixture", ProcessorAccountID: "processor-fixture", SupplierID: "supplier-fixture", APIKey: "checkout-fixture-key", APIBaseURL: processor.server.URL, WebhookSecret: paymentInboxTestSecret,
 		Offers: []PaymentOfferConfiguration{{Code: "five", PriceID: "pri_01hv8x2axb33yr5y238zfwcn5p", FundingCents: 500}},
 	}})
 	configuration.Management.DatabasePath = source.File
@@ -177,10 +177,26 @@ func TestHostedPaymentsRuntimeFinancialFailureStopsHTTPAndRecovers(t *testing.T)
 }
 
 func TestHostedPaymentsRuntimeRejectsInvalidConfigurationBeforeOpeningDatabase(t *testing.T) {
-	for _, scenario := range []string{"secret", "secret-whitespace", "api-key", "api-key-whitespace", "client-token", "client-environment", "client-whitespace", "environment", "minimum", "price", "plaintext-remote"} {
+	for _, scenario := range []string{"secret", "secret-whitespace", "api-key", "api-key-whitespace", "client-token", "client-environment", "client-whitespace", "environment", "minimum", "price", "plaintext-remote", "checkout-missing", "checkout-http", "checkout-relative", "checkout-user", "checkout-query", "checkout-fragment", "checkout-empty-fragment", "checkout-escape"} {
 		t.Run(scenario, func(t *testing.T) {
-			input := &PaymentConfiguration{Environment: "sandbox", ClientToken: "test_browserfixture", ProcessorAccountID: "processor", SupplierID: "supplier", APIKey: "fixture-key", WebhookSecret: "fixture-secret", Offers: []PaymentOfferConfiguration{{Code: "five", PriceID: "pri_01hv8x2axb33yr5y238zfwcn5p", FundingCents: 500}}}
+			input := &PaymentConfiguration{Environment: "sandbox", CheckoutURL: "https://checkout.example/app/", ClientToken: "test_browserfixture", ProcessorAccountID: "processor", SupplierID: "supplier", APIKey: "fixture-key", WebhookSecret: "fixture-secret", Offers: []PaymentOfferConfiguration{{Code: "five", PriceID: "pri_01hv8x2axb33yr5y238zfwcn5p", FundingCents: 500}}}
 			switch scenario {
+			case "checkout-missing":
+				input.CheckoutURL = ""
+			case "checkout-http":
+				input.CheckoutURL = "http://checkout.example/app/"
+			case "checkout-relative":
+				input.CheckoutURL = "/app/"
+			case "checkout-user":
+				input.CheckoutURL = "https://user:secret@checkout.example/app/"
+			case "checkout-query":
+				input.CheckoutURL = "https://checkout.example/app/?funding_order_id=untrusted"
+			case "checkout-fragment":
+				input.CheckoutURL = "https://checkout.example/app/#fragment"
+			case "checkout-empty-fragment":
+				input.CheckoutURL = "https://checkout.example/app/#"
+			case "checkout-escape":
+				input.CheckoutURL = "https://%zz.example/app/"
 			case "client-token":
 				input.ClientToken = ""
 			case "client-environment":

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -76,6 +77,9 @@ func newCheckoutProtocolFixture(t *testing.T) *checkoutProtocolFixture {
 			encode(map[string]any{"data": []any{map[string]any{"id": "ctm_01hv8x2axb33yr5y238zfwcn5p"}}, "meta": map[string]any{"pagination": map[string]any{"has_more": false}}})
 		case request.Method == http.MethodPost && request.URL.Path == "/transactions":
 			var input struct {
+				Checkout *struct {
+					URL string `json:"url"`
+				} `json:"checkout"`
 				CustomerID string            `json:"customer_id"`
 				Metadata   map[string]string `json:"custom_data"`
 				Items      []struct {
@@ -89,6 +93,9 @@ func newCheckoutProtocolFixture(t *testing.T) *checkoutProtocolFixture {
 			}
 			if input.Metadata["funding_order_id"] == "" || input.Metadata["billing_account_id"] != "billing-journal" || input.CustomerID != "ctm_01hv8x2axb33yr5y238zfwcn5p" || len(input.Items) != 1 || input.Items[0].Quantity != 1 {
 				t.Errorf("unbound checkout: %+v", input)
+			}
+			if input.Checkout == nil || input.Checkout.URL != "https://checkout.example/app/?funding_order_id="+input.Metadata["funding_order_id"] {
+				t.Errorf("transaction checkout=%+v; missing owned-order URL", input.Checkout)
 			}
 			id := fmt.Sprintf("txn_%026d", fixture.creates.Add(1))
 			if fixture.wrongAccount.Load() {
@@ -139,7 +146,7 @@ func checkoutWorkerFixture(t *testing.T, database *gormManagedTenantDatabase, ca
 	if err != nil {
 		t.Fatal(err)
 	}
-	worker := newPaddleCheckoutDelivery(database, catalog, client)
+	worker := newPaddleCheckoutDelivery(database, catalog, client, paymentCheckoutURLFixture(t))
 	worker.now = func() time.Time { return now }
 	return worker
 }
@@ -345,4 +352,13 @@ func TestHostedPaymentsCheckoutRetainsAmbiguousTransactions(t *testing.T) {
 			}
 		})
 	}
+}
+
+func paymentCheckoutURLFixture(t *testing.T) url.URL {
+	t.Helper()
+	parsed, err := url.Parse("https://checkout.example/app/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return *parsed
 }

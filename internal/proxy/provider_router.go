@@ -67,6 +67,12 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 	}
 	requestContext = qualificationLogicalContext(requestContext)
 	defer func() { executionError = errors.Join(executionError, finishQualificationExecution(requestContext)) }()
+	// Omission delegates output sizing to the selected catalog offering. Explicit
+	// caller limits remain the initial allowance; unknown ceilings stay provider-owned.
+	if request.maxTokens == nil && request.model.hasOutputTokenLimit {
+		maximum := request.model.outputTokenLimit
+		request.maxTokens = &maximum
+	}
 	originalMessages := request.messages
 	accumulatedText := strings.Builder{}
 	var accumulatedUsage *tokenUsage
@@ -227,11 +233,7 @@ func continuationMaxTokens(currentMaxTokens *int, model textModelDefinition, lat
 		return currentMaxTokens
 	}
 	if currentMaxTokens == nil {
-		if !model.hasOutputTokenLimit {
-			return nil
-		}
-		nextMaxTokens := model.outputTokenLimit
-		return &nextMaxTokens
+		return nil
 	}
 
 	maximumMaxTokens := math.MaxInt

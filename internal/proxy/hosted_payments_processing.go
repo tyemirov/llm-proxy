@@ -23,6 +23,7 @@ const (
 )
 
 var paymentMinorAmountPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)$`)
+var paymentSignedMinorAmountPattern = regexp.MustCompile(`^(0|-?[1-9][0-9]*)$`)
 var paymentCurrencyPattern = regexp.MustCompile(`^[A-Z]{3}$`)
 
 type managedPaymentReceiptRecord struct {
@@ -144,7 +145,7 @@ func (worker *paddlePaymentProcessor) process(ctx context.Context, event managed
 	if err != nil {
 		return worker.deferEvent(ctx, event, "transaction_mismatch")
 	}
-	if verified.updatedAt.Before(eventEvidence.updatedAt) {
+	if paddleSnapshotPrecedes(verified.updatedAt, eventEvidence.updatedAt) {
 		return worker.deferEvent(ctx, event, "transaction_snapshot_stale")
 	}
 	if eventEvidence.digest != verified.digest {
@@ -163,6 +164,12 @@ type verifiedCompletedPayment struct {
 	updatedAt   time.Time
 	encoded     string
 	digest      string
+}
+
+// Paddle's transaction API truncates revisions to microseconds while its
+// webhooks can retain finer precision. Keep the original evidence unchanged.
+func paddleSnapshotPrecedes(current, event time.Time) bool {
+	return current.Truncate(time.Microsecond).Before(event.Truncate(time.Microsecond))
 }
 
 func completedPaymentEvidence(transaction billing.PaddleTransactionCompletedWebhookData, order managedFundingOrderRecord, checkout managedPaymentCheckoutRecord) (verifiedCompletedPayment, error) {
@@ -271,7 +278,7 @@ func (worker *paddlePaymentProcessor) credit(ctx context.Context, event managedP
 		if lock.RowsAffected != 1 {
 			return errFundingNotFound
 		}
-		if err := retainPaymentStateObservation(tx, observation); err != nil {
+		if err := retainPaymentStateObservation(tx, observation, evidence.transaction); err != nil {
 			return err
 		}
 		var retained managedPaymentReceiptRecord

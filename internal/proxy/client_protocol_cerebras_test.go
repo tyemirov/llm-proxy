@@ -218,7 +218,7 @@ func TestClientProtocolsCerebrasAdmissionAndFailureUsage(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); w.WriteHeader(500) }))
 	defer upstream.Close()
 	server := cerebrasHTTPServer(t, upstream.URL, "cerebras")
-	for _, extra := range []string{`,"reasoning_effort":"xhigh"`, `,"max_tokens":32769`, `,"web_search":true`, `,"structured_output":{"schema":{"type":"object","properties":{"a":{"type":"string","pattern":"x"}},"additionalProperties":false}}`} {
+	for _, extra := range []string{`,"reasoning_effort":"xhigh"`, `,"max_tokens":65537`, `,"web_search":true`, `,"structured_output":{"schema":{"type":"object","properties":{"a":{"type":"string","pattern":"x"}},"additionalProperties":false}}`} {
 		body := `{"model":"qwen3.8-27b","messages":[{"role":"user","content":"hello"}]` + extra + `}`
 		status, _, data := cerebrasPost(t, server, "/v2?provider=cerebras", body, "cerebras:negative")
 		if status != 400 || calls.Load() != 0 {

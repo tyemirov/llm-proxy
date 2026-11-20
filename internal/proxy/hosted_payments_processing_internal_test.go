@@ -15,6 +15,7 @@ func completedPaymentFixture(t *testing.T, processor *checkoutProtocolFixture) m
 	defer processor.mutex.Unlock()
 	transaction := processor.transactions[0]
 	transaction["status"] = "completed"
+	transaction["checkout"] = map[string]any{"url": "https://checkout.example.test/?_ptxn=" + transaction["id"].(string)}
 	transaction["billed_at"] = "2026-09-23T11:59:59Z"
 	transaction["updated_at"] = "2026-09-23T12:00:01Z"
 	transaction["invoice_number"] = "INV-FIXTURE-1"

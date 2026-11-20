@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -154,17 +155,23 @@ func xa1dBudgetAnswer(w http.ResponseWriter, _ *http.Request) {
 func TestQualificationBudgetXA1DConcurrentCapAndTenantIsolation(t *testing.T) {
 	started := make(chan struct{}, 4)
 	release := make(chan struct{})
-	fixture := newXA1DBudgetFixture(t, 70000, func(w http.ResponseWriter, r *http.Request) { started <- struct{}{}; <-release; xa1dBudgetAnswer(w, r) })
+	fixture := newXA1DBudgetFixture(t, 140000, func(w http.ResponseWriter, r *http.Request) { started <- struct{}{}; <-release; xa1dBudgetAnswer(w, r) })
+	releaseRequests := sync.OnceFunc(func() { close(release) })
+	t.Cleanup(releaseRequests)
 	done := make(chan *httptest.ResponseRecorder, 1)
 	go func() { done <- fixture.request(t, fixture.secret, "") }()
-	<-started
+	select {
+	case <-started:
+	case response := <-done:
+		t.Fatalf("selected request ended before upstream entry: status=%d body=%s", response.Code, response.Body.String())
+	}
 	rejected := fixture.request(t, fixture.secret, "")
 	if rejected.Code == http.StatusOK || fixture.calls.Load() != 1 {
 		t.Fatalf("cap status=%d calls=%d", rejected.Code, fixture.calls.Load())
 	}
 	other := make(chan *httptest.ResponseRecorder, 1)
 	go func() { other <- fixture.request(t, fixture.otherSecret, "") }()
-	close(release)
+	releaseRequests()
 	if response := <-done; response.Code != http.StatusOK {
 		t.Fatalf("selected status=%d body=%s", response.Code, response.Body.String())
 	}
@@ -172,7 +179,7 @@ func TestQualificationBudgetXA1DConcurrentCapAndTenantIsolation(t *testing.T) {
 		t.Fatalf("other status=%d body=%s", response.Code, response.Body.String())
 	}
 	receipt := fixture.inspect(t)
-	if receipt["remaining_micro_usd"] != float64(69993) || len(receipt["attempts"].([]any)) != 1 {
+	if receipt["remaining_micro_usd"] != float64(139993) || len(receipt["attempts"].([]any)) != 1 {
 		t.Fatalf("receipt=%v", receipt)
 	}
 }
@@ -657,11 +664,15 @@ func TestQualificationBudgetXA1DConfiguredRouteAndBillableFeatures(t *testing.T)
 		}
 		io.WriteString(w, `{"id":"answer","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"answer"}]}],"usage":{"input_tokens":2,"output_tokens":3}}`)
 	})
-	// The public request omits its limit; the private policy supplies the wire cap.
+	// The catalog default exceeds this private allowance and must not dispatch.
 	response := httptest.NewRecorder()
 	fixture.router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/?key="+fixture.secret+"&provider=openai&model=gpt-6-luna&prompt=test", nil))
+	if response.Code == http.StatusOK || fixture.calls.Load() != 0 || len(fixture.inspect(t)["attempts"].([]any)) != 0 {
+		t.Fatalf("catalog default escaped private allowance: status=%d calls=%d body=%s", response.Code, fixture.calls.Load(), response.Body.String())
+	}
+	response = fixture.request(t, fixture.secret, "")
 	if response.Code != http.StatusOK || fixture.calls.Load() != 1 {
-		t.Fatalf("omitted cap status=%d calls=%d body=%s", response.Code, fixture.calls.Load(), response.Body.String())
+		t.Fatalf("explicit cap status=%d calls=%d body=%s", response.Code, fixture.calls.Load(), response.Body.String())
 	}
 	for _, body := range []string{
 		`{"model":"gpt-6-luna","max_tokens":128,"messages":[{"role":"user","content":"test"}],"tools":[{"name":"lookup","description":"Lookup data","parameters":{"type":"object","properties":{},"additionalProperties":false}}]}`,
@@ -730,20 +741,24 @@ func TestQualificationBudgetXA1DObservationDurabilityFailures(t *testing.T) {
 	}
 }
 
-func TestQualificationBudgetXA1DGeminiOmittedWireBound(t *testing.T) {
+func TestQualificationBudgetXA1DGeminiRequiresPrivateOutputAllowance(t *testing.T) {
 	fixture := newXA1DBudgetProviderFixture(t, 1000000, "gemini", "gemini-3.5-flash-lite", func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&payload)
 		configuration, _ := payload["generation_config"].(map[string]any)
 		if configuration["max_output_tokens"] != float64(128) {
-			t.Errorf("Gemini omitted output bound not enforced: %v", payload)
+			t.Errorf("Gemini explicit output allowance not enforced: %v", payload)
 		}
 		io.WriteString(w, `{"status":"completed","steps":[{"type":"model_output","content":[{"type":"text","text":"answer"}]}],"usage":{"total_input_tokens":2,"total_output_tokens":3,"total_thought_tokens":0,"total_tokens":5}}`)
 	})
 	response := httptest.NewRecorder()
 	fixture.router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/?key="+fixture.secret+"&provider=gemini&model=gemini-3.5-flash-lite&prompt=test", nil))
+	if response.Code == http.StatusOK || fixture.calls.Load() != 0 || len(fixture.inspect(t)["attempts"].([]any)) != 0 {
+		t.Fatalf("Gemini catalog default escaped private allowance: status=%d calls=%d body=%s", response.Code, fixture.calls.Load(), response.Body.String())
+	}
+	response = fixture.request(t, fixture.secret, "")
 	if response.Code != http.StatusOK || fixture.calls.Load() != 1 {
-		t.Fatalf("Gemini omitted bound status=%d calls=%d body=%s", response.Code, fixture.calls.Load(), response.Body.String())
+		t.Fatalf("Gemini explicit allowance status=%d calls=%d body=%s", response.Code, fixture.calls.Load(), response.Body.String())
 	}
 }
 

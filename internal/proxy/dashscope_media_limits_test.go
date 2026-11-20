@@ -14,7 +14,7 @@ import (
 )
 
 func TestDashScopeMediaImageCount(t *testing.T) {
-	for _, model := range []string{"qwen3.7-plus", "qwen3.6-flash", "qwen3.8-flash"} {
+	for _, model := range []string{"qwen3.7-plus", "qwen3.6-flash", "qwen3.8-flash", "qwen3.8-27b"} {
 		t.Run(model, func(t *testing.T) {
 			calls := 0
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +61,7 @@ func TestDashScopeMediaImageCount(t *testing.T) {
 }
 
 func TestDashScopeMediaDataURIBoundary(t *testing.T) {
-	for _, model := range []string{"qwen3.7-plus", "qwen3.6-flash", "qwen3.8-flash"} {
+	for _, model := range []string{"qwen3.7-plus", "qwen3.6-flash", "qwen3.8-flash", "qwen3.8-27b"} {
 		t.Run(model, func(t *testing.T) {
 			calls := 0
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -110,12 +110,15 @@ func TestDashScopeMediaCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	count := 0
+	expected := map[string]bool{"qwen3.7-plus": true, "qwen3.6-flash": true, "qwen3.8-flash": true, "qwen3.8-27b": true}
 	for _, offering := range public.Offerings {
 		if offering.Provider != "dashscope" || len(offering.MediaLimits) == 0 {
 			continue
 		}
-		count++
+		if !expected[offering.Model] {
+			t.Fatalf("unexpected or duplicate image offering=%s", offering.Model)
+		}
+		delete(expected, offering.Model)
 		for _, limit := range offering.MediaLimits {
 			if limit.ID == proxy.CatalogMediaLimitIDInlineRequestBytes {
 				if limit.Status != "unknown" || limit.Value != nil {
@@ -144,7 +147,7 @@ func TestDashScopeMediaCatalog(t *testing.T) {
 			}
 		}
 	}
-	if count != 3 {
-		t.Fatalf("image offerings=%d", count)
+	if len(expected) != 0 {
+		t.Fatalf("missing image offerings=%v", expected)
 	}
 }

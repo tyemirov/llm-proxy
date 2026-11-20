@@ -17,6 +17,7 @@ import (
 // PaymentConfiguration selects one processor environment. Nil disables payments.
 type PaymentConfiguration struct {
 	Environment        string                      `mapstructure:"environment"`
+	CheckoutURL        string                      `mapstructure:"checkout_url"`
 	ClientToken        string                      `mapstructure:"client_token"`
 	ProcessorAccountID string                      `mapstructure:"processor_account_id"`
 	SupplierID         string                      `mapstructure:"supplier_id"`
@@ -38,6 +39,7 @@ type paymentSettings struct {
 	client      billing.PaddleCommerceClient
 	verifier    *billing.PaddleWebhookVerifier
 	clientToken string
+	checkoutURL url.URL
 }
 
 var paymentClientTokenPattern = regexp.MustCompile(`^(test|live)_[a-zA-Z0-9]+$`)
@@ -52,6 +54,10 @@ func newPaymentSettings(input *PaymentConfiguration) (*paymentSettings, error) {
 	}
 	if !paymentClientTokenPattern.MatchString(input.ClientToken) || !strings.HasPrefix(input.ClientToken, prefix) {
 		return nil, fmt.Errorf("configure payments: client_token must match the payment environment")
+	}
+	checkoutURL, err := url.Parse(input.CheckoutURL)
+	if err != nil || checkoutURL.Scheme != "https" || checkoutURL.Hostname() == "" || checkoutURL.User != nil || checkoutURL.RawQuery != "" || checkoutURL.ForceQuery || strings.Contains(input.CheckoutURL, "#") {
+		return nil, fmt.Errorf("configure payments: checkout_url requires an HTTPS URL without credentials, query, or fragment")
 	}
 	if input.APIBaseURL != "" {
 		parsed, err := url.Parse(input.APIBaseURL)
@@ -79,7 +85,7 @@ func newPaymentSettings(input *PaymentConfiguration) (*paymentSettings, error) {
 	if err != nil {
 		return nil, fmt.Errorf("configure payments event verification: %w", err)
 	}
-	return &paymentSettings{catalog: catalog, client: client, verifier: verifier, clientToken: input.ClientToken}, nil
+	return &paymentSettings{catalog: catalog, client: client, verifier: verifier, clientToken: input.ClientToken, checkoutURL: *checkoutURL}, nil
 }
 
 type paddlePaymentRuntime struct {
@@ -94,7 +100,7 @@ func newPaddlePaymentRuntime(settings *paymentSettings, database *gormManagedTen
 	if settings == nil {
 		return nil, nil
 	}
-	checkout := newPaddleCheckoutDelivery(database, settings.catalog, settings.client)
+	checkout := newPaddleCheckoutDelivery(database, settings.catalog, settings.client, settings.checkoutURL)
 	processor := newPaddlePaymentProcessor(database, settings.catalog, settings.client)
 	inbox := newPaddlePaymentInbox(database, settings.catalog, settings.verifier)
 	if err := bindPaymentEnvironment(database.database, settings.catalog.environment); err != nil {
