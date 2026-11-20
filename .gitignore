@@ -26,6 +26,7 @@ dist/
 node_modules/
 playwright-report/
 test-results/
+/configs/config.local.yml
 output/playwright/
 tmp/
 __pycache__/
