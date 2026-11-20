@@ -35,7 +35,8 @@ done < <(git -C "$repository_root" ls-files -z)
 git -C "$application_root" init --quiet --initial-branch=master
 unset LLM_PROXY_MANAGEMENT_ADMIN_EMAILS LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID \
   LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY \
-  DEPLOY_SUDO_PASSWORD_TUTOSH LLM_PROXY_QUALIFICATION_BUDGET
+  DEPLOY_SUDO_PASSWORD_TUTOSH LLM_PROXY_QUALIFICATION_BUDGET \
+  PADDLE_API_KEY PADDLE_CLIENT_TOKEN PADDLE_WEBHOOK_SECRET
 cat >"$application_root/.mprlab/deploy/.env" <<'ENVIRONMENT'
 LLM_PROXY_MANAGEMENT_ADMIN_EMAILS=installed-gateway@example.invalid
 LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID=installed-gateway.apps.googleusercontent.com
@@ -43,6 +44,9 @@ LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY=synthetic-installed-gateway-signing-key
 LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=synthetic-installed-gateway-encryption-key
 DEPLOY_SUDO_PASSWORD_TUTOSH=synthetic-installed-gateway-sudo-password
 LLM_PROXY_QUALIFICATION_BUDGET=null
+PADDLE_API_KEY=synthetic-installed-gateway-paddle-key
+PADDLE_CLIENT_TOKEN=live_InstalledGatewayFixture
+PADDLE_WEBHOOK_SECRET=synthetic-installed-gateway-paddle-webhook-secret
 ENVIRONMENT
 git -C "$application_root" check-ignore --quiet .mprlab/deploy/.env
 git -C "$application_root" add --all

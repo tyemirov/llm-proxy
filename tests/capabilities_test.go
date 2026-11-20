@@ -188,7 +188,7 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 		if _, retired := retiredGeminiModels[model.Identifier]; retired {
 			testingInstance.Fatalf("public capability catalog exposed retired Gemini model=%s", model.Identifier)
 		}
-		if model.Publisher == "google" && !strings.HasPrefix(model.Identifier, "gemini-3") {
+		if model.Publisher == "google" && !strings.HasPrefix(model.Identifier, "gemini-3") && model.Identifier != "gemini-4-neon" && model.Identifier != "gemini-4-hydrogen" {
 			testingInstance.Fatalf("public capability catalog exposed retired Gemini model=%s", model.Identifier)
 		}
 		for _, capability := range model.Capabilities {
@@ -197,6 +197,11 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 			}
 		}
 		switch model.Identifier {
+		case "gemini-4-neon", "gemini-4-hydrogen":
+			if !slices.Equal(model.ProviderOfferings, []string{"vertex-project:" + model.Identifier}) ||
+				!slices.Equal(model.Capabilities, []string{proxy.PublicModelCapabilityAudioInput, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityReasoning, proxy.PublicModelCapabilityStructuredOutput, proxy.PublicModelCapabilityText}) {
+				testingInstance.Fatalf("Gemini 4 project capability=%+v", model)
+			}
 		case proxy.DefaultTranscriptionModel:
 			if !slices.Equal(model.Capabilities, []string{proxy.PublicModelCapabilityDictation}) {
 				testingInstance.Fatalf("OpenAI dictation capability=%+v", model)
@@ -380,7 +385,8 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 		proxy.ProviderNameTypeSafe:  1,
 		proxy.ProviderNameOpenAI:    13,
 		"vertex":                    4,
-		proxy.ProviderNameDashScope: 3,
+		"vertex-project":            2,
+		proxy.ProviderNameDashScope: 4,
 		proxy.ProviderNameGemini:    5,
 		proxy.ProviderNameAnthropic: 11,
 		proxy.ProviderNameMoonshot:  4,
@@ -390,6 +396,7 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 		proxy.ModelNameDashScopeQwen37Plus:  250,
 		proxy.ModelNameDashScopeQwen36Flash: 250,
 		"qwen3.8-flash":                     250,
+		"qwen3.8-27b":                       250,
 	}
 	observedOfferingCounts := map[string]int{}
 	for _, offering := range catalog.Offerings {
@@ -401,7 +408,7 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 		if offering.Provider == proxy.ProviderNameTypeSafe {
 			expectedLimitCount = 4
 		}
-		if (offering.Provider == proxy.ProviderNameGemini || offering.Provider == "vertex") && slices.Contains(offering.Capabilities, proxy.ModelOperationText) {
+		if (offering.Provider == proxy.ProviderNameGemini || offering.Provider == "vertex" || offering.Provider == "vertex-project") && slices.Contains(offering.Capabilities, proxy.ModelOperationText) {
 			expectedLimitCount = 5
 		}
 		if _, expectedProvider := expectedOfferingCounts[offering.Provider]; !expectedProvider || len(offering.MediaLimits) != expectedLimitCount {
@@ -413,7 +420,9 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 			if offering.Provider == proxy.ProviderNameTypeSafe {
 				expectedVerificationDate = "2026-11-11"
 			}
-			if offering.Provider == "vertex" || (offering.Provider == proxy.ProviderNameOpenAI && offering.Model == "gpt-6-astra") {
+			if offering.Provider == "vertex-project" {
+				expectedVerificationDate = "2026-11-19"
+			} else if offering.Provider == "vertex" || (offering.Provider == proxy.ProviderNameOpenAI && offering.Model == "gpt-6-astra") {
 				expectedVerificationDate = "2026-09-07"
 			} else if offering.Provider == proxy.ProviderNameMoonshot {
 				expectedVerificationDate = "2026-08-13"

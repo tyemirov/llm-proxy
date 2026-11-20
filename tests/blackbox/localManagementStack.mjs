@@ -84,7 +84,7 @@ export async function startLocalManagementStack(authRouting = "frontend", {admin
     }
     const capacityConfig = yaml.load(llmProxyConfig);
     capacityConfig.server.asset_store_path = path.join(temporaryDirectory, "assets");
-    if (payments) capacityConfig.payments = payments;
+    capacityConfig.payments = payments ?? null;
     if (hosted) capacityConfig.hosted = hosted;
     capacityConfig.server.upstream_capacity.origins = capacityConfig.server.upstream_capacity.origins.filter(rule => rule.origin !== "https://api.fal.ai");
     capacityConfig.server.upstream_capacity.origins.push({origin: frontendOrigin, active: 4, queued: 24});
