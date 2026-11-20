@@ -195,7 +195,10 @@ Root `AGENTS.md` is the agent entrypoint. Shared rules live under `.mprlab/`.
 
 Read `.mprlab/POLICY.md` for every task.
 Read the following files only when their condition applies.
-Read each selected guide in full before its first applicable action.
+Open each selected guide and read its full contents before acting. If the output is truncated, read the remaining chunks.
+Follow required references at every depth, including Markdown links and named files in prose or tables. Apply the conditions in each document. A scoped reference selects the named section or record.
+Resolve relative links from the document that contains them and explicit repository paths from the repository root. Reuse content already read in this context, including when a link leads back to it.
+Before the dependent action, apply the requirements you found. If a required reference is unavailable, identify it and the affected action, and continue independent work.
 
 - Before edits: `.mprlab/PLANNING.md`.
 - Before editing repository technical prose: `.mprlab/AGENTS.DOCS.md` and `.mprlab/TERMINOLOGY.md`.
