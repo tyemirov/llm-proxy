@@ -1,13 +1,13 @@
 // @ts-check
 
-import { createConnectionContextResponsibility } from './connectionContext.js?v=20261119f102';
+import { createConnectionContextResponsibility } from './connectionContext.js?v=20261119paymentfix';
 
-import { APP_INTEGRITY_ERROR } from "../constants.js?v=20261119f102";
-import { createAdminDashboardResponsibility } from "./adminDashboard.js?v=20261119f102";
-import { createAuthenticationLifecycleResponsibility } from "./authenticationLifecycle.js?v=20261119f102";
-import { createManagementApplicationState } from "./managementApplicationState.js?v=20261119f102";
-import { createNotificationsResponsibility } from "./notifications.js?v=20261119f102";
-import { createUsageDashboardResponsibility } from "./usageDashboard.js?v=20261119f102";
+import { APP_INTEGRITY_ERROR } from "../constants.js?v=20261119paymentfix";
+import { createAdminDashboardResponsibility } from "./adminDashboard.js?v=20261119paymentfix";
+import { createAuthenticationLifecycleResponsibility } from "./authenticationLifecycle.js?v=20261119paymentfix";
+import { createManagementApplicationState } from "./managementApplicationState.js?v=20261119paymentfix";
+import { createNotificationsResponsibility } from "./notifications.js?v=20261119paymentfix";
+import { createUsageDashboardResponsibility } from "./usageDashboard.js?v=20261119paymentfix";
 
 /**
  * Compose the authenticated management application from non-overlapping UI responsibilities.

@@ -215,7 +215,7 @@ export const MPR_UI = Object.freeze({
 });
 
 export const RUNTIME_UI = Object.freeze({
-  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20261119f102",
+  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20261119paymentfix",
   APPLICATION_MODULE_ID: "llm-proxy-application-module",
   APPLICATION_MODULE_MISSING: "llm_proxy_application_module_missing",
   APPLICATION_READY_ATTRIBUTE: "data-llm-proxy-application",

@@ -1,5 +1,5 @@
 // @ts-check
-import {APP_INTEGRITY_ERROR} from '../constants.js?v=20261119f102';
+import {APP_INTEGRITY_ERROR} from '../constants.js?v=20261119paymentfix';
 const KEY='llm-proxy:payment-continuation';
 /** @typedef {{order_id:string,transaction_id:string}} PaymentContinuation */
 /** Read an untrusted continuation after the account is authenticated.

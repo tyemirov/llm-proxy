@@ -1,17 +1,17 @@
 // @ts-check
 
-import * as backend from '../core/backendClient.js?v=20261119f102';
-import {profileFailureMessage} from '../core/managementProfile.js?v=20261119f102';
-import './usageJournal.js?v=20261119f102';
-import './prepaidBalance.js?v=20261119f102';
-import './paymentHistory.js?v=20261119f102';
-import './fundingCheckout.js?v=20261119f102';
+import * as backend from '../core/backendClient.js?v=20261119paymentfix';
+import {profileFailureMessage} from '../core/managementProfile.js?v=20261119paymentfix';
+import './usageJournal.js?v=20261119paymentfix';
+import './prepaidBalance.js?v=20261119paymentfix';
+import './paymentHistory.js?v=20261119paymentfix';
+import './fundingCheckout.js?v=20261119paymentfix';
 
-import {COPY, PROVIDER_CAPABILITY_LABELS, PROVIDER_RESOURCE_LABELS, CAPABILITY_DOMAINS} from '../constants.js?v=20261119f102';
+import {COPY, PROVIDER_CAPABILITY_LABELS, PROVIDER_RESOURCE_LABELS, CAPABILITY_DOMAINS} from '../constants.js?v=20261119paymentfix';
 
-import {MODEL_TASKS, tasksForOffering, offeringMatchesTasks, reconcileSelectedTasks, toggleSelectedTask, renderTaskIcon, renderTaskDetails, renderTaskPicker} from '../modelTasks.js?v=20261119f102';
+import {MODEL_TASKS, tasksForOffering, offeringMatchesTasks, reconcileSelectedTasks, toggleSelectedTask, renderTaskIcon, renderTaskDetails, renderTaskPicker} from '../modelTasks.js?v=20261119paymentfix';
 
-import {startAutomaticUpdates, updateManagementData} from '../core/automaticUpdates.js?v=20261119f102';
+import {startAutomaticUpdates, updateManagementData} from '../core/automaticUpdates.js?v=20261119paymentfix';
 
 const MCP_PATH = '/mcp';
 
@@ -132,7 +132,9 @@ export class ConnectionDashboard extends HTMLElement {
   async selectTenant(id) {
     const revision = ++this.revision;
     this.tenantID = id; this.connectionID = ''; this.modelID = ''; this.secret = ''; this.requestExample = ''; this.profile = null; this.assignments = [];
-    this.message = ''; this.failure = ''; this.accessFailure=''; this.render();
+    this.message = ''; this.failure = ''; this.accessFailure='';
+    // Show routing while it loads. Mount billing widgets after initial selection.
+    this.render({includeBilling: this.firstElementChild !== null});
     if (id) {
       const [profile, assignments] = await Promise.all([backend.fetchTenant(id, this.controller.signal),backend.fetchProviderAssignments(id, this.controller.signal)]);
       if (revision !== this.revision) return;
@@ -140,7 +142,7 @@ export class ConnectionDashboard extends HTMLElement {
       this.connectionID = this.connections.find(c => c.tenant_ids.includes(id))?.id || '';
       this.adaptCapabilityForConnection();
     }
-    this.emitContext(); this.render();
+    this.emitContext();
   }
   /** @param {() => Promise<void>} action */
   async run(action) {
@@ -176,7 +178,8 @@ export class ConnectionDashboard extends HTMLElement {
       if (button instanceof HTMLButtonElement) button.disabled=this.busy;
     });
   }
-  render() {
+  /** @param {{includeBilling?: boolean}} [options] */
+  render({includeBilling = true} = {}) {
     this.setBusy();
     const dialog = this.querySelector('dialog[open]');
     if (dialog) { this.updateNotice(); return; }
@@ -188,7 +191,7 @@ export class ConnectionDashboard extends HTMLElement {
       <p class="cw-notice" role="status" aria-live="polite" data-notice></p>
       <section class="cw-details" aria-label="Selection details" data-details></section>
       <section class="cw-details" aria-label="Prepaid provider access" data-hosted-access></section>
-      <div data-billing-widgets>${this.billingWidgets()}</div>
+      <div data-billing-widgets>${includeBilling ? this.billingWidgets() : ''}</div>
     </section>`;
     this.renderMap(); this.renderDetails(promptDisclosures); this.renderHostedAccess(); this.updateNotice();
   }

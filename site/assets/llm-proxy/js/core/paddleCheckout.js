@@ -37,7 +37,7 @@ function loadPaddle() {
 export async function openPaddleCheckout(config,checkout,callback,signal) {
   if (config.environment!==checkout.environment) throw new Error('The checkout environment changed. Reload this page.');
   const paddle=await loadPaddle();signal.throwIfAborted();
-  // Check the actual URL at the SDK boundary even if the early capture resource failed.
+  // Check the current URL at the SDK boundary even after the page's early capture.
   const query=new URL(window.location.href).searchParams;
   if(query.has('_ptxn') || query.has('funding_order_id'))throw new Error('The payment link could not be verified. Reopen this page before checkout.');
   if (initialized && (initialized.token!==config.client_token || initialized.environment!==config.environment)) throw new Error('The checkout configuration changed. Reload this page.');

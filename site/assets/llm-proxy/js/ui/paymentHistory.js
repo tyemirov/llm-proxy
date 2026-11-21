@@ -1,8 +1,8 @@
 // @ts-check
-import {startAutomaticUpdates, updateManagementData, reloadVisibleCollection} from '../core/automaticUpdates.js?v=20261119f102';
-import {FUNDING_CHANGED_EVENT,FUNDING_RESUME_EVENT} from '../constants.js?v=20261119f102';
-import * as backend from '../core/backendClient.js?v=20261119f102';
-import {profileFailureMessage} from '../core/managementProfile.js?v=20261119f102';
+import {startAutomaticUpdates, updateManagementData, reloadVisibleCollection} from '../core/automaticUpdates.js?v=20261119paymentfix';
+import {FUNDING_CHANGED_EVENT,FUNDING_RESUME_EVENT} from '../constants.js?v=20261119paymentfix';
+import * as backend from '../core/backendClient.js?v=20261119paymentfix';
+import {profileFailureMessage} from '../core/managementProfile.js?v=20261119paymentfix';
 
 /** @param {unknown} value */
 function escapeHTML(value) { return String(value).replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character] || character)); }

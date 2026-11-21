@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="c293d0d0d13a63eef29f246a11dd29c123abab5b5def1d852698f7dc5edb48ab">
+    <meta name="openapi-source-sha256" content="925616f812baa62e2e2270c20da09b651df080e3f8d90f0eeee4dcaefcff4596">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="c293d0d0d13a63eef29f246a11dd29c123abab5b5def1d852698f7dc5edb48ab">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="925616f812baa62e2e2270c20da09b651df080e3f8d90f0eeee4dcaefcff4596">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>c293d0d0d13a63eef29f246a11dd29c123abab5b5def1d852698f7dc5edb48ab</code></span>
+          <span>Source SHA-256 <code>925616f812baa62e2e2270c20da09b651df080e3f8d90f0eeee4dcaefcff4596</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -2532,6 +2532,7 @@ paths:
     get:
       operationId: listFundingOffers
       summary: List server funding offers
+      description: Returns 503 while funding checkout is disabled.
       tags: [Management]
       security:
         - TAuthSession: []
@@ -2603,6 +2604,7 @@ paths:
         The account and creation key identify one order. A repeated key returns
         that order. A changed offer or processor identity returns 409.
         Order creation does not grant funds or confirm payment.
+        The service returns 503 while funding checkout is disabled.
       x-llm-proxy-required-request-content-type: application/json
       parameters:
         - $ref: &#39;#/components/parameters/BillingAccountID&#39;
@@ -13794,6 +13796,7 @@ components:
           <span class="api-operation-id">listFundingOffers</span>
         </header>
         <h2>List server funding offers</h2>
+        <p>Returns 503 while funding checkout is disabled.</p>
         <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
         <div class="api-contract-block">
           <h3>Parameters</h3>
@@ -13870,7 +13873,7 @@ components:
           <span class="api-operation-id">createFundingOrder</span>
         </header>
         <h2>Create an owned funding order</h2>
-        <p>Select one server offer. Commit its immutable price, USD funding amount, processor identity, and checkout delivery intent in one transaction. The account and creation key identify one order. A repeated key returns that order. A changed offer or processor identity returns 409. Order creation does not grant funds or confirm payment.</p>
+        <p>Select one server offer. Commit its immutable price, USD funding amount, processor identity, and checkout delivery intent in one transaction. The account and creation key identify one order. A repeated key returns that order. A changed offer or processor identity returns 409. Order creation does not grant funds or confirm payment. The service returns 503 while funding checkout is disabled.</p>
         <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
         <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
         <div class="api-contract-block">

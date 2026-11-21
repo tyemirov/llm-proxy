@@ -1,9 +1,9 @@
 // @ts-check
-import * as backend from '../core/backendClient.js?v=20261119f102';
-import {readPaymentContinuation,clearPaymentContinuation} from '../core/paymentContinuation.js?v=20261119f102';
-import {openPaddleCheckout} from '../core/paddleCheckout.js?v=20261119f102';
-import {profileFailureMessage} from '../core/managementProfile.js?v=20261119f102';
-import {FUNDING_CHANGED_EVENT,FUNDING_RESUME_EVENT,APP_INTEGRITY_ERROR} from '../constants.js?v=20261119f102';
+import * as backend from '../core/backendClient.js?v=20261119paymentfix';
+import {readPaymentContinuation,clearPaymentContinuation} from '../core/paymentContinuation.js?v=20261119paymentfix';
+import {openPaddleCheckout} from '../core/paddleCheckout.js?v=20261119paymentfix';
+import {profileFailureMessage} from '../core/managementProfile.js?v=20261119paymentfix';
+import {FUNDING_CHANGED_EVENT,FUNDING_RESUME_EVENT,APP_INTEGRITY_ERROR} from '../constants.js?v=20261119paymentfix';
 
 const INTENT_PREFIX='llm-proxy:funding-intent:';
 const POLL_MILLISECONDS=1000,POLL_LIMIT=30;
@@ -104,15 +104,19 @@ class FundingCheckout extends HTMLElement {
     }
     this.message='Checkout is still being prepared. Resume this payment later.';
   }
-  /** Keep unrelated requests and their original idempotency keys until resolved.
+  /** Preserve the original creation key until the server identifies the order.
    * @param {import('../types.d.js').FundingOrder} order
    */
   selectRetainedOrder(order) {
-    if(this.intent && this.intent.order_id!==order.id) {
+    if(this.intent?.order_id===null) {
       this.message='Finish the retained funding request before continuing this payment link.';
       return false;
     }
-    if(!this.intent)this.saveIntent({key:crypto.randomUUID(),offer_code:order.offer_code,order_id:order.id});
+    if(this.intent?.order_id!==order.id) {
+      this.saveIntent({key:crypto.randomUUID(),offer_code:order.offer_code,order_id:order.id});
+      this.closeCheckout();
+      this.statusRequested=false;
+    }
     return true;
   }
   async continueSavedLink() {
