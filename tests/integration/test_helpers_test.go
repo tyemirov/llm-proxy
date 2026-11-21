@@ -138,6 +138,10 @@ func newIntegrationServer(testingInstance *testing.T, openAIServer *httptest.Ser
 }
 
 func newIntegrationServerWithDefaults(testingInstance *testing.T, openAIServer *httptest.Server, defaults proxy.TenantDefaults) *httptest.Server {
+	return newIntegrationServerWithDefaultsAndCatalog(testingInstance, openAIServer, defaults, nil)
+}
+
+func newIntegrationServerWithDefaultsAndCatalog(testingInstance *testing.T, openAIServer *httptest.Server, defaults proxy.TenantDefaults, catalog *proxy.ProviderCatalog) *httptest.Server {
 	testingInstance.Helper()
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetModelsURL(openAIServer.URL + integrationModelsPath)
@@ -152,6 +156,7 @@ func newIntegrationServerWithDefaults(testingInstance *testing.T, openAIServer *
 	router, buildRouterError := testfixtures.BuildManagedRouter(testingInstance, integrationConfiguration(testingInstance, proxy.Configuration{
 		LogLevel:         logLevelDebug,
 		UpstreamCapacity: testfixtures.UpstreamCapacity(1, 4),
+		ProviderCatalog:  catalog,
 		Endpoints:        endpoints,
 	}), loggerInstance.Sugar(), tenant)
 	if buildRouterError != nil {

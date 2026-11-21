@@ -254,22 +254,43 @@ func TestProxyGPT56SavedReasoningEffortFollowsTheResolvedRoute(testingInstance *
 }
 
 func TestProxyTenantReasoningEffortDoesNotLeakToUnsupportedResolvedRoute(testingInstance *testing.T) {
+	const requestedModel = "gpt-6.2-sol"
+	schema := testfixtures.ProviderCatalog(testingInstance).Schema()
+	configured := false
+	for _, provider := range schema.Providers {
+		if provider.ID != proxy.ProviderNameOpenAI {
+			continue
+		}
+		for index, offering := range provider.Offerings {
+			if offering.Model == requestedModel {
+				provider.Offerings[index].ReasoningEffort = nil
+				configured = true
+			}
+		}
+	}
+	if !configured {
+		testingInstance.Fatal("selected test offering is absent")
+	}
+	catalog, err := proxy.NewProviderCatalog(schema)
+	if err != nil {
+		testingInstance.Fatal(err)
+	}
 	var capturedPayload any
 	openAIServer := newOpenAIServer(testingInstance, integrationOKBody, &capturedPayload)
 	testingInstance.Cleanup(openAIServer.Close)
-	applicationServer := newIntegrationServerWithDefaults(testingInstance, openAIServer, proxy.TenantDefaults{
+	applicationServer := newIntegrationServerWithDefaultsAndCatalog(testingInstance, openAIServer, proxy.TenantDefaults{
 		Provider:              proxy.ProviderNameOpenAI,
-		Model:                 "gpt-6.2-sol",
+		Model:                 "gpt-6-sol",
 		TranscriptionProvider: proxy.ProviderNameOpenAI,
 		TranscriptionModel:    proxy.DefaultTranscriptionModel,
 		ReasoningEffort:       reasoningEffortHighValue,
-	})
+	}, catalog)
 
 	requestURL, _ := url.Parse(applicationServer.URL)
 	queryValues := requestURL.Query()
 	queryValues.Set(promptQueryParameter, promptValue)
 	queryValues.Set(keyQueryParameter, integrationServiceSecret)
-	queryValues.Set(adaptiveModelQueryParameter, "gpt-6.2-sol")
+	queryValues.Set(adaptiveModelQueryParameter, requestedModel)
 	requestURL.RawQuery = queryValues.Encode()
 	httpResponse, requestError := http.Get(requestURL.String())
 	if requestError != nil {
@@ -282,6 +303,9 @@ func TestProxyTenantReasoningEffortDoesNotLeakToUnsupportedResolvedRoute(testing
 	}
 	_, _ = io.ReadAll(httpResponse.Body)
 	payloadMap, _ := capturedPayload.(map[string]any)
+	if payloadMap["model"] != requestedModel {
+		testingInstance.Fatalf("upstream model=%v want=%s", payloadMap["model"], requestedModel)
+	}
 	if _, hasReasoning := payloadMap[reasoningField]; hasReasoning {
 		testingInstance.Fatalf("unsupported route received reasoning: %v", payloadMap)
 	}
