@@ -4541,11 +4541,11 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
 
 ## Features
 
-- [-] [F103] (P1) Add current OpenAI routes and retire general-purpose models before GPT-5.6.
+- [x] [F103] (P1) Add current OpenAI routes and retire general-purpose models before GPT-5.6.
   Goal: Make GPT-6 through GPT-6.2 explicitly selectable, including GPT-6.2 Sol for the authorized iRoom comparison, and apply the approved GPT-5.6 cutoff.
   Requirements: Add gpt-6-sol, gpt-6.1-sol, gpt-6.1-terra, gpt-6.2-astra and gpt-6.2-sol; audit gpt-6-astra and gpt-6-luna. Keep GPT-5.6 and GPT-6 routes. Remove gpt-4o-mini, gpt-4o, gpt-4.1, gpt-5-mini, gpt-5, gpt-5.5 and gpt-5.5-pro. Map mini selections to gpt-6-luna, standard selections to gpt-6.2-sol and pro selections to gpt-6.2-astra in a bounded version-18 ORM startup transaction. Preserve supported explicit efforts and omission; reject incompatible inherited efforts before any write. Update global/provider/new-tenant/verification defaults and the image Responses parent to gpt-6.2-sol. Preserve historical usage, accepted-request identities, credentials, prompts, timestamps and unrelated catalog entries. Declare exact documented efforts, limits and Standard price tiers; retain unknown cache-retention prices on new routes.
   Deliverables: Catalog declarations, bounded model-only cutover, table-driven public HTTP/discovery/rejection/price-boundary tests, ORM startup and rollback tests, accepted-request reconciliation evidence, and the current-route guide.
-  Validation: Focused checks passed for exact route selection, documented efforts, images with strict schema, usage headers, price boundaries, startup migration and rollback, and original-request readback. Browser checks passed for current model selection, discovery, and hosted requests. Use `make ci` for the final code validation gate.
+  Validation: Focused checks passed for exact route selection, documented efforts, images with strict schema, usage headers, price boundaries, startup migration and rollback, and original-request readback. Browser checks passed for current model selection, discovery, and hosted requests. Final `make ci` passed all 15 gates with 100.0% Go statement coverage and 188 frontend browser tests.
 
 - [-] [F099] (P1) Enforce operator-controlled qualification attempt budgets.
   Goal: Bound catalog-priced qualification work for one existing tenant and retain every paid attempt without creating customer billing resources.
