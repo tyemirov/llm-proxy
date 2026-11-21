@@ -125,8 +125,15 @@ func TestHostedPaymentsCorruptRetainedTransactionRevision(t *testing.T) {
 				t.Fatal(err)
 			}
 			sendPaymentEventFixture(t, fixture.database, paymentStateFixture(t, fixture.processor, "completed", "2026-09-23T12:00:01Z"), "transaction.updated", 2)
-			if err := paymentProcessorFixture(t, fixture.checkout, fixture.database).reconcile(t.Context()); err == nil || !strings.Contains(err.Error(), message) {
-				t.Fatalf("corrupt retained revision error=%v; want %s", err, message)
+			if err := paymentProcessorFixture(t, fixture.checkout, fixture.database).reconcile(t.Context()); err != nil {
+				t.Fatalf("corrupt retained revision stopped the worker: %v", err)
+			}
+			var event managedPaymentInboxRecord
+			if err := fixture.database.database.First(&event, "event_type = ?", "transaction.updated").Error; err != nil {
+				t.Fatal(err)
+			}
+			if event.State != paymentInboxReconciliation || event.Reason != "transaction_observation_integrity" {
+				t.Fatalf("corrupt retained revision state=%s reason=%s", event.State, event.Reason)
 			}
 			if _, err := ReconcilePayments(t.Context(), fixture.management, fixture.payments, "corrupt-revision"); err == nil || !strings.Contains(err.Error(), message) {
 				t.Fatalf("corrupt audit revision error=%v; want %s", err, message)

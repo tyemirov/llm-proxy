@@ -18,6 +18,8 @@ const (
 	paymentTransactionStatusCanceled = "canceled"
 )
 
+var errPaymentStateEvidenceIntegrity = errors.New("retained payment state evidence integrity failed")
+
 // Observations retain the processor response used for a state decision.
 // They commit with the order, event, and any funding effect.
 type managedPaymentStateObservationRecord struct {
@@ -68,11 +70,11 @@ func paymentStateObservation(event managedPaymentInboxRecord, order managedFundi
 
 func (record managedPaymentStateObservationRecord) matchesTransactionRevision(current billing.PaddleTransactionCompletedWebhookData) (bool, error) {
 	if sha256Hex(record.Evidence) != record.EvidenceDigest {
-		return false, fmt.Errorf("retained payment state evidence integrity failed for order %s", record.OrderID)
+		return false, fmt.Errorf("%w for order %s", errPaymentStateEvidenceIntegrity, record.OrderID)
 	}
 	var retained billing.PaddleTransactionCompletedWebhookData
 	if err := json.Unmarshal([]byte(record.Evidence), &retained); err != nil {
-		return false, fmt.Errorf("decode retained payment state for order %s: %w", record.OrderID, err)
+		return false, fmt.Errorf("%w: decode retained payment state for order %s: %w", errPaymentStateEvidenceIntegrity, record.OrderID, err)
 	}
 	// Refund aggregates change independently of the transaction revision.
 	// Their separate adjustment history controls financial effects.

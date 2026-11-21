@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -27,11 +28,22 @@ type checkoutProtocolFixture struct {
 	wrongAccount atomic.Bool
 	recurring    atomic.Bool
 	priceStatus  atomic.Int64
+	customers    map[string]checkoutProtocolCustomer
+}
+
+type checkoutProtocolCustomer struct {
+	accountID  string
+	customerID string
 }
 
 func newCheckoutProtocolFixture(t *testing.T) *checkoutProtocolFixture {
 	t.Helper()
-	fixture := &checkoutProtocolFixture{portalURL: "https://customer-portal.paddle.com/fixture?token=temporary"}
+	fixture := &checkoutProtocolFixture{
+		portalURL: "https://customer-portal.paddle.com/fixture?token=temporary",
+		customers: map[string]checkoutProtocolCustomer{
+			"owner@example.com": {accountID: "billing-journal", customerID: "ctm_01hv8x2axb33yr5y238zfwcn5p"},
+		},
+	}
 	fixture.server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		fixture.mutex.Lock()
 		defer fixture.mutex.Unlock()
@@ -66,15 +78,25 @@ func newCheckoutProtocolFixture(t *testing.T) *checkoutProtocolFixture {
 			writer.WriteHeader(http.StatusCreated)
 			encode(map[string]any{"data": map[string]any{"urls": map[string]any{"general": map[string]any{"overview": fixture.portalURL}}}})
 		case request.Method == http.MethodGet && request.URL.Path == "/adjustments":
-			if request.URL.Query().Get("transaction_id") != "txn_00000000000000000000000001" {
+			transactionID := request.URL.Query().Get("transaction_id")
+			index := slices.IndexFunc(fixture.transactions, func(transaction map[string]any) bool {
+				return transaction["id"] == transactionID
+			})
+			if index == -1 {
 				t.Error("unscoped adjustment read")
 			}
-			encode(map[string]any{"data": fixture.adjustments, "meta": map[string]any{"pagination": map[string]any{"has_more": false}}})
-		case request.Method == http.MethodGet && request.URL.Path == "/customers":
-			if request.URL.Query().Get("email") == "" {
-				t.Error("customer lookup lacks owner email")
+			var adjustments []map[string]any
+			if index == 0 {
+				adjustments = fixture.adjustments
 			}
-			encode(map[string]any{"data": []any{map[string]any{"id": "ctm_01hv8x2axb33yr5y238zfwcn5p"}}, "meta": map[string]any{"pagination": map[string]any{"has_more": false}}})
+			encode(map[string]any{"data": adjustments, "meta": map[string]any{"pagination": map[string]any{"has_more": false}}})
+		case request.Method == http.MethodGet && request.URL.Path == "/customers":
+			email := request.URL.Query().Get("email")
+			customer, found := fixture.customers[email]
+			if !found {
+				t.Errorf("unbound customer lookup: %q", email)
+			}
+			encode(map[string]any{"data": []any{map[string]any{"id": customer.customerID}}, "meta": map[string]any{"pagination": map[string]any{"has_more": false}}})
 		case request.Method == http.MethodPost && request.URL.Path == "/transactions":
 			var input struct {
 				Checkout *struct {
@@ -91,7 +113,11 @@ func newCheckoutProtocolFixture(t *testing.T) *checkoutProtocolFixture {
 				t.Error(err)
 				return
 			}
-			if input.Metadata["funding_order_id"] == "" || input.Metadata["billing_account_id"] != "billing-journal" || input.CustomerID != "ctm_01hv8x2axb33yr5y238zfwcn5p" || len(input.Items) != 1 || input.Items[0].Quantity != 1 {
+			owned := false
+			for _, customer := range fixture.customers {
+				owned = owned || input.CustomerID == customer.customerID && input.Metadata["billing_account_id"] == customer.accountID
+			}
+			if !owned || input.Metadata["funding_order_id"] == "" || len(input.Items) != 1 || input.Items[0].Quantity != 1 {
 				t.Errorf("unbound checkout: %+v", input)
 			}
 			if input.Checkout == nil || input.Checkout.URL != "https://checkout.example/app/?funding_order_id="+input.Metadata["funding_order_id"] {

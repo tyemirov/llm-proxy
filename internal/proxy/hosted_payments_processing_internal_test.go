@@ -11,9 +11,14 @@ import (
 
 func completedPaymentFixture(t *testing.T, processor *checkoutProtocolFixture) map[string]any {
 	t.Helper()
+	return completedPaymentFixtureAt(t, processor, 0)
+}
+
+func completedPaymentFixtureAt(t *testing.T, processor *checkoutProtocolFixture, index int) map[string]any {
+	t.Helper()
 	processor.mutex.Lock()
 	defer processor.mutex.Unlock()
-	transaction := processor.transactions[0]
+	transaction := processor.transactions[index]
 	transaction["status"] = "completed"
 	transaction["checkout"] = map[string]any{"url": "https://checkout.example.test/?_ptxn=" + transaction["id"].(string)}
 	transaction["billed_at"] = "2026-09-23T11:59:59Z"

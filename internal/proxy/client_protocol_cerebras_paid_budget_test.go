@@ -25,7 +25,7 @@ import (
 
 const cerebrasPaidNativeOutputSchema = `{"type":"object","properties":{"ok":{"type":"string","enum":["READY"]}},"required":["ok"],"additionalProperties":false}`
 
-func TestCerebrasPaidNativeOutputSourceRequestedBudget(t *testing.T) {
+func TestCerebrasPortableNativeOutputSourceBudget(t *testing.T) {
 	var calls atomic.Int64
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
@@ -34,10 +34,10 @@ func TestCerebrasPaidNativeOutputSourceRequestedBudget(t *testing.T) {
 	}))
 	defer upstream.Close()
 	server := cerebrasHTTPServer(t, upstream.URL, "cerebras")
-	body := `{"model":"qwen3.8-27b","messages":[{"role":"user","content":"Return READY JSON."}],"max_tokens":40960,"reasoning_effort":"medium","structured_output":{"schema":` + cerebrasPaidNativeOutputSchema + `}}`
-	status, _, _ := cerebrasPost(t, server, "/v2?provider=cerebras", body, "cerebras-paid-native-output-source")
+	body := `{"model":"qwen3.8-27b","messages":[{"role":"user","content":"Return READY JSON."}],"max_tokens":32768,"reasoning_effort":"medium","structured_output":{"schema":` + cerebrasPaidNativeOutputSchema + `}}`
+	status, _, _ := cerebrasPost(t, server, "/v2?provider=cerebras", body, "cerebras-portable-native-output-source")
 	if status != http.StatusOK || calls.Load() != 1 {
-		t.Fatalf("requested source40960 route status=%d native_calls=%d", status, calls.Load())
+		t.Fatalf("portable source output cap status=%d native_calls=%d", status, calls.Load())
 	}
 	response, err := server.Client().Get(server.URL + proxy.PublicCapabilitiesPath)
 	if err != nil {
@@ -56,17 +56,17 @@ func TestCerebrasPaidNativeOutputSourceRequestedBudget(t *testing.T) {
 		found = true
 		outputOK, contextOK := false, false
 		for _, control := range offering.Controls {
-			if control.ID == "max_tokens" && control.Maximum != nil && *control.Maximum == 40960 {
+			if control.ID == "max_tokens" && control.Maximum != nil && *control.Maximum == 32768 {
 				outputOK = true
 			}
 		}
 		for _, limit := range offering.Limits {
-			if limit.ID == "context_tokens" && limit.Value != nil && *limit.Value == 131072 {
+			if limit.ID == "context_tokens" && limit.Value != nil && *limit.Value == 65536 {
 				contextOK = true
 			}
 		}
 		if !outputOK || !contextOK {
-			t.Fatal("public paid Cerebras profile does not expose requested output40960/context131072")
+			t.Fatal("public Cerebras offering does not expose portable output 32768 and context 65536")
 		}
 	}
 	if !found {

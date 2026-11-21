@@ -738,7 +738,7 @@ func TestQwenCurrentProviderAllowance(t *testing.T) {
 		provider, effort string
 		maximum          int
 		ceiling          int64
-	}{{"dashscope", "medium", 65536, 696608000}, {"cerebras", "medium", 40960, 190791680}, {"cerebras", "high", 40960, 190791680}} {
+	}{{"dashscope", "medium", 65536, 696608000}, {"cerebras", "medium", 32768, 113704960}, {"cerebras", "high", 32768, 113704960}} {
 		t.Run(profile.provider+"-"+profile.effort, func(t *testing.T) {
 			for _, mode := range []string{"two-settled-financial-stop", "unknown-usage-stop", "over-allocation-stop", "over-cap-native-stop", "sixteen-native-stop"} {
 				t.Run(mode, func(t *testing.T) {

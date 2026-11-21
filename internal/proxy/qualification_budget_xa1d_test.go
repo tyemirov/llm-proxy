@@ -153,9 +153,10 @@ func xa1dBudgetAnswer(w http.ResponseWriter, _ *http.Request) {
 }
 
 func TestQualificationBudgetXA1DConcurrentCapAndTenantIsolation(t *testing.T) {
+	const capMicroUSD = 70000
 	started := make(chan struct{}, 4)
 	release := make(chan struct{})
-	fixture := newXA1DBudgetFixture(t, 140000, func(w http.ResponseWriter, r *http.Request) { started <- struct{}{}; <-release; xa1dBudgetAnswer(w, r) })
+	fixture := newXA1DBudgetFixture(t, capMicroUSD, func(w http.ResponseWriter, r *http.Request) { started <- struct{}{}; <-release; xa1dBudgetAnswer(w, r) })
 	releaseRequests := sync.OnceFunc(func() { close(release) })
 	t.Cleanup(releaseRequests)
 	done := make(chan *httptest.ResponseRecorder, 1)
@@ -165,9 +166,15 @@ func TestQualificationBudgetXA1DConcurrentCapAndTenantIsolation(t *testing.T) {
 	case response := <-done:
 		t.Fatalf("selected request ended before upstream entry: status=%d body=%s", response.Code, response.Body.String())
 	}
-	rejected := fixture.request(t, fixture.secret, "")
-	if rejected.Code == http.StatusOK || fixture.calls.Load() != 1 {
-		t.Fatalf("cap status=%d calls=%d", rejected.Code, fixture.calls.Load())
+	concurrent := make(chan *httptest.ResponseRecorder, 1)
+	go func() { concurrent <- fixture.request(t, fixture.secret, "") }()
+	select {
+	case <-started:
+		t.Fatal("concurrent selected request reached upstream while the first reservation was active")
+	case rejected := <-concurrent:
+		if rejected.Code == http.StatusOK || fixture.calls.Load() != 1 {
+			t.Fatalf("cap status=%d calls=%d", rejected.Code, fixture.calls.Load())
+		}
 	}
 	other := make(chan *httptest.ResponseRecorder, 1)
 	go func() { other <- fixture.request(t, fixture.otherSecret, "") }()
@@ -179,7 +186,7 @@ func TestQualificationBudgetXA1DConcurrentCapAndTenantIsolation(t *testing.T) {
 		t.Fatalf("other status=%d body=%s", response.Code, response.Body.String())
 	}
 	receipt := fixture.inspect(t)
-	if receipt["remaining_micro_usd"] != float64(139993) || len(receipt["attempts"].([]any)) != 1 {
+	if receipt["remaining_micro_usd"] != float64(capMicroUSD-7) || len(receipt["attempts"].([]any)) != 1 {
 		t.Fatalf("receipt=%v", receipt)
 	}
 }

@@ -75,7 +75,11 @@ func (worker *paddlePaymentProcessor) reconcile(ctx context.Context) error {
 		return fmt.Errorf("find payment events: %w", err)
 	}
 	for _, event := range events {
-		if err := worker.process(ctx, event); err != nil {
+		err := worker.process(ctx, event)
+		if errors.Is(err, errPaymentStateEvidenceIntegrity) {
+			err = worker.deferEvent(ctx, event, "transaction_observation_integrity")
+		}
+		if err != nil {
 			return fmt.Errorf("process payment event %s: %w", event.EventID, err)
 		}
 	}

@@ -18,7 +18,7 @@ func TestSelectedOutputCeilingsFollowCatalog(t *testing.T) {
 	for _, route := range []struct {
 		provider, model string
 		maximum         int
-	}{{"cerebras", "qwen3.8-27b", 40960}, {"dashscope", "qwen3.8-27b", 131072}, {"dashscope", "qwen3.8-flash", 65536}, {"openai", "gpt-6-luna", 128000}, {"anthropic", "claude-haiku-5-5", 128000}, {"gemini", "gemini-3.6-flash", 65536}} {
+	}{{"cerebras", "qwen3.8-27b", 32768}, {"dashscope", "qwen3.8-27b", 131072}, {"dashscope", "qwen3.8-flash", 65536}, {"openai", "gpt-6-luna", 128000}, {"anthropic", "claude-haiku-5-5", 128000}, {"gemini", "gemini-3.6-flash", 65536}} {
 		t.Run(route.provider+"/"+route.model, func(t *testing.T) {
 			var maxima []int
 			incomplete := false
@@ -122,9 +122,17 @@ func TestSelectedOutputCeilingsFollowCatalog(t *testing.T) {
 			}
 			request := func(maximum int) int {
 				response := httptest.NewRecorder()
-				router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/?key=%s&provider=%s&model=%s&prompt=test&reasoning_effort=medium&max_tokens=%d", TestSecret, route.provider, route.model, maximum), nil))
+				path := fmt.Sprintf("/?key=%s&provider=%s&model=%s&prompt=test&reasoning_effort=medium", TestSecret, route.provider, route.model)
+				if maximum != 0 {
+					path += fmt.Sprintf("&max_tokens=%d", maximum)
+				}
+				router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
 				return response.Code
 			}
+			if status := request(0); status != 200 || !slices.Equal(maxima, []int{route.maximum}) {
+				t.Fatalf("omitted maximum status=%d native_maxima=%v; want ceiling %d", status, maxima, route.maximum)
+			}
+			maxima = nil
 			if status := request(route.maximum); status != 200 || !slices.Equal(maxima, []int{route.maximum}) {
 				t.Fatalf("catalog ceiling status=%d native_maxima=%v", status, maxima)
 			}
@@ -141,7 +149,8 @@ func TestSelectedOutputCeilingsFollowCatalog(t *testing.T) {
 			if route.provider != "gemini" {
 				maxima = nil
 				incomplete = true
-				if status := request(40000); status != 200 || !slices.Equal(maxima, []int{40000, min(80000, route.maximum)}) {
+				initial := min(40000, route.maximum-1)
+				if status := request(initial); status != 200 || !slices.Equal(maxima, []int{initial, min(initial*2, route.maximum)}) {
 					t.Fatalf("empty continuation status=%d native_maxima=%v", status, maxima)
 				}
 			}

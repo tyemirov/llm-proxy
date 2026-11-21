@@ -15,7 +15,7 @@ func paymentReconciliationConfiguration(t *testing.T, database *gormManagedTenan
 		t.Fatal(err)
 	}
 	return ManagementConfiguration{DatabaseDialector: database.database.Dialector}, &PaymentConfiguration{
-		Environment: "sandbox", CheckoutURL: "https://checkout.example/app/", ClientToken: "test_fixture", ProcessorAccountID: "processor-fixture", SupplierID: "supplier-fixture", APIKey: "checkout-fixture-key", APIBaseURL: processor.server.URL, WebhookSecret: "fixture-secret",
+		Environment: "sandbox", CheckoutEnabled: true, CheckoutURL: "https://checkout.example/app/", ClientToken: "test_fixture", ProcessorAccountID: "processor-fixture", SupplierID: "supplier-fixture", APIKey: "checkout-fixture-key", APIBaseURL: processor.server.URL, WebhookSecret: "fixture-secret",
 		Offers: []PaymentOfferConfiguration{{Code: "five", PriceID: "pri_01hv8x2axb33yr5y238zfwcn5p", FundingCents: 500}},
 	}
 }

@@ -20,7 +20,7 @@ func TestAutomaticOutputSizingUsesNativeOfferingLimits(t *testing.T) {
 		provider, model string
 		maximum         int
 	}{
-		{"cerebras", "qwen3.8-27b", 40960},
+		{"cerebras", "qwen3.8-27b", 32768},
 		{"dashscope", "qwen3.8-27b", 131072},
 		{"openai", "gpt-6-luna", 128000},
 		{"anthropic", "claude-haiku-5-5", 128000},
