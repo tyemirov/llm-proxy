@@ -1,0 +1,52 @@
+{
+  "scope": "Existing test/current-example/document adaptations for F103 OpenAI GPT-5.6 cutoff",
+  "checks": [
+    {
+      "log": "catalog-client-final.log",
+      "command": "make test-go-focused TEST_PATTERN='^Test(ModelActivation|CatalogRatingAdvertised|RootCommandRunsConfiguredProxyFromConfigFile|ClientProtocolsTenantDiscoveryAndAccounting|ManagementTokenMeasurementPresence|TokenPresenceCompatibilityJSON|IntegrationCanonicalOpenAIUpstreamCapacityStructuredBackground)'",
+      "status": "passed",
+      "log_sha256": "6d6800c8543ff95ec39d6a2cdb8ad3bd66bd5be53684cbea92af4b89347a0211"
+    },
+    {
+      "log": "current-routes-stable.log",
+      "command": "make test-go-focused TEST_PATTERN='^Test(Integration|MCP|Router|Structured|Image|MediaWorker|ResponseShape|ProviderRouting|AccountConnection)'",
+      "status": "passed",
+      "log_sha256": "0e4fed08bec940ba01207e1709ad1613378b06a0d7792c01ef1b4414f2a2349d"
+    },
+    {
+      "log": "offline-capability-fixtures.log",
+      "command": "make test-go-focused TEST_PATTERN='^Test(IntegrationModelCatalogRejectsUnsupportedWebSearch|ProviderRoutingRejectsModelReasoningEffortCapabilityOnUnsupportedRoute)'",
+      "status": "passed",
+      "log_sha256": "8ea499e865057daede482b09ac8560a2c3ef448a6df81a99157fa0cbb138ae86"
+    },
+    {
+      "log": "final-edge-fixtures.log",
+      "command": "make test-go-focused TEST_PATTERN='^Test(ManagementCapabilityMigration|AccountConnectionDefaultSaveUsesCurrentAssignment|ManagedProviderConnectionProjectionRejectsPersistedDrift|ManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants)'",
+      "status": "passed",
+      "log_sha256": "1b171e364fa798c7b4abb0e29a58aad52d18e12e31a0949896c374e53b0c7463"
+    },
+    {
+      "log": "predecessor-expectations.log",
+      "command": "make test-go-focused TEST_PATTERN='^Test(ManagedTenantInitializationPropagatesPreRetirementMigrationFailures|ManagedUsageDispositionInitializationValidatesVersionTwelvePrerequisites|ManagedResolvedUsageRouteSchemaElevenRejectsInvalidStoreShapes|ManagedTenantSQLiteMigrationPreflightRejectsMalformedOwnershipData)'",
+      "status": "passed",
+      "log_sha256": "5a726d6d937918cac62431d6b90d1d5878eb0ca2a35ecd7e9bb231b3df1b57b0"
+    },
+    {
+      "log": "hosted-final.log",
+      "command": "make test-go-focused TEST_PATTERN='^TestHosted'",
+      "status": "running",
+      "log_sha256": "97f6fc197eab0d30ba52f081e76fd0ddcac6c044581c6f0b4dc20820122a941b"
+    }
+  ],
+  "full_ci_run": false,
+  "external_operations": "No credential reads or publication/deployment. Two unintentionally permitted requests in unsupported-web-search fixture hit configured endpoint with hard-coded sk-test and returned401; fixture now uses an explicit unsupported synthetic capability plus in-memory transport guard. Focused guard check passes.",
+  "patch": "fixture-sweep.patch",
+  "patch_inventory": "fixture-sweep.json",
+  "changes": "Current routes and parent-image controls use retained models. Generic old request profiles and historical IDs remain in synthetic/history coverage; accepted journal-view row restored exactly to original bytes.",
+  "handoff": {
+    "remaining_exec_session": 49968,
+    "scratch_preserved": "_scratch/F103-retirement-fixtures/",
+    "plan_preserved": ".mprlab/XE82-PLAN.md",
+    "owner": "parent; retained scratch until curated integration verified"
+  }
+}

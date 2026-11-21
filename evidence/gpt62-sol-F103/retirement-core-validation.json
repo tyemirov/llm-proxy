@@ -1,0 +1,114 @@
+{
+  "issue": "F103",
+  "state": "retirement_core_frozen_for_primary_review",
+  "created_at": "2026-11-21T09:00:32.546282+00:00",
+  "patch_sha256": "a86733a7ca8fd05dfc3c4264fd493c51904c3d5c5423599af67f70d44b99c0af",
+  "files": {
+    "configs/providers.yml": {
+      "original_before_sha256": "6dbcd9769117219e6948bc17f3202d789605399c053c250854741e8b457bc7cb",
+      "retirement_start_sha256": "1a5b9e84fe0962b6dc86cc9c28d93b84b567482c10d7371d52a6c699a5cde63f",
+      "after_sha256": "b5f300ce047f1f103cfd5b232b92d4ba86419f3860223ff0a6f57fe5a2a994bc"
+    },
+    "internal/proxy/config.go": {
+      "original_before_sha256": "557adbc2ab7d76fcbad8b7bec08b51a6974f860d2f6a3a1f00b21828af7ee6b2",
+      "retirement_start_sha256": "557adbc2ab7d76fcbad8b7bec08b51a6974f860d2f6a3a1f00b21828af7ee6b2",
+      "after_sha256": "02d01118428845f33c37f01b8c6069a3510e7f9b39eaa8741b6a6f28ac6a90e6"
+    },
+    "internal/proxy/management_store.go": {
+      "original_before_sha256": "b74a568d17f89143ddf26350df4b118f78306c9783541572a1d4dca2f77b8147",
+      "retirement_start_sha256": "b74a568d17f89143ddf26350df4b118f78306c9783541572a1d4dca2f77b8147",
+      "after_sha256": "c1914544d843e9fca4b0123b475a6949b1199d76b7835a954481c85bbdde871b"
+    },
+    "internal/proxy/management_test.go": {
+      "original_before_sha256": "5e7569174281f6ea4b40a0fe03f611924cb9f197da7cf1afd249fcc3f0dbb9e2",
+      "retirement_start_sha256": "beb238646fd32b086e547a3044e06f9bdce6df2d04a7f3515943c4665de9c47d",
+      "after_sha256": "3b0dacb1536702e74c60a37b7ad742b83945e5681fe9e80c2425c43e8c8fb0f9"
+    },
+    "tests/capabilities_test.go": {
+      "original_before_sha256": "b2b887a8af7dfca73d748658e9fd3e54c4ee9695e1f634ab9f2d30b631525400",
+      "retirement_start_sha256": "3113791cdfdef770781a20dc7cc237f78dc8335ca40dfede991fa71284beda52",
+      "after_sha256": "2103fe9cb4361dac7724b5e11c939dcaf773824a5eddf327a5b6d28573f2112e"
+    },
+    "internal/proxy/gpt62_sol_catalog_test.go": {
+      "original_before_sha256": null,
+      "retirement_start_sha256": "9a4e8cc990ea237942373834638f1115f655735daa0c58c724c281f23eaa3ad6",
+      "after_sha256": "9a4e8cc990ea237942373834638f1115f655735daa0c58c724c281f23eaa3ad6"
+    },
+    "docs/gpt62-sol.md": {
+      "original_before_sha256": null,
+      "retirement_start_sha256": "7bf9544f6cab4c8535580c435d30e467e8a8d83fd90c414ec861ed79a51552ba",
+      "after_sha256": "59b0d73539f5fd1537bd050ab035f9abd328fcc82976bcf8548ef87ab22ec58e"
+    },
+    "docs/provider-catalog.md": {
+      "original_before_sha256": "d4516699862211c4c97b3597c2360f001a90ec74f23dfff62eaf36a68471d462",
+      "retirement_start_sha256": "1ffe4570f335c42fe59b2187b1c042808ff352d55312eb524c7895cc2f24a2d8",
+      "after_sha256": "c2540838fa54fe3980e18031a4d0536a19354a99d2bf47e868d2167a86f7dd05"
+    },
+    ".mprlab/ISSUES.md": {
+      "original_before_sha256": "1553e2225717f8cae707952538215c3021f7382d8bbf2c6c707af7b6122b55b4",
+      "retirement_start_sha256": "ce5be04a8701efdd307b54c2a456d0b3787d2219fdb3fedf9620695335051c32",
+      "after_sha256": "63e204aa9f5f1df41b41cc04e96d560f22fd7c07a0424b4a8fb1d849a862ab65"
+    },
+    "internal/proxy/openai_gpt56_retirement.go": {
+      "original_before_sha256": null,
+      "retirement_start_sha256": null,
+      "after_sha256": "8148fa0e4e0e63c2288802c3b6941d0f387321f53b633a32a0c146745ef4d3cf"
+    },
+    "internal/proxy/openai_gpt56_retirement_internal_test.go": {
+      "original_before_sha256": null,
+      "retirement_start_sha256": null,
+      "after_sha256": "1961ff5c371e3e94ce42d745e11e22fac8ae621a2c735d56c7b9c3766d78e028"
+    },
+    "internal/proxy/openai_gpt56_retirement_test.go": {
+      "original_before_sha256": null,
+      "retirement_start_sha256": null,
+      "after_sha256": "5208f371005eab4cda6a34cbdb5d4f9768afcbfaeb9b4613cb91035b157bcc31"
+    }
+  },
+  "baseline": "Original pre-F103 dirty baseline reconstructed by reversing immutable expanded-models.patch against pinned retirement starting bytes; new expansion files absent in original.",
+  "prior_artifacts_unchanged": {
+    "prepared.patch": "6811ff5853677e21fe69cab95ce81784fde776cf434dbf050495f36f92dd8743",
+    "expanded-models.patch": "d3bc780054e2054f51b57b03783096b7be9b17d88b974c9d381a66c28d4fafe7",
+    "expanded-validation.json": "f3d14cb62b5201ae7369aa95299f9839efda57dd59329ca35168064e6cf7770a"
+  },
+  "checks": {
+    "reverse_patch_matches_original_baseline": true,
+    "new_changed_lines_whitespace": true,
+    "application_authored_SQL_added": false
+  },
+  "tests": {
+    "retirement-focused-final.log": "PASS: make test-go-focused TEST_PATTERN=^Test(OpenAIGPT56Retirement|OpenAIGPT6|Managed|Management|AccountConnection|Integration_OmitsDisallowedParameters)",
+    "retirement-native-public-final.log": "PASS: make test-go-focused TEST_PATTERN=^TestOpenAIGPT56Retirement; dispatched and preexisting uncertain native JSON records; native/v1Chat/v1Responses rejection; zero upstream calls",
+    "retirement-catalogue-final.log": "Pending fixture-owner adaptations: two migration-index assumptions and removed GPT-4 family expectation. No core failure.",
+    "full_ci": "Pending primary final checkpoint; worker did not run."
+  },
+  "scope": {
+    "new_models": [
+      "gpt-6-sol",
+      "gpt-6.1-sol",
+      "gpt-6.1-terra",
+      "gpt-6.2-astra",
+      "gpt-6.2-sol"
+    ],
+    "audited_models": [
+      "gpt-6-astra",
+      "gpt-6-luna"
+    ],
+    "retired_models": [
+      "gpt-4o-mini",
+      "gpt-4o",
+      "gpt-4.1",
+      "gpt-5-mini",
+      "gpt-5",
+      "gpt-5.5",
+      "gpt-5.5-pro"
+    ],
+    "migration_version": 18,
+    "policy": "Preserve supported inherited efforts and omission; model columns only; unsupported effort rejects before writes; source usage and accepted native request identities unchanged."
+  },
+  "limits": [
+    "Independent review and final CI primary-owned.",
+    "Fixture sweep changes have separate owned patch.",
+    "No provider, production, credential, Git commit or release operation ran."
+  ]
+}

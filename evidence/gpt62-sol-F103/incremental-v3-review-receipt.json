@@ -1,0 +1,22 @@
+{
+  "state": "frozen_review_accepted",
+  "created_at": "2026-11-21T09:21:42.521216+00:00",
+  "patch": "incremental-v3-fix.patch",
+  "patch_sha256": "607233f70def997d2f15f8fefac823eb1c00705c793850c6260e255b8a165951",
+  "validation_sha256": "334985d66d33cffef760123bcc4c4608a2be1516e9ae9857ca24d78d12114d67",
+  "review": "Primary reported independent architect acceptance and application to alternate index with both Go files parse/format verified.",
+  "primary_curated_patch_sha256": "2e7f08564e8db9740be45a67d77dc03b3f3aed6dbe765090878bc2f98987e450",
+  "checks": {
+    "frozen_source_hashes_match": true,
+    "owned_v3_scratch_absent": true,
+    "reverse_proof_retained_in_validation": true
+  },
+  "coverage": {
+    "new_cutover_module": "124/124 statements,100% in focused retirement+Managed run",
+    "changed_management_functions": "471/478 statements,98.54%;7pre-existing error returns remain outsideselectedtests"
+  },
+  "limits": [
+    "FullCI remainsprimary-owned atfinalcheckpoint.",
+    "No checkout,index,Git,provider,production orcredential operation ran in this worker."
+  ]
+}

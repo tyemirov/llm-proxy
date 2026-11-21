@@ -1,0 +1,427 @@
+{
+  "created_at": "2026-11-21T09:09:13.639310+00:00",
+  "command": "make test-go-focused TEST_PATTERN='^Test(OpenAIGPT56Retirement|Managed)' GO_TEST_ARGS='-coverprofile=evidence/gpt62-sol-F103/retirement-focused-coverage.out -covermode=count'",
+  "result": "pass",
+  "scope": "Only new retirement module and functions changed by frozen core v2 patch in management_store.go. Coverage of other files intentionally excluded. Focused run is not whole-suite coverage.",
+  "files": {
+    "internal/proxy/openai_gpt56_retirement.go": {
+      "source_sha256": "8148fa0e4e0e63c2288802c3b6941d0f387321f53b633a32a0c146745ef4d3cf",
+      "functions": {
+        "openAICutoverTarget": {
+          "line": 26,
+          "statements": 1,
+          "covered_statements": 1,
+          "uncovered_blocks": [],
+          "percentage": 100.0
+        },
+        "projectOpenAIPredecessorDefaults": {
+          "line": 32,
+          "statements": 3,
+          "covered_statements": 3,
+          "uncovered_blocks": [],
+          "percentage": 100.0
+        },
+        "projectOpenAIPredecessorProfiles": {
+          "line": 39,
+          "statements": 5,
+          "covered_statements": 5,
+          "uncovered_blocks": [],
+          "percentage": 100.0
+        },
+        "validateOpenAIPredecessorRoutingDefaults": {
+          "line": 51,
+          "statements": 6,
+          "covered_statements": 6,
+          "uncovered_blocks": [],
+          "percentage": 100.0
+        },
+        "preflightOpenAICutover": {
+          "line": 64,
+          "statements": 78,
+          "covered_statements": 64,
+          "uncovered_blocks": [
+            {
+              "start_line": 72,
+              "end_line": 73,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\t\treturn plan, fmt.Errorf(\"%w: operation=preflight_openai_cutover invalid_preservation_policy source_model=%s\", errManagedTenantSchemaMigration, migration.source)\n\t\t}"
+            },
+            {
+              "start_line": 91,
+              "end_line": 92,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\treturn plan, fmt.Errorf(\"%w: operation=preflight_openai_cutover tenants: %w\", errManagedTenantSchemaMigration, err)\n\t}"
+            },
+            {
+              "start_line": 116,
+              "end_line": 117,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\t\treturn plan, fmt.Errorf(\"%w: operation=preflight_openai_cutover profiles: %w\", errManagedTenantSchemaMigration, err)\n\t\t}"
+            },
+            {
+              "start_line": 122,
+              "end_line": 123,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\t\treturn plan, fmt.Errorf(\"%w: operation=preflight_openai_cutover predecessor profiles: %w\", errManagedTenantSchemaMigration, err)\n\t\t}"
+            },
+            {
+              "start_line": 127,
+              "end_line": 128,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\t\t\treturn plan, fmt.Errorf(\"%w: operation=preflight_openai_cutover orphan_user=%s provider=%s\", errManagedTenantSchemaMigration, record.UserID, record.ProviderID)\n\t\t\t}"
+            },
+            {
+              "start_line": 132,
+              "end_line": 133,
+              "statements": 2,
+              "contains_task_changed_line": true,
+              "source": "\t\tvar predecessor []managedProviderAPIKeyRecord\n\t\tif err := database.Where(&managedProviderAPIKeyRecord{ProviderID: ProviderNameOpenAI}).Find(&predecessor).Error; err != nil {"
+            },
+            {
+              "start_line": 134,
+              "end_line": 135,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\t\treturn plan, fmt.Errorf(\"%w: operation=preflight_openai_cutover predecessor profiles: %w\", errManagedTenantSchemaMigration, err)\n\t\t}"
+            },
+            {
+              "start_line": 136,
+              "end_line": 136,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\tfor _, record := range predecessor {"
+            },
+            {
+              "start_line": 137,
+              "end_line": 138,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\t\tprofiles = append(profiles, managedProviderProfileRecord{TenantID: record.TenantID, ProviderID: record.ProviderID, TextModel: record.TextModel})\n\t\t}"
+            },
+            {
+              "start_line": 144,
+              "end_line": 145,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\t\t\treturn plan, fmt.Errorf(\"%w: operation=preflight_openai_cutover orphan_tenant=%s\", errManagedTenantSchemaMigration, profile.TenantID)\n\t\t\t}"
+            },
+            {
+              "start_line": 158,
+              "end_line": 159,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\t\t\treturn plan, fmt.Errorf(\"%w: operation=preflight_openai_cutover reason=retired_selection_after_cutover\", errManagedTenantSchemaMigration)\n\t\t\t}"
+            },
+            {
+              "start_line": 163,
+              "end_line": 164,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\t\treturn plan, fmt.Errorf(\"%w: operation=preflight_openai_cutover marker: %w\", errManagedTenantSchemaMigration, err)\n\t\t}"
+            },
+            {
+              "start_line": 167,
+              "end_line": 168,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\t\treturn plan, err\n\t\t}"
+            }
+          ],
+          "percentage": 82.05
+        },
+        "applyOpenAICutover": {
+          "line": 178,
+          "statements": 25,
+          "covered_statements": 20,
+          "uncovered_blocks": [
+            {
+              "start_line": 182,
+              "end_line": 183,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\t\treturn fmt.Errorf(\"%w: operation=apply_openai_cutover tenant=%s scope=profile: %w\", errManagedTenantSchemaMigration, selection.tenantID, err)\n\t\t}"
+            },
+            {
+              "start_line": 195,
+              "end_line": 196,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\t\treturn fmt.Errorf(\"%w: operation=apply_openai_cutover tenant=%s scope=default: %w\", errManagedTenantSchemaMigration, selection.tenantID, err)\n\t\t}"
+            },
+            {
+              "start_line": 198,
+              "end_line": 198,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\t\tcontinue"
+            },
+            {
+              "start_line": 202,
+              "end_line": 203,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\t\treturn fmt.Errorf(\"%w: operation=apply_openai_cutover tenant=%s source_model=%s scope=default rows=%d: %v\", errManagedTenantSchemaMigration, selection.tenantID, selection.source, result.RowsAffected, result.Error)\n\t\t}"
+            },
+            {
+              "start_line": 209,
+              "end_line": 210,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\treturn fmt.Errorf(\"%w: operation=apply_openai_cutover marker schema: %w\", errManagedTenantSchemaMigration, err)\n\t}"
+            }
+          ],
+          "percentage": 80.0
+        }
+      },
+      "statements": 118,
+      "covered_statements": 99,
+      "percentage": 83.9
+    },
+    "internal/proxy/management_store.go": {
+      "source_sha256": "c1914544d843e9fca4b0123b475a6949b1199d76b7835a954481c85bbdde871b",
+      "functions": {
+        "initializeManagedConnectionSchema": {
+          "line": 724,
+          "statements": 37,
+          "covered_statements": 31,
+          "uncovered_blocks": [
+            {
+              "start_line": 728,
+              "end_line": 729,
+              "statements": 1,
+              "contains_task_changed_line": false,
+              "source": "\t\t\treturn fmt.Errorf(\"%w: operation=inspect_schema: %w\", errManagedTenantSchemaMigration, err)\n\t\t}"
+            },
+            {
+              "start_line": 747,
+              "end_line": 748,
+              "statements": 1,
+              "contains_task_changed_line": false,
+              "source": "\t\t\t\treturn err\n\t\t\t}"
+            },
+            {
+              "start_line": 760,
+              "end_line": 761,
+              "statements": 1,
+              "contains_task_changed_line": false,
+              "source": "\t\t\t\treturn err\n\t\t\t}"
+            },
+            {
+              "start_line": 771,
+              "end_line": 772,
+              "statements": 1,
+              "contains_task_changed_line": false,
+              "source": "\t\t\t\treturn err\n\t\t\t}"
+            },
+            {
+              "start_line": 775,
+              "end_line": 776,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\t\treturn err\n\t\t}"
+            },
+            {
+              "start_line": 778,
+              "end_line": 779,
+              "statements": 1,
+              "contains_task_changed_line": false,
+              "source": "\t\t\treturn err\n\t\t}"
+            }
+          ],
+          "percentage": 83.78
+        },
+        "migrateManagedProviderConnectionDataWithReader": {
+          "line": 1331,
+          "statements": 77,
+          "covered_statements": 77,
+          "uncovered_blocks": [],
+          "percentage": 100.0
+        },
+        "migrateManagedKeyedRoutingDefaults": {
+          "line": 1535,
+          "statements": 26,
+          "covered_statements": 26,
+          "uncovered_blocks": [],
+          "percentage": 100.0
+        },
+        "preflightManagedQwenCloudRetirement": {
+          "line": 1644,
+          "statements": 31,
+          "covered_statements": 31,
+          "uncovered_blocks": [],
+          "percentage": 100.0
+        },
+        "validateManagedQwenCloudRetirementDefaults": {
+          "line": 1707,
+          "statements": 18,
+          "covered_statements": 18,
+          "uncovered_blocks": [],
+          "percentage": 100.0
+        },
+        "preflightManagedModelIdentity": {
+          "line": 1827,
+          "statements": 27,
+          "covered_statements": 27,
+          "uncovered_blocks": [],
+          "percentage": 100.0
+        },
+        "preflightManagedXAIProviderWithReader": {
+          "line": 2000,
+          "statements": 41,
+          "covered_statements": 41,
+          "uncovered_blocks": [],
+          "percentage": 100.0
+        },
+        "preflightManagedDashScopeSettings": {
+          "line": 2167,
+          "statements": 31,
+          "covered_statements": 31,
+          "uncovered_blocks": [],
+          "percentage": 100.0
+        },
+        "preflightManagedZAIProviderWithReader": {
+          "line": 2305,
+          "statements": 45,
+          "covered_statements": 45,
+          "uncovered_blocks": [],
+          "percentage": 100.0
+        },
+        "validateManagedConnectionRoutingDefaults": {
+          "line": 2462,
+          "statements": 10,
+          "covered_statements": 9,
+          "uncovered_blocks": [
+            {
+              "start_line": 2478,
+              "end_line": 2479,
+              "statements": 1,
+              "contains_task_changed_line": false,
+              "source": "\t\t\treturn fmt.Errorf(\"%w: operation=validate table=%s owner=%s tenant=%s: %v\", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, defaultsError)\n\t\t}"
+            }
+          ],
+          "percentage": 90.0
+        },
+        "validateManagedRoutingDefaults": {
+          "line": 2488,
+          "statements": 10,
+          "covered_statements": 10,
+          "uncovered_blocks": [],
+          "percentage": 100.0
+        },
+        "preflightLegacyManagedTenantSchema": {
+          "line": 2709,
+          "statements": 106,
+          "covered_statements": 106,
+          "uncovered_blocks": [],
+          "percentage": 100.0
+        },
+        "managedProviderSettingsFromPredecessorRecords": {
+          "line": 3882,
+          "statements": 19,
+          "covered_statements": 18,
+          "uncovered_blocks": [
+            {
+              "start_line": 3898,
+              "end_line": 3899,
+              "statements": 1,
+              "contains_task_changed_line": true,
+              "source": "\t\t\ttextModel = target\n\t\t}"
+            }
+          ],
+          "percentage": 94.74
+        }
+      },
+      "statements": 478,
+      "covered_statements": 470,
+      "percentage": 98.33
+    }
+  },
+  "profile_sha256": "9227fd0f238e3026d62f98a43a61a8b70d4aee4fd7e22bf6c1b2b754a7dcd0fd",
+  "concrete_missing_scenarios": [
+    {
+      "priority": "correctness",
+      "scenario": "Two owner_user_id tenants with pre9 provider-key rows must retain independent TenantID bindings and inherited efforts. Current SQLite HasColumn(user_id) discriminator sees referenced FK columns and selects legacy user-owned decoding. Use exact ColumnTypes helper and protect with mixed-effort zero-write rejection plus valid migration.",
+      "blocks": [
+        "openai_gpt56_retirement.go:80",
+        "openai_gpt56_retirement.go:132-138",
+        "management_store.go:3898"
+      ]
+    },
+    {
+      "priority": "public startup contract",
+      "scenario": "After marker18 is committed, reintroduce one exact retired default or profile using ORM and restart. Startup must reject retired_selection_after_cutover with no rewritten row or upstream call.",
+      "blocks": [
+        "openai_gpt56_retirement.go:158"
+      ]
+    },
+    {
+      "priority": "atomic persistence boundary",
+      "scenario": "Inject a read failure at each selected cutover metadata boundary: tenant rows in owner_user_id shape, provider profiles, legacy/current provider-key rows, marker lookup,17marker count. Opening the managed runtime must fail before model or marker writes; compare full retained snapshots.",
+      "blocks": [
+        "openai_gpt56_retirement.go:91",
+        "openai_gpt56_retirement.go:116",
+        "openai_gpt56_retirement.go:122",
+        "openai_gpt56_retirement.go:134",
+        "openai_gpt56_retirement.go:163",
+        "openai_gpt56_retirement.go:167"
+      ]
+    },
+    {
+      "priority": "invalid persisted ownership",
+      "scenario": "Seed orphan OpenAI key/profile through ORM with constraints intentionally disabled at fixture boundary. Startup must reject orphan user/tenant before writes.",
+      "blocks": [
+        "openai_gpt56_retirement.go:127",
+        "openai_gpt56_retirement.go:144"
+      ]
+    },
+    {
+      "priority": "atomic persistence boundary",
+      "scenario": "Inject failures after preflight during selected profile/default reads, default-model update, and marker schema creation. Startup must rollback earlier model updates and preserve exact original state. Existing tests already cover profile-update and marker-create rollback.",
+      "blocks": [
+        "openai_gpt56_retirement.go:182",
+        "openai_gpt56_retirement.go:195",
+        "openai_gpt56_retirement.go:202",
+        "openai_gpt56_retirement.go:209"
+      ]
+    },
+    {
+      "priority": "predecessor atomic transfer",
+      "scenario": "Legacy normalization has already projected a tenant default to its final target before apply; applying saved plan must leave that exact value and timestamp intact. Predecessor transfer failure at account-connections, cutover application, or final validation must rollback the entire startup.",
+      "blocks": [
+        "openai_gpt56_retirement.go:198",
+        "management_store.go:771",
+        "management_store.go:775",
+        "management_store.go:778"
+      ]
+    },
+    {
+      "priority": "catalog boundary",
+      "scenario": "A version18 policy that changes effort or drops historical usage preservation must fail startup before writes. Use a catalog-valid malformed version18 declaration, rather than bypassing catalog validation.",
+      "blocks": [
+        "openai_gpt56_retirement.go:72"
+      ]
+    },
+    {
+      "priority": "existing function coverage outside this focused subset",
+      "scenario": "Schema inventory failure, capability-transfer rejection, predecessor latest-version read failure, and invalid projected routing defaults. These are uncovered in this selected pattern; reuse equivalent existing focused tests if available rather than duplicating internals.",
+      "blocks": [
+        "management_store.go:728",
+        "management_store.go:747",
+        "management_store.go:760",
+        "management_store.go:2478"
+      ]
+    }
+  ],
+  "finding": {
+    "kind": "source_correctness",
+    "source": "internal/proxy/openai_gpt56_retirement.go:80",
+    "driver": "github.com/glebarez/sqlite@v1.11.0/migrator.go:58-75",
+    "evidence": "Pinned driver HasColumn uses LIKE across full CREATE TABLE SQL, including foreign-key reference column names; current owner_user_id tables are decoded as legacy user_id shape in selected tests. Current-provider-key branch132-138 received zero executions.",
+    "recommended_fix": "Use existing managedTableHasColumn exact ColumnTypes-name helper. Parent requested independent architect acceptance before bounded fix."
+  }
+}

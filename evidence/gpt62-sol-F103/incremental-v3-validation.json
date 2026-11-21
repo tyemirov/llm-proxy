@@ -1,0 +1,48 @@
+{
+  "state": "awaiting_independent_review",
+  "issue": "F103",
+  "patch": "incremental-v3-fix.patch",
+  "patch_sha256": "607233f70def997d2f15f8fefac823eb1c00705c793850c6260e255b8a165951",
+  "base_patch": "retirement-core-v2.patch",
+  "base_patch_sha256": "d9a007b88fc7fe8ddb2c33a6aa140b24d61c36a05e6c0c4a1f6796ba84bca88b",
+  "files": {
+    "internal/proxy/openai_gpt56_retirement.go": {
+      "before_sha256": "8148fa0e4e0e63c2288802c3b6941d0f387321f53b633a32a0c146745ef4d3cf",
+      "after_sha256": "b98bb83ac08bb8b73895f440eb0f6f044daa9ed316d76c3e09c8280d17c4681e"
+    },
+    "internal/proxy/openai_gpt56_retirement_internal_test.go": {
+      "before_sha256": "1961ff5c371e3e94ce42d745e11e22fac8ae621a2c735d56c7b9c3766d78e028",
+      "after_sha256": "f66eda2d9ddf4a4e555cf772826cd0416de40c34b61e22cad2774ccd99eb98e8"
+    }
+  },
+  "source_change": "Inspect exact tenant ColumnTypes; distinguish actual user_id columns from FK references and propagate inspection errors.",
+  "tests": {
+    "failure_first": "retirement-v3-discriminator-red.log: valid firsttenant wrongly mapped to secondnone tenant; incompatible profile wrongtenant identity",
+    "green": "retirement-v3-discriminator-green.log",
+    "invariants": "retirement-v3-invariants-final.log: passed before adding final legacy-read/version6 variants",
+    "final": "retirement-v3-focused-coverage-final.log: retirement+Managed focused tests pass; coverage assessment bound by sourcehash",
+    "full_ci": "Not run; primary final checkpoint."
+  },
+  "checks": {
+    "reverse_patch_matches_frozen_v2": true,
+    "changed_line_whitespace": true,
+    "added_SQL_or_fragment_candidates": 0
+  },
+  "coverage": {
+    "internal/proxy/openai_gpt56_retirement.go": {
+      "source_sha256": "b98bb83ac08bb8b73895f440eb0f6f044daa9ed316d76c3e09c8280d17c4681e",
+      "statements": 124,
+      "covered_statements": 124,
+      "percentage": 100.0
+    },
+    "internal/proxy/management_store.go": {
+      "source_sha256": "c1914544d843e9fca4b0123b475a6949b1199d76b7835a954481c85bbdde871b",
+      "statements": 478,
+      "covered_statements": 471,
+      "percentage": 98.54
+    }
+  },
+  "independent_review": "Pre-implementation hypothesis and bounded design approved by benchmark_review; postimplementation source review requested and pending.",
+  "scope": "Only two owned files; no branch/index/provider/production changes.",
+  "created_at": "2026-11-21T09:19:47.451883+00:00"
+}

@@ -1,0 +1,184 @@
+{
+  "command": "make test-go-focused TEST_PATTERN='^Test(OpenAIGPT56Retirement|Managed)' GO_TEST_ARGS='-coverprofile=evidence/gpt62-sol-F103/retirement-v3-focused-coverage-final.out -covermode=count'",
+  "result": "pass",
+  "profile_sha256": "bd01b4cd0eff91fa61dc5ab4cc5297dd249c198d06013ccfaae67adafdf86d75",
+  "files": {
+    "internal/proxy/openai_gpt56_retirement.go": {
+      "source_sha256": "b98bb83ac08bb8b73895f440eb0f6f044daa9ed316d76c3e09c8280d17c4681e",
+      "statements": 124,
+      "covered_statements": 124,
+      "percentage": 100.0,
+      "functions": {
+        "openAICutoverTarget": {
+          "line": 26,
+          "statements": 1,
+          "covered_statements": 1,
+          "uncovered_blocks": []
+        },
+        "projectOpenAIPredecessorDefaults": {
+          "line": 32,
+          "statements": 3,
+          "covered_statements": 3,
+          "uncovered_blocks": []
+        },
+        "projectOpenAIPredecessorProfiles": {
+          "line": 39,
+          "statements": 5,
+          "covered_statements": 5,
+          "uncovered_blocks": []
+        },
+        "validateOpenAIPredecessorRoutingDefaults": {
+          "line": 51,
+          "statements": 6,
+          "covered_statements": 6,
+          "uncovered_blocks": []
+        },
+        "preflightOpenAICutover": {
+          "line": 64,
+          "statements": 84,
+          "covered_statements": 84,
+          "uncovered_blocks": []
+        },
+        "applyOpenAICutover": {
+          "line": 187,
+          "statements": 25,
+          "covered_statements": 25,
+          "uncovered_blocks": []
+        }
+      }
+    },
+    "internal/proxy/management_store.go": {
+      "source_sha256": "c1914544d843e9fca4b0123b475a6949b1199d76b7835a954481c85bbdde871b",
+      "statements": 478,
+      "covered_statements": 471,
+      "percentage": 98.54,
+      "functions": {
+        "initializeManagedConnectionSchema": {
+          "line": 724,
+          "statements": 37,
+          "covered_statements": 31,
+          "uncovered_blocks": [
+            {
+              "start_line": 728,
+              "end_line": 729,
+              "statements": 1,
+              "source": "\t\t\treturn fmt.Errorf(\"%w: operation=inspect_schema: %w\", errManagedTenantSchemaMigration, err)\n\t\t}"
+            },
+            {
+              "start_line": 747,
+              "end_line": 748,
+              "statements": 1,
+              "source": "\t\t\t\treturn err\n\t\t\t}"
+            },
+            {
+              "start_line": 760,
+              "end_line": 761,
+              "statements": 1,
+              "source": "\t\t\t\treturn err\n\t\t\t}"
+            },
+            {
+              "start_line": 771,
+              "end_line": 772,
+              "statements": 1,
+              "source": "\t\t\t\treturn err\n\t\t\t}"
+            },
+            {
+              "start_line": 775,
+              "end_line": 776,
+              "statements": 1,
+              "source": "\t\t\treturn err\n\t\t}"
+            },
+            {
+              "start_line": 778,
+              "end_line": 779,
+              "statements": 1,
+              "source": "\t\t\treturn err\n\t\t}"
+            }
+          ]
+        },
+        "migrateManagedProviderConnectionDataWithReader": {
+          "line": 1331,
+          "statements": 77,
+          "covered_statements": 77,
+          "uncovered_blocks": []
+        },
+        "migrateManagedKeyedRoutingDefaults": {
+          "line": 1535,
+          "statements": 26,
+          "covered_statements": 26,
+          "uncovered_blocks": []
+        },
+        "preflightManagedQwenCloudRetirement": {
+          "line": 1644,
+          "statements": 31,
+          "covered_statements": 31,
+          "uncovered_blocks": []
+        },
+        "validateManagedQwenCloudRetirementDefaults": {
+          "line": 1707,
+          "statements": 18,
+          "covered_statements": 18,
+          "uncovered_blocks": []
+        },
+        "preflightManagedModelIdentity": {
+          "line": 1827,
+          "statements": 27,
+          "covered_statements": 27,
+          "uncovered_blocks": []
+        },
+        "preflightManagedXAIProviderWithReader": {
+          "line": 2000,
+          "statements": 41,
+          "covered_statements": 41,
+          "uncovered_blocks": []
+        },
+        "preflightManagedDashScopeSettings": {
+          "line": 2167,
+          "statements": 31,
+          "covered_statements": 31,
+          "uncovered_blocks": []
+        },
+        "preflightManagedZAIProviderWithReader": {
+          "line": 2305,
+          "statements": 45,
+          "covered_statements": 45,
+          "uncovered_blocks": []
+        },
+        "validateManagedConnectionRoutingDefaults": {
+          "line": 2462,
+          "statements": 10,
+          "covered_statements": 9,
+          "uncovered_blocks": [
+            {
+              "start_line": 2478,
+              "end_line": 2479,
+              "statements": 1,
+              "source": "\t\t\treturn fmt.Errorf(\"%w: operation=validate table=%s owner=%s tenant=%s: %v\", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, defaultsError)\n\t\t}"
+            }
+          ]
+        },
+        "validateManagedRoutingDefaults": {
+          "line": 2488,
+          "statements": 10,
+          "covered_statements": 10,
+          "uncovered_blocks": []
+        },
+        "preflightLegacyManagedTenantSchema": {
+          "line": 2709,
+          "statements": 106,
+          "covered_statements": 106,
+          "uncovered_blocks": []
+        },
+        "managedProviderSettingsFromPredecessorRecords": {
+          "line": 3882,
+          "statements": 19,
+          "covered_statements": 19,
+          "uncovered_blocks": []
+        }
+      }
+    }
+  },
+  "scope": "Only new retirement module and originally changed management_store functions; focused coverage does not establish whole-suite coverage.",
+  "remaining_old_function_gaps": "Unchanged management startup error branches only; no additional tests added outside assigned new behavior.",
+  "created_at": "2026-11-21T09:19:47.442779+00:00"
+}
