@@ -65,7 +65,7 @@ func TestHostedImageEditingRetainsUsageOnBothSurfaces(t *testing.T) {
 			}
 			extra := ""
 			if surface == "responses" {
-				extra = `,"responses_model":"gpt-5"`
+				extra = `,"responses_model":"gpt-6.2-sol"`
 			}
 			intent := fmt.Sprintf(`{"capability":"image.edit","provider":"openai","model":"gpt-image-2","input":{"prompt":"Private edit","image_asset_ids":[%q]},"controls":{"surface":%q%s,"quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1}}`, asset.AssetID, surface, extra)
 			id := hostedSpeechHTTP(t, server, "edit", intent, http.StatusAccepted)["operation_id"].(string)

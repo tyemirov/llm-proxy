@@ -85,7 +85,7 @@ The examples use standard provider packages. They require no custom provider cod
 | Example | Package | Model | Acceptance |
 | --- | --- | --- | --- |
 | [Chat Completions](../examples/opencode/chat-completions.json) | `@ai-sdk/openai-compatible` | `openai/gpt-5.6` | Text and a local file read. |
-| [Responses](../examples/opencode/responses.json) | `@ai-sdk/openai` | `openai/gpt-4.1` | Text and a local file read. |
+| [Responses](../examples/opencode/responses.json) | `@ai-sdk/openai` | `openai/gpt-6.2-sol` | Text and a local file read. |
 
 OpenCode `1.18.28` adds encrypted reasoning controls to its GPT-5 Responses requests.
 Those controls are outside this API subset. Use the Chat Completions example for that OpenCode model.
@@ -153,13 +153,13 @@ from llm_proxy_client import ClientMessage, ClientMessagesRequest, ClientStructu
 
 request = ClientMessagesRequest(
     messages=(ClientMessage(role="user", content="Summarize this result."),),
-    model="gpt-4.1",
+    model="gpt-6.2-sol",
     idempotency_key="report-42",
 )
 
 structured_request = ClientMessagesRequest(
     messages=(ClientMessage(role="user", content="Return a decision."),),
-    model="gpt-4.1",
+    model="gpt-6.2-sol",
     structured_output=ClientStructuredOutput(schema={"type": "object"}),
     idempotency_key="decision-42",
 )
@@ -169,7 +169,7 @@ structured_request = ClientMessagesRequest(
 The CLI accepts the same key through `--idempotency-key`:
 
 ```bash
-llm-proxy-client --provider openai --model gpt-4.1 \
+llm-proxy-client --provider openai --model gpt-6.2-sol \
   --prompt 'Summarize this result.' --idempotency-key report-42
 ```
 

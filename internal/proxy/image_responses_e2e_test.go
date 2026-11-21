@@ -39,7 +39,7 @@ func TestImageGenerationResponsesUsesPrivateHandlesAndGatewayOperationChains(t *
 				writer.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			if payload["model"] != "gpt-5" || payload["background"] != true || payload["store"] != true || payload["max_tool_calls"] != float64(1) {
+			if payload["model"] != "gpt-6.2-sol" || payload["background"] != true || payload["store"] != true || payload["max_tool_calls"] != float64(1) {
 				t.Errorf("Responses controls=%v", payload)
 			}
 			tool := payload["tools"].([]any)[0].(map[string]any)
@@ -81,7 +81,7 @@ func TestImageGenerationResponsesUsesPrivateHandlesAndGatewayOperationChains(t *
 	client := imageGenerationTestClient(t, upstream, testfixtures.ProviderCatalog(t), "openai")
 	input := llmproxyclient.MediaOperationInput{
 		Capability: "image.generate", Provider: "openai", Model: "gpt-image-2", Input: json.RawMessage(`{"prompt":"A lighthouse"}`),
-		Controls: json.RawMessage(`{"surface":"responses","responses_model":"gpt-5","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1}`),
+		Controls: json.RawMessage(`{"surface":"responses","responses_model":"gpt-6.2-sol","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1}`),
 	}
 	first, err := client.CreateMediaOperation(t.Context(), "responses-image-first", input)
 	if err != nil {
@@ -163,7 +163,7 @@ func TestImageGenerationResponsesRecoversAcceptedJobWithoutResubmission(t *testi
 	t.Cleanup(upstream.Close)
 	owner, database, restart, _ := imageResponsesDurableClient(t, upstream)
 	input := imageGenerationTestIntent()
-	input.Surface, input.ResponsesModel = "responses", "gpt-5"
+	input.Surface, input.ResponsesModel = "responses", "gpt-6.2-sol"
 	accepted, err := owner.CreateImageGeneration(t.Context(), "recover-responses-image", input)
 	if err != nil {
 		t.Fatal(err)
@@ -210,7 +210,7 @@ func TestImageGenerationResponsesConfirmsBackgroundCancellation(t *testing.T) {
 	defer upstream.Close()
 	owner := imageGenerationTestClient(t, upstream, testfixtures.ProviderCatalog(t), "openai")
 	input := imageGenerationTestIntent()
-	input.Surface, input.ResponsesModel = "responses", "gpt-5"
+	input.Surface, input.ResponsesModel = "responses", "gpt-6.2-sol"
 	accepted, err := owner.CreateImageGeneration(t.Context(), "cancel-responses-image", input)
 	if err != nil {
 		t.Fatal(err)
@@ -235,7 +235,7 @@ func imageResponsesDurableClient(t *testing.T, upstream *httptest.Server) (llmpr
 	t.Helper()
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetProviderBaseURL("openai", upstream.URL)
-	configuration, err := testfixtures.ProvisionManagedRouter(t, proxy.Configuration{ProviderCatalog: testfixtures.ProviderCatalog(t), AssetStorePath: t.TempDir(), Endpoints: endpoints, Management: proxy.ManagementConfiguration{DatabasePath: filepath.Join(t.TempDir(), "responses.sqlite")}, MediaOperationClaimSeconds: 7200, MediaOperationClaimRenewalSeconds: 3600}, zap.NewNop().Sugar(), testfixtures.ManagedTenant{Secret: "responses-owner", Defaults: proxy.TenantDefaults{Provider: "openai", Model: proxy.ModelNameGPT41}, ProviderKeys: map[string]string{"openai": "responses-provider"}})
+	configuration, err := testfixtures.ProvisionManagedRouter(t, proxy.Configuration{ProviderCatalog: testfixtures.ProviderCatalog(t), AssetStorePath: t.TempDir(), Endpoints: endpoints, Management: proxy.ManagementConfiguration{DatabasePath: filepath.Join(t.TempDir(), "responses.sqlite")}, MediaOperationClaimSeconds: 7200, MediaOperationClaimRenewalSeconds: 3600}, zap.NewNop().Sugar(), testfixtures.ManagedTenant{Secret: "responses-owner", Defaults: proxy.TenantDefaults{Provider: "openai", Model: "gpt-6.2-sol"}, ProviderKeys: map[string]string{"openai": "responses-provider"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,7 +337,7 @@ func TestImageGenerationResponsesStreamsVerifiedPreviewsAndRetrievesInterruptedR
 			t.Cleanup(upstream.Close)
 			owner := imageGenerationTestClient(t, upstream, testfixtures.ProviderCatalog(t), "openai")
 			input := imageGenerationTestIntent()
-			input.Surface, input.ResponsesModel = "responses", "gpt-5"
+			input.Surface, input.ResponsesModel = "responses", "gpt-6.2-sol"
 			input.Stream, input.PartialImages = true, 3
 			accepted, err := owner.CreateImageGeneration(t.Context(), "stream-responses-image", input)
 			if err != nil {
@@ -400,7 +400,7 @@ func TestImageGenerationResponsesRejectsParentFromChangedRoute(t *testing.T) {
 	defer foreign.Close()
 	owner, _, restart, _ := imageResponsesDurableClient(t, upstream)
 	input := imageGenerationTestIntent()
-	input.Surface, input.ResponsesModel = "responses", "gpt-5"
+	input.Surface, input.ResponsesModel = "responses", "gpt-6.2-sol"
 	first, err := owner.CreateImageGeneration(t.Context(), "route-bound-parent", input)
 	if err != nil {
 		t.Fatal(err)
@@ -474,7 +474,7 @@ func TestImageGenerationResponsesSecondProviderUsesCatalogValuesAndOrderedAssets
 				client := imageGenerationTestClient(t, upstream, fixture.catalog, fixture.provider)
 				input := imageGenerationTestIntent()
 				input.Provider = fixture.provider
-				input.Surface, input.ResponsesModel = "responses", "gpt-5"
+				input.Surface, input.ResponsesModel = "responses", "gpt-6.2-sol"
 				input.Stream = stream
 				if stream {
 					input.PartialImages = 2
@@ -516,7 +516,7 @@ func TestImageGenerationResponsesRejectsForeignAndInvalidChainInputsBeforeDispat
 	defer upstream.Close()
 	owner, database, _, foreign := imageResponsesDurableClient(t, upstream)
 	input := imageGenerationTestIntent()
-	input.Surface, input.ResponsesModel = "responses", "gpt-5"
+	input.Surface, input.ResponsesModel = "responses", "gpt-6.2-sol"
 	parent, err := owner.CreateImageGeneration(t.Context(), "valid-chain-parent", input)
 	if err != nil {
 		t.Fatal(err)
@@ -615,7 +615,7 @@ func TestImageGenerationResponsesRetainsParentWhileChildOutcomeIsOutstanding(t *
 			t.Cleanup(upstream.Close)
 			owner, database, restart, _ := imageResponsesDurableClient(t, upstream)
 			input := imageGenerationTestIntent()
-			input.Surface, input.ResponsesModel = "responses", "gpt-5"
+			input.Surface, input.ResponsesModel = "responses", "gpt-6.2-sol"
 			parent, err := owner.CreateImageGeneration(t.Context(), "retained-parent", input)
 			if err != nil {
 				t.Fatal(err)
@@ -732,7 +732,7 @@ func TestImageGenerationResponsesRejectsInvalidProviderStreams(t *testing.T) {
 			defer upstream.Close()
 			client := imageGenerationTestClient(t, upstream, testfixtures.ProviderCatalog(t), "openai")
 			input := imageGenerationTestIntent()
-			input.Surface, input.ResponsesModel = "responses", "gpt-5"
+			input.Surface, input.ResponsesModel = "responses", "gpt-6.2-sol"
 			input.Stream, input.PartialImages = true, 2
 			accepted, err := client.CreateImageGeneration(t.Context(), "invalid-response-stream", input)
 			if err != nil {
@@ -786,7 +786,7 @@ func TestImageGenerationResponsesClassifiesProviderOutcomesWithoutResubmission(t
 			defer upstream.Close()
 			client := imageGenerationTestClient(t, upstream, testfixtures.ProviderCatalog(t), "openai")
 			input := imageGenerationTestIntent()
-			input.Surface, input.ResponsesModel = "responses", "gpt-5"
+			input.Surface, input.ResponsesModel = "responses", "gpt-6.2-sol"
 			accepted, err := client.CreateImageGeneration(t.Context(), "provider-response-outcome", input)
 			if err != nil {
 				t.Fatal(err)
@@ -824,7 +824,7 @@ func TestImageGenerationResponsesLostPollPreservesAcceptedOperation(t *testing.T
 	defer upstream.Close()
 	client := imageGenerationTestClient(t, upstream, testfixtures.ProviderCatalog(t), "openai")
 	input := imageGenerationTestIntent()
-	input.Surface, input.ResponsesModel = "responses", "gpt-5"
+	input.Surface, input.ResponsesModel = "responses", "gpt-6.2-sol"
 	accepted, err := client.CreateImageGeneration(t.Context(), "lost-image-poll", input)
 	if err != nil {
 		t.Fatal(err)

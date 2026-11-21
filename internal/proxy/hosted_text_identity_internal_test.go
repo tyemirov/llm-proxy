@@ -136,7 +136,7 @@ func TestHostedTextIdentityConcurrentInstancesAndRestart(t *testing.T) {
 	first := newHostedIdentityHTTPServer(t, database, upstream.URL, root)
 	second := newHostedIdentityHTTPServer(t, secondDatabase, upstream.URL, root)
 	t.Cleanup(unblock)
-	request, err := http.NewRequest(http.MethodPost, first.URL+"/?provider=openai&model=gpt-4.1", strings.NewReader(`{"prompt":"concurrent prompt"}`))
+	request, err := http.NewRequest(http.MethodPost, first.URL+"/?provider=openai&model=gpt-6.2-sol", strings.NewReader(`{"prompt":"concurrent prompt"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,9 +253,9 @@ func TestHostedTextIdentityIsSharedAcrossHTTPProtocols(t *testing.T) {
 	hostedIdentityHTTP(t, server, "protocols", "private prompt", http.StatusOK)
 	journal := read("")["requests"].([]any)[0].(map[string]any)
 	for _, scenario := range []struct{ path, body string }{
-		{v2Path + "?provider=openai&model=gpt-4.1", `{"messages":[{"role":"user","content":"private prompt"}]}`},
-		{chatCompletionsPath, `{"model":"openai/gpt-4.1","messages":[{"role":"user","content":"private prompt"}]}`},
-		{responsesPath, `{"model":"openai/gpt-4.1","input":"private prompt"}`},
+		{v2Path + "?provider=openai&model=gpt-6.2-sol", `{"messages":[{"role":"user","content":"private prompt"}]}`},
+		{chatCompletionsPath, `{"model":"openai/gpt-6.2-sol","messages":[{"role":"user","content":"private prompt"}]}`},
+		{responsesPath, `{"model":"openai/gpt-6.2-sol","input":"private prompt"}`},
 	} {
 		request, err := http.NewRequest(http.MethodPost, server.URL+scenario.path, strings.NewReader(scenario.body))
 		if err != nil {
@@ -302,7 +302,7 @@ func TestHostedTextIdentityPreservesStructuredJSON(t *testing.T) {
 	t.Cleanup(upstream.Close)
 	server := newHostedIdentityHTTPServer(t, database, upstream.URL, t.TempDir())
 	for range 2 {
-		request, err := http.NewRequest(http.MethodPost, server.URL+v2Path+"?provider=openai&model=gpt-4.1", strings.NewReader(`{"messages":[{"role":"user","content":"private prompt"}],"structured_output":{"schema":{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}}}`))
+		request, err := http.NewRequest(http.MethodPost, server.URL+v2Path+"?provider=openai&model=gpt-6.2-sol", strings.NewReader(`{"messages":[{"role":"user","content":"private prompt"}],"structured_output":{"schema":{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}}}`))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -357,7 +357,7 @@ func hostedIdentityStatusHTTP(t *testing.T, server *httptest.Server, key string,
 
 func hostedIdentityHTTP(t *testing.T, server *httptest.Server, key, prompt string, want int) string {
 	t.Helper()
-	request, err := http.NewRequest(http.MethodPost, server.URL+"/?provider=openai&model=gpt-4.1", strings.NewReader(fmt.Sprintf(`{"prompt":%q}`, prompt)))
+	request, err := http.NewRequest(http.MethodPost, server.URL+"/?provider=openai&model=gpt-6.2-sol", strings.NewReader(fmt.Sprintf(`{"prompt":%q}`, prompt)))
 	if err != nil {
 		t.Fatal(err)
 	}

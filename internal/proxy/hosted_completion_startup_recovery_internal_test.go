@@ -38,7 +38,7 @@ func hostedRecoveryApplicationConfiguration(t *testing.T, fixture fundsAdmission
 	}
 	configuration := withInternalUpstreamCapacity(t, Configuration{
 		Management: management.configuration, ProviderCatalog: catalog, AssetStorePath: fixture.responseRoot,
-		Hosted: &HostedConfiguration{Offerings: []HostedOfferingConfiguration{{Provider: "openai", Model: "gpt-4.1", Operation: ModelOperationText, MaximumAttempts: 1}}},
+		Hosted: &HostedConfiguration{Offerings: []HostedOfferingConfiguration{{Provider: "openai", Model: "gpt-6.2-sol", Operation: ModelOperationText, MaximumAttempts: 1}}},
 	})
 	return configuration, func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
 		return management.store, nil

@@ -54,7 +54,7 @@ func TestHostedDispatchedRequestInterruptionRetainsUncertainty(t *testing.T) {
 			server.Client().Transport = hostedIdentityTransport{next: server.Client().Transport}
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
-			request, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL+"/?provider=openai&model=gpt-4.1", strings.NewReader(`{"prompt":"private prompt"}`))
+			request, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL+"/?provider=openai&model=gpt-6.2-sol", strings.NewReader(`{"prompt":"private prompt"}`))
 			if err != nil {
 				t.Fatal(err)
 			}

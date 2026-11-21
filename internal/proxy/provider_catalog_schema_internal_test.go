@@ -183,7 +183,11 @@ func TestProviderCatalogModelMigrationValidationRejectsEveryInvalidShape(t *test
 			schema.ModelMigrations[len(schema.ModelMigrations)-1].TargetReasoningEffort = ""
 		}, expected: "reason=current_provider"},
 		{name: "retired provider target", mutate: func(schema *ProviderCatalogSchema) {
-			schema.ModelMigrations[0].TargetModel = schema.ModelMigrations[1].TargetModel
+			for index, migration := range schema.ModelMigrations {
+				if migration.Provider == retiredQwenCloudProviderIdentifier {
+					schema.ModelMigrations[index].TargetModel = "qwen3.8-flash"
+				}
+			}
 		}, expected: "reason=retired_provider"},
 		{name: "target whitespace", mutate: func(schema *ProviderCatalogSchema) {
 			schema.ModelMigrations[1].TargetModel = " " + schema.ModelMigrations[1].TargetModel
@@ -195,7 +199,11 @@ func TestProviderCatalogModelMigrationValidationRejectsEveryInvalidShape(t *test
 			schema.ModelMigrations[1].TargetModel = "missing-model"
 		}, expected: "reason=dangling_reference"},
 		{name: "target operation", mutate: func(schema *ProviderCatalogSchema) {
-			schema.ModelMigrations[3].TargetModel = schema.ModelMigrations[2].TargetModel
+			for index, migration := range schema.ModelMigrations {
+				if migration.Provider == ProviderNameSiliconFlow && migration.Operation == ModelOperationDictation {
+					schema.ModelMigrations[index].TargetModel = "deepseek-reasoner"
+				}
+			}
 		}, expected: "reason=dangling_reference"},
 		{name: "duplicate", mutate: func(schema *ProviderCatalogSchema) {
 			schema.ModelMigrations = append(schema.ModelMigrations, schema.ModelMigrations[1])

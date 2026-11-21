@@ -14,7 +14,7 @@ The catalog defines provider declarations, exact models, offerings, prices, and 
 Read the YAML for the complete inventory. Use public capability discovery for enabled routes.
 Disabled entries remain validated source declarations. They do not establish runtime availability.
 
-The [current OpenAI GPT-6 routes](gpt62-sol.md) cover the seven general-purpose text/image models through GPT-6.2. Their curated source update, production activation and live qualification have separate validation records.
+The [current OpenAI GPT-6 routes](gpt62-sol.md) cover the seven general-purpose text/image models through GPT-6.2. The guide also defines the GPT-5.6 cutoff, approved stored-selection mapping and bounded version-18 effort-preserving cutover. Their curated source update, production activation and live qualification have separate validation records.
 The two [GLM 5.3 candidates](zai-current-models.md) remain disabled during provider qualification.
 [Qwen 3.8 Flash](qwen-current-models.md) is enabled after live text, reasoning, image, and usage qualification.
 The other four Alibaba Qwen 3.8 offerings remain disabled. The separate
@@ -676,7 +676,7 @@ adapters before they are available through `/dictate`.
 
 | Provider selector | Aliases | Wire contract | Execution lifecycle | Configured default text model | Credential field | Default base URL | Dictation | Web search |
 |-------------------|---------|---------------|---------------------|-------------------------------|------------------|------------------|-----------|------------|
-| `openai` | none | `openai_responses` | `pollable_resource` | `gpt-4.1` | Account connection API key | `https://api.openai.com/v1` | Yes: `gpt-transcribe` | Yes, on marked OpenAI models |
+| `openai` | none | `openai_responses` | `pollable_resource` | `gpt-6.2-sol` | Account connection API key | `https://api.openai.com/v1` | Yes: `gpt-transcribe` | Yes, on marked OpenAI models |
 | `baidu` | none | `openai_chat_completions` | `synchronous_completion` | `ernie-5.0` | Account connection API key | `https://api.baiduqianfan.ai/v1` | No | No |
 | `meta` | none | `openai_chat_completions` | `synchronous_completion` | `muse-spark-1.1` | Account connection API key | `https://api.meta.ai/v1` | No | No |
 | `deepseek` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-v4-flash` | Account connection API key | `https://api.deepseek.com` | No | No |
@@ -946,12 +946,7 @@ Read the exact model's `reasoning_effort` declaration in the catalog.
 Omission retains the saved tenant effort. An explicit value must belong to that route's permitted list.
 See [Astra](astra.md), [Claude](claude-current-models.md), [Gemini](gemini-qualified-models.md), and [Qwen](qwen-current-models.md) for provider evidence.
 
-See OpenAI's [GPT-4.1 model reference](https://developers.openai.com/api/docs/models/gpt-4.1),
-[GPT-5 API launch contract](https://openai.com/index/introducing-gpt-5-for-developers/),
-[GPT-5 model reference](https://developers.openai.com/api/docs/models/gpt-5),
-[GPT-5.5 model reference](https://developers.openai.com/api/docs/models/gpt-5.5),
-[GPT-5.5 Pro model reference](https://developers.openai.com/api/docs/models/gpt-5.5-pro),
-and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-model).
+See the [current OpenAI GPT-6 routes](gpt62-sol.md) for supported efforts, upstream model references, and the GPT-5.6 cutoff.
 
 ### DeepSeek model retirement
 

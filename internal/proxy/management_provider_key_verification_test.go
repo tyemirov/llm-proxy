@@ -73,7 +73,7 @@ func (failingVerificationReadCloser) Close() error {
 
 func TestManagementProviderKeyVerificationUsesEveryCanonicalTransportBeforePersistence(t *testing.T) {
 	transportCases := []providerKeyVerificationTransportCase{
-		{provider: proxy.ProviderNameOpenAI, model: proxy.ModelNameGPT41, transport: verificationTransportOpenAI},
+		{provider: proxy.ProviderNameOpenAI, model: "gpt-6.2-sol", transport: verificationTransportOpenAI},
 		{provider: proxy.ProviderNameDeepSeek, model: proxy.ModelNameDeepSeekV4Flash, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
 		{provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwenPlus, transport: verificationTransportResponses},
 		{provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen37Max, transport: verificationTransportResponses},
@@ -922,7 +922,7 @@ func TestManagementDashScopeWorkspaceChangeVerifiesRetainedKeyAndRoutesWithStore
 
 func TestManagementProviderKeyVerificationRejectsSafeFailuresWithoutPersistence(t *testing.T) {
 	transportCases := []providerKeyVerificationTransportCase{
-		{provider: proxy.ProviderNameOpenAI, model: proxy.ModelNameGPT41, transport: verificationTransportOpenAI},
+		{provider: proxy.ProviderNameOpenAI, model: "gpt-6.2-sol", transport: verificationTransportOpenAI},
 		{provider: proxy.ProviderNameDeepSeek, model: proxy.ModelNameDeepSeekV4Flash, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
 		{provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini35Flash},
 		{provider: proxy.ProviderNameAnthropic, model: proxy.ModelNameClaudeSonnet46, transport: verificationTransportAnthropic},
@@ -1223,7 +1223,7 @@ func TestManagementProviderKeyVerificationPreservesVerifiedReplacementAndCoversT
 				tenantID,
 				proxy.ProviderNameOpenAI,
 				"edge-candidate-key",
-				proxy.ModelNameGPT41,
+				"gpt-6.2-sol",
 				"",
 				context.Background(),
 			)
@@ -1256,7 +1256,7 @@ func TestManagementProviderKeyVerificationPreservesVerifiedReplacementAndCoversT
 			"missing-tenant",
 			proxy.ProviderNameOpenAI,
 			"must-not-be-verified",
-			proxy.ModelNameGPT41,
+			"gpt-6.2-sol",
 			"",
 			context.Background(),
 		)

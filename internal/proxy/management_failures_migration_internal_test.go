@@ -1226,7 +1226,7 @@ func TestManagedTenantInitializationPropagatesPreRetirementMigrationFailures(t *
 		seedManagedUsageSchemaOne(t, database)
 		registerManagedGORMError(t, database, "schema_one_keyed_failure", "query", managedTenantTable, errInternalTestDatabase)
 		initializeError := initializeManagedTenantSchema(database, internalManagedProviderKeyCipher(), internalManagementProviderRegistry())
-		if !errors.Is(initializeError, errManagedTenantSchemaMigration) || !strings.Contains(initializeError.Error(), "operation=read") {
+		if !errors.Is(initializeError, errManagedTenantSchemaMigration) || !strings.Contains(initializeError.Error(), "operation=preflight_openai_cutover tenants") {
 			t.Fatalf("schema-one initialize error=%v", initializeError)
 		}
 	})
@@ -1508,7 +1508,7 @@ func TestManagedUsageDispositionInitializationValidatesVersionTwelvePrerequisite
 	t.Run("routing defaults", func(t *testing.T) {
 		database := newFixture(t)
 		registerManagedGORMError(t, database, "usage_disposition_connection_validation", "query", managedTenantTable, errInternalTestDatabase)
-		if initializeError := initializeManagedTenantSchema(database, internalManagedProviderKeyCipher(), internalManagementProviderRegistry()); !errors.Is(initializeError, errManagedTenantSchemaMigration) || !strings.Contains(initializeError.Error(), "operation=read") {
+		if initializeError := initializeManagedTenantSchema(database, internalManagedProviderKeyCipher(), internalManagementProviderRegistry()); !errors.Is(initializeError, errManagedTenantSchemaMigration) || !strings.Contains(initializeError.Error(), "operation=preflight_openai_cutover tenants") {
 			t.Fatalf("initialize error=%v", initializeError)
 		}
 	})

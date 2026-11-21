@@ -75,6 +75,18 @@ func textRouterWithResponsesHandler(t *testing.T, handler http.HandlerFunc) *gin
 }
 
 func textRouterWithResponsesHandlerAndDefaults(t *testing.T, handler http.HandlerFunc, defaults proxy.TenantDefaults) *gin.Engine {
+	return textRouterWithResponsesCatalog(t, handler, defaults, nil)
+}
+
+func textRouterWithoutResponsesOutputLimit(t *testing.T, handler http.HandlerFunc) *gin.Engine {
+	t.Helper()
+	catalog := catalogWithOpenAIDefaultFixture(t, func(offering *proxy.ProviderCatalogOffering) {
+		offering.OutputTokenLimit = 0
+	})
+	return textRouterWithResponsesCatalog(t, handler, proxy.DefaultTenantDefaults(), catalog)
+}
+
+func textRouterWithResponsesCatalog(t *testing.T, handler http.HandlerFunc, defaults proxy.TenantDefaults, catalog *proxy.ProviderCatalog) *gin.Engine {
 	t.Helper()
 	upstreamServer := httptest.NewServer(handler)
 	t.Cleanup(upstreamServer.Close)
@@ -83,6 +95,7 @@ func textRouterWithResponsesHandlerAndDefaults(t *testing.T, handler http.Handle
 	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
 	tenantConfiguration.Defaults = defaults
 	router, buildError := buildRouterWithManagedTenant(t, proxy.Configuration{
+		ProviderCatalog:       catalog,
 		LogLevel:              proxy.LogLevelInfo,
 		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 2),
 		RequestTimeoutSeconds: TestTimeout,
@@ -279,7 +292,7 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 	t.Run("json body validates malformed and invalid prompt message requests", func(subTest *testing.T) {
 		for _, requestBody := range []string{
 			`{`,
-			`{"model":"` + proxy.ModelNameGPT41 + `"}`,
+			`{"model":"` + "gpt-6.2-sol" + `"}`,
 			`{"prompt":"hello","messages":[{"role":"user","content":"hello"}]}`,
 			`{"messages":[]}`,
 			`{"messages":[{"role":"tool","content":"tool result"}]}`,
@@ -303,7 +316,7 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 			`{"prompt":null,"messages":[{"role":"user","content":"hello"}]}`,
 			`{"system_prompt":"outer","messages":[{"role":"user","content":"hello"}]}`,
 			`{"system_prompt":null,"messages":[{"role":"user","content":"hello"}]}`,
-			`{"model":"` + proxy.ModelNameGPT41 + `"}`,
+			`{"model":"` + "gpt-6.2-sol" + `"}`,
 			`{"messages":[]}`,
 			`{"messages":[{"role":"tool","content":"tool result"}]}`,
 			`{"messages":[{"role":"user","content":"   "}]}`,
@@ -329,8 +342,8 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 			body string
 		}{
 			{
-				path: "/v2?key=" + TestSecret + "&model=" + proxy.ModelNameGPT41,
-				body: `{"model":"` + proxy.ModelNameGPT55 + `","messages":[{"role":"user","content":"hello"}]}`,
+				path: "/v2?key=" + TestSecret + "&model=" + "gpt-6.2-sol",
+				body: `{"model":"` + "gpt-6-sol" + `","messages":[{"role":"user","content":"hello"}]}`,
 			},
 			{
 				path: "/v2?key=" + TestSecret,
@@ -391,7 +404,7 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 	})
 
 	t.Run("json body accepts query model override and default system prompt", func(subTest *testing.T) {
-		request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&model="+proxy.ModelNameGPT41, strings.NewReader(`{"prompt":"hello json"}`))
+		request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&model="+"gpt-6.2-sol", strings.NewReader(`{"prompt":"hello json"}`))
 		request.Header.Set("Content-Type", "application/json")
 		responseRecorder := httptest.NewRecorder()
 		router.ServeHTTP(responseRecorder, request)
@@ -401,7 +414,7 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 	})
 
 	t.Run("json body messages accept request system prompt", func(subTest *testing.T) {
-		request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&model="+proxy.ModelNameGPT41, strings.NewReader(`{"system_prompt":"outer","messages":[{"role":"user","content":"hello json"}]}`))
+		request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&model="+"gpt-6.2-sol", strings.NewReader(`{"system_prompt":"outer","messages":[{"role":"user","content":"hello json"}]}`))
 		request.Header.Set("Content-Type", "application/json")
 		responseRecorder := httptest.NewRecorder()
 		router.ServeHTTP(responseRecorder, request)
@@ -437,9 +450,9 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 }
 
 func TestCoverageOpenAIResponsesMaxTokensContract(t *testing.T) {
-	t.Run("default request omits max_output_tokens", func(subTest *testing.T) {
+	t.Run("request omits max_output_tokens for an unbounded offering", func(subTest *testing.T) {
 		var capturedPayload map[string]any
-		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		router := textRouterWithoutResponsesOutputLimit(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			requestBytes, _ := io.ReadAll(httpRequest.Body)
 			if decodeError := json.Unmarshal(requestBytes, &capturedPayload); decodeError != nil {
 				subTest.Fatalf("decode upstream request: %v", decodeError)
@@ -453,7 +466,7 @@ func TestCoverageOpenAIResponsesMaxTokensContract(t *testing.T) {
 			subTest.Fatalf("status=%d body=%q", statusCode, body)
 		}
 		if _, exists := capturedPayload["max_output_tokens"]; exists {
-			subTest.Fatalf("max_output_tokens must be omitted by default: %v", capturedPayload)
+			subTest.Fatalf("max_output_tokens set without a caller or offering limit: %v", capturedPayload)
 		}
 	})
 
@@ -659,7 +672,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 	t.Run("initial incomplete response without text continues without inventing an unknown model limit", func(subTest *testing.T) {
 		requestCount := 0
 		var continuationPayload map[string]any
-		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		router := textRouterWithoutResponsesOutputLimit(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			if httpRequest.Method != http.MethodPost || httpRequest.URL.Path != "/" {
 				http.NotFound(responseWriter, httpRequest)
@@ -689,7 +702,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 
 	t.Run("initial incomplete response without text doubles the caller budget without a model limit", func(subTest *testing.T) {
 		var capturedPayloads []map[string]any
-		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		router := textRouterWithoutResponsesOutputLimit(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			if httpRequest.Method != http.MethodPost || httpRequest.URL.Path != "/" {
 				http.NotFound(responseWriter, httpRequest)
@@ -734,7 +747,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 	t.Run("completed without final message starts synthesis continuation", func(subTest *testing.T) {
 		var synthesisPayload map[string]any
 		defaults := proxy.DefaultTenantDefaults()
-		defaults.Model = proxy.ModelNameGPT5
+		defaults.Model = "gpt-6.2-sol"
 		defaults.ReasoningEffort = "high"
 		router := textRouterWithResponsesHandlerAndDefaults(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")

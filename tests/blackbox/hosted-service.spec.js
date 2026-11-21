@@ -9,9 +9,9 @@ test.beforeAll(async()=>{
   processor=await startPaddleProtocolFixture();
   stack=await startLocalManagementStack('frontend',{
     adminEmails:[localManagementProfile.secondOperatorEmail],payments:processor.config,
-    hosted:{offerings:[{provider:'openai',model:'gpt-4.1',operation:'text',maximum_attempts:1,conditions:{billing_mode:'standard',service_tier:'standard'}}]},
+    hosted:{offerings:[{provider:'openai',model:'gpt-6.2-sol',operation:'text',maximum_attempts:1,conditions:{billing_mode:'standard',service_tier:'standard'}}]},
     configureCatalog(catalog) {
-      const offering=catalog.providers.find(provider=>provider.id==='openai').offerings.find(offering=>offering.model==='gpt-4.1');
+      const offering=catalog.providers.find(provider=>provider.id==='openai').offerings.find(offering=>offering.model==='gpt-6.2-sol');
       offering.output_token_limit=10;
       offering.limits=[{id:'input_tokens',value:10,unit:'tokens'},{id:'output_tokens',value:10,unit:'tokens'}];
       offering.prices=[{operation:'text',available:true,source:'https://example.com/controlled-rates',last_verified:'2026-09-23',rates:['input_tokens','output_tokens','prompt_cache_read_tokens'].map(component=>({component,currency:'USD',rate:'2000',unit:'USD/1M_tokens',conditions:{billing_mode:'standard',service_tier:'standard',effective_from:'2026-09-01T00:00:00Z',...(component==='prompt_cache_read_tokens'?{cache_class:'read'}:{})}}))}];
@@ -42,26 +42,26 @@ test('a customer funds hosted access and reads the real settled charge',async({p
     };
     const platform=await provision('/platform-connections',{name:'Controlled hosted account',provider:'openai',fields:{api_key:'sk-private-hosted-service'}});
     const catalog=await (await context.request.get(stack.llmProxyOrigin+'/api/public/capabilities')).json();
-    const grant=await provision('/hosted-access-grants',{billing_account_id:accountID,tenant_id:tenantID,platform_connection_id:platform.id,catalog_revision:catalog.revision,offerings:[{model:'gpt-4.1',operations:['text']}],reason:'Controlled complete service acceptance'});
+    const grant=await provision('/hosted-access-grants',{billing_account_id:accountID,tenant_id:tenantID,platform_connection_id:platform.id,catalog_revision:catalog.revision,offerings:[{model:'gpt-6.2-sol',operations:['text']}],reason:'Controlled complete service acceptance'});
     const hosted=page.getByRole('region',{name:'Prepaid provider access',exact:true});
     await page.clock.fastForward(30_001);
     const card=hosted.locator(`[data-hosted-grant="${grant.id}"]`);
     await card.getByRole('button',{name:'Use provider access',exact:true}).click();
     await expect(card).toContainText('Assigned');
     await expect(card.getByLabel('Prepaid text model',{exact:true})).toBeVisible();
-    await card.getByLabel('Prepaid text model', {exact:true}).selectOption('gpt-4.1');
+    await card.getByLabel('Prepaid text model', {exact:true}).selectOption('gpt-6.2-sol');
     await card.getByRole('button',{name:'Save prepaid text default',exact:true}).click();
-    await expect(card).toContainText('Saved text default: gpt-4.1');
+    await expect(card).toContainText('Saved text default: gpt-6.2-sol');
     await page.reload();
-    await expect(card.getByLabel('Prepaid text model',{exact:true})).toHaveValue('gpt-4.1');
-    await expect(card).toContainText('Saved text default: gpt-4.1');
+    await expect(card.getByLabel('Prepaid text model',{exact:true})).toHaveValue('gpt-6.2-sol');
+    await expect(card).toContainText('Saved text default: gpt-6.2-sol');
     await page.getByRole('button',{name:'API access',exact:true}).click();
     await page.getByRole('dialog').getByRole('button',{name:'Create API key',exact:true}).click();
     const key=await page.getByRole('dialog').getByLabel('Tenant API key').inputValue();
     await expect(page.getByRole('dialog')).toContainText('Idempotency-Key');
     await page.getByRole('button',{name:'Close dialog',exact:true}).click();
     const callsBefore=stack.providerRequests.length;
-    const request=async(idempotencyKey='funded-browser-request')=>context.request.post(stack.llmProxyOrigin+'/v1/responses',{headers:{Authorization:'Bearer '+key,'Idempotency-Key':idempotencyKey},data:{model:'openai/gpt-4.1',input:'Hello',max_output_tokens:10}});
+    const request=async(idempotencyKey='funded-browser-request')=>context.request.post(stack.llmProxyOrigin+'/v1/responses',{headers:{Authorization:'Bearer '+key,'Idempotency-Key':idempotencyKey},data:{model:'openai/gpt-6.2-sol',input:'Hello',max_output_tokens:10}});
     const denied=await request();
     expect(denied.status(),await denied.text()).toBe(402);
     expect(stack.providerRequests).toHaveLength(callsBefore);
@@ -140,7 +140,7 @@ test('a customer funds hosted access and reads the real settled charge',async({p
     expect(suspension.status(),await suspension.text()).toBe(200);
     const suspendedProfile=await context.request.get(base+'/tenants/'+tenantID,{headers});
     expect(suspendedProfile.status(),await suspendedProfile.text()).toBe(200);
-    expect(await suspendedProfile.json()).toMatchObject({tenant:{defaults:{provider:'openai',model:'gpt-4.1'}}});
+    expect(await suspendedProfile.json()).toMatchObject({tenant:{defaults:{provider:'openai',model:'gpt-6.2-sol'}}});
     const suspendedRequest=await request('suspended-browser-request');
     expect(suspendedRequest.status(),await suspendedRequest.text()).toBe(403);
     expect(stack.providerRequests).toHaveLength(callsBefore+1);

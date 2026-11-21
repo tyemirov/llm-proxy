@@ -48,7 +48,7 @@ func TestImageGenerationEditingRejectsInvalidAndForeignAssetsWithoutDispatch(t *
 	configuration, err := testfixtures.ProvisionManagedRouter(t, proxy.Configuration{
 		ProviderCatalog: testfixtures.ProviderCatalog(t), AssetStorePath: t.TempDir(), Endpoints: endpoints,
 	}, zap.NewNop().Sugar(), testfixtures.ManagedTenant{
-		Secret: "editing-owner", Defaults: proxy.TenantDefaults{Provider: "openai", Model: proxy.ModelNameGPT41},
+		Secret: "editing-owner", Defaults: proxy.TenantDefaults{Provider: "openai", Model: "gpt-6.2-sol"},
 		ProviderKeys: map[string]string{"openai": "image-provider-secret"},
 	})
 	if err != nil {
@@ -170,7 +170,7 @@ func imageEditingSecondProvider(t *testing.T) imageEditingFixture {
 			if provider.Offerings[index].Transport == "text" {
 				provider.Offerings[index].Transport = "fixture-responses"
 			}
-			if provider.Offerings[index].Model == "gpt-5" {
+			if provider.Offerings[index].Model == "gpt-6.2-sol" {
 				provider.Offerings[index].UpstreamModel = "fixture-text-model"
 			}
 			if provider.Offerings[index].Model == "gpt-image-2" {

@@ -19,6 +19,7 @@ import (
 	"github.com/tyemirov/llm-proxy/internal/proxy"
 	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 type xa1dBudgetFixture struct {
@@ -381,13 +382,47 @@ func TestQualificationBudgetXA1DExpiredMissingAndCorruptJournal(t *testing.T) {
 				changed.OwnerUserID = "different-owner"
 				fixture.configuration.QualificationBudget = &changed
 			case "unpriced":
+				schema := fixture.configuration.ProviderCatalog.Schema()
+				unpriced := false
+				for providerIndex := range schema.Providers {
+					provider := &schema.Providers[providerIndex]
+					if provider.ID != "openai" {
+						continue
+					}
+					for offeringIndex := range provider.Offerings {
+						offering := &provider.Offerings[offeringIndex]
+						if offering.Model != "gpt-6.2-sol" {
+							continue
+						}
+						for priceIndex := range offering.Prices {
+							price := &offering.Prices[priceIndex]
+							if price.Operation == proxy.ModelOperationText {
+								price.Available, price.Rates, price.UnavailableReason = false, nil, "controlled qualification price unavailable"
+								unpriced = true
+							}
+						}
+					}
+				}
+				if !unpriced {
+					t.Fatal("current Sol text price fixture missing")
+				}
+				catalog, err := proxy.NewProviderCatalog(schema)
+				if err != nil {
+					t.Fatal(err)
+				}
+				fixture.configuration.ProviderCatalog, fixture.configuration.ModelCatalog = catalog, catalog.ModelCatalog()
 				changed := *fixture.policy
-				changed.Offerings = []proxy.QualificationBudgetOffering{{Provider: "openai", Model: "gpt-4.1", MaxOutputTokens: 128}}
+				// A fresh policy reaches price admission instead of immutable-policy rejection.
+				changed.BudgetID = "unpriced-price-admission-budget"
+				changed.ReceiptDatabasePath = filepath.Join(filepath.Dir(changed.ReceiptDatabasePath), "qualification-unpriced.sqlite")
+				changed.Offerings = []proxy.QualificationBudgetOffering{{Provider: "openai", Model: "gpt-6.2-sol", MaxOutputTokens: 128}}
 				fixture.configuration.QualificationBudget = &changed
 			}
 			if router, err := proxy.BuildRouter(fixture.configuration, zap.NewNop().Sugar()); err == nil {
 				_ = router.Close()
 				t.Fatal("invalid initialized policy started")
+			} else if scenario == "unpriced" && (!strings.Contains(err.Error(), "qualification_budget_denied") || !strings.Contains(err.Error(), "exact list rates unavailable") || fixture.calls.Load() != 0) {
+				t.Fatalf("unpriced current offering failed outside price admission: calls=%d error=%v", fixture.calls.Load(), err)
 			}
 		})
 	}
@@ -693,11 +728,26 @@ func TestQualificationBudgetXA1DConfiguredRouteAndBillableFeatures(t *testing.T)
 			t.Fatalf("billable feature reached upstream: status=%d calls=%d body=%s", rejected.Code, fixture.calls.Load(), rejected.Body.String())
 		}
 	}
+	// Capture the private admission reason while the public error stays sanitized.
+	fixture.server.Close()
+	if err := fixture.router.Close(); err != nil {
+		t.Fatal(err)
+	}
+	core, events := observer.New(zap.DebugLevel)
+	router, err := proxy.BuildRouter(fixture.configuration, zap.New(core).Sugar())
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.router, fixture.server = router, httptest.NewServer(router)
 	// A different enabled model on the same configured connection is outside the exact allowlist.
 	rejected := httptest.NewRecorder()
-	fixture.router.ServeHTTP(rejected, httptest.NewRequest(http.MethodGet, "/?key="+fixture.secret+"&provider=openai&model=gpt-4.1&prompt=test&max_tokens=128", nil))
-	if rejected.Code == http.StatusOK || fixture.calls.Load() != 1 || len(fixture.inspect(t)["attempts"].([]any)) != 1 {
-		t.Fatalf("unlisted configured route dispatched: status=%d calls=%d", rejected.Code, fixture.calls.Load())
+	fixture.router.ServeHTTP(rejected, httptest.NewRequest(http.MethodGet, "/?key="+fixture.secret+"&provider=openai&model=gpt-6.2-sol&prompt=test&max_tokens=128", nil))
+	denials := events.Filter(func(event observer.LoggedEntry) bool {
+		reason, _ := event.ContextMap()["error"].(string)
+		return strings.Contains(reason, "qualification_budget_denied") && strings.Contains(reason, "exact priced text offering required")
+	}).Len()
+	if rejected.Code != http.StatusBadGateway || !strings.Contains(rejected.Body.String(), `"code":"provider_error"`) || denials == 0 || fixture.calls.Load() != 1 || len(fixture.inspect(t)["attempts"].([]any)) != 1 {
+		t.Fatalf("unlisted configured route failed outside exact price admission: status=%d denials=%d calls=%d body=%s", rejected.Code, denials, fixture.calls.Load(), rejected.Body.String())
 	}
 }
 

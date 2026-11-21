@@ -84,7 +84,7 @@ func TestEndpoint_Empty200TreatedAsError(testingInstance *testing.T) {
 
 	router := newRouterWithStubbedOpenAI(
 		testingInstance,
-		`{"data":[{"id":"`+proxy.ModelNameGPT41+`"}]}`,
+		`{"data":[{"id":"`+"gpt-6.2-sol"+`"}]}`,
 		`{"output":[]}`,
 		1,
 		4,
@@ -112,7 +112,7 @@ func TestEndpoint_RespectsAcceptHeaderCSV(testingInstance *testing.T) {
 
 	router := newRouterWithStubbedOpenAI(
 		testingInstance,
-		`{"data":[{"id":"`+proxy.ModelNameGPT41+`"}]}`,
+		`{"data":[{"id":"`+"gpt-6.2-sol"+`"}]}`,
 		`{"status":"completed","output_text":"Hello, world!"}`,
 		1,
 		4,
@@ -156,7 +156,7 @@ func TestEndpoint_ReturnsServiceUnavailableWhenQueueFull(testingInstance *testin
 			case endpoints.GetModelsURL():
 				return &http.Response{
 					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(strings.NewReader(`{"data":[{"id":"` + proxy.ModelNameGPT41 + `"}]}`)),
+					Body:       io.NopCloser(strings.NewReader(`{"data":[{"id":"` + "gpt-6.2-sol" + `"}]}`)),
 					Header:     make(http.Header),
 				}, nil
 			case endpoints.GetResponsesURL():
@@ -258,7 +258,7 @@ func TestEndpoint_ReturnsGatewayTimeoutWhenWaitingForUpstreamWorker(testingInsta
 			case endpoints.GetModelsURL():
 				return &http.Response{
 					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(strings.NewReader(`{"data":[{"id":"` + proxy.ModelNameGPT41 + `"}]}`)),
+					Body:       io.NopCloser(strings.NewReader(`{"data":[{"id":"` + "gpt-6.2-sol" + `"}]}`)),
 					Header:     make(http.Header),
 				}, nil
 			case endpoints.GetResponsesURL():

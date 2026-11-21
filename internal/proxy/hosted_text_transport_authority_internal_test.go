@@ -81,7 +81,7 @@ func TestHostedTextSearchBodyFailuresPreserveExecutionAuthority(t *testing.T) {
 	server.Client().Transport = hostedIdentityTransport{next: server.Client().Transport}
 	request := func(server *httptest.Server) {
 		t.Helper()
-		message, err := http.NewRequest(http.MethodPost, server.URL+"/?provider=openai&model=gpt-4.1", strings.NewReader(`{"prompt":"funded prompt","web_search":true}`))
+		message, err := http.NewRequest(http.MethodPost, server.URL+"/?provider=openai&model=gpt-6.2-sol", strings.NewReader(`{"prompt":"funded prompt","web_search":true}`))
 		if err != nil {
 			t.Fatal(err)
 		}

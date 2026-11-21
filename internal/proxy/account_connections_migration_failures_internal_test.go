@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -125,6 +126,9 @@ func TestAccountConnectionStartupRejectsInvalidSchemaAndRelations(t *testing.T) 
 			service, database, server := newAccountConnectionHTTPFixture(t)
 			created := accountConnectionHTTPExchange(t, server, http.MethodPost, managementConnectionsPath, `{"name":"Startup","provider":"openai","fields":{"api_key":"sk-original"}}`, http.StatusCreated)
 			accountConnectionHTTPExchange(t, server, http.MethodPut, "/tenants/managed-first/connections/openai", fmt.Sprintf(`{"kind":"account_connection","resource_id":%q}`, created["id"]), http.StatusOK)
+			profileIdentity := managedProviderProfileRecord{TenantID: "managed-first", ProviderID: ProviderNameOpenAI}
+			hadMigrationTable := database.database.Migrator().HasTable(&managedSchemaMigrationRecord{})
+			validationFailures := 0
 			var changeError error
 			switch scenario {
 			case "missing-table":
@@ -136,7 +140,18 @@ func TestAccountConnectionStartupRejectsInvalidSchemaAndRelations(t *testing.T) 
 			case "connections-read":
 				registerManagedGORMError(t, database.database, "startup_failure", "query", "managed_account_connection_records", errInternalTestDatabase)
 			case "tenants-read":
-				registerManagedGORMError(t, database.database, "startup_failure", "query", managedTenantTable, errInternalTestDatabase)
+				changeError = database.database.Model(&managedProviderProfileRecord{}).Where(&profileIdentity).UpdateColumn("text_model", ModelNameGPT41).Error
+				if changeError != nil {
+					t.Fatal(changeError)
+				}
+				changeError = database.database.Callback().Query().Before("gorm:query").Register("account_connection_tenant_validation_failure", func(query *gorm.DB) {
+					_, hasAssignments := query.Statement.Preloads["ConnectionAssignments"]
+					_, hasProfiles := query.Statement.Preloads["ProviderProfiles"]
+					if query.Statement.Table == managedTenantTable && hasAssignments && hasProfiles {
+						validationFailures++
+						query.AddError(errInternalTestDatabase)
+					}
+				})
 			case "missing-profile":
 				changeError = database.database.Where("tenant_id = ?", "managed-first").Delete(&managedProviderProfileRecord{}).Error
 			case "invalid-profile":
@@ -145,8 +160,21 @@ func TestAccountConnectionStartupRejectsInvalidSchemaAndRelations(t *testing.T) 
 			if changeError != nil {
 				t.Fatal(changeError)
 			}
-			if err := initializeManagedTenantSchema(database.database, service.store.providerKeyCipher, service.providers); err == nil {
+			startupError := initializeManagedTenantSchema(database.database, service.store.providerKeyCipher, service.providers)
+			if startupError == nil {
 				t.Fatal("startup accepted invalid schema or assignment")
+			}
+			if scenario == "tenants-read" {
+				if validationFailures != 1 || !errors.Is(startupError, errInternalTestDatabase) {
+					t.Fatalf("expected one account connection validation failure: count=%d error=%v", validationFailures, startupError)
+				}
+				var retained managedProviderProfileRecord
+				if err := database.database.Where(&profileIdentity).First(&retained).Error; err != nil {
+					t.Fatal(err)
+				}
+				if retained.TextModel != ModelNameGPT41 || database.database.Migrator().HasTable(&managedSchemaMigrationRecord{}) != hadMigrationTable {
+					t.Fatal("connection validation failure left a partial model cutover")
+				}
 			}
 		})
 	}

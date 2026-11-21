@@ -101,6 +101,14 @@ func TestHostedPlatformConnectionDisabledVerificationPreservesCredentials(t *tes
 		}
 		selected := provider.Verification.Model
 		for index := range provider.Offerings {
+			for controlIndex := range provider.Offerings[index].Controls {
+				control := &provider.Offerings[index].Controls[controlIndex]
+				if control.ID == "responses_model" {
+					control.Values = []string{"gpt-6-sol"}
+				}
+			}
+		}
+		for index := range provider.Offerings {
 			offering := &provider.Offerings[index]
 			if offering.Model == selected {
 				offering.Enabled = proxy.ModelDisabled

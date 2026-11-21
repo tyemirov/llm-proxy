@@ -16,7 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const activationDisabledTextModel = "gpt-4o-mini"
+const activationDisabledTextModel = "gpt-5.6-luna"
 
 func TestModelActivationPrunesModelsWithoutActiveOfferingsFromHTTP(t *testing.T) {
 	for _, providerID := range []string{"vertex", "baidu"} {
@@ -167,7 +167,7 @@ func TestModelActivationRequiresExplicitBoolean(t *testing.T) {
 			}
 		})
 	}
-	disabledDefault := strings.Replace(document, "    - id: gpt-4.1\n      enabled: true", "    - id: gpt-4.1\n      enabled: false", 1)
+	disabledDefault := strings.Replace(document, "    - id: gpt-6.2-sol\n      enabled: true", "    - id: gpt-6.2-sol\n      enabled: false", 1)
 	if _, err := proxy.ParseProviderCatalog([]byte(disabledDefault)); err == nil || !strings.Contains(err.Error(), "disabled_default") {
 		t.Fatalf("disabled provider default error=%v", err)
 	}
@@ -273,7 +273,7 @@ func TestModelActivationExcludesDisabledRoutesFromHTTP(t *testing.T) {
 	if response.StatusCode != http.StatusBadRequest || calls.Load() != 0 {
 		t.Fatalf("disabled route status=%d upstream calls=%d", response.StatusCode, calls.Load())
 	}
-	response, err = server.Client().Get(server.URL + "/?key=" + TestSecret + "&provider=openai&model=gpt-4.1&prompt=test")
+	response, err = server.Client().Get(server.URL + "/?key=" + TestSecret + "&provider=openai&model=gpt-6.2-sol&prompt=test")
 	if err != nil {
 		t.Fatal(err)
 	}

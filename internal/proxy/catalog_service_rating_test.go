@@ -3,6 +3,7 @@ package proxy_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/tyemirov/llm-proxy/internal/proxy"
 	"github.com/tyemirov/llm-proxy/internal/testfixtures"
@@ -127,29 +128,29 @@ func TestCatalogRatingAdvertisedOpenAIImageAndResponsePrices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, scenario := range []struct{ model, operation, component, cache, rate string }{
-		{"gpt-5", proxy.ModelOperationText, "input_tokens", "", "1.25"},
-		{"gpt-5", proxy.ModelOperationText, "cache_read", "read", "0.125"},
-		{"gpt-5", proxy.ModelOperationText, "output_tokens", "", "10"},
-		{"gpt-image-2", proxy.ModelOperationImageGeneration, "input_text", "", "2.5"},
-		{"gpt-image-2", proxy.ModelOperationImageGeneration, "input_image", "", "4"},
-		{"gpt-image-2", proxy.ModelOperationImageGeneration, "output_image", "", "15"},
-		{"gpt-image-2", proxy.ModelOperationImageEditing, "input_text", "", "2.5"},
-		{"gpt-image-2", proxy.ModelOperationImageEditing, "input_image", "", "4"},
-		{"gpt-image-2", proxy.ModelOperationImageEditing, "output_image", "", "15"},
+	for _, scenario := range []struct{ model, operation, component, cache, rate, verified string }{
+		{"gpt-6.2-sol", proxy.ModelOperationText, "input_tokens", "", "2", "2026-11-21"},
+		{"gpt-6.2-sol", proxy.ModelOperationText, "prompt_cache_read_tokens", "read", "0.1", "2026-11-21"},
+		{"gpt-6.2-sol", proxy.ModelOperationText, "output_tokens", "", "10", "2026-11-21"},
+		{"gpt-image-2", proxy.ModelOperationImageGeneration, "input_text", "", "2.5", "2026-09-26"},
+		{"gpt-image-2", proxy.ModelOperationImageGeneration, "input_image", "", "4", "2026-09-26"},
+		{"gpt-image-2", proxy.ModelOperationImageGeneration, "output_image", "", "15", "2026-09-26"},
+		{"gpt-image-2", proxy.ModelOperationImageEditing, "input_text", "", "2.5", "2026-09-26"},
+		{"gpt-image-2", proxy.ModelOperationImageEditing, "input_image", "", "4", "2026-09-26"},
+		{"gpt-image-2", proxy.ModelOperationImageEditing, "output_image", "", "15", "2026-09-26"},
 	} {
-		selected := service.SelectPrice("openai", scenario.model, scenario.operation, scenario.component, proxy.CatalogPriceConditions{BillingMode: "standard", ServiceTier: "standard", CacheClass: scenario.cache, EffectiveFrom: "2026-09-26T00:00:00Z"})
-		if !selected.Available || selected.Rate == nil || string(selected.Rate.Rate) != scenario.rate || selected.Rate.Unit != "USD/1M_tokens" || selected.Source != "https://developers.openai.com/api/docs/pricing" || selected.LastVerified != "2026-09-26" {
+		selected := service.SelectApplicablePrice("openai", scenario.model, scenario.operation, scenario.component, proxy.CatalogPriceConditions{BillingMode: "standard", ServiceTier: "standard", CacheClass: scenario.cache}, 1, time.Date(2026, time.November, 21, 0, 0, 0, 0, time.UTC))
+		if !selected.Available || selected.Rate == nil || string(selected.Rate.Rate) != scenario.rate || selected.Rate.Unit != "USD/1M_tokens" || selected.Source != "https://developers.openai.com/api/docs/pricing" || selected.LastVerified != scenario.verified {
 			t.Fatalf("advertised %s %s %s price=%+v", scenario.model, scenario.operation, scenario.component, selected)
 		}
 	}
-	offering, err := service.ResolveOffering("openai", "gpt-5")
+	offering, err := service.ResolveOffering("openai", "gpt-6.2-sol")
 	if err != nil || offering.OutputTokenLimit != 128000 {
 		t.Fatalf("response output bound=%+v error=%v", offering, err)
 	}
 	found := false
 	for _, limit := range offering.Limits {
-		if limit.ID == "context_tokens" && limit.Value != nil && *limit.Value == 400000 {
+		if limit.ID == "context_tokens" && limit.Value != nil && *limit.Value == 1050000 {
 			found = true
 		}
 	}

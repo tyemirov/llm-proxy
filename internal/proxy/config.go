@@ -16,7 +16,7 @@ const (
 	// DefaultPort is the TCP port used by the HTTP server when no explicit port is provided.
 	DefaultPort = 8080
 	// DefaultModel is the model identifier used when the client does not supply one.
-	DefaultModel = ModelNameGPT41
+	DefaultModel = "gpt-6.2-sol"
 	// DefaultProvider is the provider identifier used when the client does not supply one.
 	DefaultProvider = ProviderNameOpenAI
 	// DefaultTranscriptionProvider is the provider used when /dictate does not supply one.

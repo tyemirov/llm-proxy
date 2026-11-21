@@ -38,7 +38,7 @@ func TestHostedClientIdentityAcrossLibraries(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			request, err := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "client prompt"}}, Model: "gpt-4.1", IdempotencyKey: "shared-client-key"})
+			request, err := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "client prompt"}}, Model: "gpt-6.2-sol", IdempotencyKey: "shared-client-key"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -52,7 +52,7 @@ func TestHostedClientIdentityAcrossLibraries(t *testing.T) {
 	}
 	t.Run("cli", func(t *testing.T) {
 		for range 2 {
-			command := exec.CommandContext(t.Context(), "go", "run", "../../llm-proxy-client", "--base-url", server.URL, "--secret", hostedIdentityFixtureKey, "--provider", "openai", "--model", "gpt-4.1", "--prompt", "client prompt", "--idempotency-key", "shared-client-key")
+			command := exec.CommandContext(t.Context(), "go", "run", "../../llm-proxy-client", "--base-url", server.URL, "--secret", hostedIdentityFixtureKey, "--provider", "openai", "--model", "gpt-6.2-sol", "--prompt", "client prompt", "--idempotency-key", "shared-client-key")
 			output, err := command.CombinedOutput()
 			if err != nil || string(output) != "client result" {
 				t.Fatalf("hosted CLI: output=%s error=%v", output, err)
@@ -63,7 +63,7 @@ func TestHostedClientIdentityAcrossLibraries(t *testing.T) {
 		script := `import sys
 from llm_proxy_client import Client, ClientConfig, ClientMessage, ClientMessagesRequest
 client = Client(ClientConfig(base_url=sys.argv[1], secret=sys.argv[2], provider="openai"))
-request = ClientMessagesRequest(messages=(ClientMessage(role="user", content="client prompt"),), model="gpt-4.1", idempotency_key="shared-client-key")
+request = ClientMessagesRequest(messages=(ClientMessage(role="user", content="client prompt"),), model="gpt-6.2-sol", idempotency_key="shared-client-key")
 assert client.post_messages(request) == "client result"
 assert client.post_messages(request) == "client result"
 assert client.get_text_request("shared-client-key").state == "succeeded"
@@ -98,7 +98,7 @@ func TestHostedClientIdentityPendingAndExpired(t *testing.T) {
 	var responses *structuredRequestStore
 	server := newHostedIdentityHTTPServer(t, database, upstream.URL, t.TempDir(), func(dependencies *hostedTextRequestDependencies) { responses = dependencies.responses })
 	t.Cleanup(unblock)
-	request, err := http.NewRequest(http.MethodPost, server.URL+"/?provider=openai&model=gpt-4.1", strings.NewReader(`{"prompt":"client prompt"}`))
+	request, err := http.NewRequest(http.MethodPost, server.URL+"/?provider=openai&model=gpt-6.2-sol", strings.NewReader(`{"prompt":"client prompt"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestHostedClientIdentityPendingAndExpired(t *testing.T) {
 		script := `import sys
 from llm_proxy_client import Client, ClientConfig, ClientMessage, ClientMessagesRequest
 client = Client(ClientConfig(base_url=sys.argv[1], secret=sys.argv[2], provider="openai"))
-request = ClientMessagesRequest(messages=(ClientMessage(role="user", content="client prompt"),), model="gpt-4.1", idempotency_key="client-pending")
+request = ClientMessagesRequest(messages=(ClientMessage(role="user", content="client prompt"),), model="gpt-6.2-sol", idempotency_key="client-pending")
 try:
     client.post_messages(request)
 except RuntimeError as error:
@@ -161,7 +161,7 @@ assert status.state == "dispatched" and status.proxy_request_id == sys.argv[3]
 		}
 	})
 	t.Run("pending_cli", func(t *testing.T) {
-		command := exec.CommandContext(t.Context(), "go", "run", "../../llm-proxy-client", "--base-url", server.URL, "--secret", hostedIdentityFixtureKey, "--provider", "openai", "--model", "gpt-4.1", "--prompt", "client prompt", "--idempotency-key", "client-pending")
+		command := exec.CommandContext(t.Context(), "go", "run", "../../llm-proxy-client", "--base-url", server.URL, "--secret", hostedIdentityFixtureKey, "--provider", "openai", "--model", "gpt-6.2-sol", "--prompt", "client prompt", "--idempotency-key", "client-pending")
 		output, err := command.CombinedOutput()
 		if err == nil || !strings.Contains(string(output), "structured_request_pending: state=dispatched") {
 			t.Fatalf("pending CLI result: %s error=%v", output, err)
@@ -176,7 +176,7 @@ assert status.state == "dispatched" and status.proxy_request_id == sys.argv[3]
 		script := `import sys
 from llm_proxy_client import Client, ClientConfig, ClientMessage, ClientMessagesRequest, LLMProxyHTTPError
 client = Client(ClientConfig(base_url=sys.argv[1], secret=sys.argv[2], provider="openai"))
-request = ClientMessagesRequest(messages=(ClientMessage(role="user", content="client prompt"),), model="gpt-4.1", idempotency_key="client-pending")
+request = ClientMessagesRequest(messages=(ClientMessage(role="user", content="client prompt"),), model="gpt-6.2-sol", idempotency_key="client-pending")
 for operation in (lambda: client.post_messages(request), lambda: client.get_text_request("client-pending")):
     try:
         operation()
@@ -225,7 +225,7 @@ func hostedIdentityGoClient(t *testing.T, address string, protocol llmproxyclien
 	if err != nil {
 		t.Fatal(err)
 	}
-	input, err := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "client prompt"}}, Model: "gpt-4.1", IdempotencyKey: "client-pending"})
+	input, err := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "client prompt"}}, Model: "gpt-6.2-sol", IdempotencyKey: "client-pending"})
 	if err != nil {
 		t.Fatal(err)
 	}

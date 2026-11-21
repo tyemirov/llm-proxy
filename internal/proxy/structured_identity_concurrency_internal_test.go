@@ -21,7 +21,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const identityConcurrencyBody = `{"model":"gpt-5.5","messages":[{"role":"user","content":"review"}],"structured_output":{"schema":{"type":"object","additionalProperties":false,"required":["decision"],"properties":{"decision":{"type":"string","enum":["pass"]}}}}}`
+const identityConcurrencyBody = `{"model":"gpt-6-sol","messages":[{"role":"user","content":"review"}],"structured_output":{"schema":{"type":"object","additionalProperties":false,"required":["decision"],"properties":{"decision":{"type":"string","enum":["pass"]}}}}}`
 
 func TestStructuredIdentityIndependentHTTPPersistence(t *testing.T) {
 	for _, state := range []string{structuredRequestStateNotDispatched, structuredRequestStateDispatched, structuredRequestStateSucceeded} {

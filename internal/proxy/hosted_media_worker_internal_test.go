@@ -189,7 +189,7 @@ func TestHostedMediaWorkerProviderCancellationFinishesJournal(t *testing.T) {
 	}))
 	t.Cleanup(upstream.Close)
 	server, service := newHostedMediaAdmissionHTTPServer(t, database, hostedMediaWorkerProvider(upstream.URL))
-	controls := json.RawMessage(`{"surface":"responses","responses_model":"gpt-5","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1}`)
+	controls := json.RawMessage(`{"surface":"responses","responses_model":"gpt-6.2-sol","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1}`)
 	accepted := hostedMediaAdmissionHTTP(t, server, "provider-cancel", "private image prompt", http.StatusAccepted, controls)
 	id := accepted["operation_id"].(string)
 	go func() { defer close(done); service.runOperation("cancelled-provider-worker", id) }()
@@ -320,7 +320,7 @@ func TestHostedMediaWorkerRecoversProviderHandleAfterRevocation(t *testing.T) {
 		return nil
 	}
 	firstService.hostedAdmission, secondService.hostedAdmission = reserve, reserve
-	controls := json.RawMessage(`{"surface":"responses","responses_model":"gpt-5","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1}`)
+	controls := json.RawMessage(`{"surface":"responses","responses_model":"gpt-6.2-sol","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1}`)
 	accepted := hostedMediaAdmissionHTTP(t, first, "provider-recovery", "private image prompt", http.StatusAccepted, controls)
 	id := accepted["operation_id"].(string)
 	go func() { defer close(done); firstService.runOperation("first-provider-worker", id) }()

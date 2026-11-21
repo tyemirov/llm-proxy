@@ -157,30 +157,30 @@ func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("defaults decode status=%d", response.Code)
 	}
-	response = executeInternalManagementHandler(service.updateDefaultsHandler(), http.MethodPut, "/api/management/tenants/managed-default/defaults", `{"provider":"openai","model":"`+ModelNameGPT41+`","transcription_provider":"openai","transcription_model":"`+DefaultTranscriptionModel+`","system_prompt":""}`, tenantParams, principal)
+	response = executeInternalManagementHandler(service.updateDefaultsHandler(), http.MethodPut, "/api/management/tenants/managed-default/defaults", `{"provider":"openai","model":"`+"gpt-6.2-sol"+`","transcription_provider":"openai","transcription_model":"`+DefaultTranscriptionModel+`","system_prompt":""}`, tenantParams, principal)
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("defaults reasoning status=%d", response.Code)
 	}
-	response = executeInternalManagementHandler(service.updateDefaultsHandler(), http.MethodPut, "/api/management/tenants/managed-default/defaults", managementDefaultsBody("missing", ModelNameGPT41), tenantParams, principal)
+	response = executeInternalManagementHandler(service.updateDefaultsHandler(), http.MethodPut, "/api/management/tenants/managed-default/defaults", managementDefaultsBody("missing", "gpt-6.2-sol"), tenantParams, principal)
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("defaults construction status=%d", response.Code)
 	}
 	service, database = newSeededService()
 	database.tenantByOwnerAndIDErrors = []error{errInternalTestDatabase}
-	response = executeInternalManagementHandler(service.updateDefaultsHandler(), http.MethodPut, "/api/management/tenants/managed-default/defaults", managementDefaultsBody(ProviderNameOpenAI, ModelNameGPT41), tenantParams, principal)
+	response = executeInternalManagementHandler(service.updateDefaultsHandler(), http.MethodPut, "/api/management/tenants/managed-default/defaults", managementDefaultsBody(ProviderNameOpenAI, "gpt-6.2-sol"), tenantParams, principal)
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("defaults profile status=%d", response.Code)
 	}
 	noKeyProviders := newInternalTestProviderRegistry(Configuration{
 		ModelCatalog: internalTestModelCatalog(
-			internalTestOffering(ProviderNameOpenAI, ModelNameGPT41, []string{ModelOperationText}, []string{ModelOperationText}),
+			internalTestOffering(ProviderNameOpenAI, "gpt-6.2-sol", []string{ModelOperationText}, []string{ModelOperationText}),
 			internalTestOffering(ProviderNameOpenAI, DefaultTranscriptionModel, []string{ModelOperationDictation}, []string{ModelOperationDictation}),
 		),
 	})
 	database = newFakeManagedTenantDatabase()
 	fakeUserWithTenant(database, principal, "managed-default", "Default", now)
 	service = newInternalManagementService(t, database, noKeyProviders)
-	response = executeInternalManagementHandler(service.updateDefaultsHandler(), http.MethodPut, "/api/management/tenants/managed-default/defaults", managementDefaultsBody(ProviderNameOpenAI, ModelNameGPT41), tenantParams, principal)
+	response = executeInternalManagementHandler(service.updateDefaultsHandler(), http.MethodPut, "/api/management/tenants/managed-default/defaults", managementDefaultsBody(ProviderNameOpenAI, "gpt-6.2-sol"), tenantParams, principal)
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("defaults validation status=%d body=%q", response.Code, response.Body.String())
 	}
@@ -191,10 +191,10 @@ func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 	}
 	record := database.tenantsByID["managed-default"]
 	record.ConnectionAssignments = []managedTenantConnectionRecord{{TenantID: record.TenantID, ProviderID: ProviderNameOpenAI, ConnectionID: "test-connection", Connection: managedAccountConnectionRecord{ID: "test-connection", OwnerUserID: principal.userID, ProviderID: ProviderNameOpenAI, Fields: []managedConnectionFieldRecord{{ConnectionID: "test-connection", FieldID: CatalogCredentialAPIKey, Value: ciphertext}}}}}
-	record.ProviderProfiles = []managedProviderProfileRecord{{TenantID: record.TenantID, ProviderID: ProviderNameOpenAI, TextModel: ModelNameGPT41}}
+	record.ProviderProfiles = []managedProviderProfileRecord{{TenantID: record.TenantID, ProviderID: ProviderNameOpenAI, TextModel: "gpt-6.2-sol"}}
 	database.tenantsByID[record.TenantID] = record
 	database.saveTenantErrors = []error{errInternalTestDatabase}
-	response = executeInternalManagementHandler(service.updateDefaultsHandler(), http.MethodPut, "/api/management/tenants/managed-default/defaults", managementDefaultsBody(ProviderNameOpenAI, ModelNameGPT41), tenantParams, principal)
+	response = executeInternalManagementHandler(service.updateDefaultsHandler(), http.MethodPut, "/api/management/tenants/managed-default/defaults", managementDefaultsBody(ProviderNameOpenAI, "gpt-6.2-sol"), tenantParams, principal)
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("defaults store status=%d", response.Code)
 	}

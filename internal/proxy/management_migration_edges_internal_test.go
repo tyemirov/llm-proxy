@@ -221,10 +221,10 @@ func TestManagedTenantSQLiteMigrationPreflightRejectsMalformedOwnershipData(t *t
 			name: "noncanonical model case",
 			configure: func(subTest *testing.T, testFixture fixture) {
 				addProvider(subTest, testFixture, func(record *legacyManagedProviderAPIKeyRecord) {
-					record.TextModel = strings.ToUpper(ModelNameGPT41)
+					record.TextModel = strings.ToUpper("gpt-6.2-sol")
 				})
 			},
-			want: "provider=openai model=GPT-4.1 reason=not_canonical",
+			want: "provider=openai model=GPT-6.2-SOL reason=not_canonical",
 		},
 		{
 			name: "plaintext provider key",

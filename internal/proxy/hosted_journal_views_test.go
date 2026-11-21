@@ -38,7 +38,7 @@ func TestHostedJournalEvidenceCollectionsAreOwnedBoundedAndPrivate(t *testing.T)
 		t.Fatal(err)
 	}
 	catalogResponse.Body.Close()
-	grant := hostedResourceID(t, requireHostedHTTP(t, server, operator, http.MethodPost, "/hosted-access-grants", fmt.Sprintf(`{"billing_account_id":%q,"tenant_id":%q,"platform_connection_id":%q,"catalog_revision":%q,"offerings":[{"model":"gpt-4.1","operations":["text"]}],"reason":"Journal view acceptance"}`, account, tenant, connection, catalog.Revision), "grant", http.StatusCreated))
+	grant := hostedResourceID(t, requireHostedHTTP(t, server, operator, http.MethodPost, "/hosted-access-grants", fmt.Sprintf(`{"billing_account_id":%q,"tenant_id":%q,"platform_connection_id":%q,"catalog_revision":%q,"offerings":[{"model":"gpt-6.2-sol","operations":["text"]}],"reason":"Journal view acceptance"}`, account, tenant, connection, catalog.Revision), "grant", http.StatusCreated))
 	database := openManagedFixtureDatabase(t, databasePath)
 	now := time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC)
 	requestID := "request-" + strings.Repeat("1", 32)

@@ -48,11 +48,11 @@ func hostedRatingFixtureAdmission(t *testing.T, attempts uint32) journalReservat
 
 func hostedRatingFixtureAdmissionAt(t *testing.T, attempts uint32, acceptedAt time.Time) journalReservation {
 	t.Helper()
-	catalog := internalTestModelCatalog(internalTestOffering("openai", "gpt-4.1", []string{"text"}, []string{"text"}))
+	catalog := internalTestModelCatalog(internalTestOffering("openai", "gpt-6.2-sol", []string{"text"}, []string{"text"}))
 	catalog.Revision = "journal-catalog"
 	month := time.Date(acceptedAt.Year(), acceptedAt.Month(), 1, 0, 0, 0, 0, time.UTC)
 	conditions := CatalogPriceConditions{EffectiveFrom: month.Format(time.RFC3339), EffectiveUntil: month.AddDate(0, 1, 0).Format(time.RFC3339)}
-	catalog.Prices[0] = CatalogPriceDescriptor{Provider: "openai", Model: "gpt-4.1", Operation: "text", Available: true, Source: "https://example.com/prices", LastVerified: "2026-09-22", Rates: []CatalogPriceRate{
+	catalog.Prices[0] = CatalogPriceDescriptor{Provider: "openai", Model: "gpt-6.2-sol", Operation: "text", Available: true, Source: "https://example.com/prices", LastVerified: "2026-09-22", Rates: []CatalogPriceRate{
 		{Component: "input_tokens", Currency: "USD", Rate: "2", Unit: "USD/1M_tokens", Conditions: conditions},
 		{Component: "output_tokens", Currency: "USD", Rate: "8", Unit: "USD/1M_tokens", Conditions: conditions},
 	}}
@@ -60,7 +60,7 @@ func hostedRatingFixtureAdmissionAt(t *testing.T, attempts uint32, acceptedAt ti
 	if err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := prices.NewRatingSnapshot("openai", "gpt-4.1", "text", acceptedAt, []CatalogRateBinding{{Dimension: "input_tokens", Component: "input_tokens", Conditions: categoricalPriceConditions(conditions)}, {Dimension: "output_tokens", Component: "output_tokens", Conditions: categoricalPriceConditions(conditions)}})
+	snapshot, err := prices.NewRatingSnapshot("openai", "gpt-6.2-sol", "text", acceptedAt, []CatalogRateBinding{{Dimension: "input_tokens", Component: "input_tokens", Conditions: categoricalPriceConditions(conditions)}, {Dimension: "output_tokens", Component: "output_tokens", Conditions: categoricalPriceConditions(conditions)}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,10 +155,10 @@ func TestHostedRatingPersistsAcceptedPricesAndIdempotentCharges(t *testing.T) {
 
 func TestHostedRatingRetainsSeparateReasoningInOutputCharge(t *testing.T) {
 	database, intent, server, _ := newHostedRatingFixture(t)
-	catalog := internalTestModelCatalog(internalTestOffering("openai", "gpt-4.1", []string{"text"}, []string{"text"}))
+	catalog := internalTestModelCatalog(internalTestOffering("openai", "gpt-6.2-sol", []string{"text"}, []string{"text"}))
 	catalog.Revision = "journal-catalog"
 	conditions := CatalogPriceConditions{EffectiveFrom: "2026-09-01T00:00:00Z"}
-	catalog.Prices[0] = CatalogPriceDescriptor{Provider: "openai", Model: "gpt-4.1", Operation: "text", Available: true, Source: "https://example.com/prices", LastVerified: "2026-09-22", Rates: []CatalogPriceRate{
+	catalog.Prices[0] = CatalogPriceDescriptor{Provider: "openai", Model: "gpt-6.2-sol", Operation: "text", Available: true, Source: "https://example.com/prices", LastVerified: "2026-09-22", Rates: []CatalogPriceRate{
 		{Component: "input_tokens", Currency: "USD", Rate: "2", Unit: "USD/1M_tokens", Conditions: conditions},
 		{Component: "output_tokens", Currency: "USD", Rate: "8", Unit: "USD/1M_tokens", Conditions: conditions},
 	}}
@@ -166,7 +166,7 @@ func TestHostedRatingRetainsSeparateReasoningInOutputCharge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := prices.NewRatingSnapshot("openai", "gpt-4.1", "text", ratingTestAcceptanceTime(), []CatalogRateBinding{{Dimension: "input_tokens", Component: "input_tokens"}, {Dimension: "output_tokens", AdditionalDimension: "reasoning_tokens", Component: "output_tokens"}})
+	snapshot, err := prices.NewRatingSnapshot("openai", "gpt-6.2-sol", "text", ratingTestAcceptanceTime(), []CatalogRateBinding{{Dimension: "input_tokens", Component: "input_tokens"}, {Dimension: "output_tokens", AdditionalDimension: "reasoning_tokens", Component: "output_tokens"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,12 +219,12 @@ func TestHostedRatingRetainsTierSchedulesAcrossRestart(t *testing.T) {
 	} {
 		t.Run(test.input, func(t *testing.T) {
 			database, intent, server, _ := newHostedRatingFixture(t)
-			catalog := internalTestModelCatalog(internalTestOffering("openai", "gpt-4.1", []string{"text"}, []string{"text"}))
+			catalog := internalTestModelCatalog(internalTestOffering("openai", "gpt-6.2-sol", []string{"text"}, []string{"text"}))
 			catalog.Revision = "journal-catalog"
 			low := CatalogPriceConditions{InputTokens: CatalogTokenRange{MaximumExclusive: 200000}, EffectiveFrom: "2026-09-01T00:00:00Z", EffectiveUntil: "2026-10-01T00:00:00Z"}
 			high := low
 			high.InputTokens = CatalogTokenRange{Minimum: 200000}
-			catalog.Prices[0] = CatalogPriceDescriptor{Provider: "openai", Model: "gpt-4.1", Operation: "text", Available: true, Source: "https://example.com/prices", LastVerified: "2026-09-22", Rates: []CatalogPriceRate{
+			catalog.Prices[0] = CatalogPriceDescriptor{Provider: "openai", Model: "gpt-6.2-sol", Operation: "text", Available: true, Source: "https://example.com/prices", LastVerified: "2026-09-22", Rates: []CatalogPriceRate{
 				{Component: "input_tokens", Currency: "USD", Rate: "2", Unit: "USD/1M_tokens", Conditions: low},
 				{Component: "input_tokens", Currency: "USD", Rate: "4", Unit: "USD/1M_tokens", Conditions: high},
 				{Component: "output_tokens", Currency: "USD", Rate: "8", Unit: "USD/1M_tokens", Conditions: low},
@@ -234,7 +234,7 @@ func TestHostedRatingRetainsTierSchedulesAcrossRestart(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			snapshot, err := prices.NewRatingSnapshot("openai", "gpt-4.1", "text", ratingTestAcceptanceTime(), []CatalogRateBinding{{Dimension: "input_tokens", Component: "input_tokens"}, {Dimension: "output_tokens", Component: "output_tokens"}})
+			snapshot, err := prices.NewRatingSnapshot("openai", "gpt-6.2-sol", "text", ratingTestAcceptanceTime(), []CatalogRateBinding{{Dimension: "input_tokens", Component: "input_tokens"}, {Dimension: "output_tokens", Component: "output_tokens"}})
 			if err != nil {
 				t.Fatal(err)
 			}

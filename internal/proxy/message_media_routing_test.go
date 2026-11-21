@@ -109,7 +109,7 @@ func TestV2RoutesExactOrderedImagesThroughProviderAdapters(testingInstance *test
 		assertBody func(*testing.T, map[string]any)
 	}{
 		{
-			name: "OpenAI Responses", provider: proxy.ProviderNameOpenAI, model: proxy.ModelNameGPT4oMini, path: "/responses",
+			name: "OpenAI Responses", provider: proxy.ProviderNameOpenAI, model: "gpt-6-luna", path: "/responses",
 			assertBody: func(subTest *testing.T, payload map[string]any) {
 				assertOpenAIImageInput(subTest, payload, "auto", firstImage, secondImage)
 				if payload["background"] != true || payload["store"] != true {
@@ -243,7 +243,7 @@ func TestV2AppliesNewProviderMediaLimitsAtTheBoundary(testingInstance *testing.T
 		{
 			name:                "OpenAI image count",
 			provider:            proxy.ProviderNameOpenAI,
-			model:               proxy.ModelNameGPT4oMini,
+			model:               "gpt-6-luna",
 			limitID:             proxy.CatalogMediaLimitIDImageCount,
 			limitValue:          1,
 			boundaryAttachments: []map[string]any{messageMediaPayload("image", "image/png", []byte("x"))},

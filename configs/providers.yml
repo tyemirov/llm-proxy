@@ -1,5 +1,47 @@
 schema_version: 7
 model_migrations:
+    - managed_schema_version: 18
+      provider: openai
+      operation: text
+      source_model: gpt-4o-mini
+      target_model: gpt-6-luna
+      preserve_source_usage: true
+    - managed_schema_version: 18
+      provider: openai
+      operation: text
+      source_model: gpt-5-mini
+      target_model: gpt-6-luna
+      preserve_source_usage: true
+    - managed_schema_version: 18
+      provider: openai
+      operation: text
+      source_model: gpt-4o
+      target_model: gpt-6.2-sol
+      preserve_source_usage: true
+    - managed_schema_version: 18
+      provider: openai
+      operation: text
+      source_model: gpt-4.1
+      target_model: gpt-6.2-sol
+      preserve_source_usage: true
+    - managed_schema_version: 18
+      provider: openai
+      operation: text
+      source_model: gpt-5
+      target_model: gpt-6.2-sol
+      preserve_source_usage: true
+    - managed_schema_version: 18
+      provider: openai
+      operation: text
+      source_model: gpt-5.5
+      target_model: gpt-6.2-sol
+      preserve_source_usage: true
+    - managed_schema_version: 18
+      provider: openai
+      operation: text
+      source_model: gpt-5.5-pro
+      target_model: gpt-6.2-astra
+      preserve_source_usage: true
     - managed_schema_version: 4
       provider: qwencloud
       operation: text
@@ -226,10 +268,6 @@ families:
       publisher: deepseek
       label: DeepSeek V3
       weight_access: open_weights
-    - id: gpt-4
-      publisher: openai
-      label: GPT-4
-      weight_access: proprietary
     - id: gpt-5
       publisher: openai
       label: GPT-5
@@ -465,69 +503,6 @@ models:
       version: deepseek-v3.2
       operations: [text]
       media_inputs: []
-    - id: gpt-4o-mini
-      enabled: true
-      publisher: openai
-      family: gpt-4
-      version: gpt-4o-mini
-      operations:
-        - text
-      media_inputs:
-        - image
-    - id: gpt-4o
-      enabled: true
-      publisher: openai
-      family: gpt-4
-      version: gpt-4o
-      operations:
-        - text
-      media_inputs:
-        - image
-    - id: gpt-4.1
-      enabled: true
-      publisher: openai
-      family: gpt-4
-      version: gpt-4.1
-      operations:
-        - text
-      media_inputs:
-        - image
-    - id: gpt-5-mini
-      enabled: true
-      publisher: openai
-      family: gpt-5
-      version: gpt-5-mini
-      operations:
-        - text
-      media_inputs:
-        - image
-    - id: gpt-5
-      enabled: true
-      publisher: openai
-      family: gpt-5
-      version: gpt-5
-      operations:
-        - text
-      media_inputs:
-        - image
-    - id: gpt-5.5
-      enabled: true
-      publisher: openai
-      family: gpt-5
-      version: gpt-5.5
-      operations:
-        - text
-      media_inputs:
-        - image
-    - id: gpt-5.5-pro
-      enabled: true
-      publisher: openai
-      family: gpt-5
-      version: gpt-5.5-pro
-      operations:
-        - text
-      media_inputs:
-        - image
     - id: gpt-5.6
       enabled: true
       publisher: openai
@@ -1263,7 +1238,7 @@ providers:
     - id: openai
       verification:
         transport: text
-        model: gpt-4.1
+        model: gpt-6.2-sol
       connection_ownership: tenant
       label: OpenAI
       api_service_label: OpenAI API
@@ -1564,6 +1539,7 @@ providers:
               value: 128000
               unit: tokens
         - model: gpt-6.2-sol
+          default_operations: [text]
           created: 1795249193
           upstream_model: gpt-6.2-sol
           transport: text
@@ -2211,378 +2187,6 @@ providers:
             - id: output_tokens
               value: 128000
               unit: tokens
-        - model: gpt-4o-mini
-          created: 1787276456
-          upstream_model: gpt-4o-mini
-          transport: text
-          structured_output: *openai_schema
-          operations:
-            - text
-          request_profile: openai_responses_temperature
-          media_inputs:
-            - image
-          media_limits:
-            - id: inline_request_bytes
-              media_type: all
-              transport: inline
-              status: bounded
-              value: 512000000
-              unit: bytes
-              scope: request_encoded_bytes
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-            - id: image_count
-              media_type: image
-              transport: any
-              status: bounded
-              value: 1500
-              unit: files
-              scope: request
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-            - id: image_inline_bytes
-              media_type: image
-              transport: inline
-              status: unknown
-              unit: bytes
-              scope: attachment
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-          prices:
-            - operation: text
-              available: false
-              source: https://developers.openai.com/api/docs/pricing
-              last_verified: "2026-08-10"
-              unavailable_reason: Exact published pricing has not been imported for this provider offering.
-        - model: gpt-4o
-          created: 1787276456
-          upstream_model: gpt-4o
-          transport: text
-          structured_output: *openai_schema
-          operations:
-            - text
-          request_profile: openai_responses_temperature_tools
-          caller_tools: true
-          web_search: true
-          media_inputs:
-            - image
-          media_limits:
-            - id: inline_request_bytes
-              media_type: all
-              transport: inline
-              status: bounded
-              value: 512000000
-              unit: bytes
-              scope: request_encoded_bytes
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-            - id: image_count
-              media_type: image
-              transport: any
-              status: bounded
-              value: 1500
-              unit: files
-              scope: request
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-            - id: image_inline_bytes
-              media_type: image
-              transport: inline
-              status: unknown
-              unit: bytes
-              scope: attachment
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-          prices:
-            - operation: text
-              available: false
-              source: https://developers.openai.com/api/docs/pricing
-              last_verified: "2026-08-10"
-              unavailable_reason: Exact published pricing has not been imported for this provider offering.
-        - model: gpt-4.1
-          created: 1787276456
-          upstream_model: gpt-4.1
-          transport: text
-          structured_output: *openai_schema
-          operations:
-            - text
-          default_operations:
-            - text
-          request_profile: openai_responses_temperature_tools
-          caller_tools: true
-          web_search: true
-          media_inputs:
-            - image
-          media_limits:
-            - id: inline_request_bytes
-              media_type: all
-              transport: inline
-              status: bounded
-              value: 512000000
-              unit: bytes
-              scope: request_encoded_bytes
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-            - id: image_count
-              media_type: image
-              transport: any
-              status: bounded
-              value: 1500
-              unit: files
-              scope: request
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-            - id: image_inline_bytes
-              media_type: image
-              transport: inline
-              status: unknown
-              unit: bytes
-              scope: attachment
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-          prices:
-            - operation: text
-              available: false
-              source: https://developers.openai.com/api/docs/pricing
-              last_verified: "2026-08-10"
-              unavailable_reason: Exact published pricing has not been imported for this provider offering.
-        - model: gpt-5-mini
-          created: 1787276456
-          upstream_model: gpt-5-mini
-          transport: text
-          structured_output: *openai_schema
-          operations:
-            - text
-          request_profile: openai_responses_reasoning_tools
-          caller_tools: true
-          reasoning_effort:
-            adapter: openai_responses
-            efforts:
-                - minimal
-                - low
-                - medium
-                - high
-          media_inputs:
-            - image
-          media_limits:
-            - id: inline_request_bytes
-              media_type: all
-              transport: inline
-              status: bounded
-              value: 512000000
-              unit: bytes
-              scope: request_encoded_bytes
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-            - id: image_count
-              media_type: image
-              transport: any
-              status: bounded
-              value: 1500
-              unit: files
-              scope: request
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-            - id: image_inline_bytes
-              media_type: image
-              transport: inline
-              status: unknown
-              unit: bytes
-              scope: attachment
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-          prices:
-            - operation: text
-              available: false
-              source: https://developers.openai.com/api/docs/pricing
-              last_verified: "2026-08-10"
-              unavailable_reason: Exact published pricing has not been imported for this provider offering.
-        - model: gpt-5
-          created: 1787276456
-          upstream_model: gpt-5
-          transport: text
-          structured_output: *openai_schema
-          operations:
-            - text
-          request_profile: openai_responses_reasoning_tools
-          caller_tools: true
-          web_search: true
-          reasoning_effort:
-            adapter: openai_responses
-            efforts:
-                - minimal
-                - low
-                - medium
-                - high
-          media_inputs:
-            - image
-          media_limits:
-            - id: inline_request_bytes
-              media_type: all
-              transport: inline
-              status: bounded
-              value: 512000000
-              unit: bytes
-              scope: request_encoded_bytes
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-            - id: image_count
-              media_type: image
-              transport: any
-              status: bounded
-              value: 1500
-              unit: files
-              scope: request
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-            - id: image_inline_bytes
-              media_type: image
-              transport: inline
-              status: unknown
-              unit: bytes
-              scope: attachment
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-          output_token_limit: 128000
-          limits:
-            - id: context_tokens
-              value: 400000
-              unit: tokens
-          prices:
-            - operation: text
-              available: true
-              source: https://developers.openai.com/api/docs/pricing
-              last_verified: '2026-09-26'
-              rates:
-                - component: input_tokens
-                  currency: USD
-                  rate: '1.25'
-                  unit: USD/1M_tokens
-                  conditions:
-                    billing_mode: standard
-                    service_tier: standard
-                    effective_from: 2026-09-26T00:00:00Z
-                - component: cache_read
-                  currency: USD
-                  rate: '0.125'
-                  unit: USD/1M_tokens
-                  conditions:
-                    billing_mode: standard
-                    service_tier: standard
-                    cache_class: read
-                    effective_from: 2026-09-26T00:00:00Z
-                - component: output_tokens
-                  currency: USD
-                  rate: '10'
-                  unit: USD/1M_tokens
-                  conditions:
-                    billing_mode: standard
-                    service_tier: standard
-                    effective_from: 2026-09-26T00:00:00Z
-        - model: gpt-5.5
-          created: 1787276456
-          upstream_model: gpt-5.5
-          transport: text
-          structured_output: *openai_schema
-          operations:
-            - text
-          request_profile: openai_responses_reasoning_tools
-          caller_tools: true
-          web_search: true
-          reasoning_effort:
-            adapter: openai_responses
-            efforts:
-                - none
-                - low
-                - medium
-                - high
-                - xhigh
-          media_inputs:
-            - image
-          media_limits:
-            - id: inline_request_bytes
-              media_type: all
-              transport: inline
-              status: bounded
-              value: 512000000
-              unit: bytes
-              scope: request_encoded_bytes
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-            - id: image_count
-              media_type: image
-              transport: any
-              status: bounded
-              value: 1500
-              unit: files
-              scope: request
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-            - id: image_inline_bytes
-              media_type: image
-              transport: inline
-              status: unknown
-              unit: bytes
-              scope: attachment
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-          prices:
-            - operation: text
-              available: false
-              source: https://developers.openai.com/api/docs/pricing
-              last_verified: "2026-08-10"
-              unavailable_reason: Exact published pricing has not been imported for this provider offering.
-        - model: gpt-5.5-pro
-          created: 1787276456
-          upstream_model: gpt-5.5-pro
-          transport: text
-          structured_output: *openai_schema
-          operations:
-            - text
-          request_profile: openai_responses_reasoning_tools
-          caller_tools: true
-          web_search: true
-          reasoning_effort:
-            adapter: openai_responses
-            efforts:
-                - medium
-                - high
-                - xhigh
-          media_inputs:
-            - image
-          media_limits:
-            - id: inline_request_bytes
-              media_type: all
-              transport: inline
-              status: bounded
-              value: 512000000
-              unit: bytes
-              scope: request_encoded_bytes
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-            - id: image_count
-              media_type: image
-              transport: any
-              status: bounded
-              value: 1500
-              unit: files
-              scope: request
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-            - id: image_inline_bytes
-              media_type: image
-              transport: inline
-              status: unknown
-              unit: bytes
-              scope: attachment
-              source: https://developers.openai.com/api/docs/guides/images-vision
-              last_verified: "2026-08-11"
-          prices:
-            - operation: text
-              available: false
-              source: https://developers.openai.com/api/docs/pricing
-              last_verified: "2026-08-10"
-              unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: gpt-5.6
           created: 1787276456
           upstream_model: gpt-5.6
@@ -3017,7 +2621,7 @@ providers:
               values: [images, responses]
             - id: responses_model
               kind: enum
-              values: [gpt-5]
+              values: [gpt-6.2-sol]
           limits:
             - id: prompt_characters
               value: 32000

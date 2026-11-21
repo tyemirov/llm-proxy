@@ -121,7 +121,7 @@ func TestProviderCatalogProjectsProviderCardTaxonomy(testingInstance *testing.T)
 		families        []string
 		capabilities    []string
 	}{
-		proxy.ProviderNameOpenAI:      {apiServiceLabel: "OpenAI API", families: []string{"GPT-6", "GPT-4", "GPT-5", "GPT Transcribe", "GPT Image"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.ModelOperationDictation, proxy.ModelOperationImageGeneration, proxy.ModelOperationImageEditing}},
+		proxy.ProviderNameOpenAI:      {apiServiceLabel: "OpenAI API", families: []string{"GPT-6", "GPT-5", "GPT Transcribe", "GPT Image"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.ModelOperationDictation, proxy.ModelOperationImageGeneration, proxy.ModelOperationImageEditing}},
 		proxy.ProviderNameDashScope:   {apiServiceLabel: "Alibaba Cloud", families: []string{"Qwen", "Qwen3.8"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput}},
 		proxy.ProviderNameGemini:      {apiServiceLabel: "Gemini API", families: []string{"Gemini"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityAudioInput, proxy.ModelOperationDictation}},
 		proxy.ProviderNameMeta:        {apiServiceLabel: "Meta API", families: []string{"Muse Spark"}, capabilities: []string{proxy.ModelOperationText}},

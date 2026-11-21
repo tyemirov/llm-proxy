@@ -92,7 +92,7 @@ func TestHostedRatingSearchReservesAndEnforcesAcceptedToolBound(t *testing.T) {
 			execution.webSearch = scenario.enabled
 			server := newJournalTextHTTPServer(t, database, upstream.URL, execution)
 			body := fmt.Sprintf(`{"prompt":"private prompt","web_search":%t}`, scenario.enabled)
-			response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-4.1", "application/json", strings.NewReader(body))
+			response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-6.2-sol", "application/json", strings.NewReader(body))
 			if err != nil {
 				t.Fatal(err)
 			}

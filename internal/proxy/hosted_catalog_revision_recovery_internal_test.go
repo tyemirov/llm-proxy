@@ -16,7 +16,7 @@ func TestHostedAcceptedRecoveryRejectsChangedCatalogRevision(t *testing.T) {
 	}
 	catalog, conditions := hostedRatingTextCatalog()
 	catalog.Revision = "qualified-next-catalog"
-	settings, err := newHostedRuntimeSettings(&HostedConfiguration{Offerings: []HostedOfferingConfiguration{{Provider: "openai", Model: "gpt-4.1", Operation: ModelOperationText, MaximumAttempts: 1, Conditions: categoricalPriceConditions(conditions)}}}, catalog)
+	settings, err := newHostedRuntimeSettings(&HostedConfiguration{Offerings: []HostedOfferingConfiguration{{Provider: "openai", Model: "gpt-6.2-sol", Operation: ModelOperationText, MaximumAttempts: 1, Conditions: categoricalPriceConditions(conditions)}}}, catalog)
 	if err != nil {
 		t.Fatal(err)
 	}

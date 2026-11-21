@@ -53,7 +53,7 @@ func TestPublicCapabilityCatalogProjectsGranularDictatorDomains(t *testing.T) {
 		"qwen3-tts":        {"speech"},
 		"silero-ru":        {"speech"},
 		"gpt-transcribe":   {"transcription"},
-		"gpt-4.1":          {"image", "text"},
+		"gpt-6.2-sol":      {"image", "text"},
 	}
 	for model, expected := range expectedModels {
 		if domains := modelDomains[model]; !slices.Equal(domains, expected) {
@@ -62,7 +62,7 @@ func TestPublicCapabilityCatalogProjectsGranularDictatorDomains(t *testing.T) {
 	}
 	offeringDomains := map[string][]string{}
 	for _, offering := range catalog.Offerings {
-		if offering.Provider == ProviderNameDictator || offering.Model == "gpt-4.1" {
+		if offering.Provider == ProviderNameDictator || offering.Model == "gpt-6.2-sol" {
 			offeringDomains[offering.Model] = offering.Domains
 		}
 	}

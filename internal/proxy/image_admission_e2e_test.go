@@ -45,7 +45,7 @@ func TestImageGenerationAdmissionRejectionIsDefinite(t *testing.T) {
 					ProviderCatalog: testfixtures.ProviderCatalog(t), AssetStorePath: t.TempDir(), Endpoints: endpoints,
 					UpstreamCapacity: capacity, MediaOperationWorkers: 2,
 				}, zap.NewNop().Sugar(), testfixtures.ManagedTenant{
-					Secret: "image-admission-owner", Defaults: proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.ModelNameGPT41},
+					Secret: "image-admission-owner", Defaults: proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: "gpt-6.2-sol"},
 					ProviderKeys: map[string]string{proxy.ProviderNameOpenAI: "image-admission-provider"},
 				})
 				if err != nil {
@@ -65,7 +65,7 @@ func TestImageGenerationAdmissionRejectionIsDefinite(t *testing.T) {
 				input := imageGenerationTestIntent()
 				input.Surface = surface
 				if surface == "responses" {
-					input.ResponsesModel = "gpt-5"
+					input.ResponsesModel = "gpt-6.2-sol"
 				}
 				first, err := client.CreateImageGeneration(t.Context(), "holds-media-capacity", input)
 				if err != nil {

@@ -124,7 +124,7 @@ func startHostedFundsProcess(t *testing.T, settings hostedFundsProcessSettings) 
 }
 
 func fundsProcessHTTP(address, key string) (int, string, error) {
-	request, err := http.NewRequest(http.MethodPost, address+"/?key="+hostedIdentityFixtureKey+"&provider=openai&model=gpt-4.1", strings.NewReader(`{"prompt":"funded prompt"}`))
+	request, err := http.NewRequest(http.MethodPost, address+"/?key="+hostedIdentityFixtureKey+"&provider=openai&model=gpt-6.2-sol", strings.NewReader(`{"prompt":"funded prompt"}`))
 	if err != nil {
 		return 0, "", err
 	}

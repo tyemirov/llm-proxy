@@ -50,7 +50,7 @@ func TestHostedRatingTextProtocolBindsNativeCacheUsage(t *testing.T) {
 			t.Cleanup(upstream.Close)
 			execution := newHostedTextExecution(database, accepted, reserve, func() time.Time { return accepted.CreatedAt.Add(time.Second) }, rand.Reader)
 			server := newJournalTextHTTPServer(t, database, upstream.URL, execution)
-			response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-4.1", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
+			response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-6.2-sol", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -88,7 +88,7 @@ func TestHostedRatingTextProtocolBindsNativeCacheUsage(t *testing.T) {
 func TestHostedRatingTextBindingsRespectProtocolEvidence(t *testing.T) {
 	for _, codec := range []string{CatalogProtocolOpenAIResponses, CatalogProtocolDashScopeResponses, CatalogProtocolXAIResponses, CatalogProtocolOpenAIChatCompletions, CatalogProtocolAnthropicMessages} {
 		t.Run(codec, func(t *testing.T) {
-			catalog := internalTestModelCatalog(internalTestOffering("openai", "gpt-4.1", []string{"text"}, []string{"text"}))
+			catalog := internalTestModelCatalog(internalTestOffering("openai", "gpt-6.2-sol", []string{"text"}, []string{"text"}))
 			conditions := CatalogPriceConditions{ServiceTier: "standard", BillingMode: "standard"}
 			cache := conditions
 			cache.CacheClass = "read"
@@ -109,7 +109,7 @@ func TestHostedRatingTextBindingsRespectProtocolEvidence(t *testing.T) {
 				payload = `{"usage":{"input_tokens":800,"output_tokens":100,"cache_read_input_tokens":200,"cache_creation_input_tokens":30,"cache_creation":{"ephemeral_5m_input_tokens":10,"ephemeral_1h_input_tokens":20}}}`
 				expected = ExactMoney{Numerator: "6773", Denominator: "2000000"}
 			}
-			catalog.Prices[0] = CatalogPriceDescriptor{Provider: "openai", Model: "gpt-4.1", Operation: "text", Available: true, Source: "https://example.com/prices", LastVerified: "2026-09-22", Rates: rates}
+			catalog.Prices[0] = CatalogPriceDescriptor{Provider: "openai", Model: "gpt-6.2-sol", Operation: "text", Available: true, Source: "https://example.com/prices", LastVerified: "2026-09-22", Rates: rates}
 			scope := hostedTextPriceScopeForTest(t, catalog, conditions, 1)
 			meter := newTextJournalMeter(codec)
 			snapshot, err := meter.ratingSnapshot(scope, ratingTestAcceptanceTime(), false)
@@ -135,7 +135,7 @@ func TestHostedRatingTextBindingsRespectProtocolEvidence(t *testing.T) {
 }
 
 func hostedRatingTextCatalog() (ModelCatalog, CatalogPriceConditions) {
-	catalog := internalTestModelCatalog(internalTestOffering("openai", "gpt-4.1", []string{"text"}, []string{"text"}))
+	catalog := internalTestModelCatalog(internalTestOffering("openai", "gpt-6.2-sol", []string{"text"}, []string{"text"}))
 	catalog.Revision = "journal-catalog"
 	inputLimit := 1000
 	catalog.Offerings[0].OutputTokenLimit = 1000
@@ -143,7 +143,7 @@ func hostedRatingTextCatalog() (ModelCatalog, CatalogPriceConditions) {
 	conditions := CatalogPriceConditions{BillingMode: "standard", ServiceTier: "standard", EffectiveFrom: "2026-09-01T00:00:00Z"}
 	cache := conditions
 	cache.CacheClass = "read"
-	catalog.Prices[0] = CatalogPriceDescriptor{Provider: "openai", Model: "gpt-4.1", Operation: "text", Available: true, Source: "https://example.com/prices", LastVerified: "2026-09-22", Rates: []CatalogPriceRate{
+	catalog.Prices[0] = CatalogPriceDescriptor{Provider: "openai", Model: "gpt-6.2-sol", Operation: "text", Available: true, Source: "https://example.com/prices", LastVerified: "2026-09-22", Rates: []CatalogPriceRate{
 		{Component: "input_tokens", Currency: "USD", Rate: "2", Unit: "USD/1M_tokens", Conditions: conditions},
 		{Component: "output_tokens", Currency: "USD", Rate: "8", Unit: "USD/1M_tokens", Conditions: conditions},
 		{Component: "cache_read", Currency: "USD", Rate: "0.5", Unit: "USD/1M_tokens", Conditions: cache},
@@ -180,7 +180,7 @@ func TestHostedRatingTextBoundsStopExcessContinuationBeforeDispatch(t *testing.T
 	t.Cleanup(upstream.Close)
 	execution := newHostedTextExecution(database, accepted, reserve, func() time.Time { return accepted.CreatedAt.Add(time.Second) }, rand.Reader)
 	server := newJournalTextHTTPServer(t, database, upstream.URL, execution)
-	response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-4.1&max_tokens=100", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
+	response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-6.2-sol&max_tokens=100", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -181,7 +181,7 @@ func testHostedCompletionRecovery(t *testing.T, kind journalExecutionKind) {
 			}
 			t.Cleanup(stop)
 			serverURL := waitHostedRecoverySignal(t, settings.ReadyPath, stop, &output)
-			path := "/?key=" + hostedIdentityFixtureKey + "&provider=openai&model=gpt-4.1"
+			path := "/?key=" + hostedIdentityFixtureKey + "&provider=openai&model=gpt-6.2-sol"
 			var body io.Reader = strings.NewReader(`{"prompt":"interrupted prompt"}`)
 			contentType := "application/json"
 			if kind == journalExecutionDictation {
@@ -312,7 +312,7 @@ func TestHostedTextRecoveryFencesReplacedWorker(t *testing.T) {
 		service.authorize = fixedHostedCompletionAdmission(reserve)
 	})
 	t.Cleanup(func() { close(release) })
-	request, err := http.NewRequest(http.MethodPost, first.URL+"/?provider=openai&model=gpt-4.1", strings.NewReader(`{"prompt":"same intent"}`))
+	request, err := http.NewRequest(http.MethodPost, first.URL+"/?provider=openai&model=gpt-6.2-sol", strings.NewReader(`{"prompt":"same intent"}`))
 	if err != nil {
 		t.Fatal(err)
 	}

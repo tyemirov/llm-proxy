@@ -21,17 +21,18 @@ import (
 )
 
 func TestOpenAITranscriptionRetirementOwnershipMigration(t *testing.T) {
+	const retainedTextModel = "gpt-5.6-terra"
 	for _, model := range []string{"gpt-4o-mini-transcribe", "gpt-4o-transcribe"} {
 		t.Run(model, func(t *testing.T) {
 			database := openLegacyManagedTenantDatabase(t, filepath.Join(t.TempDir(), "ownership.db"))
 			now := time.Date(2026, 9, 7, 1, 0, 0, 0, time.UTC)
-			tenant := legacyManagedTenantRecord{UserID: "transcription-owner", TenantID: "managed-transcription", DefaultProvider: ProviderNameOpenAI, DefaultModel: "gpt-4.1", DefaultTranscriptionProvider: ProviderNameOpenAI, DefaultTranscriptionModel: model, DefaultSystemPrompt: "preserve prompt", CreatedAt: now, UpdatedAt: now}
+			tenant := legacyManagedTenantRecord{UserID: "transcription-owner", TenantID: "managed-transcription", DefaultProvider: ProviderNameOpenAI, DefaultModel: retainedTextModel, DefaultTranscriptionProvider: ProviderNameOpenAI, DefaultTranscriptionModel: model, DefaultSystemPrompt: "preserve prompt", CreatedAt: now, UpdatedAt: now}
 			cipher := internalManagedProviderKeyCipher()
 			encrypted, err := cipher.encrypt(bytes.NewReader(bytes.Repeat([]byte{1}, cipher.aeadCipher.NonceSize())), tenant.UserID, ProviderNameOpenAI, "transcription-test-key")
 			if err != nil {
 				t.Fatal(err)
 			}
-			key := legacyManagedProviderAPIKeyRecord{UserID: tenant.UserID, ProviderID: ProviderNameOpenAI, EncryptedAPIKey: encrypted, TextModel: "gpt-4.1", CreatedAt: now, UpdatedAt: now}
+			key := legacyManagedProviderAPIKeyRecord{UserID: tenant.UserID, ProviderID: ProviderNameOpenAI, EncryptedAPIKey: encrypted, TextModel: retainedTextModel, CreatedAt: now, UpdatedAt: now}
 			event := legacyManagedUsageEventRecord{ID: 1, UserID: tenant.UserID, TenantID: tenant.TenantID, Endpoint: usageEndpointDictation, ProviderID: ProviderNameOpenAI, ModelID: model, StatusCode: 200, Success: true, TotalTokens: 9, CreatedAt: now}
 			for _, record := range []struct {
 				table string
@@ -168,6 +169,7 @@ func TestOpenAITranscriptionRetirementStartup(t *testing.T) {
 			for index, expected := range tenants {
 				if scenario == "success" {
 					expected.DefaultTranscriptionModel = "gpt-transcribe"
+					expected.DefaultModel = "gpt-6.2-sol"
 				}
 				var actual managedTenantRecord
 				if err := database.First(&actual, "tenant_id = ?", expected.TenantID).Error; err != nil {
@@ -195,7 +197,11 @@ func TestOpenAITranscriptionRetirementStartup(t *testing.T) {
 				if err := database.First(&event, index+1).Error; err != nil {
 					t.Fatal(err)
 				}
-				if !reflect.DeepEqual(profile, profiles[index]) || !reflect.DeepEqual(event, usage[index]) {
+				expectedProfile := profiles[index]
+				if scenario == "success" {
+					expectedProfile.TextModel = "gpt-6.2-sol"
+				}
+				if !reflect.DeepEqual(profile, expectedProfile) || !reflect.DeepEqual(event, usage[index]) {
 					t.Fatal("migration changed a profile, credential, or historical usage record")
 				}
 				if scenario == "success" {

@@ -67,7 +67,7 @@ func TestHostedAssignmentExplicitChoiceIsolationAndRestart(t *testing.T) {
 	defaults := `{"provider":"openai","model":"gpt-6-astra","transcription_provider":"","transcription_model":"","speech_provider":"","speech_model":"","system_prompt":"Hosted default","reasoning_effort":""}`
 	requireHostedHTTP(t, server, other, http.MethodPut, defaultsPath, defaults, "", http.StatusNotFound)
 	requireHostedHTTP(t, server, owner, http.MethodPut, defaultsPath, defaults, "", http.StatusOK)
-	requireHostedHTTP(t, server, owner, http.MethodPut, defaultsPath, strings.Replace(defaults, "gpt-6-astra", "gpt-4.1", 1), "", http.StatusBadRequest)
+	requireHostedHTTP(t, server, owner, http.MethodPut, defaultsPath, strings.Replace(defaults, "gpt-6-astra", "gpt-6.2-sol", 1), "", http.StatusBadRequest)
 	outsideOperation := strings.Replace(defaults, `"transcription_provider":"","transcription_model":""`, `"transcription_provider":"openai","transcription_model":"gpt-transcribe"`, 1)
 	requireHostedHTTP(t, server, owner, http.MethodPut, defaultsPath, outsideOperation, "", http.StatusBadRequest)
 	requireHostedHTTP(t, server, owner, http.MethodPut, path, owned, "", http.StatusConflict)

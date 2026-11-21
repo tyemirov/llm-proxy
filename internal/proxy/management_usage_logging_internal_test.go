@@ -228,7 +228,7 @@ func TestManagedUsageWriterKeepsPublicResponsesIndependentFromPersistence(t *tes
 	tenantRecord := fakeTenantRecord(ownerUserID, tenantIDValue, "Queue", timestamp)
 	tenantRecord.SecretDigest = &secretDigestText
 	tenantRecord.DefaultProvider = ProviderNameOpenAI
-	tenantRecord.DefaultModel = ModelNameGPT41
+	tenantRecord.DefaultModel = "gpt-6.2-sol"
 	tenantRecord.DefaultTranscriptionProvider = ProviderNameOpenAI
 	tenantRecord.DefaultTranscriptionModel = DefaultTranscriptionModel
 	tenantRecord.ConnectionAssignments = []managedTenantConnectionRecord{{
@@ -238,7 +238,7 @@ func TestManagedUsageWriterKeepsPublicResponsesIndependentFromPersistence(t *tes
 	}}
 
 	tenantRecord.ProviderProfiles = []managedProviderProfileRecord{{
-		TenantID: tenantIDValue, ProviderID: ProviderNameOpenAI, TextModel: ModelNameGPT41,
+		TenantID: tenantIDValue, ProviderID: ProviderNameOpenAI, TextModel: "gpt-6.2-sol",
 		CreatedAt: timestamp, UpdatedAt: timestamp,
 	}}
 	baseDatabase := newFakeManagedTenantDatabase()
@@ -383,7 +383,7 @@ func waitForObservedLogCount(t *testing.T, observedLogs *observer.ObservedLogs, 
 
 func internalManagedUsageWriterProviderModels() ModelCatalog {
 	return internalTestModelCatalog(
-		internalTestOffering(ProviderNameOpenAI, ModelNameGPT41, []string{ModelOperationText}, []string{ModelOperationText}),
+		internalTestOffering(ProviderNameOpenAI, "gpt-6.2-sol", []string{ModelOperationText}, []string{ModelOperationText}),
 		internalTestOffering(ProviderNameOpenAI, DefaultTranscriptionModel, []string{ModelOperationDictation}, []string{ModelOperationDictation}),
 	)
 }

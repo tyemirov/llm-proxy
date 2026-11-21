@@ -61,7 +61,7 @@ func TestManagementCapabilityMigrationPreservesDataAndRestart(t *testing.T) {
 			path := "/tenants/" + tenantID
 			if populated {
 				fixture, listener := newDictatorAcceptanceUpstream(t, proxy.ProviderNameDictator)
-				response := putManagementProviderKey(t, router, owner, tenantID, proxy.ProviderNameOpenAI, testManagementOpenAIKey, proxy.ModelNameGPT41, "Provider prompt", t.Context())
+				response := putManagementProviderKey(t, router, owner, tenantID, proxy.ProviderNameOpenAI, testManagementOpenAIKey, "gpt-6.2-sol", "Provider prompt", t.Context())
 				if response.Code != http.StatusOK {
 					t.Fatalf("create text connection: status=%d", response.Code)
 				}
@@ -71,7 +71,7 @@ func TestManagementCapabilityMigrationPreservesDataAndRestart(t *testing.T) {
 				}, http.StatusCreated)
 				accountConnectionExchange(t, router, owner, http.MethodPut, path+"/connections/dictator", map[string]any{"kind": "account_connection", "resource_id": connection["id"]}, http.StatusOK)
 				accountConnectionExchange(t, router, owner, http.MethodPut, path+"/defaults", map[string]string{
-					"provider": "openai", "model": proxy.ModelNameGPT41,
+					"provider": "openai", "model": "gpt-6.2-sol",
 					"transcription_provider": "dictator", "transcription_model": "whisper-base",
 					"system_prompt": "Keep the tenant prompt.", "reasoning_effort": "",
 				}, http.StatusOK)
@@ -140,7 +140,8 @@ func TestManagementCapabilityMigrationRejectsAmbiguousSchema(t *testing.T) {
 
 type capabilityMigrationFailureDialector struct {
 	gorm.Dialector
-	column string
+	column            string
+	tenantInspections *int
 }
 
 func (dialector capabilityMigrationFailureDialector) Initialize(database *gorm.DB) error {
@@ -156,17 +157,22 @@ func (dialector capabilityMigrationFailureDialector) Initialize(database *gorm.D
 }
 
 func (dialector capabilityMigrationFailureDialector) Migrator(database *gorm.DB) gorm.Migrator {
-	return capabilityMigrationFailureMigrator{Migrator: dialector.Dialector.Migrator(database), column: dialector.column}
+	return capabilityMigrationFailureMigrator{Migrator: dialector.Dialector.Migrator(database), column: dialector.column, tenantInspections: dialector.tenantInspections}
 }
 
 type capabilityMigrationFailureMigrator struct {
 	gorm.Migrator
-	column string
+	column            string
+	tenantInspections *int
 }
 
 func (migrator capabilityMigrationFailureMigrator) ColumnTypes(model any) ([]gorm.ColumnType, error) {
-	if migrator.column == "inspect_capability_defaults" {
-		return nil, errors.New("injected capability migration failure")
+	if migrator.column == "inspect_capability_defaults" && model == capabilityTenantTable {
+		(*migrator.tenantInspections)++
+		// Let the model cutover preflight complete before failing capability inspection.
+		if *migrator.tenantInspections == 2 {
+			return nil, errors.New("injected capability migration failure")
+		}
 	}
 	return migrator.Migrator.ColumnTypes(model)
 }
@@ -195,7 +201,8 @@ func TestManagementCapabilityMigrationFailureRollsBack(t *testing.T) {
 			previousCapabilityDefaults(t, database)
 			before := capabilityDatabaseSnapshot(t, database)
 			configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, databasePath)
-			configuration.Management.DatabaseDialector = capabilityMigrationFailureDialector{Dialector: sqlite.Open(databasePath), column: column}
+			tenantInspections := 0
+			configuration.Management.DatabaseDialector = capabilityMigrationFailureDialector{Dialector: sqlite.Open(databasePath), column: column, tenantInspections: &tenantInspections}
 			_, err := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
 			if err == nil || !strings.Contains(err.Error(), "injected capability migration failure") || !strings.Contains(err.Error(), column) {
 				t.Fatalf("migration error=%v, want injected failure with column context", err)

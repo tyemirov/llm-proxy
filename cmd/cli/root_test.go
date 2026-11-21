@@ -179,8 +179,14 @@ PAYMENT_TEST_WEBHOOK_SECRET=paddle-webhook-fixture
 		}
 	}
 	openAIOfferings := configuredProviderOfferings(capturedConfiguration.ModelCatalog, proxy.ProviderNameOpenAI)
-	if len(openAIOfferings) < 4 || openAIOfferings[3].Model != "gpt-4.1" || openAIOfferings[3].RequestProfile != "openai_responses_temperature_tools" || !openAIOfferings[3].WebSearch {
-		t.Fatalf("openai offerings=%+v", openAIOfferings)
+	currentOpenAIFound := false
+	for _, offering := range openAIOfferings {
+		if offering.Model == "gpt-6.2-sol" {
+			currentOpenAIFound = offering.RequestProfile == "openai_responses_reasoning_tools" && offering.WebSearch
+		}
+	}
+	if !currentOpenAIFound {
+		t.Fatalf("current openai Responses offering absent: %+v", openAIOfferings)
 	}
 	for _, offering := range capturedConfiguration.ModelCatalog.Offerings {
 		if slices.Contains(offering.Operations, proxy.ModelOperationText) && (offering.WireContract == "" || offering.ExecutionLifecycle == "") {

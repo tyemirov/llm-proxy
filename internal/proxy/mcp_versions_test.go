@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tyemirov/llm-proxy/internal/proxy"
 	"github.com/tyemirov/tauth/pkg/oauthvalidator"
 )
 
@@ -22,7 +21,7 @@ func TestMCPHandshakeVersions(t *testing.T) {
 			owner := managementSessionCookie(t, "version-owner")
 			tenant := requestManagementAccount(t, fixture.router, owner).Tenants[0].ID
 			foreign := requestManagementAccount(t, fixture.router, managementSessionCookie(t, "other-owner")).Tenants[0].ID
-			saveManagementProviderKey(t, fixture.router, owner, tenant, "fixture-key", proxy.ModelNameGPT41, "")
+			saveManagementProviderKey(t, fixture.router, owner, tenant, "fixture-key", "gpt-6.2-sol", "")
 			token := fixture.token(t, "version-owner", nil)
 			call := func(headerVersion, method string, params any, notification bool, bearer string, status int) map[string]any {
 				t.Helper()

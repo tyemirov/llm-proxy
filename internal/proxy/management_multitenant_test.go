@@ -195,10 +195,10 @@ func TestManagementTenantConfigurationSecretAndUsageIsolation(t *testing.T) {
 
 	firstKey := "sk-first-tenant"
 	secondKey := "sk-second-tenant"
-	saveManagementProviderKey(t, router, ownerCookie, firstTenantID, firstKey, proxy.ModelNameGPT41, "first system")
-	saveManagementProviderKey(t, router, ownerCookie, secondTenantID, secondKey, proxy.ModelNameGPT55, "second system")
-	saveManagementDefaults(t, router, ownerCookie, firstTenantID, proxy.ModelNameGPT41, "first default")
-	saveManagementDefaults(t, router, ownerCookie, secondTenantID, proxy.ModelNameGPT55, "second default")
+	saveManagementProviderKey(t, router, ownerCookie, firstTenantID, firstKey, "gpt-6.2-sol", "first system")
+	saveManagementProviderKey(t, router, ownerCookie, secondTenantID, secondKey, "gpt-6-sol", "second system")
+	saveManagementDefaults(t, router, ownerCookie, firstTenantID, "gpt-6.2-sol", "first default")
+	saveManagementDefaults(t, router, ownerCookie, secondTenantID, "gpt-6-sol", "second default")
 
 	firstSecret := generateManagementTenantSecret(t, router, ownerCookie, firstTenantID)
 	secondSecret := generateManagementTenantSecret(t, router, ownerCookie, secondTenantID)
@@ -256,9 +256,9 @@ func TestManagementTenantConfigurationSecretAndUsageIsolation(t *testing.T) {
 	}
 	if len(upstreamCalls) != 2 ||
 		upstreamCalls[0].authorization != "Bearer "+firstKey ||
-		upstreamCalls[0].model != proxy.ModelNameGPT41 ||
+		upstreamCalls[0].model != "gpt-6.2-sol" ||
 		upstreamCalls[1].authorization != "Bearer "+secondKey ||
-		upstreamCalls[1].model != proxy.ModelNameGPT55 {
+		upstreamCalls[1].model != "gpt-6-sol" {
 		t.Fatalf("upstream calls=%+v", upstreamCalls)
 	}
 

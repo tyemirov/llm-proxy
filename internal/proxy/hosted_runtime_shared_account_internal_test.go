@@ -28,10 +28,10 @@ func seedHostedSharedFundsTenant(t *testing.T, database *gormManagedTenantDataba
 	const grantID = "grant-44444444444444444444444444444444"
 	for _, record := range []any{
 		&tenant,
-		&managedHostedGrantRecord{ID: grantID, BillingAccountID: "billing-journal", TenantID: tenant.TenantID, PlatformConnectionID: "platform-journal", Provider: "openai", CatalogRevision: "journal-catalog", Offerings: []byte(`[{"model":"gpt-4.1","operations":["text"]}]`), State: hostedGrantActive, Revision: 1, CreatedAt: now, UpdatedAt: now},
+		&managedHostedGrantRecord{ID: grantID, BillingAccountID: "billing-journal", TenantID: tenant.TenantID, PlatformConnectionID: "platform-journal", Provider: "openai", CatalogRevision: "journal-catalog", Offerings: []byte(`[{"model":"gpt-6.2-sol","operations":["text"]}]`), State: hostedGrantActive, Revision: 1, CreatedAt: now, UpdatedAt: now},
 		&managedHostedGrantRevisionRecord{GrantID: grantID, Revision: 1, State: hostedGrantActive, ActorUserID: "operator", Reason: "Shared funds acceptance", CreatedAt: now},
 		&managedHostedTenantAssignmentRecord{TenantID: tenant.TenantID, ProviderID: "openai", GrantID: grantID, CreatedAt: now},
-		&managedProviderProfileRecord{TenantID: tenant.TenantID, ProviderID: "openai", TextModel: "gpt-4.1", CreatedAt: now, UpdatedAt: now},
+		&managedProviderProfileRecord{TenantID: tenant.TenantID, ProviderID: "openai", TextModel: "gpt-6.2-sol", CreatedAt: now, UpdatedAt: now},
 	} {
 		if err := database.database.Omit(clause.Associations).Create(record).Error; err != nil {
 			t.Fatal(err)
@@ -101,7 +101,7 @@ func TestHostedRuntimeConcurrentTenantsConserveSharedFunds(t *testing.T) {
 				err    error
 			}
 			exchange := func(tenant int, key string) response {
-				request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, baseURL+"/?provider=openai&model=gpt-4.1&key="+secrets[tenant], strings.NewReader(`{"prompt":"funded prompt"}`))
+				request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, baseURL+"/?provider=openai&model=gpt-6.2-sol&key="+secrets[tenant], strings.NewReader(`{"prompt":"funded prompt"}`))
 				if err != nil {
 					return response{tenant: tenant, err: err}
 				}

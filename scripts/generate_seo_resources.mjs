@@ -597,7 +597,7 @@ done`,
       ["Early rejection", "Unsupported combinations fail before provider spend.", "Callers get a clear request error."],
     ],
     examples: [
-      ["Research prompt", "A caller selects gpt-5 with web_search=true for a search-enabled answer."],
+      ["Research prompt", "A caller selects gpt-6.2-sol with web_search=true for a search-enabled answer."],
       ["Non-search provider", "A Gemini request with web_search does not silently pretend to search."],
       ["Default model check", "If the tenant default model lacks web search, the request must choose a supporting OpenAI model."],
     ],
@@ -1237,7 +1237,7 @@ request, err := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequest
     examples: [
       ["Scripted summary", "A Python script sends one user message to a configured provider default."],
       ["Transcript replay", "A workflow sends ordered chat messages for review."],
-      ["Reasoning route", "The client targets provider=openai with gpt-5.5 and reasoning_effort=high for one supported request."],
+      ["Reasoning route", "The client selects gpt-6.2-sol with reasoning_effort=high."],
     ],
     limitations: [
       "The package is v2-only for text requests.",
@@ -1259,7 +1259,7 @@ client = Client(
 text = client.post_messages(
     ClientMessagesRequest(
         messages=(ClientMessage(role="user", content="Summarize this"),),
-        model="gpt-5.5",
+        model="gpt-6.2-sol",
         max_tokens=512,
         reasoning_effort="high",
         request_timeout_seconds=900,
@@ -1307,7 +1307,7 @@ text = client.post_messages(
       code: `llm-proxy-client \\
   --base-url "http://localhost:8080/?provider=openai" \\
   --secret "$LLM_PROXY_DEFAULT_TENANT_KEY" \\
-  --model "gpt-5.5" \\
+  --model "gpt-6.2-sol" \\
   --reasoning-effort "high" \\
   --request-timeout-seconds 900 \\
   --prompt "Summarize this"`,

@@ -15,7 +15,7 @@ func TestHostedFundsMCPRejectsUnfundedWorkAndReusesSettlement(t *testing.T) {
 	upstream := fundsUpstream(t, &calls)
 	server, clientFor := newHostedMCPIdentityServer(t, database, upstream.URL, t.TempDir(), fundsDependencies(prices))
 	client := clientFor("owner")
-	input := map[string]any{"tenant_id": "managed-first", "idempotency_key": "funds-mcp", "provider": "openai", "model": "gpt-4.1", "messages": []map[string]string{{"role": "user", "content": "funded prompt"}}}
+	input := map[string]any{"tenant_id": "managed-first", "idempotency_key": "funds-mcp", "provider": "openai", "model": "gpt-6.2-sol", "messages": []map[string]string{{"role": "user", "content": "funded prompt"}}}
 	waitUsage := fundsFixtureUsageCommitBarrier(t, database, 1)
 	if denied := hostedMCPCall(t, client, input, true); denied["code"] != errInsufficientFunds.Error() || calls.Load() != 0 {
 		t.Fatalf("unfunded MCP=%v calls=%d", denied, calls.Load())

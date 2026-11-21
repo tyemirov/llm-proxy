@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	modelsListBody               = `{"data":[{"id":"` + proxy.ModelNameGPT41 + `"}]}`
+	modelsListBody               = `{"data":[{"id":"` + "gpt-6.2-sol" + `"}]}`
 	expectedResponseBody         = "SLOW_OK"
 	requestTimeoutSecondsDefault = 40
 	responseReadyAssertion       = "response returned before upstream release"

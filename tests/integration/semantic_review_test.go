@@ -156,7 +156,7 @@ func TestIntegrationLargeSemanticReviewPostUsesRequestMaxTokens(testingInstance 
 	requestURL.RawQuery = queryValues.Encode()
 	requestPayload := map[string]any{
 		"prompt":     largeSemanticReviewPrompt(testingInstance),
-		"model":      proxy.ModelNameGPT55Pro,
+		"model":      "gpt-6.2-astra",
 		"web_search": false,
 		"max_tokens": semanticReviewRequiredOutputLimit,
 	}
@@ -186,8 +186,8 @@ func TestIntegrationLargeSemanticReviewPostUsesRequestMaxTokens(testingInstance 
 	if string(responseBytes) != semanticReviewAcceptedResponse {
 		testingInstance.Fatalf(bodyMismatchFormat, string(responseBytes), semanticReviewAcceptedResponse)
 	}
-	if captured.initialModel != proxy.ModelNameGPT55Pro {
-		testingInstance.Fatalf("model=%s want=%s", captured.initialModel, proxy.ModelNameGPT55Pro)
+	if captured.initialModel != "gpt-6.2-astra" {
+		testingInstance.Fatalf("model=%s want=%s", captured.initialModel, "gpt-6.2-astra")
 	}
 	if captured.initialPromptBytes < semanticReviewMinimumPromptBytes {
 		testingInstance.Fatalf("prompt_bytes=%d want>=%d", captured.initialPromptBytes, semanticReviewMinimumPromptBytes)
@@ -253,7 +253,7 @@ func TestIntegrationLargeSemanticReviewPostPollsBackgroundOpenAIResponse(testing
 	requestURL.RawQuery = queryValues.Encode()
 	requestPayload := map[string]any{
 		"prompt":     largeSemanticReviewPrompt(testingInstance),
-		"model":      proxy.ModelNameGPT55Pro,
+		"model":      "gpt-6.2-astra",
 		"web_search": false,
 		"max_tokens": semanticReviewRequiredOutputLimit,
 	}
@@ -340,7 +340,7 @@ func TestIntegrationLargeSemanticReviewPostCompletesThroughServerSidePolling(tes
 	requestURL.RawQuery = queryValues.Encode()
 	requestPayload := map[string]any{
 		"prompt":     largeSemanticReviewPrompt(testingInstance),
-		"model":      proxy.ModelNameGPT55Pro,
+		"model":      "gpt-6.2-astra",
 		"web_search": false,
 		"max_tokens": semanticReviewRequiredOutputLimit,
 	}

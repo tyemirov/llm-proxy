@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "llmproxy/openai/gpt-4.1",
+  "model": "llmproxy/openai/gpt-6.2-sol",
   "provider": {
     "llmproxy": {
       "npm": "@ai-sdk/openai",
@@ -11,8 +11,8 @@
         "setCacheKey": false
       },
       "models": {
-        "openai/gpt-4.1": {
-          "name": "GPT-4.1 through LLM Proxy",
+        "openai/gpt-6.2-sol": {
+          "name": "GPT-6.2 Sol through LLM Proxy",
           "tool_call": true,
           "temperature": false,
           "reasoning": false,

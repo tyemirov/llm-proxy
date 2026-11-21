@@ -78,7 +78,7 @@ func TestHostedImageResponsesUsageRetainsSeparateEvidence(t *testing.T) {
 			}))
 			t.Cleanup(upstream.Close)
 			server, service := newHostedMediaAdmissionHTTPServer(t, database, hostedMediaWorkerProvider(upstream.URL))
-			controls := json.RawMessage(fmt.Sprintf(`{"surface":"responses","responses_model":"gpt-5","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1,"stream":%t,"partial_images":0}`, scenario.surface == "stream"))
+			controls := json.RawMessage(fmt.Sprintf(`{"surface":"responses","responses_model":"gpt-6.2-sol","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1,"stream":%t,"partial_images":0}`, scenario.surface == "stream"))
 			accepted := hostedMediaAdmissionHTTP(t, server, "responses-usage", "private image prompt", http.StatusAccepted, controls)
 			id := accepted["operation_id"].(string)
 			if scenario.failWrite {

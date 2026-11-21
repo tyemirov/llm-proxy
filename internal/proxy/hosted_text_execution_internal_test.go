@@ -47,7 +47,7 @@ func TestHostedJournalTextTransportRecordsEachContinuation(t *testing.T) {
 	t.Cleanup(upstream.Close)
 	execution := newHostedTextExecution(database, accepted, reserve, func() time.Time { return accepted.CreatedAt.Add(time.Second) }, rand.Reader)
 	server := newJournalTextHTTPServer(t, database, upstream.URL, execution)
-	response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-4.1", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
+	response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-6.2-sol", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestHostedJournalTextUnknownUsageStopsPaidContinuation(t *testing.T) {
 	t.Cleanup(upstream.Close)
 	execution := newHostedTextExecution(database, accepted, reserve, func() time.Time { return accepted.CreatedAt.Add(time.Second) }, rand.Reader)
 	server := newJournalTextHTTPServer(t, database, upstream.URL, execution)
-	response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-4.1", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
+	response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-6.2-sol", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestHostedJournalTextPollingRetainsProviderIdentityBeforeObservation(t *tes
 	t.Cleanup(upstream.Close)
 	execution := newHostedTextExecution(database, accepted, reserve, func() time.Time { return accepted.CreatedAt.Add(time.Second) }, rand.Reader)
 	server := newJournalTextHTTPServer(t, database, upstream.URL, execution)
-	response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-4.1", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
+	response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-6.2-sol", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestHostedJournalTextStagingDoesNotBecomeAGenerationAttempt(t *testing.T) {
 	}))
 	t.Cleanup(upstream.Close)
 	provider := internalManagementProviderRegistry().definitions[providerID("openai")]
-	model := provider.textModels["gpt-4.1"]
+	model := provider.textModels["gpt-6.2-sol"]
 	provider, _ = provider.resolvedTransport(model.transportIdentifier)
 	client := newGeminiInteractionsClient(newProviderTransportHTTPDoer(http.DefaultClient, provider, "sk-platform-journal"))
 	execution := newHostedTextExecution(database, accepted, reserve, func() time.Time { return accepted.CreatedAt.Add(time.Second) }, rand.Reader)
@@ -206,7 +206,7 @@ func TestHostedJournalTextLostResponseRetainsUncertainDispatch(t *testing.T) {
 	t.Cleanup(upstream.Close)
 	execution := newHostedTextExecution(database, accepted, reserve, func() time.Time { return accepted.CreatedAt.Add(time.Second) }, rand.Reader)
 	server := newJournalTextHTTPServer(t, database, upstream.URL, execution)
-	response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-4.1", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
+	response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-6.2-sol", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestHostedJournalTextRevokedGrantStopsSynthesis(t *testing.T) {
 	t.Cleanup(upstream.Close)
 	execution := newHostedTextExecution(database, accepted, reserve, func() time.Time { return accepted.CreatedAt.Add(time.Second) }, rand.Reader)
 	server := newJournalTextHTTPServer(t, database, upstream.URL, execution)
-	response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-4.1", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
+	response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-6.2-sol", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +287,7 @@ func TestHostedJournalTextSynthesisCreatesAnotherAttempt(t *testing.T) {
 	t.Cleanup(upstream.Close)
 	execution := newHostedTextExecution(database, accepted, reserve, func() time.Time { return accepted.CreatedAt.Add(time.Second) }, rand.Reader)
 	server := newJournalTextHTTPServer(t, database, upstream.URL, execution)
-	response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-4.1", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
+	response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-6.2-sol", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +325,7 @@ func TestHostedJournalTextMalformedResponseCannotSupplyCompleteUsage(t *testing.
 	t.Cleanup(upstream.Close)
 	execution := newHostedTextExecution(database, accepted, reserve, func() time.Time { return accepted.CreatedAt.Add(time.Second) }, rand.Reader)
 	server := newJournalTextHTTPServer(t, database, upstream.URL, execution)
-	response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-4.1", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
+	response, err := server.Client().Post(server.URL+"/?provider=openai&model=gpt-6.2-sol", "application/json", strings.NewReader(`{"prompt":"private prompt"}`))
 	if err != nil {
 		t.Fatal(err)
 	}

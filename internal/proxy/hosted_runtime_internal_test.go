@@ -71,13 +71,13 @@ func newHostedRuntimeTextFixture(t *testing.T) hostedRuntimeTextFixture {
 	catalog := internalCanonicalProviderCatalog()
 	catalog.modelCatalog.Revision = priced.Revision
 	for index, offering := range catalog.modelCatalog.Offerings {
-		if offering.Provider == "openai" && offering.Model == "gpt-4.1" {
+		if offering.Provider == "openai" && offering.Model == "gpt-6.2-sol" {
 			catalog.modelCatalog.Offerings[index].Limits = priced.Offerings[0].Limits
 			catalog.modelCatalog.Offerings[index].OutputTokenLimit = priced.Offerings[0].OutputTokenLimit
 		}
 	}
 	for index, price := range catalog.modelCatalog.Prices {
-		if price.Provider == "openai" && price.Model == "gpt-4.1" && price.Operation == ModelOperationText {
+		if price.Provider == "openai" && price.Model == "gpt-6.2-sol" && price.Operation == ModelOperationText {
 			catalog.modelCatalog.Prices[index] = priced.Prices[0]
 		}
 	}
@@ -87,7 +87,7 @@ func newHostedRuntimeTextFixture(t *testing.T) hostedRuntimeTextFixture {
 				continue
 			}
 			for offering := range schema.Providers[index].Offerings {
-				if schema.Providers[index].Offerings[offering].Model == "gpt-4.1" {
+				if schema.Providers[index].Offerings[offering].Model == "gpt-6.2-sol" {
 					schema.Providers[index].Offerings[offering].OutputTokenLimit = priced.Offerings[0].OutputTokenLimit
 				}
 			}
@@ -99,7 +99,7 @@ func newHostedRuntimeTextFixture(t *testing.T) hostedRuntimeTextFixture {
 		}
 	}
 	configuration := withInternalUpstreamCapacity(t, Configuration{Management: management.configuration, ProviderCatalog: catalog, AssetStorePath: root,
-		Hosted: &HostedConfiguration{Offerings: []HostedOfferingConfiguration{{Provider: "openai", Model: "gpt-4.1", Operation: ModelOperationText, MaximumAttempts: 1, Conditions: categoricalPriceConditions(conditions)}}}})
+		Hosted: &HostedConfiguration{Offerings: []HostedOfferingConfiguration{{Provider: "openai", Model: "gpt-6.2-sol", Operation: ModelOperationText, MaximumAttempts: 1, Conditions: categoricalPriceConditions(conditions)}}}})
 	return hostedRuntimeTextFixture{fundsStartupFixture{database, managementHTTP, calls}, configuration, management.store}
 }
 
@@ -111,7 +111,7 @@ func TestHostedRuntimeFundsAdmissionAndSettlementThroughNormalHTTP(t *testing.T)
 	}
 	excluded := configuration.Hosted.Offerings[0]
 	for _, offering := range configuration.ProviderCatalog.modelCatalog.Offerings {
-		if offering.Model != "gpt-4.1" && slices.Contains(offering.Operations, ModelOperationText) {
+		if offering.Model != "gpt-6.2-sol" && slices.Contains(offering.Operations, ModelOperationText) {
 			excluded.Provider, excluded.Model = offering.Provider, offering.Model
 			break
 		}
@@ -234,7 +234,7 @@ func TestHostedRuntimeRejectsCatalogWithoutEnabledOfferings(t *testing.T) {
 func hostedRuntimeHTTP(t *testing.T, baseURL, key string, status int) string {
 	t.Helper()
 	client := &http.Client{Transport: hostedIdentityTransport{next: http.DefaultTransport}}
-	message, err := http.NewRequest(http.MethodPost, baseURL+"/?provider=openai&model=gpt-4.1&key="+hostedIdentityFixtureKey, strings.NewReader(`{"prompt":"funded prompt"}`))
+	message, err := http.NewRequest(http.MethodPost, baseURL+"/?provider=openai&model=gpt-6.2-sol&key="+hostedIdentityFixtureKey, strings.NewReader(`{"prompt":"funded prompt"}`))
 	if err != nil {
 		t.Fatal(err)
 	}

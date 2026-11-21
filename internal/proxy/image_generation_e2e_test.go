@@ -78,7 +78,7 @@ func TestImageGenerationReturnsOrderedTenantArtifacts(t *testing.T) {
 	routerConfiguration, err := testfixtures.ProvisionManagedRouter(t, proxy.Configuration{
 		ProviderCatalog: testfixtures.ProviderCatalog(t), AssetStorePath: assetRoot, Endpoints: endpoints,
 	}, zap.NewNop().Sugar(), testfixtures.ManagedTenant{
-		Secret: secret, Defaults: proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.ModelNameGPT41},
+		Secret: secret, Defaults: proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: "gpt-6.2-sol"},
 		ProviderKeys: map[string]string{proxy.ProviderNameOpenAI: providerKey},
 	})
 	if err != nil {
@@ -218,7 +218,7 @@ func imageGenerationTestClient(t *testing.T, upstream *httptest.Server, catalog 
 	endpoints.SetProviderBaseURL(proxy.ProviderNameOpenAI, upstream.URL)
 	endpoints.SetProviderBaseURL(provider, upstream.URL)
 	router, err := testfixtures.BuildManagedRouter(t, proxy.Configuration{ProviderCatalog: catalog, AssetStorePath: t.TempDir(), Endpoints: endpoints}, zap.NewNop().Sugar(), testfixtures.ManagedTenant{
-		Secret: "image-acceptance-tenant", Defaults: proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.ModelNameGPT41},
+		Secret: "image-acceptance-tenant", Defaults: proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: "gpt-6.2-sol"},
 		ProviderKeys: map[string]string{proxy.ProviderNameOpenAI: "image-provider-secret", provider: "image-provider-secret"},
 	})
 	if err != nil {
@@ -261,7 +261,7 @@ func TestImageGenerationRejectsUnsupportedControlsBeforeDispatch(t *testing.T) {
 	for name, change := range map[string]func(*llmproxyclient.ImageGenerationInput){
 		"missing surface":          func(input *llmproxyclient.ImageGenerationInput) { input.Surface = "" },
 		"unknown surface":          func(input *llmproxyclient.ImageGenerationInput) { input.Surface = "other" },
-		"Images text model":        func(input *llmproxyclient.ImageGenerationInput) { input.ResponsesModel = "gpt-5" },
+		"Images text model":        func(input *llmproxyclient.ImageGenerationInput) { input.ResponsesModel = "gpt-6.2-sol" },
 		"empty prompt":             func(input *llmproxyclient.ImageGenerationInput) { input.Prompt = "  " },
 		"long prompt":              func(input *llmproxyclient.ImageGenerationInput) { input.Prompt = strings.Repeat("界", 32001) },
 		"quality":                  func(input *llmproxyclient.ImageGenerationInput) { input.Quality = "ultra" },
@@ -533,7 +533,7 @@ func TestImageGenerationRestartReportsUncertainWithoutRepeatingPaidSubmission(t 
 	defer upstream.Close()
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetProviderBaseURL(proxy.ProviderNameOpenAI, upstream.URL)
-	tenant := testfixtures.ManagedTenant{Secret: "image-restart-tenant", Defaults: proxy.TenantDefaults{Provider: "openai", Model: proxy.ModelNameGPT41}, ProviderKeys: map[string]string{"openai": "image-restart-provider"}}
+	tenant := testfixtures.ManagedTenant{Secret: "image-restart-tenant", Defaults: proxy.TenantDefaults{Provider: "openai", Model: "gpt-6.2-sol"}, ProviderKeys: map[string]string{"openai": "image-restart-provider"}}
 	configuration, err := testfixtures.ProvisionManagedRouter(t, proxy.Configuration{
 		ProviderCatalog: testfixtures.ProviderCatalog(t), AssetStorePath: t.TempDir(), Endpoints: endpoints,
 		Management:                 proxy.ManagementConfiguration{DatabasePath: filepath.Join(t.TempDir(), "image-restart.sqlite")},
@@ -638,7 +638,7 @@ func TestImageGenerationKeepsTextCapacityAndProvesCancellationAuthority(t *testi
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetProviderBaseURL("openai", upstream.URL)
 	router, err := testfixtures.BuildManagedRouter(t, proxy.Configuration{ProviderCatalog: testfixtures.ProviderCatalog(t), AssetStorePath: t.TempDir(), Endpoints: endpoints, UpstreamCapacity: testfixtures.UpstreamCapacity(2, 4), MediaOperationWorkers: 3}, zap.NewNop().Sugar(), testfixtures.ManagedTenant{
-		Secret: "image-capacity-tenant", Defaults: proxy.TenantDefaults{Provider: "openai", Model: proxy.ModelNameGPT41}, ProviderKeys: map[string]string{"openai": "image-capacity-provider"},
+		Secret: "image-capacity-tenant", Defaults: proxy.TenantDefaults{Provider: "openai", Model: "gpt-6.2-sol"}, ProviderKeys: map[string]string{"openai": "image-capacity-provider"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -804,7 +804,7 @@ func TestImageGenerationRejectsChangedOrCorruptedAcceptedCredentials(t *testing.
 			endpoints := proxy.NewEndpoints()
 			endpoints.SetProviderBaseURL("openai", upstream.URL)
 			configuration, err := testfixtures.ProvisionManagedRouter(t, proxy.Configuration{ProviderCatalog: testfixtures.ProviderCatalog(t), AssetStorePath: t.TempDir(), Endpoints: endpoints, MediaOperationWorkers: 1}, zap.NewNop().Sugar(), testfixtures.ManagedTenant{
-				Secret: "changed-image-credentials", Defaults: proxy.TenantDefaults{Provider: "openai", Model: proxy.ModelNameGPT41}, ProviderKeys: map[string]string{"openai": "original-image-key"},
+				Secret: "changed-image-credentials", Defaults: proxy.TenantDefaults{Provider: "openai", Model: "gpt-6.2-sol"}, ProviderKeys: map[string]string{"openai": "original-image-key"},
 			})
 			if err != nil {
 				t.Fatal(err)

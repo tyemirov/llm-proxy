@@ -49,7 +49,7 @@ func TestStructuredOutputFailuresExposeOnlyBoundedPrivateClassification(t *testi
 			endpoints.SetResponsesURL(upstream.URL)
 			tenant := proxy.StandardManagedTenantTestConfiguration(TestSecret)
 			tenant.ID = "structured-diagnostics"
-			tenant.Defaults.Model = proxy.ModelNameGPT55
+			tenant.Defaults.Model = "gpt-6-sol"
 			assetRoot := t.TempDir()
 			router, err := buildRouterWithManagedTenant(t, proxy.Configuration{UpstreamCapacity: testfixtures.UpstreamCapacity(1, 2), RequestTimeoutSeconds: TestTimeout, Endpoints: endpoints, AssetStorePath: assetRoot, AssetRetentionSeconds: 3600}, zap.New(core).Sugar(), tenant)
 			if err != nil {
@@ -57,7 +57,7 @@ func TestStructuredOutputFailuresExposeOnlyBoundedPrivateClassification(t *testi
 			}
 			server := httptest.NewServer(router)
 			defer server.Close()
-			payload, _ := json.Marshal(map[string]any{"model": proxy.ModelNameGPT55, "messages": []map[string]string{{"role": "user", "content": "private-prompt-do-not-log"}}, "structured_output": map[string]any{"schema": schema}})
+			payload, _ := json.Marshal(map[string]any{"model": "gpt-6-sol", "messages": []map[string]string{{"role": "user", "content": "private-prompt-do-not-log"}}, "structured_output": map[string]any{"schema": schema}})
 			request, err := http.NewRequest(http.MethodPost, server.URL+"/v2?key="+TestSecret, bytes.NewReader(payload))
 			if err != nil {
 				t.Fatal(err)

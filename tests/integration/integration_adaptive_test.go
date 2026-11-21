@@ -35,7 +35,7 @@ func newAdaptiveClient(testingInstance *testing.T, mode string, endpoints *proxy
 		Transport: adaptiveRoundTripper(func(httpRequest *http.Request) (*http.Response, error) {
 			switch {
 			case httpRequest.URL.String() == endpoints.GetModelsURL():
-				body := `{"data":[{"id":"` + proxy.ModelNameGPT5Mini + `"}]}`
+				body := `{"data":[{"id":"` + "gpt-6-luna" + `"}]}`
 				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
 			case strings.HasPrefix(httpRequest.URL.String(), endpoints.GetModelsURL()+"/"):
 				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(metadataEmpty)), Header: make(http.Header)}, nil
@@ -100,7 +100,7 @@ func TestAdaptiveRemovesUnsupportedParameters(testingInstance *testing.T) {
 			mode:     adaptiveModeTemperature,
 			expected: adaptiveOKNoTemp,
 			query: map[string]string{
-				adaptiveModelQueryParameter: proxy.ModelNameGPT5Mini,
+				adaptiveModelQueryParameter: "gpt-6-luna",
 			},
 		},
 	}
