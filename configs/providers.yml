@@ -406,6 +406,51 @@ models:
         - text
       media_inputs:
         - image
+    - id: gpt-6.2-sol
+      enabled: true
+      publisher: openai
+      family: gpt-6
+      version: gpt-6.2-sol
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-6-sol
+      enabled: true
+      publisher: openai
+      family: gpt-6
+      version: gpt-6-sol
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-6.1-sol
+      enabled: true
+      publisher: openai
+      family: gpt-6
+      version: gpt-6.1-sol
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-6.1-terra
+      enabled: true
+      publisher: openai
+      family: gpt-6
+      version: gpt-6.1-terra
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-6.2-astra
+      enabled: true
+      publisher: openai
+      family: gpt-6
+      version: gpt-6.2-astra
+      operations:
+        - text
+      media_inputs:
+        - image
     - id: ernie-5.0
       enabled: true
       publisher: baidu
@@ -1502,6 +1547,654 @@ providers:
                     effective_from: 2026-09-07T00:00:00Z
               source: https://developers.openai.com/api/docs/pricing
               last_verified: '2026-09-07'
+          output_token_limit: 128000
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 128000
+          limits:
+            - id: context_tokens
+              value: 1050000
+              unit: tokens
+            - id: input_tokens
+              value: 922000
+              unit: tokens
+            - id: output_tokens
+              value: 128000
+              unit: tokens
+        - model: gpt-6.2-sol
+          created: 1795249193
+          upstream_model: gpt-6.2-sol
+          transport: text
+          structured_output: *openai_schema
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          caller_tools: true
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: '2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '10'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.1'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: input_tokens
+                  currency: USD
+                  rate: '4'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '15'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+              source: https://developers.openai.com/api/docs/pricing
+              last_verified: '2026-11-21'
+          output_token_limit: 128000
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 128000
+          limits:
+            - id: context_tokens
+              value: 1050000
+              unit: tokens
+            - id: input_tokens
+              value: 922000
+              unit: tokens
+            - id: output_tokens
+              value: 128000
+              unit: tokens
+        - model: gpt-6-sol
+          created: 1795249193
+          upstream_model: gpt-6-sol
+          transport: text
+          structured_output: *openai_schema
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          caller_tools: true
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+              - none
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: '2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '10'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: input_tokens
+                  currency: USD
+                  rate: '4'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '15'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.4'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+              source: https://developers.openai.com/api/docs/models/gpt-6-sol
+              last_verified: '2026-11-21'
+          output_token_limit: 128000
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 128000
+          limits:
+            - id: context_tokens
+              value: 1050000
+              unit: tokens
+            - id: output_tokens
+              value: 128000
+              unit: tokens
+        - model: gpt-6.1-sol
+          created: 1795249193
+          upstream_model: gpt-6.1-sol
+          transport: text
+          structured_output: *openai_schema
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          caller_tools: true
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: '2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '10'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.1'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: input_tokens
+                  currency: USD
+                  rate: '4'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '15'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+              source: https://developers.openai.com/api/docs/models/gpt-6.1-sol
+              last_verified: '2026-11-21'
+          output_token_limit: 128000
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 128000
+          limits:
+            - id: context_tokens
+              value: 1050000
+              unit: tokens
+            - id: output_tokens
+              value: 128000
+              unit: tokens
+        - model: gpt-6.1-terra
+          created: 1795249193
+          upstream_model: gpt-6.1-terra
+          transport: text
+          structured_output: *openai_schema
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          caller_tools: true
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+              - none
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: '1'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '5'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.05'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: input_tokens
+                  currency: USD
+                  rate: '2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '7.5'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.1'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+              source: https://developers.openai.com/api/docs/models/gpt-6.1-terra
+              last_verified: '2026-11-21'
+          output_token_limit: 128000
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 128000
+          limits:
+            - id: context_tokens
+              value: 1050000
+              unit: tokens
+            - id: output_tokens
+              value: 128000
+              unit: tokens
+        - model: gpt-6.2-astra
+          created: 1795249193
+          upstream_model: gpt-6.2-astra
+          transport: text
+          structured_output: *openai_schema
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          caller_tools: true
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: '8'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '40'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.4'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: input_tokens
+                  currency: USD
+                  rate: '16'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '60'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.8'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+              source: https://developers.openai.com/api/docs/models/gpt-6.2-astra
+              last_verified: '2026-11-21'
           output_token_limit: 128000
           controls:
             - id: max_tokens
@@ -8203,7 +8896,7 @@ providers:
               large_enum_characters: 7500
           operations:
             - text
-          output_token_limit: 40960
+          output_token_limit: 32768
           reasoning_effort:
             adapter: openai_chat_completions
             efforts: [none, low, medium, high]
@@ -8211,10 +8904,10 @@ providers:
             - id: max_tokens
               kind: integer
               minimum: 1
-              maximum: 40960
+              maximum: 32768
           limits:
             - id: context_tokens
-              value: 131072
+              value: 65536
               unit: tokens
           prices:
             - operation: text

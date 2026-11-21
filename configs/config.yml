@@ -55,6 +55,7 @@ server:
   upstream_rate_limits: []
 payments:
   environment: production
+  checkout_enabled: false
   checkout_url: https://llm-proxy.mprlab.com/app/
   client_token: "${PADDLE_CLIENT_TOKEN}"
   processor_account_id: slr_01kgtaq3a0qyht2skncvt4hkem
