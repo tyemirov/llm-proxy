@@ -5,7 +5,10 @@ window.Paddle={
   Environment:{set(environment){window.paddleFixture.environment=environment;}},
   Initialize(options){
     if(++window.paddleFixture.initializations!==1)throw new Error('Paddle initialized twice');
+    window.paddleFixture.initializedURL=location.href;
     window.paddleFixture.token=options.token;callback=options.eventCallback;window.paddleFixture.emit=callback;
+    const queryTransaction=new URL(location.href).searchParams.get('_ptxn');
+    if(queryTransaction)window.Paddle.Checkout.open({transactionId:queryTransaction,automatic:true});
   },
   Checkout:{
     open(options){

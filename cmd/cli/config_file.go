@@ -157,6 +157,11 @@ func loadProviderCatalog(configPath string) (*proxy.ProviderCatalog, error) {
 }
 
 func validateExplicitConfiguration(configReader *viper.Viper) error {
+	if checkoutEnabled := configReader.Get("payments.checkout_enabled"); checkoutEnabled != nil {
+		if _, ok := checkoutEnabled.(bool); !ok {
+			return fmt.Errorf("invalid configuration: payments.checkout_enabled must be a boolean")
+		}
+	}
 	rawOfferings := configReader.Get("hosted.offerings")
 	if configReader.IsSet("hosted") && rawOfferings == nil {
 		return fmt.Errorf("invalid configuration: hosted explicit offering scopes are required")

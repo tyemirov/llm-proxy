@@ -1,4 +1,5 @@
 // @ts-check
+import {FUNDING_ORDER_QUERY_PARAMETER,PADDLE_TRANSACTION_QUERY_PARAMETER} from '../constants.js?v=20261121payment';
 const SDK_URL='https://cdn.paddle.com/paddle/v2/paddle.js';
 const COMPLETED='checkout.completed',CLOSED='checkout.closed';
 /** @typedef {{Environment:{set:(environment:string)=>void},Initialize:(options:{token:string,eventCallback:(event:unknown)=>void})=>void,Checkout:{open:(options:{transactionId:string,settings:{displayMode:string,allowLogout:boolean,showAddDiscounts:boolean}})=>void,close:()=>void}}} PaddleClient */
@@ -13,6 +14,11 @@ function checkoutEvent(input) {
   const callback=active.callback;
   if (event.name===CLOSED) active=null;
   callback(event.name);
+}
+function assertCleanCheckoutURL() {
+  // Check the current URL at the SDK boundary even after the page's early capture.
+  const query=new URL(window.location.href).searchParams;
+  if(query.has(PADDLE_TRANSACTION_QUERY_PARAMETER) || query.has(FUNDING_ORDER_QUERY_PARAMETER))throw new Error('The payment link could not be verified. Reopen this page before checkout.');
 }
 /** @returns {Promise<PaddleClient>} */
 function loadPaddle() {
@@ -36,7 +42,9 @@ function loadPaddle() {
 /** @param {import('../types.d.js').FundingOffers} config @param {import('../types.d.js').PaymentCheckout} checkout @param {(name:string)=>void} callback @param {AbortSignal} signal @returns {Promise<()=>void>} */
 export async function openPaddleCheckout(config,checkout,callback,signal) {
   if (config.environment!==checkout.environment) throw new Error('The checkout environment changed. Reload this page.');
+  assertCleanCheckoutURL();
   const paddle=await loadPaddle();signal.throwIfAborted();
+  assertCleanCheckoutURL();
   if (initialized && (initialized.token!==config.client_token || initialized.environment!==config.environment)) throw new Error('The checkout configuration changed. Reload this page.');
   if (!initialized) {
     paddle.Environment.set(config.environment);

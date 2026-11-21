@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -48,14 +49,15 @@ type managedPaymentCheckoutRecord struct {
 }
 
 type paddleCheckoutDelivery struct {
-	database *gormManagedTenantDatabase
-	catalog  *fundingCatalog
-	client   billing.PaddleCommerceClient
-	now      func() time.Time
+	database    *gormManagedTenantDatabase
+	catalog     *fundingCatalog
+	client      billing.PaddleCommerceClient
+	checkoutURL url.URL
+	now         func() time.Time
 }
 
-func newPaddleCheckoutDelivery(database *gormManagedTenantDatabase, catalog *fundingCatalog, client billing.PaddleCommerceClient) *paddleCheckoutDelivery {
-	return &paddleCheckoutDelivery{database: database, catalog: catalog, client: client, now: time.Now}
+func newPaddleCheckoutDelivery(database *gormManagedTenantDatabase, catalog *fundingCatalog, client billing.PaddleCommerceClient, checkoutURL url.URL) *paddleCheckoutDelivery {
+	return &paddleCheckoutDelivery{database: database, catalog: catalog, client: client, checkoutURL: checkoutURL, now: time.Now}
 }
 
 type paymentCheckoutJob struct {
@@ -171,7 +173,10 @@ func (worker *paddleCheckoutDelivery) deliver(ctx context.Context, job paymentCh
 		return errFundingConflict
 	}
 	job.delivery.CustomerID = customerID
-	transactionID, err := worker.client.CreateTransaction(ctx, billing.PaddleTransactionInput{CustomerID: customerID, PriceID: job.order.PriceID, Metadata: checkoutMetadata(job.order)})
+	checkoutURL := worker.checkoutURL
+	query := url.Values{paymentMetadataOrder: []string{job.order.ID}}
+	checkoutURL.RawQuery = query.Encode()
+	transactionID, err := worker.client.CreateTransaction(ctx, billing.PaddleTransactionInput{CustomerID: customerID, PriceID: job.order.PriceID, Metadata: checkoutMetadata(job.order), CheckoutURL: checkoutURL.String()})
 	if err != nil {
 		return worker.retainOutcome(ctx, job, paymentDeliveryReconciliation, "creation_outcome_unknown")
 	}

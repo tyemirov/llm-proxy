@@ -48,7 +48,7 @@ func TestOpenAPIContractMatchesRegisteredOwnedRoutes(t *testing.T) {
 	}))
 	t.Cleanup(processor.Close)
 	handler := newManagementRouter(t, proxy.Configuration{Payments: &proxy.PaymentConfiguration{
-		Environment: "sandbox", ClientToken: "test_openapi", ProcessorAccountID: "openapi-account", SupplierID: "openapi-supplier",
+		Environment: "sandbox", CheckoutURL: "https://checkout.example/app/", ClientToken: "test_openapi", ProcessorAccountID: "openapi-account", SupplierID: "openapi-supplier",
 		APIKey: "openapi-fixture-key", APIBaseURL: processor.URL, WebhookSecret: "openapi-fixture-secret",
 		Offers: []proxy.PaymentOfferConfiguration{{Code: "five", PriceID: "pri_01hv8x2axb33yr5y238zfwcn5p", FundingCents: 500}},
 	}})

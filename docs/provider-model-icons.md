@@ -5,7 +5,7 @@ The source review date is September 7, 2026.
 
 ## Scope and placement
 
-The provider catalog defines 19 API providers and 37 model families, including disabled candidates.
+The provider catalog defines 20 API providers and 36 model families, including disabled candidates.
 I237 separates API connection identities from model family identities.
 The icons keep that separation.
 
@@ -39,6 +39,7 @@ They identify the installed artwork. The collection is not an official asset pac
 | `xai` | xAI API | xAI symbol | `xai.svg` |
 | `baidu` | Qianfan API | Baidu Cloud symbol | `baiducloud-color.svg` |
 | `vertex` | Google Cloud Vertex AI | Vertex AI product symbol | `vertexai-color.svg` |
+| `vertex-project` | Google Cloud Vertex AI Project | Vertex AI product symbol | `vertexai-color.svg` |
 | `dictator` | Dictator API | Explicit text-only presentation | No verified small logo |
 | `fal` | FAL API | Explicit text-only presentation | No reviewed logo asset |
 | `elevenlabs` | ElevenLabs API | Explicit text-only presentation | No reviewed logo asset |

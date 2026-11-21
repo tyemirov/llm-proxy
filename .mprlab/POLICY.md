@@ -41,17 +41,18 @@ Unknown local sections extend this core policy. The repository source requires u
 
 ## Test-Driven Development
 
+- Start with tests. Define the requested behavior and run its relevant tests before implementation or configuration changes.
+- For new behavior, write a test that fails because the behavior is absent. For a defect, write a regression test that reproduces it before the fix.
 - Use integration tests as the primary layer for public behavior and component contracts.
 - For a bug fix, first reproduce the failure through the relevant public entry point and confirm its cause.
-- Prefer a failing regression test before the fix. When another reproducible check gives better evidence, record the reason and result.
 - For a behavior change, add or update coverage that exercises the changed public contract. Choose the smallest meaningful check.
 - For a refactor, run relevant existing coverage first. Add characterization coverage where changed behavior is otherwise unprotected.
 - Use focused unit tests for algorithms, calculations, and isolated logic when they provide useful evidence.
 - Documentation, static configuration, and other low-impact changes can use document, schema, build, or structural checks appropriate to their effect.
-- Record a justified exception when the default test sequence adds no useful evidence. A required product acceptance check remains binding.
+- For prose and static configuration, start with existing document, schema, or contract tests and rerun them after the edit. Add a test when the requested behavior lacks coverage.
 - Use deterministic local infrastructure for repository-owned databases, filesystems, queues, servers, and browsers.
 - At an external provider boundary, use a provider sandbox or a local protocol implementation for routine integration tests.
-- Keep live-provider acceptance as a separate qualification step.
+- Use live-provider tests when the requested test scope includes actual provider behavior. Production observations are auxiliary evidence.
 
 ## Dependency Injection In Integration Tests
 
@@ -62,7 +63,7 @@ Unknown local sections extend this core policy. The repository source requires u
 - Assert observable results through the public contract.
 - Keep integration coverage with real dependency implementations.
 - Injected scenarios prove behavior under the specified conditions. They do not prove actual provider connectivity.
-- Qualify actual provider connectivity separately from injected scenarios.
+- Test actual provider connectivity when it is part of the requested behavior; injected tests do not claim live execution.
 
 ## Prohibited Patterns
 
@@ -107,6 +108,8 @@ Use this gate when credentials are necessary for the selected task.
 
 ## Issue Closure
 
+Apply the Validation section and complete applicable independent review and authorization requirements before issue closure.
+
 - Close an issue when its required implementation, documentation, and code validation are completed.
 - Keep release, publication, deployment, production DNS/TLS, and live acceptance outside implementation issue acceptance criteria.
 - Do not keep an implementation issue open or blocked because production operations are not completed.
@@ -114,41 +117,31 @@ Use this gate when credentials are necessary for the selected task.
 - Validate deployment tooling and infrastructure configuration through the required isolated integration tests.
 
 Failed or missing required code validation prevents closure.
-Production operations outside the task do not remove code validation requirements.
+Code validation includes tests for the issue's required behavior and any selected final CI gate.
+Turn a suspected defect or coverage gap into a test, then resolve that test.
 
 ## Validation
 
-Full CI is the final validation gate before CI-dependent delivery or task completion.
-Finish all other authorized task work and all non-CI results and documentation first.
-This includes implementation, configuration, required account setup, focused tests,
-review fixes, live acceptance, benchmarks, and their analysis when applicable.
-Use focused checks while any work or required input remains.
+Tests provide implementation evidence. Task completion also requires applicable independent reviews, authorization, and selected CI gates.
+The repository policy owns CI selection. Global instructions own final-CI timing.
 
-- Use repository-native `make` targets.
-- Do not run a pre-edit or per-issue `make ci` baseline.
-- Preserve reproduction results and any expected failing regression test as implementation evidence.
-- During the change, run the smallest public-entrypoint target that validates the changed contract.
-- Run full CI once at the final checkpoint, after absolutely all other authorized task work is finished.
-- Use successful full CI from the pull request when its workflow supplies all required checks.
-- Open the pull request at the final checkpoint, after all other authorized task work and focused local checks are complete. Let its workflow supply the final full CI result.
-- Wait for that result before merge or completion.
-- When no pull request supplies full CI, run `make ci` locally only after all other authorized task work is complete.
-- Use focused checks to correct failures.
-- If final CI fails, make corrections with focused checks. Repeat full CI only after all corrections and other remaining work are complete.
-- Reuse successful CI results while the validated code remains unchanged.
-- Use equivalent CI results across local validation, pull requests, and release.
-- Keep separate release checks for additional artifact, signing, or platform coverage.
-- Record the selected CI command, its result, and any required checks outside its coverage.
-- Run `make verify` only when the operator explicitly selects the complete qualification lane.
-- When `make ci` includes `make fmt`, `make lint`, and `make test`, use its result for those targets.
-- During the change or error diagnosis, run the necessary component target.
-- Run a component target when `make ci` does not include the necessary check.
-- For documentation-only work, run the applicable document and repository checks.
-- For `.mprlab/`-only work, run the Governor check and `git diff --check`.
-- These are the repository checks for `.mprlab/`-only work. Changed prose also requires the documentation-language review.
-- For read-only work, use source facts and run only the necessary checks.
-- For frontend behavior, verify through a browser test when the behavior is user-visible.
-- For services and CLIs, verify through HTTP, CLI, or public API entry points.
+- Use repository-native test targets and the smallest meaningful scope for the changed contract.
+- Preserve the failing test and its passing result after the change.
+- Report test commands, results, and the behavior covered. Keep untested claims explicit.
+- Turn a suspected defect or missing contract into a test.
+- Use production observations and diagnostics to inform test design.
+- Keep release, publication, deployment, and benchmark execution separate from implementation validation and issue closure.
+- Reuse passing results while the tested state remains unchanged, regardless of whether they ran locally or in CI.
+- Run full CI when the user explicitly selects it or the repository policy requires it. A repository requirement counts as explicit selection.
+- Read any Repository CI Requirements section in this policy when selecting CI. Maintain that local section in `.mprlab/POLICY.REPOSITORY.md` so shared validation rules continue to receive updates.
+- Run selected full CI at the final checkpoint after all other authorized work, review findings, acceptance checks, and documentation are complete.
+- Use equivalent successful pull-request CI when it supplies all selected checks. Wait for the selected gate before merge or completion.
+- When the user prohibits full CI, finish the authorized work with focused checks and report the omitted run. Apply the prohibition to commands, wrappers, delegated work, and actions that trigger CI automatically. If a separate delivery control requires a passing result and none applies, keep its gated delivery pending.
+- Use focused checks to correct failures. Repeat selected full CI only at the next final checkpoint after corrections and all other work are complete.
+- Run `make verify` only when the user explicitly selects the complete qualification lane.
+- For documentation and governance, use the applicable document, schema, and normalizer contract checks and review changed prose.
+- For user-visible frontend behavior, use browser tests. For services and CLIs, use HTTP, CLI, or public API tests.
+- For read-only work, report source facts and existing test evidence and run only checks necessary for the requested analysis.
 
 ## Documentation Language
 
@@ -176,3 +169,11 @@ Before claiming completion:
 - Reusable literals are centralized.
 - Public behavior is covered through public entry points.
 - Repo-native validation was run or a concrete blocker is documented.
+
+## Repository CI Requirements
+
+Implementation changes require final full CI. Use equivalent passing pull-request CI for the same validated state or run `make ci` locally at the selected final checkpoint.
+
+For read-only work, inspect source facts. For documentation-only work, run the applicable document and repository checks. For changes confined to `.mprlab/`, run the Governor check and `git diff --check`, and review changed prose.
+
+When `make ci` covers format, lint, and test targets, reuse that result. Run additional focused targets only for required coverage outside that gate. Keep artifact, signing, and platform release checks for their additional coverage.

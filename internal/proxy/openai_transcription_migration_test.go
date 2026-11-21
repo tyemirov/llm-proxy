@@ -22,17 +22,27 @@ import (
 
 func TestOpenAITranscriptionRetirementOwnershipMigration(t *testing.T) {
 	const retainedTextModel = "gpt-5.6-terra"
-	for _, model := range []string{"gpt-4o-mini-transcribe", "gpt-4o-transcribe"} {
-		t.Run(model, func(t *testing.T) {
+	for _, scenario := range []struct {
+		name               string
+		transcriptionModel string
+		previousTextModel  string
+		expectedTextModel  string
+	}{
+		{"mini transcription", "gpt-4o-mini-transcribe", retainedTextModel, retainedTextModel},
+		{"full transcription", "gpt-4o-transcribe", retainedTextModel, retainedTextModel},
+		{"combined text and transcription cutovers", "gpt-4o-transcribe", ModelNameGPT41, DefaultModel},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			model := scenario.transcriptionModel
 			database := openLegacyManagedTenantDatabase(t, filepath.Join(t.TempDir(), "ownership.db"))
 			now := time.Date(2026, 9, 7, 1, 0, 0, 0, time.UTC)
-			tenant := legacyManagedTenantRecord{UserID: "transcription-owner", TenantID: "managed-transcription", DefaultProvider: ProviderNameOpenAI, DefaultModel: retainedTextModel, DefaultTranscriptionProvider: ProviderNameOpenAI, DefaultTranscriptionModel: model, DefaultSystemPrompt: "preserve prompt", CreatedAt: now, UpdatedAt: now}
+			tenant := legacyManagedTenantRecord{UserID: "transcription-owner", TenantID: "managed-transcription", DefaultProvider: ProviderNameOpenAI, DefaultModel: scenario.previousTextModel, DefaultTranscriptionProvider: ProviderNameOpenAI, DefaultTranscriptionModel: model, DefaultSystemPrompt: "preserve prompt", CreatedAt: now, UpdatedAt: now}
 			cipher := internalManagedProviderKeyCipher()
 			encrypted, err := cipher.encrypt(bytes.NewReader(bytes.Repeat([]byte{1}, cipher.aeadCipher.NonceSize())), tenant.UserID, ProviderNameOpenAI, "transcription-test-key")
 			if err != nil {
 				t.Fatal(err)
 			}
-			key := legacyManagedProviderAPIKeyRecord{UserID: tenant.UserID, ProviderID: ProviderNameOpenAI, EncryptedAPIKey: encrypted, TextModel: retainedTextModel, CreatedAt: now, UpdatedAt: now}
+			key := legacyManagedProviderAPIKeyRecord{UserID: tenant.UserID, ProviderID: ProviderNameOpenAI, EncryptedAPIKey: encrypted, TextModel: scenario.previousTextModel, CreatedAt: now, UpdatedAt: now}
 			event := legacyManagedUsageEventRecord{ID: 1, UserID: tenant.UserID, TenantID: tenant.TenantID, Endpoint: usageEndpointDictation, ProviderID: ProviderNameOpenAI, ModelID: model, StatusCode: 200, Success: true, TotalTokens: 9, CreatedAt: now}
 			for _, record := range []struct {
 				table string
@@ -62,7 +72,7 @@ func TestOpenAITranscriptionRetirementOwnershipMigration(t *testing.T) {
 			if err := database.First(&current, "tenant_id = ?", tenant.TenantID).Error; err != nil {
 				t.Fatal(err)
 			}
-			if current.DefaultTranscriptionModel != "gpt-transcribe" || current.DefaultModel != tenant.DefaultModel || current.DefaultSystemPrompt != tenant.DefaultSystemPrompt || !current.UpdatedAt.Equal(now) {
+			if current.DefaultTranscriptionModel != "gpt-transcribe" || current.DefaultModel != scenario.expectedTextModel || current.DefaultSystemPrompt != tenant.DefaultSystemPrompt || !current.UpdatedAt.Equal(now) {
 				t.Fatalf("ownership migration dictation=%s text=%s prompt=%q updated=%s expected=%s", current.DefaultTranscriptionModel, current.DefaultModel, current.DefaultSystemPrompt, current.UpdatedAt, now)
 			}
 			var historical managedUsageEventRecord

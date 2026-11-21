@@ -134,6 +134,7 @@ export const brandIconManifest = {
     "xai": "xai",
     "baidu": "baiducloud-color",
     "vertex": "vertexai-color",
+    "vertex-project": "vertexai-color",
     "dictator": null
   },
   "families": {

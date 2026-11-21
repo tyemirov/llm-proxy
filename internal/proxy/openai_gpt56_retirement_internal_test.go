@@ -370,6 +370,7 @@ func openAIRetirementState(t *testing.T, database *gorm.DB) string {
 		{managedTenantTable, &[]managedTenantRecord{}, []string{"tenant_id"}},
 		{managedProviderProfileTable, &[]managedProviderProfileRecord{}, []string{"tenant_id", "provider_id"}},
 		{managedProviderKeyTable, &[]managedProviderAPIKeyRecord{}, []string{"tenant_id", "provider_id"}},
+		{managedProviderConnectionTable, &[]managedProviderConnectionRecord{}, []string{"tenant_id", "provider_id", "field_id"}},
 		{managedUsageEventTable, &[]managedUsageEventRecord{}, []string{"id"}},
 		{managedSchemaMigrationTable, &[]managedSchemaMigrationRecord{}, []string{"version"}},
 		{"managed_account_connection_records", &[]managedAccountConnectionRecord{}, []string{"id"}},
@@ -533,6 +534,43 @@ func TestOpenAIGPT56RetirementCompletedMarkerRejectsReintroducedSelections(t *te
 				t.Fatal("reintroduced selection was rewritten")
 			}
 		})
+	}
+}
+
+func TestOpenAIGPT56RetirementPredecessorCutoverFailureRollsBack(t *testing.T) {
+	database, tenants, _, _ := openAIRetirementDatabase(t, true)
+	before := openAIRetirementState(t, database)
+	markerAttempts := 0
+	migratedConnections := int64(0)
+	predecessorRemoved := false
+	const callbackName = "predecessor-cutover-marker-failure"
+	if err := database.Callback().Create().Before("gorm:create").Register(callbackName, func(transaction *gorm.DB) {
+		marker, ok := transaction.Statement.Dest.(*managedSchemaMigrationRecord)
+		if !ok || marker.Version != managedOpenAIGPT56CutoverVersion {
+			return
+		}
+		markerAttempts++
+		read := transaction.Session(&gorm.Session{NewDB: true})
+		predecessorRemoved = !read.Migrator().HasTable(managedProviderConnectionTable)
+		if err := read.Model(&managedAccountConnectionRecord{}).Count(&migratedConnections).Error; err != nil {
+			transaction.AddError(err)
+			return
+		}
+		transaction.AddError(errInternalTestDatabase)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { database.Callback().Create().Remove(callbackName) })
+	err := initializeManagedTenantSchema(database, internalManagedProviderKeyCipher(), internalManagementProviderRegistry())
+	want := fmt.Sprintf("%s: operation=apply_openai_cutover marker: %s", errManagedTenantSchemaMigration, errInternalTestDatabase)
+	if err == nil || err.Error() != want || !errors.Is(err, errManagedTenantSchemaMigration) || !errors.Is(err, errInternalTestDatabase) {
+		t.Fatalf("predecessor cutover error=%v want=%s", err, want)
+	}
+	if markerAttempts != 1 || !predecessorRemoved || migratedConnections != int64(len(tenants)) {
+		t.Fatalf("failure preceded connection transfer: markers=%d removed=%t migrated=%d", markerAttempts, predecessorRemoved, migratedConnections)
+	}
+	if after := openAIRetirementState(t, database); after != before {
+		t.Fatal("cutover failure changed predecessor schema, credentials, selections, usage or markers")
 	}
 }
 

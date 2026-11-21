@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
@@ -420,6 +421,8 @@ func TestOperationalMakeUpRequiresPrivateLocalEnvironment(testingInstance *testi
 		"Makefile",
 		filepath.Join(operationalScriptsDirectory, "up.sh"),
 		filepath.Join(operationalScriptsDirectory, "local_orchestration.sh"),
+		filepath.Join(operationalScriptsDirectory, "render_nonpayment_config.py"),
+		filepath.Join("configs", "config.yml"),
 	} {
 		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
 	}
@@ -453,6 +456,8 @@ func TestOperationalMakeDownStopsLocalWebOrchestration(testingInstance *testing.
 		"docker-compose.local.yml",
 		filepath.Join(operationalScriptsDirectory, "down.sh"),
 		filepath.Join(operationalScriptsDirectory, "local_orchestration.sh"),
+		filepath.Join(operationalScriptsDirectory, "render_nonpayment_config.py"),
+		filepath.Join("configs", "config.yml"),
 	} {
 		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
 	}
@@ -519,6 +524,7 @@ func TestOperationalMakeUpStartsLocalWebOrchestration(testingInstance *testing.T
 		"docker-compose.local.yml",
 		filepath.Join(operationalScriptsDirectory, "up.sh"),
 		filepath.Join(operationalScriptsDirectory, "local_orchestration.sh"),
+		filepath.Join(operationalScriptsDirectory, "render_nonpayment_config.py"),
 		filepath.Join("configs", "config.yml"),
 		filepath.Join("configs", "tauth.local.yml"),
 	} {
@@ -801,6 +807,40 @@ exec "${REAL_AWK_PATH:?}" "$@"
 		"LLM_PROXY_LOCAL_TAUTH_REFRESH_COOKIE_NAME",
 	})
 
+	generatedPath := filepath.Join(fixtureRoot, "configs", "config.local.yml")
+	generated, err := os.ReadFile(generatedPath)
+	if err != nil {
+		testingInstance.Fatalf("read local nonpayment config: %v", err)
+	}
+	if !strings.Contains(string(generated), "payments: null\n") || strings.Contains(string(generated), "PADDLE_") {
+		testingInstance.Fatal("local profile retained production payment inputs")
+	}
+	canonical, err := os.ReadFile(filepath.Join(fixtureRoot, "configs", "config.yml"))
+	if err != nil {
+		testingInstance.Fatal(err)
+	}
+	var expectedConfig, actualConfig map[string]any
+	if err := yaml.Unmarshal(canonical, &expectedConfig); err != nil {
+		testingInstance.Fatal(err)
+	}
+	if err := yaml.Unmarshal(generated, &actualConfig); err != nil {
+		testingInstance.Fatal(err)
+	}
+	expectedConfig["payments"] = nil
+	if !reflect.DeepEqual(expectedConfig, actualConfig) {
+		testingInstance.Fatal("local preparation changed unrelated canonical configuration")
+	}
+	// A second preparation replaces stale output rather than reusing the previous projection.
+	operationalWriteConfigText(testingInstance, generatedPath, "payments: stale\n")
+	prepare := exec.Command("bash", "-c", `source "$1"; local_orchestration_prepare_environment "$2" "$3" "$4" "$5"`, "local-prepare", filepath.Join(fixtureRoot, "scripts", "local_orchestration.sh"), filepath.Join(fixtureRoot, "configs", ".env.local"), filepath.Join(fixtureRoot, "configs", ".env.frontend.local"), filepath.Join(fixtureRoot, "configs", ".env.api.local"), filepath.Join(fixtureRoot, "configs", ".env.tauth.local"))
+	if output, err := prepare.CombinedOutput(); err != nil {
+		testingInstance.Fatalf("regenerate local config: %v\n%s", err, output)
+	}
+	regenerated, err := os.ReadFile(generatedPath)
+	if err != nil || !bytes.Equal(generated, regenerated) {
+		testingInstance.Fatalf("local preparation did not regenerate exact config: %v", err)
+	}
+
 	for _, configurationContract := range []struct {
 		path              string
 		expectedFragments []string
@@ -827,7 +867,7 @@ exec "${REAL_AWK_PATH:?}" "$@"
 				"LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY",
 				"condition: service_healthy",
 				"[\"CMD\", \"curl\", \"--fail\", \"--silent\", \"--show-error\", \"http://127.0.0.1:8080/healthz\"]",
-				"./configs/config.yml:/app/configs/config.yml:ro",
+				"./configs/config.local.yml:/app/configs/config.yml:ro",
 				"./configs/providers.yml:/app/configs/providers.yml:ro",
 				"GHTTP_SERVE_DIRECTORY: \"/app/docs\"",
 				"./docs:/app/docs:ro",
@@ -898,6 +938,7 @@ func TestOperationalLocalComposeLiveAcceptanceOwnsDisposableProject(testingInsta
 				"Makefile",
 				"docker-compose.local.yml",
 				filepath.Join(operationalScriptsDirectory, "local_orchestration.sh"),
+				filepath.Join(operationalScriptsDirectory, "render_nonpayment_config.py"),
 				filepath.Join(operationalScriptsDirectory, "test_live_local.sh"),
 				filepath.Join("configs", "config.yml"),
 				filepath.Join("configs", "tauth.local.yml"),
@@ -1112,6 +1153,8 @@ func TestOperationalMakeUpRetainsSiteArtifactWhenAutomaticShutdownFails(testingI
 		"docker-compose.local.yml",
 		filepath.Join(operationalScriptsDirectory, "up.sh"),
 		filepath.Join(operationalScriptsDirectory, "local_orchestration.sh"),
+		filepath.Join(operationalScriptsDirectory, "render_nonpayment_config.py"),
+		filepath.Join("configs", "config.yml"),
 	} {
 		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
 	}
@@ -1228,6 +1271,8 @@ func TestOperationalMakeUpRejectsAnotherProcessReadinessResponse(testingInstance
 		"docker-compose.local.yml",
 		filepath.Join(operationalScriptsDirectory, "up.sh"),
 		filepath.Join(operationalScriptsDirectory, "local_orchestration.sh"),
+		filepath.Join(operationalScriptsDirectory, "render_nonpayment_config.py"),
+		filepath.Join("configs", "config.yml"),
 	} {
 		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
 	}
@@ -2083,6 +2128,9 @@ func TestOperationalLiveConfigRequiresManagementAndSafelyLoadsDotenv(testingInst
 		testingInstance.Fatalf("read generated live config: %v", readError)
 	}
 	configuration := string(configurationBytes)
+	if !strings.Contains(configuration, "payments: null\n") || strings.Contains(configuration, "PADDLE_") {
+		testingInstance.Fatal("nonpayment provider configuration retained Paddle inputs")
+	}
 	if !strings.Contains(configuration, "  port: 18181") {
 		testingInstance.Fatalf("generated live config did not set the requested port: %s", configuration)
 	}
@@ -2495,6 +2543,9 @@ func TestOperationalLiveConfigWritesWithoutProviderKeys(testingInstance *testing
 		testingInstance.Fatalf("read generated live config without provider keys: %v", readError)
 	}
 	configuration := string(configurationBytes)
+	if !strings.Contains(configuration, "payments: null\n") || strings.Contains(configuration, "PADDLE_") {
+		testingInstance.Fatal("nonpayment provider configuration retained Paddle inputs")
+	}
 	if !strings.Contains(configuration, "  port: 18182") {
 		testingInstance.Fatalf("generated live config did not set the requested port: %s", configuration)
 	}
@@ -3673,4 +3724,108 @@ if [[ "${FAKE_JEV_FAIL_CASE:-}" == "${case_name}" ]]; then exit 1; fi
 if [[ "${case_name}" == preflight ]]; then exit 0; fi
 builtin printf 'live test passed: case=typesafe-%s provider=typesafe status=200 request_id=AAAAAAAAAAAAAAAAAAAAAAAAAA typesafe_request_id=typesafe-fixture-request\n' "${case_name}"
 `, 0o755)
+}
+
+func TestOperationalNonpaymentConfigRendererPreservesUnrelatedConfiguration(t *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(t)
+	directory := t.TempDir()
+	sourcePath := filepath.Join(directory, "source.yml")
+	outputPath := filepath.Join(directory, "output.yml")
+	const source = "# Canonical fixture\nserver:\n  port: 8080\n  log_level: info\npayments:\n  api_key: ${PADDLE_API_KEY}\n  offers:\n    - code: five\n\n# Management stays exact.\nmanagement:\n  public_origin: ${PUBLIC_ORIGIN}\n"
+	operationalWriteConfigText(t, sourcePath, source)
+	command := exec.Command("python3", filepath.Join(repositoryRoot, "scripts", "render_nonpayment_config.py"), "--source", sourcePath, "--output", outputPath, "--port", "18181")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("render nonpayment config: %v\n%s", err, output)
+	}
+	rendered, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := strings.Replace(source, "  port: 8080", "  port: 18181", 1)
+	expected = strings.Replace(expected, "payments:\n  api_key: ${PADDLE_API_KEY}\n  offers:\n    - code: five\n", "payments: null\n", 1)
+	if string(rendered) != expected {
+		t.Fatalf("renderer changed unrelated config: got %q want %q", rendered, expected)
+	}
+	original, err := os.ReadFile(sourcePath)
+	if err != nil || string(original) != source {
+		t.Fatalf("renderer changed canonical source: %v", err)
+	}
+}
+
+func TestOperationalNonpaymentConfigRendererRejectsAmbiguousInputBeforeWrite(t *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(t)
+	const canonical = "server:\n  port: 8080\npayments:\n  environment: production\nmanagement:\n  public_origin: https://example.invalid\n"
+	for _, scenario := range []struct {
+		name, source, port string
+		samePath           bool
+	}{
+		{name: "missing-payments", source: strings.Replace(canonical, "payments:\n  environment: production\n", "", 1)},
+		{name: "duplicate-payments", source: canonical + "payments:\n  environment: sandbox\n"},
+		{name: "inline-payments", source: strings.Replace(canonical, "payments:", "payments: {}", 1)},
+		{name: "quoted-payments", source: strings.Replace(canonical, "payments:", "\"payments\":", 1)},
+		{name: "duplicate-port", source: strings.Replace(canonical, "  port: 8080", "  port: 8080\n  port: 8081", 1), port: "18181"},
+		{name: "missing-port", source: strings.Replace(canonical, "  port: 8080\n", "", 1), port: "18181"},
+		{name: "duplicate-server", source: canonical + "server:\n  port: 8081\n", port: "18181"},
+		{name: "zero-port", source: canonical, port: "0"},
+		{name: "large-port", source: canonical, port: "65536"},
+		{name: "invalid-port", source: canonical, port: "not-a-port"},
+		{name: "same-path", source: canonical, samePath: true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			directory := t.TempDir()
+			sourcePath := filepath.Join(directory, "source.yml")
+			outputPath := filepath.Join(directory, "output.yml")
+			operationalWriteConfigText(t, sourcePath, scenario.source)
+			if scenario.samePath {
+				outputPath = sourcePath
+			}
+			arguments := []string{filepath.Join(repositoryRoot, "scripts", "render_nonpayment_config.py"), "--source", sourcePath, "--output", outputPath}
+			if scenario.port != "" {
+				arguments = append(arguments, "--port", scenario.port)
+			}
+			if output, err := exec.Command("python3", arguments...).CombinedOutput(); err == nil {
+				t.Fatalf("invalid renderer input succeeded: %s", output)
+			}
+			if !scenario.samePath {
+				if _, err := os.Stat(outputPath); !os.IsNotExist(err) {
+					t.Fatalf("invalid input produced output: %v", err)
+				}
+			}
+			original, err := os.ReadFile(sourcePath)
+			if err != nil || string(original) != scenario.source {
+				t.Fatalf("invalid input changed source: %v", err)
+			}
+		})
+	}
+}
+
+func operationalWriteConfigText(t *testing.T, path, text string) {
+	t.Helper()
+	output, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := output.WriteString(text); err != nil {
+		output.Close()
+		t.Fatal(err)
+	}
+	if err := output.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOperationalNonpaymentLocalPreparationRejectsInvalidCanonicalConfig(t *testing.T) {
+	root := operationalRepositoryRoot(t)
+	fixture := t.TempDir()
+	for _, relative := range []string{"scripts/local_orchestration.sh", "scripts/render_nonpayment_config.py", "configs/config.yml"} {
+		copyOperationalFile(t, filepath.Join(root, relative), filepath.Join(fixture, relative))
+	}
+	operationalWriteConfigText(t, filepath.Join(fixture, "configs", "config.yml"), "server:\n  port: 8080\n")
+	command := exec.Command("bash", "-c", `source "$1"; local_orchestration_prepare_environment "$2" "$3" "$4" "$5"`, "local-prepare", filepath.Join(fixture, "scripts", "local_orchestration.sh"), "unused-source", "unused-frontend", "unused-api", "unused-tauth")
+	if output, err := command.CombinedOutput(); err == nil || !strings.Contains(string(output), "exactly one root payments block") {
+		t.Fatalf("invalid local config preparation: error=%v output=%s", err, output)
+	}
+	if _, err := os.Stat(filepath.Join(fixture, "configs", "config.local.yml")); !os.IsNotExist(err) {
+		t.Fatalf("invalid local source produced configuration: %v", err)
+	}
 }

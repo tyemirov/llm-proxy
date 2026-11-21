@@ -78,6 +78,14 @@ func textRouterWithResponsesHandlerAndDefaults(t *testing.T, handler http.Handle
 	return textRouterWithResponsesCatalog(t, handler, defaults, nil)
 }
 
+func textRouterWithoutResponsesOutputLimit(t *testing.T, handler http.HandlerFunc) *gin.Engine {
+	t.Helper()
+	catalog := catalogWithOpenAIDefaultFixture(t, func(offering *proxy.ProviderCatalogOffering) {
+		offering.OutputTokenLimit = 0
+	})
+	return textRouterWithResponsesCatalog(t, handler, proxy.DefaultTenantDefaults(), catalog)
+}
+
 func textRouterWithResponsesCatalog(t *testing.T, handler http.HandlerFunc, defaults proxy.TenantDefaults, catalog *proxy.ProviderCatalog) *gin.Engine {
 	t.Helper()
 	upstreamServer := httptest.NewServer(handler)
@@ -442,9 +450,9 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 }
 
 func TestCoverageOpenAIResponsesMaxTokensContract(t *testing.T) {
-	t.Run("default request omits max_output_tokens", func(subTest *testing.T) {
+	t.Run("request omits max_output_tokens for an unbounded offering", func(subTest *testing.T) {
 		var capturedPayload map[string]any
-		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		router := textRouterWithoutResponsesOutputLimit(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			requestBytes, _ := io.ReadAll(httpRequest.Body)
 			if decodeError := json.Unmarshal(requestBytes, &capturedPayload); decodeError != nil {
 				subTest.Fatalf("decode upstream request: %v", decodeError)
@@ -458,7 +466,7 @@ func TestCoverageOpenAIResponsesMaxTokensContract(t *testing.T) {
 			subTest.Fatalf("status=%d body=%q", statusCode, body)
 		}
 		if _, exists := capturedPayload["max_output_tokens"]; exists {
-			subTest.Fatalf("max_output_tokens must be omitted by default: %v", capturedPayload)
+			subTest.Fatalf("max_output_tokens set without a caller or offering limit: %v", capturedPayload)
 		}
 	})
 
@@ -664,10 +672,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 	t.Run("initial incomplete response without text continues without inventing an unknown model limit", func(subTest *testing.T) {
 		requestCount := 0
 		var continuationPayload map[string]any
-		catalog := catalogWithOpenAIDefaultFixture(subTest, func(offering *proxy.ProviderCatalogOffering) {
-			offering.OutputTokenLimit = 0
-		})
-		router := textRouterWithResponsesCatalog(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		router := textRouterWithoutResponsesOutputLimit(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			if httpRequest.Method != http.MethodPost || httpRequest.URL.Path != "/" {
 				http.NotFound(responseWriter, httpRequest)
@@ -681,7 +686,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 				return
 			}
 			_, _ = responseWriter.Write([]byte(`{"id":"partial","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[],"usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3}}`))
-		}, proxy.DefaultTenantDefaults(), catalog)
+		})
 		queryParameters := url.Values{}
 		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
 		if statusCode != http.StatusOK || body != "complete after empty partial" {
@@ -697,10 +702,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 
 	t.Run("initial incomplete response without text doubles the caller budget without a model limit", func(subTest *testing.T) {
 		var capturedPayloads []map[string]any
-		catalog := catalogWithOpenAIDefaultFixture(subTest, func(offering *proxy.ProviderCatalogOffering) {
-			offering.OutputTokenLimit = 0
-		})
-		router := textRouterWithResponsesCatalog(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		router := textRouterWithoutResponsesOutputLimit(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			if httpRequest.Method != http.MethodPost || httpRequest.URL.Path != "/" {
 				http.NotFound(responseWriter, httpRequest)
@@ -715,7 +717,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 				return
 			}
 			_, _ = responseWriter.Write([]byte(`{"id":"complete","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"continued with a larger budget"}]}]}`))
-		}, proxy.DefaultTenantDefaults(), catalog)
+		})
 		queryParameters := url.Values{}
 		queryParameters.Set("max_tokens", "512")
 		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")

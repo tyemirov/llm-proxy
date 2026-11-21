@@ -65,7 +65,9 @@ func paymentOrderHTTP(t *testing.T, server *httptest.Server, cookie *http.Cookie
 	}
 	template := "/api/management/billing-accounts/{billing_account_id}/funding-orders"
 	resourcePath := strings.SplitN(path, "?", 2)[0]
-	if strings.HasSuffix(resourcePath, "/balance") {
+	if resourcePath == managementBillingAccountsPath {
+		template = managementAPIPath + managementBillingAccountsPath
+	} else if strings.HasSuffix(resourcePath, "/balance") {
 		template = "/api/management/billing-accounts/{billing_account_id}/balance"
 	} else if strings.HasSuffix(resourcePath, "/ledger-entries") {
 		template = "/api/management/billing-accounts/{billing_account_id}/ledger-entries"
@@ -99,7 +101,7 @@ func paymentOrderHTTP(t *testing.T, server *httptest.Server, cookie *http.Cookie
 		if response.Header.Get("Location") != result["url"] {
 			t.Fatalf("portal location=%s", response.Header.Get("Location"))
 		}
-	} else if status == http.StatusCreated && response.Header.Get("Location") != managementAPIPath+paymentOrdersTestPath+"/"+result["id"].(string) {
+	} else if status == http.StatusCreated && response.Header.Get("Location") != managementAPIPath+resourcePath+"/"+result["id"].(string) {
 		t.Fatalf("location=%s", response.Header.Get("Location"))
 	}
 	return result

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"strings"
@@ -17,6 +18,8 @@ import (
 // PaymentConfiguration selects one processor environment. Nil disables payments.
 type PaymentConfiguration struct {
 	Environment        string                      `mapstructure:"environment"`
+	CheckoutEnabled    bool                        `mapstructure:"checkout_enabled"`
+	CheckoutURL        string                      `mapstructure:"checkout_url"`
 	ClientToken        string                      `mapstructure:"client_token"`
 	ProcessorAccountID string                      `mapstructure:"processor_account_id"`
 	SupplierID         string                      `mapstructure:"supplier_id"`
@@ -24,6 +27,7 @@ type PaymentConfiguration struct {
 	APIBaseURL         string                      `mapstructure:"api_base_url"`
 	WebhookSecret      string                      `mapstructure:"webhook_secret"`
 	Offers             []PaymentOfferConfiguration `mapstructure:"offers"`
+	transport          http.RoundTripper
 }
 
 // PaymentOfferConfiguration binds a server offer to an immutable funding amount.
@@ -34,10 +38,12 @@ type PaymentOfferConfiguration struct {
 }
 
 type paymentSettings struct {
-	catalog     *fundingCatalog
-	client      billing.PaddleCommerceClient
-	verifier    *billing.PaddleWebhookVerifier
-	clientToken string
+	catalog         *fundingCatalog
+	client          billing.PaddleCommerceClient
+	verifier        *billing.PaddleWebhookVerifier
+	checkoutEnabled bool
+	clientToken     string
+	checkoutURL     url.URL
 }
 
 var paymentClientTokenPattern = regexp.MustCompile(`^(test|live)_[a-zA-Z0-9]+$`)
@@ -53,14 +59,18 @@ func newPaymentSettings(input *PaymentConfiguration) (*paymentSettings, error) {
 	if !paymentClientTokenPattern.MatchString(input.ClientToken) || !strings.HasPrefix(input.ClientToken, prefix) {
 		return nil, fmt.Errorf("configure payments: client_token must match the payment environment")
 	}
+	checkoutURL, err := url.Parse(input.CheckoutURL)
+	if err != nil || checkoutURL.Scheme != "https" || checkoutURL.Hostname() == "" || checkoutURL.User != nil || checkoutURL.RawQuery != "" || checkoutURL.ForceQuery || strings.Contains(input.CheckoutURL, "#") {
+		return nil, fmt.Errorf("configure payments: checkout_url requires an HTTPS URL without credentials, query, or fragment")
+	}
 	if input.APIBaseURL != "" {
 		parsed, err := url.Parse(input.APIBaseURL)
-		if err != nil || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		if err != nil || parsed.Hostname() == "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.ForceQuery || strings.Contains(input.APIBaseURL, "#") {
 			return nil, fmt.Errorf("configure payments: invalid api_base_url")
 		}
-		loopback := parsed.Hostname() == "127.0.0.1" || parsed.Hostname() == "localhost" || parsed.Hostname() == "::1"
-		if parsed.Scheme != "https" && !(input.Environment == paymentEnvironmentSandbox && parsed.Scheme == "http" && loopback) {
-			return nil, fmt.Errorf("configure payments: api_base_url requires HTTPS except for a sandbox loopback protocol")
+		address, err := netip.ParseAddr(parsed.Hostname())
+		if err != nil || !address.IsLoopback() || address.Zone() != "" || parsed.Scheme != "http" || input.Environment != paymentEnvironmentSandbox {
+			return nil, fmt.Errorf("configure payments: api_base_url is only available for a sandbox loopback HTTP origin")
 		}
 	}
 	offers := make([]fundingOfferInput, len(input.Offers))
@@ -71,7 +81,12 @@ func newPaymentSettings(input *PaymentConfiguration) (*paymentSettings, error) {
 	if err != nil {
 		return nil, err
 	}
-	client, err := billing.NewPaddleCommerceClient(catalog.environment, input.APIKey, input.APIBaseURL, &http.Client{Timeout: paymentCheckoutRetry})
+	client, err := billing.NewPaddleCommerceClient(catalog.environment, input.APIKey, input.APIBaseURL, &http.Client{
+		Timeout:   paymentCheckoutRetry,
+		Transport: input.transport,
+		// Keep credentials and transaction dispatch on the selected origin.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	})
 	if err != nil {
 		return nil, fmt.Errorf("configure payments client: %w", err)
 	}
@@ -79,7 +94,7 @@ func newPaymentSettings(input *PaymentConfiguration) (*paymentSettings, error) {
 	if err != nil {
 		return nil, fmt.Errorf("configure payments event verification: %w", err)
 	}
-	return &paymentSettings{catalog: catalog, client: client, verifier: verifier, clientToken: input.ClientToken}, nil
+	return &paymentSettings{catalog: catalog, client: client, verifier: verifier, checkoutEnabled: input.CheckoutEnabled, clientToken: input.ClientToken, checkoutURL: *checkoutURL}, nil
 }
 
 type paddlePaymentRuntime struct {
@@ -94,7 +109,10 @@ func newPaddlePaymentRuntime(settings *paymentSettings, database *gormManagedTen
 	if settings == nil {
 		return nil, nil
 	}
-	checkout := newPaddleCheckoutDelivery(database, settings.catalog, settings.client)
+	var checkout *paddleCheckoutDelivery
+	if settings.checkoutEnabled {
+		checkout = newPaddleCheckoutDelivery(database, settings.catalog, settings.client, settings.checkoutURL)
+	}
 	processor := newPaddlePaymentProcessor(database, settings.catalog, settings.client)
 	inbox := newPaddlePaymentInbox(database, settings.catalog, settings.verifier)
 	if err := bindPaymentEnvironment(database.database, settings.catalog.environment); err != nil {
@@ -134,8 +152,10 @@ func bindPaymentEnvironment(database *gorm.DB, environment string) error {
 }
 
 func (runtime *paddlePaymentRuntime) reconcile(ctx context.Context) error {
-	if err := runtime.checkout.reconcile(ctx); err != nil {
-		return fmt.Errorf("deliver payment checkout: %w", err)
+	if runtime.checkout != nil {
+		if err := runtime.checkout.reconcile(ctx); err != nil {
+			return fmt.Errorf("deliver payment checkout: %w", err)
+		}
 	}
 	if err := runtime.processor.reconcile(ctx); err != nil {
 		return fmt.Errorf("process payment evidence: %w", err)

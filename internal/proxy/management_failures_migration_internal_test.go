@@ -1224,9 +1224,12 @@ func TestManagedTenantInitializationPropagatesPreRetirementMigrationFailures(t *
 			t.Fatalf("open schema-one fixture: %v", openError)
 		}
 		seedManagedUsageSchemaOne(t, database)
-		registerManagedGORMError(t, database, "schema_one_keyed_failure", "query", managedTenantTable, errInternalTestDatabase)
+		registerManagedGORMQueryError(t, database, "schema_one_keyed_failure", managedTenantTable, errInternalTestDatabase, func(statement *gorm.Statement) bool {
+			_, ordered := statement.Clauses[(clause.OrderBy{}).Name()]
+			return ordered
+		})
 		initializeError := initializeManagedTenantSchema(database, internalManagedProviderKeyCipher(), internalManagementProviderRegistry())
-		if !errors.Is(initializeError, errManagedTenantSchemaMigration) || !strings.Contains(initializeError.Error(), "operation=preflight_openai_cutover tenants") {
+		if !errors.Is(initializeError, errManagedTenantSchemaMigration) || !strings.Contains(initializeError.Error(), "operation=read table="+managedTenantTable) || !strings.Contains(initializeError.Error(), errInternalTestDatabase.Error()) {
 			t.Fatalf("schema-one initialize error=%v", initializeError)
 		}
 	})
@@ -1507,8 +1510,8 @@ func TestManagedUsageDispositionInitializationValidatesVersionTwelvePrerequisite
 	})
 	t.Run("routing defaults", func(t *testing.T) {
 		database := newFixture(t)
-		registerManagedGORMError(t, database, "usage_disposition_connection_validation", "query", managedTenantTable, errInternalTestDatabase)
-		if initializeError := initializeManagedTenantSchema(database, internalManagedProviderKeyCipher(), internalManagementProviderRegistry()); !errors.Is(initializeError, errManagedTenantSchemaMigration) || !strings.Contains(initializeError.Error(), "operation=preflight_openai_cutover tenants") {
+		registerManagedTenantPreloadError(t, database, "ProviderConnections")
+		if initializeError := initializeManagedTenantSchema(database, internalManagedProviderKeyCipher(), internalManagementProviderRegistry()); !errors.Is(initializeError, errManagedTenantSchemaMigration) || !strings.Contains(initializeError.Error(), "operation=read table="+managedTenantTable) || !strings.Contains(initializeError.Error(), errInternalTestDatabase.Error()) {
 			t.Fatalf("initialize error=%v", initializeError)
 		}
 	})

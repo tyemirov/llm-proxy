@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -50,6 +51,13 @@ func currentQwenCatalog(t *testing.T) *proxy.ProviderCatalog {
 	return catalog
 }
 
+func currentQwenOutputCeiling(model string) int {
+	if model == "qwen3.8-flash" {
+		return 65536
+	}
+	return 131072
+}
+
 func TestQwenCurrentHTTP(t *testing.T) {
 	for _, model := range currentQwenModels {
 		t.Run(model, func(t *testing.T) {
@@ -61,7 +69,7 @@ func TestQwenCurrentHTTP(t *testing.T) {
 				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 					t.Fatal(err)
 				}
-				if r.Method != "POST" || r.URL.Path != "/responses" || payload["model"] != model || payload["store"] != false || payload["max_output_tokens"] != float64(131072) {
+				if r.Method != "POST" || r.URL.Path != "/responses" || payload["model"] != model || payload["store"] != false || payload["max_output_tokens"] != float64(currentQwenOutputCeiling(model)) {
 					t.Errorf("request=%s %s payload=%v", r.Method, r.URL.Path, payload)
 				}
 				for _, key := range []string{"enable_thinking", "reasoning_effort", "background", "previous_response_id", "conversation", "include", "tools", "text"} {
@@ -104,7 +112,7 @@ func TestQwenCurrentHTTP(t *testing.T) {
 			target := server.URL + "/?key=" + TestSecret + "&provider=dashscope&model=" + model + "&prompt=test"
 			for _, effort := range []string{"", "none", "low", "medium", "xhigh"} {
 				expectedEffort = effort
-				requestURL := target + "&max_tokens=131072"
+				requestURL := target + "&max_tokens=" + strconv.Itoa(currentQwenOutputCeiling(model))
 				if effort != "" {
 					requestURL += "&reasoning_effort=" + effort
 				}
@@ -118,7 +126,7 @@ func TestQwenCurrentHTTP(t *testing.T) {
 					t.Fatalf("effort=%s status=%d body=%s usage=%s", effort, response.StatusCode, data, response.Header.Get("X-LLM-Proxy-Total-Tokens"))
 				}
 			}
-			for _, query := range []string{"&reasoning_effort=minimal", "&reasoning_effort=high", "&reasoning_effort=max", "&max_tokens=15", "&max_tokens=131073"} {
+			for _, query := range []string{"&reasoning_effort=minimal", "&reasoning_effort=high", "&reasoning_effort=max", "&max_tokens=15", "&max_tokens=" + strconv.Itoa(currentQwenOutputCeiling(model)+1)} {
 				response, err := http.Get(target + query)
 				if err != nil {
 					t.Fatal(err)
@@ -219,7 +227,7 @@ func TestQwenCurrentCatalog(t *testing.T) {
 		if len(offering.Limits) != 1 || offering.Limits[0].Value == nil || *offering.Limits[0].Value != 1000000 {
 			t.Fatalf("context=%v", offering.Limits)
 		}
-		if len(offering.Controls) != 1 || offering.Controls[0].Minimum == nil || *offering.Controls[0].Minimum != 16 || offering.Controls[0].Maximum == nil || *offering.Controls[0].Maximum != 131072 {
+		if len(offering.Controls) != 1 || offering.Controls[0].Minimum == nil || *offering.Controls[0].Minimum != 16 || offering.Controls[0].Maximum == nil || *offering.Controls[0].Maximum != float64(currentQwenOutputCeiling(model)) {
 			t.Fatalf("controls=%v", offering.Controls)
 		}
 		image := model != "qwen3.8-2.4t-a95b"
@@ -280,7 +288,7 @@ func assertCurrentQwenProductionDiscovery(t *testing.T, identifiers []string, pa
 	t.Helper()
 	for _, model := range currentQwenModels {
 		identifier := proxy.ProviderNameDashScope + "/" + model
-		expected := model == "qwen3.8-flash"
+		expected := model == "qwen3.8-flash" || model == currentQwenSharedModel
 		if slices.Contains(identifiers, identifier) != expected {
 			t.Errorf("offering=%s discovery=%s want present=%t", identifier, path, expected)
 		}
@@ -371,10 +379,10 @@ func TestQwenCurrentFlashActivation(t *testing.T) {
 		t.Fatal(err)
 	}
 	response.Body.Close()
-	if response.StatusCode != http.StatusBadRequest {
-		t.Fatalf("unqualified DashScope offering status=%d", response.StatusCode)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("enabled DashScope offering status=%d", response.StatusCode)
 	}
-	if !reflect.DeepEqual(dispatched, []string{"qwen3.8-flash", "qwen-plus"}) {
+	if !reflect.DeepEqual(dispatched, []string{"qwen3.8-flash", "qwen-plus", currentQwenSharedModel}) {
 		t.Fatalf("explicit Flash selection changed provider default: %v", dispatched)
 	}
 }

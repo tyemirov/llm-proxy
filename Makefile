@@ -40,7 +40,7 @@ go-lint:
 	$(GO) run github.com/gordonklaus/ineffassign@latest ./...
 
 python-lint:
-	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev mypy --strict llm_proxy_client ../scripts/snapshot_managed_database.py
+	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev mypy --strict llm_proxy_client ../scripts/snapshot_managed_database.py ../scripts/render_nonpayment_config.py
 
 frontend-dependencies: $(FRONTEND_DEPENDENCY_STAMP)
 
@@ -564,3 +564,8 @@ test-dashscope-inventory:
 
 inventory-dashscope:
 	@$(GO) run ./cmd/cli inventory-dashscope
+
+.PHONY: test-automatic-output
+AUTOMATIC_OUTPUT_TEST_PATTERN ?= ^TestAutomaticOutputSizing
+test-automatic-output:
+	$(GO) test ./internal/proxy -run '$(AUTOMATIC_OUTPUT_TEST_PATTERN)' -count=1 $(AUTOMATIC_OUTPUT_TEST_ARGS)

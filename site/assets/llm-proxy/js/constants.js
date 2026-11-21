@@ -215,7 +215,7 @@ export const MPR_UI = Object.freeze({
 });
 
 export const RUNTIME_UI = Object.freeze({
-  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20261117b333",
+  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20261121payment",
   APPLICATION_MODULE_ID: "llm-proxy-application-module",
   APPLICATION_MODULE_MISSING: "llm_proxy_application_module_missing",
   APPLICATION_READY_ATTRIBUTE: "data-llm-proxy-application",
@@ -437,3 +437,7 @@ export const PROVIDER_RESOURCE_LABELS = Object.freeze({
 
 export const FUNDING_CHANGED_EVENT = 'llm-proxy:funding-changed';
 export const FUNDING_RESUME_EVENT = 'llm-proxy:funding-resume';
+
+export const PAYMENT_CONTINUATION_STORAGE_KEY = 'llm-proxy:payment-continuation';
+export const FUNDING_ORDER_QUERY_PARAMETER = 'funding_order_id';
+export const PADDLE_TRANSACTION_QUERY_PARAMETER = '_ptxn';

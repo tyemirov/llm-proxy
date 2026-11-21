@@ -341,6 +341,119 @@ func TestGeminiCurrentModelsVertexShippedRoute(t *testing.T) {
 	}
 }
 
+func TestGeminiCurrentModelsVertexGemini4(t *testing.T) {
+	catalog := testfixtures.ProviderCatalog(t)
+	for _, model := range vertexGemini4Models {
+		for _, scenario := range []struct {
+			name       string
+			parameters string
+			status     int
+			effort     string
+			maxOutput  int
+		}{
+			{"omitted", "", http.StatusOK, "", 65536},
+			{"xhigh", "&reasoning_effort=xhigh&max_tokens=128", http.StatusOK, "XHIGH", 128},
+			{"unsupported effort", "&reasoning_effort=minimal", http.StatusBadRequest, "", 0},
+			{"synchronous output limit", "&max_tokens=65537", http.StatusBadRequest, "", 0},
+		} {
+			t.Run(model+"/"+scenario.name, func(t *testing.T) {
+				projectPath := "/v1/projects/test-project/locations/global"
+				if model == vertexProjectDefaultModel {
+					projectPath = "/v1/projects/123456789012/locations/global"
+				}
+				const apiKey = "fixture-vertex-project-key"
+				var calls atomic.Int32
+				upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Header.Get("x-goog-api-key") != apiKey || r.Header.Get("Authorization") != "" {
+						t.Error("incorrect project-scoped Vertex authentication")
+					}
+					if calls.Add(1) == 1 {
+						if r.URL.Path != projectPath+"/publishers/google/models/"+vertexProjectDefaultModel+":generateContent" {
+							t.Errorf("wrong project verification path: %s", r.URL.Path)
+						}
+						io.WriteString(w, vertexSuccess)
+						return
+					}
+					if r.Method != http.MethodPost || r.URL.Path != projectPath+"/publishers/google/models/"+model+":generateContent" {
+						t.Errorf("unexpected Vertex request: %s %s", r.Method, r.URL.Path)
+					}
+					var body struct {
+						Generation struct {
+							Thinking *struct {
+								Level string `json:"thinkingLevel"`
+							} `json:"thinkingConfig"`
+							MaxOutput int `json:"maxOutputTokens"`
+						} `json:"generationConfig"`
+					}
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+						t.Error(err)
+						return
+					}
+					thinking := body.Generation.Thinking
+					if scenario.effort == "" && thinking != nil || scenario.effort != "" && (thinking == nil || thinking.Level != scenario.effort) {
+						t.Errorf("thinking config=%+v, want effort %q", thinking, scenario.effort)
+					}
+					if body.Generation.MaxOutput != scenario.maxOutput {
+						t.Errorf("Vertex maxOutputTokens=%d, want %d", body.Generation.MaxOutput, scenario.maxOutput)
+					}
+					io.WriteString(w, vertexSuccess)
+				}))
+				t.Cleanup(upstream.Close)
+				config := proxy.Configuration{ProviderCatalog: catalog, Endpoints: providerEndpoints(upstream.URL+projectPath, vertexProjectProvider)}
+				router := newOperationalProviderKeyVerificationRouter(t, config, zap.NewNop().Sugar(), t.TempDir()+"/managed.db", TestTimeout)
+				owner := managementSessionCookie(t, "vertex-project-fixture")
+				if model == vertexProjectDefaultModel && scenario.name == "omitted" {
+					for _, rejected := range []string{
+						"",
+						"https://elsewhere.example" + projectPath,
+						"https://aiplatform.googleapis.com:443" + projectPath,
+						"https://aiplatform.googleapis.com" + projectPath + "/publishers/google/models",
+						"https://aiplatform.googleapis.com/v1/projects/test%2Fproject/locations/global",
+					} {
+						response := createVertexProjectConnection(t, router, owner, apiKey, rejected)
+						if response.Code != http.StatusBadRequest || calls.Load() != 0 {
+							t.Fatalf("invalid project connection URL %q: status=%d calls=%d", rejected, response.Code, calls.Load())
+						}
+					}
+				}
+				secret := assignVertexProjectConnection(t, router, owner, apiKey, "https://aiplatform.googleapis.com"+projectPath)
+				if model == vertexProjectDefaultModel && scenario.name == "omitted" {
+					other := managementSessionCookie(t, "vertex-project-unconnected")
+					otherTenantID := managementDefaultTenantTestID(t, router, other)
+					otherSecret := generateManagementTenantSecret(t, router, other, otherTenantID)
+					response := httptest.NewRecorder()
+					router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/?key="+otherSecret+"&provider="+vertexProjectProvider+"&model="+model+"&prompt=test", nil))
+					if response.Code != http.StatusConflict || calls.Load() != 1 {
+						t.Fatalf("tenant without its own project connection: status=%d, calls=%d", response.Code, calls.Load())
+					}
+				}
+				server := httptest.NewServer(router)
+				t.Cleanup(server.Close)
+				request, err := http.NewRequest(http.MethodGet, server.URL+"/?key="+secret+"&provider="+vertexProjectProvider+"&model="+model+"&prompt=test"+scenario.parameters, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				response, err := server.Client().Do(request)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer response.Body.Close()
+				if response.StatusCode != scenario.status {
+					body, _ := io.ReadAll(response.Body)
+					t.Fatalf("status=%d, want %d: %s", response.StatusCode, scenario.status, body)
+				}
+				if scenario.status == http.StatusOK {
+					if calls.Load() != 2 || response.Header.Get("X-LLM-Proxy-Total-Tokens") != "16" {
+						t.Fatal("expected one Vertex dispatch and measured usage")
+					}
+				} else if calls.Load() != 1 {
+					t.Fatal("rejected request reached Vertex")
+				}
+			})
+		}
+	}
+}
+
 func TestGeminiCurrentModelsVertexDictationProtocol(t *testing.T) {
 	for _, filename := range []string{"voice.wav", "voice.unknown"} {
 		t.Run(filename, func(t *testing.T) {

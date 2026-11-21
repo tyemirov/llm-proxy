@@ -44,6 +44,172 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
 
 ## BugFixes
 
+- [x] [B352] (P1) Resolve every browser checkout through current funding admission.
+  Evidence: Ordinary resume can open a retained Paddle transaction with cached funding offers after the live gate closes. A saved link resolves the same order through a separate flow that reloads offers.
+  Requirements: Use one owned-order checkout resolver. Verify the saved link against the retained transaction. Keep current offers authoritative for each opening, including history and resume, and preserve creation identity, status polling, signed fulfillment, and receipt visibility.
+  The browser now uses one resolver for new orders, resume, history, and links. It binds the owned order and checkout to current funding offers before opening Paddle. Terminal status remains readable when checkout is closed.
+  The browser regressions first reproduced an overlay opening after offers returned 503 and a preparing history order losing its selection. All 13 payment browser cases pass through the normal application after the correction, including reload of the selected order, ambiguous creation key retention, closed admission, and signed settlement. Independent review cleared the correction.
+  The shared B352–B356 validation includes `make test-hosted-payments`, the focused payment runtime tests with race detection, and the frontend static checks in `npm run frontend:lint`. Each passes on the corrected payment implementation.
+  The first `CI=1 make ci` passed the first five gates and stopped at frontend static analysis with `brand_icon_catalog_mismatch: families`. The hosted-service fixture reported `Cannot set properties of undefined (setting 'output_token_limit')` for the retired `gpt-4.1` offering. The landing catalog test also expected the retired model.
+  The F103 follow-up removes the stale `gpt-4` icon mapping, updates the catalog count to 36 families, and moves current browser selections to retained routes. It preserves migration inputs and historical usage. The ownership migration test initially expected the predecessor text model and now verifies the migrated GPT-6.2 Sol selection. Qualification tests use a current alternate offering to exercise rejection.
+  All four affected authenticated browser cases and the 26-case final icon, history, and usage check pass. The broader browser check's sole failure expected the former 37-family count, which passes after correction. Catalog and migration race tests, protocol acceptance, admission race tests, operational harness, controlled provider preflight, frontend lint, and independent review pass.
+  The first rerun passed the frontend gate and exposed three more Go fixtures with stale assumptions. GPT-6.2 Sol sent `max_output_tokens:128000` where two omission cases expected no cap. The reasoning rejection case received HTTP 504 and recorded 19 upstream attempts because its selected models accepted the requested efforts. Tests with an unspecified output limit, absent reasoning capability, and a current route with an incompatible effort now pass through the public entry points.
+  The remaining Go groups reproduced two migration shape checks returning a nil error, a rollback failpoint stopping in `preflight_openai_cutover`, an obsolete GPT-4 provider card expectation, and reasoning reaching a route the fixture treated as unsupported. The corrected tests use explicit invalid migration records, isolate the capability rollback check, verify the retained families, and inject an actual route without reasoning control. Their focused rerun passes, and all 24 authenticated browser tests pass.
+  The next full run passed all Go test groups and reported `uncovered coverage blocks remain` for six migration error paths despite the rounded 100.0% total. The failure fixtures now target the predecessor version read, keyed defaults, connection preloads, and the cutover marker after connection migration. Focused coverage records an execution of each of the six blocks, including a complete predecessor rollback after the marker failure. The retirement race tests and OpenAPI Pages artifact check also pass.
+  Final `CI=1 make ci` passed all 15 gates in 836 seconds for B352–B356. Go statement coverage is exactly 100.0% with every block exercised. All 190 frontend browser cases and 24 authenticated browser cases passed. Validation input contents matched before and after the run.
+  The change is in the funding checkout module, payment browser tests, application module references, and hosted billing guide.
+
+- [x] [B353] (P2) Generate the early payment URL capture once and protect SDK loading.
+  Evidence: Both entry pages contain an independently authored capture script. The SDK adapter checks the URL after making the external script request.
+  Requirements: Generate the synchronous inline capture for both entry pages before external script execution. Strip identifiers before storage or validation. Check the current URL before loading and before initializing the SDK.
+  Both entry documents now render one synchronous capture from the public shell generator. The continuation reader validates the captured values, and the Paddle adapter checks the URL at the SDK boundary.
+  The dirty-URL regression first observed one Paddle SDK request before rejection. The passing browser cases verify that analytics sees clean entry URLs, dirty URLs stop SDK loading, and a URL modified during the SDK download stops initialization and checkout.
+  Final CI passed with B352.
+  The change is in the public shell generator, browser entry documents, payment continuation module, Paddle adapter, module references, and browser tests.
+
+- [x] [B354] (P1) Select the Paddle API origin from the configured environment.
+  Evidence: Production configuration accepts an arbitrary HTTPS API origin even with a live client token. Sandbox also accepts arbitrary remote HTTPS origins.
+  Requirements: Select exactly one Paddle origin from the configured environment. Reserve the explicit loopback HTTP origin for controlled sandbox fixtures, with no remote override. Keep one runtime, credentials contract, and separate environment bindings.
+  The shared runtime selects the official API origin from the environment. An explicit loopback IP over HTTP remains available for controlled sandbox fixtures.
+  Startup tests first reproduced invalid origins reaching database initialization. They now reject overrides in production, remote sandbox origins, and fixture URLs with paths, queries, or fragments. The runtime race tests use both configurations with controlled processor responses and verify the selected origin, one transaction and one 500-cent credit after signed replay, a matching receipt, and rejection of the opposite environment on the retained database.
+  The first payment suite run reported `api_base_url is only available for a sandbox loopback HTTP origin` before reaching the qualification guard for API overrides. The corrected test uses a valid loopback fixture and passes through the guard. The change is in payment runtime configuration, Go payment and qualification tests, and the hosted billing guide.
+  Final CI passed with B352.
+
+- [x] [B355] (P1) Keep Paddle requests at the selected origin.
+  Evidence: The shared application HTTP client uses the default redirect policy. A redirected request can leave the configured origin and a redirect can replay a transaction POST.
+  Requirements: Stop redirects at the existing transport boundary. Preserve the one dispatch intent and reconcile an uncertain outcome without repeating creation.
+  The shared Paddle HTTP client stops redirects. The order retains its original dispatch intent for reconciliation.
+  The first runtime test observed one redirected request per case. The passing race test covers GET 302 and POST 307 and 308, verifies zero requests to the redirect destination, and confirms that reconciliation does not repeat creation.
+  Final CI passed with B352.
+  The change is in the hosted payment runtime, its controlled HTTP tests, and the hosted billing guide.
+
+- [x] [B356] (P2) Apply the saved funding intent boundary to each checkout entry.
+  Evidence: Malformed stored intent disables click actions but automatic link and history handlers can replace it.
+  Requirements: Verify saved intent before accepting any checkout action. Preserve the stored intent and linked order while the session state is invalid.
+  The funding component validates saved intent before accepting any entry action for the account.
+  The two browser cases first reproduced history and link actions suppressing the intent error. The passing regressions verify preservation of the intent and link, no checkout activity, and continued access to history.
+  Final CI passed with B352.
+  The change is in the funding checkout module, its browser tests, and the hosted billing guide.
+
+- [x] [B344] (P1) Keep live funding closed until the Paddle destination is verified.
+  Evidence: With payment processing configured, the live runtime exposes funding offers before the Paddle destination is active. The controlled runtime reproduced HTTP 200 where the closed checkout requires 503.
+  Resolution: The production config leaves `payments.checkout_enabled` false. The signed webhook and event worker run independently of checkout admission and delivery. The activation handoff requires positive signed delivery before opt-in.
+  Validation: The normal service returns 503 for offers and creation, leaves a queued order undispatched, rejects an unsigned event, and settles a signed refund while checkout is closed. The opt-in service still creates and fulfills a funding order. The CLI rejects a nonboolean gate. CI found a checkout cancellation fixture that reported `runtime did not start its financial read`. The shared full-payment fixture now opts in explicitly so cancellation and recovery still exercise checkout delivery.
+  Final validation: Local `CI=1 make ci` passed all 15 gates for B344 through B351 in 881 seconds, with 100.0% Go statement coverage, 190 frontend browser cases, and 21 authenticated browser cases.
+  Files: Payment runtime, funding-order handlers, router, CLI config, production config, Paddle test fixture, OpenAPI reference, and activation and billing guides.
+
+- [x] [B345] (P2) Defer events with corrupt retained payment observations.
+  Evidence: Equal-revision payment events with a digest mismatch or undecodable retained evidence aborted the ordered inbox batch.
+  Resolution: Defer the affected event with `transaction_observation_integrity`. Its regular retry schedule and retained reason allow reconciliation while later events continue.
+  Validation: Signed lifecycle and refund events leave the affected account unchanged, a later completion credits another account, and the deferred event applies after evidence repair at its scheduled retry time.
+  Files: Payment state and processing code, payment protocol fixtures, inbox regression, and billing guide.
+
+- [x] [B346] (P2) Allow switching between known funding orders.
+  Evidence: After an overlay closed, selecting another known pending order left the browser on the first order.
+  Resolution: History and checkout links can select another known order. An unresolved order creation retains its original idempotency key.
+  Validation: The browser switches between retained orders without another order creation and preserves the original key for an ambiguous creation.
+  Files: Browser funding checkout module, application module revisions, and payment browser tests.
+
+- [x] [B347] (P2) Remove payment link identifiers before analytics scripts run.
+  Evidence: With the external continuation bootstrap blocked, Google Analytics and LoopAware saw `funding_order_id` and `_ptxn` in the current URL.
+  Resolution: Both browser entry documents capture and strip the parameters inline before loading external scripts.
+  Validation: The rendered-page check verifies matching inline capture, and controlled Google Analytics and LoopAware scripts observe clean URLs with the former bootstrap URL blocked. Initial CI reported `paymentContinuationBootstrap.js: No such file or directory` when the fixture copied the deleted source from the index. The installed Gateway check passes with the obsolete bootstrap removed from the working tree.
+  Files: Browser entry HTML, application module revisions, static-page and browser tests, and the installed Gateway fixture that copies tracked working-tree files.
+
+- [x] [B348] (P2) Run local startup preparation on Python 3.9.
+  Evidence: Python 3.9.6 raises `TypeError: unsupported operand type(s) for |` while importing the non-payment configuration renderer, before `make up` starts Compose.
+  Resolution: Postpone annotation evaluation in the renderer.
+  Validation: The renderer and controlled `make up` and `make down` contracts pass with Python 3.9.6 selected as the host `python3`.
+  Files: `scripts/render_nonpayment_config.py`.
+
+- [x] [B349] (P2) Use portable Cerebras limits for unclassified connections.
+  Evidence: The router dispatched an omitted output cap as 40,960 tokens, above the 32,768-token Free Trial ceiling. The shared connection accepts keys without tier classification.
+  Resolution: Declare 32,768 output tokens and 65,536 context tokens for the shared offering. The explicit paid qualification harness retains its separate scope.
+  Validation: Discovery and explicit and omitted cap tests verify the portable limits. Qualification budget tests use the current catalog and still enforce admission and settlement.
+  Files: Provider catalog, Cerebras guide, router and protocol tests, and qualification budget tests.
+
+- [x] [B350] Document the actual DashScope 27B output limit.
+  Evidence: The model guide described a 65,536-token ceiling for 27B. The active catalog and router use 131,072.
+  Resolution: Document Flash and 27B independently with their accepted ranges and exact caps on omission.
+  Validation: Router tests verify 65,536 for Flash and 131,072 for 27B on omission.
+  Files: Qwen model guide and output ceiling tests.
+
+- [x] [B351] (P2) Preserve paid checkout confirmation during dashboard startup.
+  Evidence: Final CI reached the authenticated browser suite and received HTTP 200 for the paid order and its matching checkout. A subsequent startup render replaced the funding widget. The browser expected `Payment verified: paid` and found `Choose funding amount` instead. Twenty other authenticated cases passed.
+  Requirements: Keep the owned payment link available until the dashboard's initial funding widget can show the verified status. Preserve checkout ownership and duplicate-order protection.
+  Resolution: Preserve the initial disabled routing controls and mount billing widgets on the completed dashboard render.
+  Validation: Holding the real initial assignments response reproduced an early checkout mount. The regression now keeps checkout unmounted until startup completes and verifies the paid confirmation. An initial fix delayed all controls and failed the existing held tenant profile test with `element(s) not found`. After narrowing the startup change to billing widgets, all 21 authenticated browser cases and seven related management browser cases passed.
+  Files: `site/assets/llm-proxy/js/ui/connectionDashboard.js` and `tests/blackbox/hosted-payments.spec.js`.
+
+- [x] [B343] Isolate non-payment runtimes from production Paddle configuration.
+  Evidence: F101 final CI reproduces provider-harness generated configuration retaining `api_key:` and all three production payment placeholders. Local Compose also mounts that production configuration while its scoped environment excludes payment inputs; the tagged recovery fixture copies the same block.
+  Requirements: Explicitly disable payments in provider qualification, local Compose, and non-payment recovery fixtures. Keep production payment configuration and the explicit local payment protocol scenarios intact. Preserve all other service configuration.
+  Validation: The two provider output tests failed with retained production payment fields before correction. Renderer output and invalid-input tests pass (0.708s); local startup/shutdown, regeneration, and isolated Compose contracts pass (3.526s); all provider config cases pass (0.582s). Controlled provider preflight and tagged recovery CLI pass (2.051s recovery), with payments and unused qualification budgeting explicitly disabled in that fixture. Strict Python lint, formatting, shell syntax, and diff checks pass. Independent review cleared the current-layout renderer and failure propagation. Selected final CI passed with F101.
+  Final validation: Local `make ci` passed all 15 gates in 958 seconds with exact 100.0% Go statement coverage, 190 frontend browser tests, and all 19 authenticated browser cases. Source content was unchanged throughout the gate.
+
+
+- [x] [B342] Keep static public footers within the narrow viewport.
+  Evidence: F101's Chromium at 390px purchase-page check reproduces document overflow when shared UI loading fails. The static footer uses 100% content width plus horizontal padding. Independent review confirmed the layout cause.
+  Resolution: Include padding within the footer width. Validate public purchase and legal pages with external scripts blocked and the hydrated public shell separately. Final CI passed with F101.
+  Final validation: Local `make ci` passed all 15 gates in 958 seconds with exact 100.0% Go statement coverage, 190 frontend browser tests, and all 19 authenticated browser cases. Source content was unchanged throughout the gate.
+
+
+- [x] [B341] (P2) Align qualification budget fixtures with current catalog limits.
+  Resolution: Qualification fixtures use a 140000-microUSD concurrency cap and 139993 settled remainder, preserve one-request admission and isolation, reject oversized catalog defaults before explicit-128 success, and test excessive input at the frozen ceiling plus one. Failure cleanup releases blocked handlers.
+  Evidence: The remaining Go group times out at `TestQualificationBudgetXA1DConcurrentCapAndTenantIsolation` waiting for upstream entry. Its existing explicit 128-token request now requires 129,953 microUSD against the current Cerebras context and rates, exceeding the old 70,000 fixture cap.
+  Requirements: Preserve one admitted active request, rejection of a concurrent selected-tenant request, isolation of the other tenant, and exact settlement. Report premature HTTP completion instead of waiting indefinitely for upstream entry.
+  Validation: Independently reviewed the reservation math. Actual premature HTTP completion and omitted-limit rejections reproduce before correction. Complete XA1D focused race checks pass in 74.535 seconds. The remaining-group run found an excessive-input fixture within the new context; ceiling-plus-one boundary checks pass with race detection in 7.496 seconds. Cleanup and final review are clear.
+  Final validation: Final local `make ci` passed all 15 gates in 799 seconds, with exact 100.0% Go statement coverage, 188 frontend browser cases, and all 13 authenticated browser cases.
+
+- [x] [B340] (P2) Align Gemini routing acceptance with automatic output sizing.
+  Resolution: Gemini polling acceptance requires only the exact catalog-selected default output allowance and preserves response, polling, and deletion assertions.
+  Evidence: Focused real HTTP routing fails `generation_config must be omitted by default: map[max_output_tokens:65536]`. The current router and canonical API contract select the catalog ceiling for an omitted allowance.
+  Requirements: Verify the exact default output allowance while preserving Gemini polling, response usage, and cleanup assertions.
+  Validation: Bounded independent review confirmed other omission assertions remain valid. Exact Gemini default, polling, and cleanup checks pass with race detection.
+  Final validation: Final local `make ci` passed all 15 gates in 799 seconds, with exact 100.0% Go statement coverage, 188 frontend browser cases, and all 13 authenticated browser cases.
+
+- [x] [B339] (P2) Include the active DashScope 27B offering in media catalog acceptance.
+  Resolution: Exact active model sets, family labels, media projections, and HTTP image limits include DashScope 27B. Browser acceptance requires its presence without changing the persisted Flash default.
+  Evidence: F087 final CI passed hosted payments but failed `TestDashScopeMediaCatalog` with `image offerings=4`; the current catalog enables `dashscope/qwen3.8-27b` alongside the three existing image offerings.
+  Requirements: Verify all four exact DashScope image models, current management model families, and public media projections. Preserve catalog activation, limit values, sources, and dates.
+  Validation: Include 27B in existing real HTTP image-count and data-URI boundary tests, then run focused race checks and final CI.
+  Final validation: Final local `make ci` passed all 15 gates in 799 seconds, with exact 100.0% Go statement coverage, 188 frontend browser cases, and all 13 authenticated browser cases.
+
+- [x] [B338] (P2) Regenerate the API reference after canonical output allowance edits.
+  Resolution: The generated API reference and source digests now match the existing canonical output-allowance descriptions; source edits were preserved.
+  Evidence: F087 final CI passed its first five gates, then frontend static analysis failed with `openapi_docs_out_of_date`. Existing canonical OpenAPI edits change three output allowance descriptions without their generated page.
+  Requirements: Regenerate the API reference from the current canonical source and preserve the source edits.
+  Validation: Run the existing generator, frontend static analysis, Pages artifact acceptance, and final CI.
+  Final validation: Final local `make ci` passed all 15 gates in 799 seconds, with exact 100.0% Go statement coverage, 188 frontend browser cases, and all 13 authenticated browser cases.
+
+- [x] [B337] (P1) Accept generated Paddle checkout links after account setting changes.
+  Resolution: Revision equality excludes generated checkout URL values while preserving checkout presence, raw evidence, and all financial fields. The newly configured and original refunded orders reconcile and restore with zero differences.
+  Evidence: F087 changed the sandbox default link from PoodleScanner to LLM Proxy. Paddle's API immediately reports the new `checkout.url` for the original refunded transaction while keeping its `updated_at` unchanged. Native reconciliation rejects it as `processor_snapshot_conflict`.
+  Requirements: Exclude the generated checkout URL from canonical transaction-revision comparison. Preserve full retained evidence and digests, original money, captures, identity, lifecycle, and independently ordered refund history.
+  Validation: Reproduce through HTTP-backed payment reconciliation before and after a generated-link change, including refunded transactions, signed lifecycle events, replay, and unchanged balances. Retry the actual retained sandbox orders after correction.
+  Final validation: Final local `make ci` passed all 15 gates in 799 seconds, with exact 100.0% Go statement coverage, 188 frontend browser cases, and all 13 authenticated browser cases.
+
+- [x] [B336] (P1) Separate Paddle transaction revisions from computed refund totals.
+  Resolution: Processing and reconciliation share transaction-revision comparison without computed refund aggregates, retain complete evidence, and independently verify adjustment history. Actual partial and full refund checkpoints have zero differences.
+  Evidence: F087 partial approval changes only transaction `details.adjusted_totals` and `details.adjusted_payout_totals`, while `updated_at` stays at the original completion revision. After B335, full-snapshot equality rejects the approved adjustment as `financial_state_conflict`. Payment reconciliation repeats the same incorrect equality rule.
+  Requirements: Preserve complete raw evidence and digests. Exclude only the represented computed adjusted totals from equal-revision transaction comparisons. Keep strict original transaction identity, lifecycle, money, capture, revision ordering, and independent adjustment-history checks.
+  Validation: Hold the transaction revision constant through pending and approved refunds. Verify one principal reversal, replay and restart, exact public balances and receipts, and zero reconciliation differences. Reject corrupt retained evidence and uncorroborated or regressed adjustment history.
+  Final validation: Final local `make ci` passed all 15 gates in 799 seconds, with exact 100.0% Go statement coverage, 188 frontend browser cases, and all 13 authenticated browser cases.
+
+- [x] [B335] (P1) Accept signed retained fees in Paddle adjusted transaction evidence.
+  Resolution: Adjusted retained-fee parsing accepts canonical signed evidence while customer principal and adjustment validation remain unsigned. Actual approved refunds settle correctly.
+  Evidence: During F087, Paddle approved partial refund `adj_01m7senfqge4svqcphbg8c4hvt`. The transaction API reports adjusted `retained_fee: "-31"`; the adjustment itself reports `retained_fee: "31"`. The unsigned transaction-fee validator leaves the event in `adjustment_evidence_unavailable` and preserves its pending hold.
+  Requirements: Accept canonical signed integer evidence for the adjusted transaction retained fee. Preserve unsigned customer principal, tax, fee, and adjustment validation, exact evidence retention, and corroborated refund calculations.
+  Validation: Reproduce through signed HTTP events and public balances and receipts. Verify the approved principal reversal, malformed fee rejection, replay, and restart. Resume F087 against the existing transaction and refund.
+  Final validation: Final local `make ci` passed all 15 gates in 799 seconds, with exact 100.0% Go statement coverage, 188 frontend browser cases, and all 13 authenticated browser cases.
+
+- [x] [B334] (P1) Accept matching Paddle snapshots across webhook timestamp precision.
+  Resolution: Webhook/API comparison uses microsecond revision ordering with the conflicting-state safeguard; original evidence remains exact. Actual sandbox delivery and replay grant funds once.
+  Evidence: F087 actual sandbox transaction `txn_01m7se638xj3fjwx2ge41fzgmp` completed, but its webhook reports `2026-11-19T08:20:47.02610139Z` and the transaction API reports `2026-11-19T08:20:47.026101Z`. Exact revision ordering leaves the verified event in `transaction_snapshot_stale`, the order pending, and funds unavailable.
+  Requirements: Compare webhook and transaction API revisions at microsecond precision. Preserve original evidence, exact financial digests, capture validation, and retained API revision ordering. Reject an earlier API status that conflicts with its webhook within the same microsecond.
+  Validation: Reproduce through signed HTTP events and public financial reads. Verify one credit after replay and restart, older revisions, conflicting states, and changed financial evidence. Resume the retained F087 transaction after correction.
+  Final validation: Final local `make ci` passed all 15 gates in 799 seconds, with exact 100.0% Go statement coverage, 188 frontend browser cases, and all 13 authenticated browser cases.
+
 - [x] [B333] (P2) Disable prepaid balance actions during automatic refresh.
   Goal: Make financial-history controls reflect whether their handler can accept input.
   Evidence: PR 368 run 44064613419 passes all 188 frontend cases but fails the hosted payment browser flow at `hosted-payments.spec.js:64`. The history click occurs while the balance refresh sets `busy`; the existing button remains enabled and the handler drops the click.
@@ -2484,6 +2650,14 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
 
 ## Improvements
 
+- [x] [I323] (P2) Remove obsolete output allowance defaults after router sizing.
+  Resolution: Removed the unreachable continuation default and replaced private wire-cap injection with explicit boundary validation. Missing or malformed serialized allowances reject before reservation or dispatch. Unknown ceilings and valid explicit limits retain their public behavior; architect review and conservation checks pass.
+  Evidence: F087 final CI passes all nine Go groups but rejects three unexecuted blocks. Router sizing already selects known catalog ceilings; continuation and private qualification still contain a second default selection.
+  Goal: Keep one canonical output selection and explicit wire admission before a qualification reservation.
+  Requirements: Obtain architect review before changing financial admission, preserve explicit allowances and unknown-ceiling behavior, and reject malformed wire requests before dispatch. Preserve current API and event schemas.
+  Validation: Qualification/routing/sizing race suite passes in 148.369 seconds, and public unknown-ceiling continuation passes in 2.389 seconds.
+  Final validation: Final local `make ci` passed all 15 gates in 799 seconds, with exact 100.0% Go statement coverage, 188 frontend browser cases, and all 13 authenticated browser cases.
+
 - [-] [I322] (P1) {B323,B324,B325,F098,F099} Activate the TellTale tenant candidates and complete the quality-first benchmark.
   Goal: Repair the live dashboard, configure the existing TellTale tenant, and select among quality-qualified candidate configurations using quality 50%, cost 35%, and generation time 15%.
   Requirements: All provider operations pass through LLM Proxy. Clients receive only its origin and tenant key. Preserve the cumulative $5 spending cap and $0.644939 starting ledger; include failures, evaluations, continuations, and repairs. Keep full CI at the explicitly agreed final checkpoint.
@@ -4547,6 +4721,37 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
   Deliverables: Catalog declarations, bounded model-only cutover, table-driven public HTTP/discovery/rejection/price-boundary tests, ORM startup and rollback tests, accepted-request reconciliation evidence, and the current-route guide.
   Validation: Focused checks passed for exact route selection, documented efforts, images with strict schema, usage headers, price boundaries, startup migration and rollback, and original-request readback. Browser checks passed for current model selection, discovery, and hosted requests. Final `make ci` passed all 15 gates with 100.0% Go statement coverage and 188 frontend browser tests.
 
+- [x] [F102] Add owned-order continuation for Paddle checkout links.
+  Goal: Open the existing customer transaction through an application-specific checkout page.
+  Requirements: Require an HTTPS `payments.checkout_url`; send native `checkout.url` with the server funding order; capture and remove query candidates before external scripts; preserve the candidate through sign-in; verify order ownership, exact retained transaction, and eligible state through existing APIs; preserve single-attempt creation and server-only funds verification.
+  Validation: Reproduce the missing behavior through HTTP and browser entry points. Run focused payment, configuration, browser, and lint checks. Keep independent review and final CI under primary ownership. SDK publication and consumer dependency adoption remain separate delivery gates.
+  Progress: Added the required server checkout URL and native per-order dispatch. Early browser capture removes both query parameters before external scripts. Continuation checks ownership and exact retained transaction without another order. Signed-out and signed-in resume, completed status, malformed and duplicate queries, mismatches, foreign ownership, callback-only funding rejection, and financial flow passed through the normal runtime. Payment Go checks, Go lint, frontend lint, four payment/service browser scenarios, two cache/module browser checks, formatting, and diff checks passed. Initial tests used an ignored workspace for the reviewed SDK source; that workspace was removed after published dependency adoption. Architecture review identified three continuation defects. Browser regressions reproduced each defect. Corrections reject unsanitized SDK query initialization, preserve unrelated intents and original retry keys, retain temporary failures with a retry control, and keep unrelated active checkout open for terminal status. The complete payment/service browser suite passed eight cases. A later review found a created-order snapshot race; its browser regression failed before the correction. Preparation now retains the link for retry. Five focused review browser cases, frontend lint, and diff checks passed after the last correction. Independent architect rereview found no remaining actionable findings. The reviewed SDK is published and adopted as utils v0.20.0. Final CI exposed stale static-module assertions and production payment inheritance in the ordinary browser fixture. Updated the assertions and explicitly disabled payments in ordinary management scenarios; payment scenarios retain their local processor configuration. Focused Go, four shared-UI browser cases, and OpenAPI Pages checks passed; independent review found no actionable issue. Final CI then exposed a history-pagination assumption after more than 50 shared orders. Deterministic real-API pagination reproduced the failure while direct paid status and the original uncertain key remained correct. Test synchronization now uses terminal continuation status, historical actions follow UI pagination, and no-extra-order checks compare complete paginated ID sets. A gated initial response covers helper startup timing. All nine payment/service cases pass after the last correction (48.7s), frontend lint and diff checks pass, and independent rereview is clear. Final application CI passed.
+  Final validation: Local `make ci` passed all 15 gates in 958 seconds with exact 100.0% Go statement coverage, 190 frontend browser tests, and all 19 authenticated browser cases. Source content was unchanged throughout the gate.
+
+
+- [!] [F101] (P1) Configure and qualify live Paddle checkout for a paid pilot.
+  Goal: Make the real LLM Proxy funding checkout ready through the approved production Paddle account.
+  Requirements: Verify current account/domain approval and supplier identity; configure a dedicated live product, one-time USD 5 funding price, client token, server credential, notification destination and secret; preserve other applications; wire production inputs through the selected manifest; use durable checkout and webhook hosts; validate signed fulfillment and exact financial conservation.
+  Progress: Authenticated live UI/API confirm MPR Lab seller 287367, account `slr_01kgtaq3a0qyht2skncvt4hkem`, with all onboarding steps completed. Created product `pro_01m7tvgx960ptsks35fjqcws1e` and one-time USD 5 external-tax price `pri_01m7tvjahkr1qcax59g9cn2e7j`. After action-time approval, created the dedicated API key (expires 2027-02-17), public client token and 12-event webhook `ntfset_01m7tw0kqx1ehna0eg98b6fj7q`. All three credentials are in the canonical private input; destination is inactive until deployment. The exact checkout subdomain needs review. F102 owns authenticated continuation; utils F105 is published as v0.20.0 and adopted through normal dependency resolution. Production config, manifest wiring, and public purchase disclosures are prepared. The operator selected unrestricted authenticated funding. Independent review has no remaining actionable findings; focused payment, browser, lint, lifecycle and Governor checks pass. Final application CI passed all 15 gates in 958 seconds with 100.0% Go coverage, 190 frontend and 19 authenticated browser cases; code content was unchanged during the run. F102, B342 and B343 are complete. No production rollout or real live charge has occurred.
+  Validation: Start with relevant public-entrypoint checks, complete independent review before financial-boundary changes, validate actual live checkout/fulfillment/replay/reconciliation/isolation/backup, and run required final CI at the selected checkpoint. Preserve source publication and production rollout gates.
+  Review follow-up: B344 through B351 passed final application CI. The tracked production configuration keeps checkout closed. The activation record requires verified signed platform delivery before the operator enables checkout.
+  Blocked: Application source delivery/publication and operator-owned production rollout remain pending. The exact checkout domain needs Paddle approval; afterward the payer must approve and complete a real charge, followed by signed fulfillment, replay, isolation, reconciliation and backup validation. The dedicated destination remains inactive until deployment.
+
+
+- [x] [F100] Qualify Gemini 4 Neon and Hydrogen through project-scoped Vertex.
+  Goal:
+  Offer Gemini 4 Neon and Hydrogen through customer-owned Google Cloud projects.
+  Requirements:
+  - Require a customer API key and an explicit Google global project URL.
+  - Use the native Vertex codec and synchronous route limits.
+  - Qualify each exact offering through an isolated proxy and tenant before source activation.
+  Deliverables:
+  The `vertex-project` provider, both exact offerings, public HTTP and browser coverage, and the qualification record in `docs/vertex-gemini.md`.
+  Validation:
+  Both models returned HTTP 404 through the projectless Express endpoint. The project-scoped run used the existing billed project and a disposable tenant. Connection verification and assignment passed. Both models passed all eight live cases, including reasoning, structured output, media, and measured usage. Both offerings are enabled in source. Focused catalog, protocol, browser, and tenant and runtime credential isolation checks passed. The first final CI run passed Go coverage at 100.0 percent and rejected a browser fixture that expected 19 providers. The corrected 20-provider assertion passed its focused browser check.
+  Resolution: The released `github.com/tyemirov/utils` v0.20.0 pin in `go.mod` and `go.sum` provides `billing.PaddleTransactionInput.CheckoutURL` and resolves the F102 build error. The full local CI receipt for the F100 and F102 implementation at `d512687d` checked all 15 gates in 958 seconds with 100.0% Go statement coverage. The recorded CI inputs match that revision except for the issue tracker and Paddle evidence prose. On November 21, the focused Paddle HTTP, project-scoped Gemini, provider catalog and installed Gateway tests passed. The newer combined GitHub run 44885580628 failed in `TestRootCommandRunsConfiguredProxyFromConfigFile` on the previous GPT-4.1 catalog-position assertion. The current F103 fixture uses GPT-6.2 Sol and passed the focused rerun. The combined source remains subject to F103 validation. The production public catalog still omits both Vertex Project routes.
+  Implementation files: `configs/providers.yml`, `internal/proxy/provider_types.go`, `internal/proxy/vertex_test.go`, `internal/proxy/vertex_live_test.go`, `cmd/cli/root_test.go`, `tests/capabilities_test.go`, `tests/e2e/management-ui.spec.js`, `tests/e2e/brand-icons.spec.js`, `site/assets/llm-proxy/js/brandIconManifest.js`, `docs/provider-model-icons.md`, and `docs/vertex-gemini.md`.
+
 - [-] [F099] (P1) Enforce operator-controlled qualification attempt budgets.
   Goal: Bound catalog-priced qualification work for one existing tenant and retain every paid attempt without creating customer billing resources.
   Requirements: Use an explicit operator policy and separate durable receipts. Reserve before each generation dispatch, including retries and continuations; settle complete usage and retain uncertain reservations. Isolate other tenants, explicitly attribute paid connection verification, freeze prices and policy identity, preserve state across restart or policy changes, and fail closed on missing initialized storage. Provide sanitized operator inspection and close only fully reconciled budgets. Keep credentials and content outside receipts.
@@ -4789,15 +4994,21 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
   Browser evidence: Chromium at viewport widths from 320 to 1440 pixels. All 165 frontend and 11 real management scenarios passed.
 
 
-- [ ] [F087] (P1) Configure and qualify the LLM Proxy Paddle sandbox.
+- [x] [F087] (P1) Configure and qualify the LLM Proxy Paddle sandbox.
+  Resolution:
+  - Authenticated API and dashboard checks confirmed the Marco Polo Research Lab sandbox account, supplier details, active client token, and dedicated product, USD 5 price, and notification destination.
+  - Saved and reloaded the LLM Proxy HTTPS default checkout link. A new unpaid application order opened actual Paddle Checkout for the correct USD 5 item and granted no funds.
+  - Actual funding, delayed confirmation, signature rejection, signed delivery, replay, partial and full refunds, isolation, two-order reconciliation, and restored financial backup passed. One 500-cent grant and two reversals leave zero funds and no unresolved payment events.
+  - B334 through B341 and I323 corrections passed focused checks, applicable independent review, and final full CI. Detailed evidence is in `docs/evidence/paddle-sandbox-2026-11-19.md`.
+  - Temporary runtimes and browser tabs are closed. The owned sandbox destination is paused; a continuing paid pilot requires durable hosting and the live launch checklist.
   Status:
   - On 2026-09-23, the operator moved sandbox setup and actual qualification to this separate follow-up issue.
   - This issue does not block F069 or F070 development completion.
   Evidence:
   - Read-only Paddle sandbox requests succeeded with the API key from `/Users/tyemirov/Development/PoodleScanner/configs/.env.ps`.
   - The file also contains sandbox client-token and webhook-secret inputs. Their values were not copied or disclosed.
-  - The account has active PoodleScanner, Hecate, and Crossword products. It has no active LLM Proxy product or USD 5 funding price.
-  - No listed notification destination targets LLM Proxy. The existing destinations belong to other application flows.
+  - The September 23 inspection found active PoodleScanner, Hecate, and Crossword products, with no active LLM Proxy product or USD 5 funding price.
+  - At that inspection, no listed notification destination targeted LLM Proxy; the destinations belonged to other application flows.
   - Hecate uses RevenueCat for browser Paddle commerce. F069 uses the existing direct Paddle approach from PoodleScanner.
   - The API checks did not establish the platform supplier or the canonical Paddle account identity.
   Goal:
@@ -4818,6 +5029,7 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
   - Retain the source revision, scenario results, processor references, and expected financial totals without credentials.
   - Run `make qualify-paddle-sandbox` and distinguish actual results from controlled protocol evidence.
   - Preserve the existing F069 and F070 controlled acceptance and CI requirements.
+  Final validation: Final local `make ci` passed all 15 gates in 799 seconds, with exact 100.0% Go statement coverage, 188 frontend browser cases, and all 13 authenticated browser cases.
 
 - [ ] [F086] (P1) Compare models on tenant tasks before a model change.
   Goal:

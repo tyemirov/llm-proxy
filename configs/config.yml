@@ -53,6 +53,19 @@ server:
   asset_store_path: /data/assets
   max_input_audio_bytes: 26214400
   upstream_rate_limits: []
+payments:
+  environment: production
+  checkout_enabled: false
+  checkout_url: https://llm-proxy.mprlab.com/app/
+  client_token: "${PADDLE_CLIENT_TOKEN}"
+  processor_account_id: slr_01kgtaq3a0qyht2skncvt4hkem
+  supplier_id: marco-polo-research-lab
+  api_key: "${PADDLE_API_KEY}"
+  webhook_secret: "${PADDLE_WEBHOOK_SECRET}"
+  offers:
+    - code: five
+      price_id: pri_01m7tvjahkr1qcax59g9cn2e7j
+      funding_cents: 500
 management:
   public_origin: "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
   ui_description: "${LLM_PROXY_MANAGEMENT_UI_DESCRIPTION}"

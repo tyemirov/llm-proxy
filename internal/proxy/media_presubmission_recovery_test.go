@@ -460,8 +460,10 @@ func TestPilotRecoveryRealCLI(t *testing.T) {
 	if err := yaml.Unmarshal(source, &document); err != nil {
 		t.Fatal(err)
 	}
+	document["payments"] = nil
 	document["management"] = map[string]any{"public_origin": "https://proxy.example", "ui_description": "Fixture", "ui_origins": []string{"https://proxy.example"}, "admin_emails": []string{}, "tauth_url": "https://tauth.example", "tauth_tenant_id": "fixture", "google_client_id": "fixture", "login_path": "/auth/login", "logout_path": "/auth/logout", "nonce_path": "/auth/nonce", "session_path": "/auth/session", "jwt_signing_key": "fixture-key", "jwt_issuer": "fixture", "session_cookie_name": "fixture", "database_path": f.config.Management.DatabasePath, "provider_key_encryption_key": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=", "management_api_origin": "https://proxy.example", "proxy_origin": "https://proxy.example"}
 	document["server"].(map[string]any)["asset_store_path"] = f.config.AssetStorePath
+	document["server"].(map[string]any)["qualification_budget"] = nil
 	config, err := yaml.Marshal(document)
 	if err != nil {
 		t.Fatal(err)

@@ -131,6 +131,13 @@ For hosted work, the journal keeps private provider resource identifiers for rec
 The proxy does not expose these provider identifiers.
 
 Every current text route uses one provider-neutral completion coordinator.
+An omitted `max_tokens` delegates sizing to the selected offering. If the catalog
+declares an output ceiling, the coordinator supplies it to the native codec.
+An explicit caller limit remains the validated initial allowance. If the output ceiling
+is unknown, omission preserves the upstream default; the Proxy invents no limit.
+The native context and output limits remain provider constraints. Caller output
+limits apply to individual responses, not aggregate workflow usage.
+
 The coordinator starts a new request only when the selected transport declares
 continuation actions. OpenAI Responses `status=incomplete` with
 `reason=max_output_tokens`, Chat Completions `finish_reason=length`, and

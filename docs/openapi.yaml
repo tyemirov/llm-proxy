@@ -2469,6 +2469,7 @@ paths:
     get:
       operationId: listFundingOffers
       summary: List server funding offers
+      description: Returns 503 while funding checkout is disabled.
       tags: [Management]
       security:
         - TAuthSession: []
@@ -2540,6 +2541,7 @@ paths:
         The account and creation key identify one order. A repeated key returns
         that order. A changed offer or processor identity returns 409.
         Order creation does not grant funds or confirm payment.
+        The service returns 503 while funding checkout is disabled.
       x-llm-proxy-required-request-content-type: application/json
       parameters:
         - $ref: '#/components/parameters/BillingAccountID'
@@ -5122,7 +5124,7 @@ components:
       name: max_tokens
       in: query
       required: false
-      description: Initial per-attempt output budget. A transport that declares continuation actions reuses this budget for a missing suffix.
+      description: Optional output allowance. Omission selects the catalog output ceiling when known and otherwise preserves the upstream default. Explicit values must fit the selected offering.
       schema:
         type: integer
         minimum: 1
@@ -11037,7 +11039,7 @@ components:
         max_tokens:
           type: integer
           minimum: 1
-          description: Initial output budget. A transport that declares continuation actions reuses it for missing-suffix attempts.
+          description: Optional output allowance. Omission selects the catalog output ceiling when known and otherwise preserves the upstream default. Explicit values must fit the selected offering.
         reasoning_effort:
           type: string
           minLength: 1
@@ -11081,7 +11083,7 @@ components:
         max_tokens:
           type: integer
           minimum: 1
-          description: Initial output budget. A transport that declares continuation actions reuses it for missing-suffix attempts.
+          description: Optional output allowance. Omission selects the catalog output ceiling when known and otherwise preserves the upstream default. Explicit values must fit the selected offering.
         reasoning_effort:
           type: string
           minLength: 1

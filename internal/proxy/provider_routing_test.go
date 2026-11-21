@@ -1553,8 +1553,9 @@ func TestProviderRoutingSupportsGeminiInteractionsWithBackgroundPolling(t *testi
 	if capturedPayload["model"] != currentGeminiModel || capturedPayload["background"] != true || capturedPayload["store"] != true {
 		t.Fatalf("Gemini Interactions create payload=%v", capturedPayload)
 	}
-	if _, exists := capturedPayload["generation_config"]; exists {
-		t.Fatalf("generation_config must be omitted by default: %v", capturedPayload["generation_config"])
+	generationConfig, generationConfigOK := capturedPayload["generation_config"].(map[string]any)
+	if !generationConfigOK || len(generationConfig) != 1 || generationConfig["max_output_tokens"] != float64(65536) {
+		t.Fatalf("default generation_config=%v want only max_output_tokens=65536", capturedPayload["generation_config"])
 	}
 	if capturedPayload["system_instruction"] != "system text" {
 		t.Fatalf("system_instruction=%v", capturedPayload["system_instruction"])

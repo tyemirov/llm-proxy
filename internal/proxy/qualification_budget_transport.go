@@ -194,23 +194,18 @@ func (budget *qualificationBudget) prepare(request *http.Request, identity quali
 		outputField = "max_tokens"
 	case CatalogProtocolGeminiInteractions:
 		outputField = "max_output_tokens"
-		if configuration, ok := payload["generation_config"].(map[string]any); ok {
-			target = configuration
-		} else {
-			target = map[string]any{}
-			payload["generation_config"] = target
+		configuration, ok := payload["generation_config"].(map[string]any)
+		if !ok {
+			return nil, offering, fmt.Errorf("%w: serialized generation configuration required", errQualificationBudget)
 		}
+		target = configuration
 	default:
 		return nil, offering, fmt.Errorf("%w: unsupported qualification codec", errQualificationBudget)
 	}
-	if raw, exists := target[outputField]; exists {
-		number, ok := raw.(json.Number)
-		value, err := number.Int64()
-		if !ok || err != nil || value < 1 || value > int64(offering.MaxOutput) {
-			return nil, offering, fmt.Errorf("%w: output cap exceeded", errQualificationBudget)
-		}
-	} else {
-		target[outputField] = offering.MaxOutput
+	number, ok := target[outputField].(json.Number)
+	value, err := number.Int64()
+	if !ok || err != nil || value < 1 || value > int64(offering.MaxOutput) {
+		return nil, offering, fmt.Errorf("%w: explicit wire output allowance required within private maximum", errQualificationBudget)
 	}
 	encoded, _ := json.Marshal(payload)
 	prepared := request.Clone(request.Context())

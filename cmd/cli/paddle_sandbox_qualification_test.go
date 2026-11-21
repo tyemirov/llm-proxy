@@ -162,6 +162,7 @@ func TestHostedPaymentsSandboxQualificationRejectsInvalidInputs(t *testing.T) {
 	configurationText := strings.ReplaceAll(completeManagementYAML(), "/tmp/llm-proxy-test.sqlite", filepath.Join(directory, "sandbox.sqlite")) + `
 payments:
   environment: sandbox
+  checkout_url: https://checkout.example/app/
   client_token: test_fixture
   processor_account_id: processor-fixture
   supplier_id: supplier-fixture
@@ -185,7 +186,7 @@ payments:
 		name, config, expected, message string
 	}{
 		{"production", strings.NewReplacer("environment: sandbox", "environment: production", "test_fixture", "live_fixture").Replace(configurationText), missingOrder, "requires sandbox payments"},
-		{"origin override", strings.Replace(configurationText, "payments:", "payments:\n  api_base_url: https://sandbox-api.paddle.com", 1), missingOrder, "no API origin override"},
+		{"origin override", strings.Replace(configurationText, "payments:", "payments:\n  api_base_url: http://127.0.0.1:18080", 1), missingOrder, "no API origin override"},
 		{"empty orders", configurationText, `{"orders":[]}`, "nonempty orders"},
 		{"unknown field", configurationText, `{"orders":[],"passed":true}`, "unknown field"},
 		{"trailing object", configurationText, missingOrder + `{}`, "one bounded JSON object"},

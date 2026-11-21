@@ -3,6 +3,8 @@
 import { readFile, writeFile } from "node:fs/promises";
 import {
   assertMPRUIAuthAssets,
+  assertPaymentContinuationCapture,
+  renderPaymentContinuationCapture,
   renderLandingHeader,
   renderPublicFooter,
 } from "./public_site_shell.mjs";
@@ -11,6 +13,8 @@ const SHELL_TARGETS = Object.freeze([
   Object.freeze({ path: "site/index.html", header: true, footer: true }),
   Object.freeze({ path: "site/app/index.html", header: false, footer: true }),
 ]);
+const CAPTURE_START = "    <!-- llm-proxy-payment-capture:start -->";
+const CAPTURE_END = "    <!-- llm-proxy-payment-capture:end -->";
 const CHECK_ARGUMENT = "--check";
 const HEADER_START = "    <!-- llm-proxy-public-header:start -->";
 const HEADER_END = "    <!-- llm-proxy-public-header:end -->";
@@ -24,7 +28,7 @@ if (unexpectedArguments.length > 0) {
 
 for (const target of SHELL_TARGETS) {
   const source = await readFile(target.path, "utf8");
-  let rendered = source;
+  let rendered = replaceFragment(source, CAPTURE_START, CAPTURE_END, renderPaymentContinuationCapture());
   if (target.header) {
     rendered = replaceFragment(rendered, HEADER_START, HEADER_END, renderLandingHeader());
   }
@@ -32,6 +36,7 @@ for (const target of SHELL_TARGETS) {
     rendered = replaceFragment(rendered, FOOTER_START, FOOTER_END, renderPublicFooter());
   }
   assertMPRUIAuthAssets(rendered, target.path);
+  assertPaymentContinuationCapture(rendered, target.path);
 
   if (process.argv.includes(CHECK_ARGUMENT)) {
     if (source !== rendered) {

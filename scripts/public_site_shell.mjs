@@ -2,6 +2,9 @@
 
 import {
   APPLICATION_PATH,
+  PAYMENT_CONTINUATION_STORAGE_KEY,
+  FUNDING_ORDER_QUERY_PARAMETER,
+  PADDLE_TRANSACTION_QUERY_PARAMETER,
   LANDING_AUTHENTICATED_REDIRECT_ATTRIBUTE,
   PUBLIC_THEME,
 } from "../site/assets/llm-proxy/js/constants.js";
@@ -251,4 +254,35 @@ export function renderPublicShellHeadAssets() {
       type="application/json"
       data-mpr-ui-bundle-src="${MPR_UI_BUNDLE_URL}"
     ></script>`;
+}
+
+/** One synchronous capture, emitted before external scripts in each application entry. */
+export function renderPaymentContinuationCapture() {
+  return `    <script id="llm-proxy-payment-continuation">
+      // Strip payment identifiers before any external script can read the URL.
+      (() => {
+        const url = new URL(location.href);
+        const orderParameter = ${JSON.stringify(FUNDING_ORDER_QUERY_PARAMETER)};
+        const transactionParameter = ${JSON.stringify(PADDLE_TRANSACTION_QUERY_PARAMETER)};
+        const orders = url.searchParams.getAll(orderParameter);
+        const transactions = url.searchParams.getAll(transactionParameter);
+        if (!orders.length && !transactions.length) return;
+        url.searchParams.delete(orderParameter);
+        url.searchParams.delete(transactionParameter);
+        history.replaceState(history.state, '', url.href);
+        const continuation = {
+          order_id: orders.length === 1 ? orders[0] : null,
+          transaction_id: transactions.length === 1 ? transactions[0] : null,
+        };
+        sessionStorage.setItem(${JSON.stringify(PAYMENT_CONTINUATION_STORAGE_KEY)}, JSON.stringify(continuation));
+      })();
+    </script>`;
+}
+
+/** @param {string} document @param {string} context */
+export function assertPaymentContinuationCapture(document, context) {
+  const capture = renderPaymentContinuationCapture().trimStart();
+  if (occurrenceCount(document, capture) !== 1 || document.indexOf(capture) !== document.search(/<script\b/u)) {
+    throw new Error(`public_document_payment_capture_invalid: context=${context}`);
+  }
 }

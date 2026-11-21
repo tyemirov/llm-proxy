@@ -240,7 +240,8 @@ type MessagesRequestInput struct {
 	Messages          []MessageInput
 	Model             string
 	// WebSearch is serialized as the native JSON boolean web_search field.
-	WebSearch       bool
+	WebSearch bool
+	// MaxTokens optionally limits one provider response. Omission delegates sizing to Proxy.
 	MaxTokens       *int
 	ReasoningEffort *string
 	// RequestTimeoutSeconds optionally selects the proxy-owned wall-clock work budget.

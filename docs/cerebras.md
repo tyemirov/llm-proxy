@@ -12,15 +12,23 @@ The canonical model is `qwen3.8-27b`; Cerebras receives `qwen-3.8-27b`.
 The canonical model and Cerebras provider are enabled in the source catalog
 after the retained native-body qualification. Publication and existing-tenant
 activation remain separate operations.
-An isolated qualification catalog enables the Cerebras provider and exact model,
-assigns its text default, and disables the unqualified Alibaba offering for this model.
+Qualification selects the exact provider/model pair and keeps other provider
+offerings independent.
 This is a different model from Alibaba's hosted `qwen3.8-flash`.
 
 Requests use `https://api.cerebras.ai/v1/chat/completions`.
 `max_tokens` maps to `max_completion_tokens`, including reasoning and visible output.
-The portable catalog limits are 65,536 context tokens and 32,768 output tokens.
-Cerebras documents 131,072 context and 40,960 output tokens for paid tiers and trial
-customers; these account-dependent limits are outside the initial offering.
+The shared offering accepts keys without tier classification. It declares the
+Free Trial limits of 65,536 context tokens and 32,768 output tokens. When the
+caller omits `max_tokens`, the proxy sends 32,768 as `max_completion_tokens`.
+Cerebras includes that allowance in its quota check before generation. Callers
+can set a smaller cap when required by their project quota.
+
+Cerebras documents 131,072 context tokens and 40,960 output tokens for eligible
+higher tiers. The user identified the qualification account as Pay-As-You-Go.
+That account accepted a requested 65,536-token parameter during qualification.
+One `high` run stopped at 40,960 completion tokens with reasoning only, which
+established no capacity beyond the documented paid ceiling.
 
 The accepted reasoning efforts are `none`, `low`, `medium`, and `high`, transmitted
 unchanged. Cerebras maps `high` to Qwen-native `xhigh`; effort labels do not establish
@@ -55,9 +63,8 @@ Connection verification uses authenticated `GET /v1/models` through the shared
 read-only JSON resource transport. It does not generate model output.
 Before qualification, confirm the key's account, organization, and project when
 the console exposes them. Record observed limits separately from the advertised
-tier. The new benchmark account exposes a Default Project and higher context
-limits than the portable offering; these observations do not establish its billing
-plan or credit balance.
+tier. The user identified the benchmark account as Pay-As-You-Go. Observed project
+and model metadata remain separate from its credit balance and billing records.
 
 ## Prices and usage
 
@@ -70,6 +77,17 @@ Count rejected generations, evaluators, repairs, and continuation attempts when
 comparing total Story cost.
 
 ## Qualification
+
+On November 18, 2026, one native generation through a disposable real Proxy and
+the released Go SDK v1.12.14 accepted `max_completion_tokens: 65536` with reasoning
+effort `medium`. The exact upstream model was `qwen-3.8-27b`; the 403-byte request
+included the existing strict JSON Schema contract. Native HTTP 200 returned
+`finish_reason: stop` and the required `{"ok":"READY"}` result. Usage was 151 input
+tokens and 48 completion tokens, including 41 reasoning tokens, totaling 199.
+The catalog list-price cost was USD 0.00022101. The SDK did not expose usage for
+this response; the native observation retains those measured counts. The check
+made exactly one SDK generation POST and one native generation, with no retry,
+reconciliation request, Story call, or deployed-tenant activation.
 
 Local acceptance uses the real HTTP service, the released official Go client, and a
 local provider protocol implementation. It covers capability discovery, unchanged
@@ -103,6 +121,7 @@ Source catalog enablement, publication, and production routing remain separate.
 ## Sources
 
 - [Model limits and prices](https://inference-docs.cerebras.ai/models/qwen-3.8-27b)
+- [Token quota checks](https://inference-docs.cerebras.ai/support/rate-limits.md)
 - [Reasoning controls](https://inference-docs.cerebras.ai/capabilities/reasoning)
 - [Structured output subset](https://inference-docs.cerebras.ai/capabilities/structured-outputs)
 - [Chat Completions API](https://inference-docs.cerebras.ai/api-reference/chat-completions)

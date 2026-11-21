@@ -63,6 +63,8 @@ management:
   proxy_origin: "https://llm-proxy-api.example"
 payments:
   environment: sandbox
+  checkout_enabled: true
+  checkout_url: https://checkout.example/app/
   client_token: "${PAYMENT_TEST_CLIENT_TOKEN}"
   processor_account_id: processor-fixture
   supplier_id: supplier-fixture
@@ -79,6 +81,8 @@ P411_MANAGEMENT_DATABASE_PATH=/var/lib/llm-proxy/management.sqlite
 P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 OPENAI_API_KEY=sk-openai-catalog-binding
 DASHSCOPE_BASE_URL=https://workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1
+VERTEX_PROJECT_API_KEY=fixture-project-key
+VERTEX_PROJECT_BASE_URL=https://aiplatform.googleapis.com/v1/projects/customer-fixture/locations/global
 PAYMENT_TEST_CLIENT_TOKEN=test_browserfixture
 PAYMENT_TEST_API_KEY=paddle-api-fixture
 PAYMENT_TEST_WEBHOOK_SECRET=paddle-webhook-fixture
@@ -94,7 +98,7 @@ PAYMENT_TEST_WEBHOOK_SECRET=paddle-webhook-fixture
 	if executeError != nil {
 		t.Fatalf("ExecuteC error: %v", executeError)
 	}
-	if capturedConfiguration.Payments == nil || capturedConfiguration.Payments.Environment != "sandbox" || capturedConfiguration.Payments.ClientToken != "test_browserfixture" || capturedConfiguration.Payments.APIKey != "paddle-api-fixture" || capturedConfiguration.Payments.WebhookSecret != "paddle-webhook-fixture" || len(capturedConfiguration.Payments.Offers) != 1 || capturedConfiguration.Payments.Offers[0].FundingCents != 500 {
+	if capturedConfiguration.Payments == nil || !capturedConfiguration.Payments.CheckoutEnabled || capturedConfiguration.Payments.Environment != "sandbox" || capturedConfiguration.Payments.CheckoutURL != "https://checkout.example/app/" || capturedConfiguration.Payments.ClientToken != "test_browserfixture" || capturedConfiguration.Payments.APIKey != "paddle-api-fixture" || capturedConfiguration.Payments.WebhookSecret != "paddle-webhook-fixture" || len(capturedConfiguration.Payments.Offers) != 1 || capturedConfiguration.Payments.Offers[0].FundingCents != 500 {
 		t.Fatal("CLI did not retain payment configuration")
 	}
 	if capturedConfiguration.ProviderCatalog == nil || capturedConfiguration.ProviderCatalog.SchemaVersion() != proxy.ProviderCatalogSchemaVersion {
@@ -105,6 +109,9 @@ PAYMENT_TEST_WEBHOOK_SECRET=paddle-webhook-fixture
 	}
 	if capturedConfiguration.ProviderConnectionValues[proxy.ProviderNameDashScope]["base_url"] != "https://workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1" {
 		t.Fatalf("dashscope environment binding=%q", capturedConfiguration.ProviderConnectionValues[proxy.ProviderNameDashScope]["base_url"])
+	}
+	if _, configured := capturedConfiguration.ProviderConnectionValues["vertex-project"]; configured {
+		t.Fatal("project-scoped Vertex loaded shared runtime credentials from the qualification environment")
 	}
 	if capturedConfiguration.Port != 18080 {
 		t.Fatalf("port=%d", capturedConfiguration.Port)
@@ -404,6 +411,9 @@ LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY
 LLM_PROXY_MANAGEMENT_API_ORIGIN=https://llm-proxy-api.mprlab.com
 LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
 LLM_PROXY_QUALIFICATION_BUDGET=null
+PADDLE_API_KEY=packaged-paddle-api-fixture
+PADDLE_CLIENT_TOKEN=live_PackagedConfigFixture
+PADDLE_WEBHOOK_SECRET=packaged-paddle-webhook-fixture
 `)
 
 	var capturedConfiguration proxy.Configuration
@@ -444,6 +454,17 @@ LLM_PROXY_QUALIFICATION_BUDGET=null
 	}
 	if capturedConfiguration.Management.ManagementAPIOrigin != "https://llm-proxy-api.mprlab.com" || capturedConfiguration.Management.ProxyOrigin != "https://llm-proxy-api.mprlab.com" {
 		t.Fatalf("management api origins=%q %q", capturedConfiguration.Management.ManagementAPIOrigin, capturedConfiguration.Management.ProxyOrigin)
+	}
+	if capturedConfiguration.Payments == nil ||
+		capturedConfiguration.Payments.Environment != "production" ||
+		capturedConfiguration.Payments.CheckoutEnabled ||
+		capturedConfiguration.Payments.CheckoutURL != "https://llm-proxy.mprlab.com/app/" ||
+		capturedConfiguration.Payments.ClientToken != "live_PackagedConfigFixture" ||
+		capturedConfiguration.Payments.APIKey != "packaged-paddle-api-fixture" ||
+		capturedConfiguration.Payments.WebhookSecret != "packaged-paddle-webhook-fixture" ||
+		len(capturedConfiguration.Payments.Offers) != 1 ||
+		capturedConfiguration.Payments.Offers[0].FundingCents != 500 {
+		t.Fatal("packaged production payment configuration did not resolve the selected inputs")
 	}
 	metaOfferings := configuredProviderOfferings(capturedConfiguration.ModelCatalog, proxy.ProviderNameMeta)
 	metaDefault, metaDefaultFound := configuredDefaultOffering(capturedConfiguration.ModelCatalog, proxy.ProviderNameMeta, proxy.ModelOperationText)
@@ -547,7 +568,13 @@ func TestRootCommandPrintsCatalogDerivedLiveDiscovery(t *testing.T) {
 	dashScopeFound := false
 	metaFound := false
 	cerebrasFound := false
+	vertexProjectFound := false
 	for _, provider := range discovery.Providers {
+		if provider.ID == "vertex-project" {
+			vertexProjectFound = len(provider.Fields) == 2 && provider.Fields[0].ID == "api_key" && provider.Fields[0].Required &&
+				provider.Fields[0].Environment == "" && provider.Fields[0].Default == "" &&
+				provider.Fields[1].ID == "project_base_url" && provider.Fields[1].Required && provider.Fields[1].Environment == "" && provider.Fields[1].Default == ""
+		}
 		if provider.ID == "cerebras" {
 			cerebrasFound = len(provider.Fields) == 1 && provider.Fields[0].Environment == "CEREBRAS_API_KEY"
 		}
@@ -565,8 +592,11 @@ func TestRootCommandPrintsCatalogDerivedLiveDiscovery(t *testing.T) {
 	if !metaFound {
 		t.Fatal("Meta live discovery must require MUSE_API_KEY")
 	}
-	if discovery.SchemaVersion != proxy.ProviderCatalogSchemaVersion || len(discovery.Providers) != 19 {
+	if discovery.SchemaVersion != proxy.ProviderCatalogSchemaVersion || len(discovery.Providers) != 20 {
 		t.Fatalf("provider discovery=%+v", discovery)
+	}
+	if !vertexProjectFound {
+		t.Fatal("project-scoped Vertex discovery must require a key and project URL")
 	}
 	if !dashScopeFound || !baiduFound || !cerebrasFound {
 		t.Fatalf("DashScope discovery=%+v", discovery.Providers)

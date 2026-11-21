@@ -81,7 +81,7 @@ services:
       retries: 30
       start_period: 30s
     volumes:
-      - ./configs/config.yml:/app/configs/config.yml:ro
+      - ./configs/config.local.yml:/app/configs/config.yml:ro
       - ./configs/providers.yml:/app/configs/providers.yml:ro
       - llm_proxy_local_data:/data
 
