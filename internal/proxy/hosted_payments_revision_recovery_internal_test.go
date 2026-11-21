@@ -27,6 +27,7 @@ func TestHostedPaymentsConflictingRevisionsPreserveRefundHold(t *testing.T) {
 				fixture.processor.transactions[0]["updated_at"] = "2026-09-23T12:01:00Z"
 			case "conflicting-transaction":
 				fixture.processor.transactions[0]["updated_at"] = "2026-09-23T12:02:00Z"
+				fixture.processor.transactions[0]["billed_at"] = "2026-09-23T11:59:58Z"
 			case "older-adjustment":
 				next["updated_at"] = "2026-09-23T12:01:00Z"
 			case "conflicting-adjustment":
@@ -50,6 +51,9 @@ func TestHostedPaymentsConflictingRevisionsPreserveRefundHold(t *testing.T) {
 			if err := fixture.database.database.Order("revision").Find(&revisions).Error; err != nil || len(revisions) != 2 {
 				t.Fatalf("conflicting adjustment retained a financial revision: count=%d error=%v", len(revisions), err)
 			}
+			fixture.processor.mutex.Lock()
+			fixture.processor.transactions[0]["billed_at"] = "2026-09-23T11:59:59Z"
+			fixture.processor.mutex.Unlock()
 			recovery.next = paymentAdjustmentFixture(fixture.processor, "approved", 200, 3)
 			recovery.recover(t)
 			var after []managedPaymentAdjustmentRevisionRecord

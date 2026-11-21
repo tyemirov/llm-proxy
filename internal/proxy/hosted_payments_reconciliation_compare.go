@@ -72,7 +72,9 @@ func comparePaymentEvidence(tx *gorm.DB, order managedFundingOrderRecord, checko
 	if err := readPaymentLedgerEvidence(tx, &evidence); err != nil {
 		return report, "", err
 	}
-	comparePaymentProcessor(&report, evidence)
+	if err := comparePaymentProcessor(&report, evidence); err != nil {
+		return report, "", err
+	}
 	comparePaymentLedger(&report, evidence)
 	encoded, err := json.Marshal(evidence)
 	if err != nil {
@@ -121,11 +123,11 @@ func readPaymentLedgerEvidence(tx *gorm.DB, evidence *paymentReconciliationEvide
 	return nil
 }
 
-func comparePaymentProcessor(report *PaymentReconciliationItem, evidence paymentReconciliationEvidence) {
+func comparePaymentProcessor(report *PaymentReconciliationItem, evidence paymentReconciliationEvidence) error {
 	transaction := evidence.Transaction
 	if transaction == nil {
 		report.difference("timing", "checkout_missing", "retained processor checkout", "absent")
-		return
+		return nil
 	}
 	order, checkout := evidence.Order, evidence.Checkout
 	if transaction.CurrencyCode != order.Currency {
@@ -137,13 +139,19 @@ func comparePaymentProcessor(report *PaymentReconciliationItem, evidence payment
 	updated, err := validatePaymentState(*transaction, order, checkout)
 	if err != nil {
 		report.difference("identity", "transaction_mismatch", "owned transaction and current state", "invalid")
-		return
+		return nil
 	}
 	if evidence.LatestObservation != nil {
-		encoded, _ := json.Marshal(transaction)
-		if updated.Before(evidence.LatestObservation.ProcessorUpdatedAt) || (updated.Equal(evidence.LatestObservation.ProcessorUpdatedAt) && sha256Hex(string(encoded)) != evidence.LatestObservation.EvidenceDigest) {
+		matches := true
+		if updated.Equal(evidence.LatestObservation.ProcessorUpdatedAt) {
+			matches, err = evidence.LatestObservation.matchesTransactionRevision(*transaction)
+			if err != nil {
+				return err
+			}
+		}
+		if updated.Before(evidence.LatestObservation.ProcessorUpdatedAt) || !matches {
 			report.difference("timing", "processor_snapshot_conflict", "current consistent processor snapshot", "older or conflicting")
-			return
+			return nil
 		}
 	}
 	if transaction.Status != paymentTransactionStatusCompleted {
@@ -157,7 +165,7 @@ func comparePaymentProcessor(report *PaymentReconciliationItem, evidence payment
 		if evidence.Receipt != nil {
 			report.difference("timing", "receipt_without_completion", paymentTransactionStatusCompleted, transaction.Status)
 		}
-		return
+		return nil
 	}
 	if evidence.Receipt == nil {
 		report.difference("timing", "receipt_missing", "verified receipt", "absent")
@@ -173,7 +181,7 @@ func comparePaymentProcessor(report *PaymentReconciliationItem, evidence payment
 	payment, err := completedPaymentEvidence(*transaction, order, checkout)
 	if err != nil {
 		report.difference("amount", "completed_evidence_invalid", "verified completed payment", "invalid")
-		return
+		return nil
 	}
 	if evidence.Receipt != nil && evidence.Receipt.EvidenceDigest != payment.digest {
 		report.difference("amount", "receipt_evidence_changed", evidence.Receipt.EvidenceDigest, payment.digest)
@@ -181,7 +189,7 @@ func comparePaymentProcessor(report *PaymentReconciliationItem, evidence payment
 	verified, err := verifyPaymentAdjustments(payment, order, evidence.Adjustments)
 	if err != nil {
 		report.difference("adjustment", "adjustment_evidence_invalid", "consistent adjustment totals", "invalid")
-		return
+		return nil
 	}
 	expectedState := fundingOrderPaid
 	if verified.disputed {
@@ -196,7 +204,14 @@ func comparePaymentProcessor(report *PaymentReconciliationItem, evidence payment
 	}
 	if evidence.Projection == nil {
 		report.difference("adjustment", "adjustment_projection_missing", "retained adjustment state", "absent")
-		return
+		return nil
+	}
+	retained, err := evidence.Projection.decodedEvidence()
+	if err != nil {
+		return err
+	}
+	if !paymentAdjustmentRecordsFollow(retained.Adjustments, verified.evidence.Adjustments) {
+		report.difference("adjustment", "adjustment_history_conflict", "current consistent adjustment history", "missing, older, or conflicting")
 	}
 	if evidence.Projection.ReversedCents != verified.reversed {
 		report.difference("adjustment", "reversed_credit", strconv.FormatInt(verified.reversed, 10), strconv.FormatInt(evidence.Projection.ReversedCents, 10))
@@ -204,6 +219,7 @@ func comparePaymentProcessor(report *PaymentReconciliationItem, evidence payment
 	if evidence.Projection.PendingCents != verified.pending {
 		report.difference("adjustment", "pending_refund", strconv.FormatInt(verified.pending, 10), strconv.FormatInt(evidence.Projection.PendingCents, 10))
 	}
+	return nil
 }
 
 func optionalPaymentAmount(value *string) string {

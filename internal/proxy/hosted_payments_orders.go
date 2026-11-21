@@ -214,7 +214,7 @@ func (service *managementService) fundingOffersHandler() gin.HandlerFunc {
 			writeFundingError(ctx, errFundingInvalid)
 			return
 		}
-		if service.funding == nil {
+		if service.funding == nil || service.paymentClientToken == "" {
 			writeFundingError(ctx, errFundingUnavailable)
 			return
 		}
@@ -245,7 +245,7 @@ func (service *managementService) createFundingOrderHandler() gin.HandlerFunc {
 			writeFundingError(ctx, errFundingInvalid)
 			return
 		}
-		if service.funding == nil {
+		if service.funding == nil || service.paymentClientToken == "" {
 			writeFundingError(ctx, errFundingUnavailable)
 			return
 		}

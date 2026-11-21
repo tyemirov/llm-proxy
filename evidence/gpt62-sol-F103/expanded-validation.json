@@ -1,0 +1,91 @@
+{
+  "issue": "F103",
+  "state": "expanded_prepared_local",
+  "created_at": "2026-11-21T08:34:46.011225+00:00",
+  "new_exact_models": [
+    "gpt-6-sol",
+    "gpt-6.1-sol",
+    "gpt-6.1-terra",
+    "gpt-6.2-astra",
+    "gpt-6.2-sol"
+  ],
+  "audited_existing_models": [
+    "gpt-6-astra",
+    "gpt-6-luna"
+  ],
+  "scope": "Current general-purpose OpenAI text/image models through GPT-6.2; existing GPT-5.6 entries retained.",
+  "files": {
+    "configs/providers.yml": {
+      "before_sha256": "6dbcd9769117219e6948bc17f3202d789605399c053c250854741e8b457bc7cb",
+      "after_sha256": "1a5b9e84fe0962b6dc86cc9c28d93b84b567482c10d7371d52a6c699a5cde63f"
+    },
+    "internal/proxy/management_test.go": {
+      "before_sha256": "5e7569174281f6ea4b40a0fe03f611924cb9f197da7cf1afd249fcc3f0dbb9e2",
+      "after_sha256": "beb238646fd32b086e547a3044e06f9bdce6df2d04a7f3515943c4665de9c47d"
+    },
+    "tests/capabilities_test.go": {
+      "before_sha256": "b2b887a8af7dfca73d748658e9fd3e54c4ee9695e1f634ab9f2d30b631525400",
+      "after_sha256": "3113791cdfdef770781a20dc7cc237f78dc8335ca40dfede991fa71284beda52"
+    },
+    ".mprlab/ISSUES.md": {
+      "before_sha256": "1553e2225717f8cae707952538215c3021f7382d8bbf2c6c707af7b6122b55b4",
+      "after_sha256": "ce5be04a8701efdd307b54c2a456d0b3787d2219fdb3fedf9620695335051c32"
+    },
+    "docs/provider-catalog.md": {
+      "before_sha256": "d4516699862211c4c97b3597c2360f001a90ec74f23dfff62eaf36a68471d462",
+      "after_sha256": "1ffe4570f335c42fe59b2187b1c042808ff352d55312eb524c7895cc2f24a2d8"
+    },
+    "internal/proxy/gpt62_sol_catalog_test.go": {
+      "before_sha256": null,
+      "after_sha256": "9a4e8cc990ea237942373834638f1115f655735daa0c58c724c281f23eaa3ad6"
+    },
+    "docs/gpt62-sol.md": {
+      "before_sha256": null,
+      "after_sha256": "7bf9544f6cab4c8535580c435d30e467e8a8d83fd90c414ec861ed79a51552ba"
+    }
+  },
+  "patch_sha256": "d3bc780054e2054f51b57b03783096b7be9b17d88b974c9d381a66c28d4fafe7",
+  "prior_preparation": {
+    "prepared_patch_sha256": "6811ff5853677e21fe69cab95ce81784fde776cf434dbf050495f36f92dd8743",
+    "validation_json_sha256": "331bd157f153c864bf1c893f1ce9b142186c9ac956bf58aad91aa0f831ff5865",
+    "unchanged": true
+  },
+  "tests": {
+    "failure_first": "expanded-red.log: public discovery and native HTTP lack four newly requested exact routes",
+    "focused": "make test-go-focused TEST_PATTERN='^Test(OpenAIGPT6|ManagementProfileListsCurrentCatalogModels)' passed",
+    "catalogue": "make test-provider-catalog passed",
+    "coverage": "Seven exact models; every documented effort; public/authenticated discovery; strict schema with image; token headers; invalid effort/output rejection; 272000/272001 short/long input/output/cache-read pricing.",
+    "full_ci": "Pending primary final checkpoint; not run by worker."
+  },
+  "checks": {
+    "unrelated_catalogue_bytes_unchanged": true,
+    "expanded_patch_reverse_check_matches_original_pre_F103_dirty_baseline": true,
+    "changed_lines_whitespace_pass": true,
+    "saved_defaults_unchanged": true
+  },
+  "model_evidence": {
+    "gpt-6-astra": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+    "gpt-6-sol": "https://developers.openai.com/api/docs/models/gpt-6-sol",
+    "gpt-6-luna": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+    "gpt-6.1-sol": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+    "gpt-6.1-terra": "https://developers.openai.com/api/docs/models/gpt-6.1-terra",
+    "gpt-6.2-astra": "https://developers.openai.com/api/docs/models/gpt-6.2-astra",
+    "gpt-6.2-sol": "https://developers.openai.com/api/docs/models/gpt-6.2-sol"
+  },
+  "limits": [
+    "Local provider protocol tests establish proxy behavior, not upstream account access.",
+    "Separate max-input limits omitted for new6Sol/6.1Sol/6.1Terra because current pages do not publish them.",
+    "Existing6Astra922000input cap retained as conservative proxy cap.",
+    "New route cache-write rates unavailable; current schema lacks retention selection.",
+    "Prior prepared.patch and validation.json preserved; unrelated dirty checkout excluded from expanded patch.",
+    "Primary owns independent final review, final CI and curated release/publish/deploy."
+  ],
+  "operations": {
+    "credentials_read": false,
+    "provider_requests": 0,
+    "publication": false,
+    "deployment": false,
+    "worktrees": false
+  },
+  "scratch_cleanup": "owned _scratch/F103-expanded-models removed; absence verified"
+}

@@ -2,6 +2,24 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
+    <script id="llm-proxy-payment-continuation">
+      // Strip payment identifiers before any external script can read the URL.
+      (() => {
+        const url = new URL(location.href);
+        const orderParameter = 'funding_order_id';
+        const transactionParameter = '_ptxn';
+        const orders = url.searchParams.getAll(orderParameter);
+        const transactions = url.searchParams.getAll(transactionParameter);
+        if (!orders.length && !transactions.length) return;
+        url.searchParams.delete(orderParameter);
+        url.searchParams.delete(transactionParameter);
+        history.replaceState(history.state, '', url.href);
+        const valid = orders.length === 1 && transactions.length === 1 &&
+          /^funding-[a-f0-9]{32}$/.test(orders[0]) && /^txn_[a-z0-9]{26}$/.test(transactions[0]);
+        const continuation = valid ? {order_id: orders[0], transaction_id: transactions[0]} : {invalid: true};
+        sessionStorage.setItem('llm-proxy:payment-continuation', JSON.stringify(continuation));
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>LLM Proxy</title>
     <meta name="description" content="Private LLM Proxy app for provider credentials, client access, routing defaults, and usage visibility.">
@@ -20,7 +38,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/brand-icons.css">
-    <script type="module" src="/assets/llm-proxy/js/brandIconElement.js?v=20261117b333"></script>
+    <script type="module" src="/assets/llm-proxy/js/brandIconElement.js?v=20261119paymentfix"></script>
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdn.jsdelivr.net/npm/js-yaml@5.4.1/dist/browser/js-yaml.umd.min.js"></script>
@@ -30,8 +48,8 @@
       type="application/json"
       data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
     ></script>
-    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20261117b333"></script>
-    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20261117b333"></script>
+    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20261119paymentfix"></script>
+    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20261119paymentfix"></script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
   </head>
   <body x-data="llmProxyManagementApplication" x-init="init()">

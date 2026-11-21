@@ -33,6 +33,7 @@ export async function startPaddleProtocolFixture() {
         const chunks=[];for await(const chunk of request)chunks.push(chunk);
         const input=JSON.parse(Buffer.concat(chunks).toString());
         if(![...customers.values()].includes(input.customer_id) || input.items.length!==1 || input.items[0].price_id!==priceID || input.items[0].quantity!==1 || !input.custom_data.funding_order_id || !input.custom_data.billing_account_id)throw new Error('Unbound transaction');
+        if(input.checkout?.url!==`https://checkout.example/app/?funding_order_id=${input.custom_data.funding_order_id}`)throw new Error('Missing application-owned checkout URL');
         const transaction={id:`txn_${String(transactions.length+1).padStart(26,'0')}`,status:'ready',currency_code:'USD',collection_mode:'automatic',customer_id:input.customer_id,custom_data:input.custom_data,items:[{quantity:1,price:{id:priceID,unit_price:{amount:'500',currency_code:'USD'}}}]};
         transactions.push(transaction);return send({id:transaction.id});
       }
@@ -50,7 +51,7 @@ export async function startPaddleProtocolFixture() {
   const origin=`http://127.0.0.1:${server.address().port}`;
   const totals=(principal)=>({subtotal:String(principal),tax:String(principal/10),total:String(principal*1.1),grand_total:String(principal*1.1),grand_total_tax:String(principal/10),fee:'30',retained_fee:'0',earnings:String(principal-30),currency_code:'USD'});
   return {
-    config:{environment:'sandbox',client_token:'test_browserfixture',processor_account_id:'browser-processor',supplier_id:'browser-supplier',api_key:apiKey,api_base_url:origin,webhook_secret:webhookSecret,offers:[{code:'five',price_id:priceID,funding_cents:500}]},
+    config:{checkout_enabled:true,checkout_url:'https://checkout.example/app/',environment:'sandbox',client_token:'test_browserfixture',processor_account_id:'browser-processor',supplier_id:'browser-supplier',api_key:apiKey,api_base_url:origin,webhook_secret:webhookSecret,offers:[{code:'five',price_id:priceID,funding_cents:500}]},
     transactions,failures,
     get portalCalls(){return portalCalls;},
     cancel(orderID) {

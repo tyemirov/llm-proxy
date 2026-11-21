@@ -110,10 +110,13 @@ func verifyPaymentAdjustments(payment verifiedCompletedPayment, order managedFun
 	if totals == nil || totals.CurrencyCode != order.Currency {
 		return verifiedPaymentAdjustments{}, errFundingInvalid
 	}
-	for _, value := range []string{totals.Subtotal, totals.Tax, totals.Total, totals.GrandTotal, totals.GrandTotalTax, totals.RetainedFee} {
+	for _, value := range []string{totals.Subtotal, totals.Tax, totals.Total, totals.GrandTotal, totals.GrandTotalTax} {
 		if !paymentMinorAmountPattern.MatchString(value) {
 			return verifiedPaymentAdjustments{}, errFundingInvalid
 		}
+	}
+	if !paymentSignedMinorAmountPattern.MatchString(totals.RetainedFee) {
+		return verifiedPaymentAdjustments{}, errFundingInvalid
 	}
 	if !paymentAmountSum(totals.Subtotal, totals.Tax, totals.Total) || totals.GrandTotal != totals.Total || totals.GrandTotalTax != totals.Tax {
 		return verifiedPaymentAdjustments{}, errFundingConflict

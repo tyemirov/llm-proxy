@@ -18,6 +18,8 @@ const (
 	paymentTransactionStatusCanceled = "canceled"
 )
 
+var errPaymentStateEvidenceIntegrity = errors.New("retained payment state evidence integrity failed")
+
 // Observations retain the processor response used for a state decision.
 // They commit with the order, event, and any funding effect.
 type managedPaymentStateObservationRecord struct {
@@ -66,13 +68,51 @@ func paymentStateObservation(event managedPaymentInboxRecord, order managedFundi
 	return managedPaymentStateObservationRecord{ID: "payment-state-" + sha256Hex(event.ID + "\x00" + digest)[:32], OrderID: order.ID, InboxID: event.ID, ProcessorUpdatedAt: updated, ProcessorStatus: transaction.Status, Evidence: string(encoded), EvidenceDigest: digest, CreatedAt: now}
 }
 
+func (record managedPaymentStateObservationRecord) matchesTransactionRevision(current billing.PaddleTransactionCompletedWebhookData) (bool, error) {
+	if sha256Hex(record.Evidence) != record.EvidenceDigest {
+		return false, fmt.Errorf("%w for order %s", errPaymentStateEvidenceIntegrity, record.OrderID)
+	}
+	var retained billing.PaddleTransactionCompletedWebhookData
+	if err := json.Unmarshal([]byte(record.Evidence), &retained); err != nil {
+		return false, fmt.Errorf("%w: decode retained payment state for order %s: %w", errPaymentStateEvidenceIntegrity, record.OrderID, err)
+	}
+	// Refund aggregates change independently of the transaction revision.
+	// Their separate adjustment history controls financial effects.
+	retained.Details.AdjustedTotals = nil
+	current.Details.AdjustedTotals = nil
+	// The account's default payment link also changes generated checkout URLs
+	// without advancing the transaction revision. Keep the original pointers intact.
+	if retained.Checkout != nil {
+		checkout := *retained.Checkout
+		checkout.URL = ""
+		retained.Checkout = &checkout
+	}
+	if current.Checkout != nil {
+		checkout := *current.Checkout
+		checkout.URL = ""
+		current.Checkout = &checkout
+	}
+	before, _ := json.Marshal(retained)
+	after, _ := json.Marshal(current)
+	return string(before) == string(after), nil
+}
+
 // The caller holds the financial account writer lock.
-func retainPaymentStateObservation(tx *gorm.DB, observation managedPaymentStateObservationRecord) error {
+func retainPaymentStateObservation(tx *gorm.DB, observation managedPaymentStateObservationRecord, current billing.PaddleTransactionCompletedWebhookData) error {
 	var latest managedPaymentStateObservationRecord
 	err := tx.Where("order_id = ?", observation.OrderID).Order("processor_updated_at DESC, id DESC").First(&latest).Error
 	if err == nil {
-		if observation.ProcessorUpdatedAt.Before(latest.ProcessorUpdatedAt) || (observation.ProcessorUpdatedAt.Equal(latest.ProcessorUpdatedAt) && observation.EvidenceDigest != latest.EvidenceDigest) {
+		if observation.ProcessorUpdatedAt.Before(latest.ProcessorUpdatedAt) {
 			return errFundingConflict
+		}
+		if observation.ProcessorUpdatedAt.Equal(latest.ProcessorUpdatedAt) {
+			matches, err := latest.matchesTransactionRevision(current)
+			if err != nil {
+				return err
+			}
+			if !matches {
+				return errFundingConflict
+			}
 		}
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("read retained processor state: %w", err)
@@ -104,7 +144,7 @@ func (worker *paddlePaymentProcessor) processState(ctx context.Context, event ma
 	if err != nil {
 		return worker.deferEvent(ctx, event, "transaction_mismatch")
 	}
-	if updated.Before(eventUpdated) {
+	if paddleSnapshotPrecedes(updated, eventUpdated) || (updated.Before(eventUpdated) && current.Status != envelope.Data.Status) {
 		return worker.deferEvent(ctx, event, "transaction_snapshot_stale")
 	}
 	completedDigest := ""
@@ -126,7 +166,7 @@ func (worker *paddlePaymentProcessor) processState(ctx context.Context, event ma
 		if lock.RowsAffected != 1 {
 			return errFundingNotFound
 		}
-		if err := retainPaymentStateObservation(tx, observation); err != nil {
+		if err := retainPaymentStateObservation(tx, observation, current); err != nil {
 			return err
 		}
 		var receipt managedPaymentReceiptRecord

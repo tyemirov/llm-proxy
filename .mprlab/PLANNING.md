@@ -29,10 +29,13 @@ Keep durable decisions and requirements in the issue tracker or a source-control
 ## Validation Plan
 
 Apply the proportional test sequence in `POLICY.md`.
-Record the changed contract, relevant public entry point, chosen checks, and any justified exception.
+Start with the tests that express the requested behavior.
+Record the changed contract, relevant public entry point, and chosen tests.
 For a bug fix, reproduce the failure before the fix and retain the result.
 For behavior changes or consequential refactors, protect the affected contract with appropriate coverage.
-Use focused checks during implementation and the selected final CI gate after the last change.
+Record applicable independent reviews and CI selected by the user or repository policy.
+Resolve review findings and finish all other authorized work before the selected final CI gate.
+Treat production state and deployed versions as auxiliary context, separate from implementation acceptance.
 
 A short task can use the host's plan or a concise checklist.
 Use a temporary execution plan when multiple steps, an interruption, or a handoff needs durable local state.

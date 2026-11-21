@@ -24,33 +24,11 @@ func TestHostedPaymentsRuntimeProcessesFundingThroughNormalService(t *testing.T)
 		t.Fatal(err)
 	}
 	configuration := withInternalUpstreamCapacity(t, Configuration{Management: service.configuration, ProviderCatalog: internalCanonicalProviderCatalog(), AssetStorePath: t.TempDir(), Payments: &PaymentConfiguration{
-		Environment: "sandbox", ClientToken: "test_browserfixture", ProcessorAccountID: "processor-fixture", SupplierID: "supplier-fixture", APIKey: "checkout-fixture-key", APIBaseURL: processor.server.URL, WebhookSecret: paymentInboxTestSecret,
+		Environment: "sandbox", CheckoutEnabled: true, CheckoutURL: "https://checkout.example/app/", ClientToken: "test_browserfixture", ProcessorAccountID: "processor-fixture", SupplierID: "supplier-fixture", APIKey: "checkout-fixture-key", APIBaseURL: processor.server.URL, WebhookSecret: paymentInboxTestSecret,
 		Offers: []PaymentOfferConfiguration{{Code: "five", PriceID: "pri_01hv8x2axb33yr5y238zfwcn5p", FundingCents: 500}},
 	}})
 	configuration.Management.DatabasePath = source.File
-	application, err := buildProxyApplicationForTest(t, configuration, zap.NewNop().Sugar(), newManagedTenantStore)
-	if err != nil {
-		t.Fatal(err)
-	}
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(t.Context())
-	stopped := make(chan error, 1)
-	go func() { stopped <- application.serve(ctx, listener) }()
-	t.Cleanup(func() {
-		cancel()
-		select {
-		case err := <-stopped:
-			if err != nil {
-				t.Error(err)
-			}
-		case <-time.After(5 * time.Second):
-			t.Error("payment runtime did not stop")
-		}
-	})
-	server := &httptest.Server{URL: "http://" + listener.Addr().String()}
+	server := startHostedPaymentsRuntime(t, configuration)
 	order := paymentOrderHTTP(t, server, cookie("owner"), http.MethodPost, paymentOrdersTestPath, "runtime-funding", `{"offer_code":"five"}`, http.StatusCreated)
 	public := paymentOrderHTTP(t, server, cookie("owner"), http.MethodGet, "/billing-accounts/billing-journal/funding-offers", "", "", http.StatusOK)
 	if public["client_token"] != "test_browserfixture" || public["environment"] != "sandbox" {
@@ -92,6 +70,60 @@ func TestHostedPaymentsRuntimeProcessesFundingThroughNormalService(t *testing.T)
 	configuration.Payments = &production
 	if _, err := buildProxyApplicationForTest(t, configuration, zap.NewNop().Sugar(), newManagedTenantStore); err == nil || !strings.Contains(err.Error(), "payment environment") {
 		t.Fatalf("sandbox database accepted production runtime: %v", err)
+	}
+}
+
+func startHostedPaymentsRuntime(t *testing.T, configuration Configuration) *httptest.Server {
+	t.Helper()
+	application, err := buildProxyApplicationForTest(t, configuration, zap.NewNop().Sugar(), newManagedTenantStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	stopped := make(chan error, 1)
+	go func() { stopped <- application.serve(ctx, listener) }()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-stopped:
+			if err != nil {
+				t.Error(err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Error("payment runtime did not stop")
+		}
+	})
+	return &httptest.Server{URL: "http://" + listener.Addr().String()}
+}
+
+func TestHostedPaymentsRuntimeKeepsFundingClosedWhileServingWebhooks(t *testing.T) {
+	fixture := newPaymentStartupFixture(t)
+	fixture.configuration.Payments.CheckoutEnabled = false
+	cookie := fixture.cookie("owner")
+	queued := paymentOrderHTTP(t, fixture.server, cookie, http.MethodPost, paymentOrdersTestPath, "queued-before-closure", `{"offer_code":"five"}`, http.StatusCreated)
+	server := startHostedPaymentsRuntime(t, fixture.configuration)
+	paymentOrderHTTP(t, server, cookie, http.MethodGet, "/billing-accounts/billing-journal/funding-offers", "", "", http.StatusServiceUnavailable)
+	paymentOrderHTTP(t, server, cookie, http.MethodPost, paymentOrdersTestPath, "closed-checkout", `{"offer_code":"five"}`, http.StatusServiceUnavailable)
+	adjustment := paymentAdjustmentFixture(fixture.processor, "approved", 200, 1)
+	payload, err := json.Marshal(map[string]any{"event_id": fmt.Sprintf("evt_%026d", 2), "event_type": "adjustment.created", "occurred_at": "2026-09-23T12:00:02Z", "data": adjustment})
+	if err != nil {
+		t.Fatal(err)
+	}
+	paymentInboxHTTP(t, server, string(payload), "", http.StatusUnauthorized)
+	paymentInboxHTTP(t, server, string(payload), paymentInboxSignature(string(payload), fixture.payments.WebhookSecret, time.Now()), http.StatusOK)
+	waitPaymentRuntime(t, func() bool {
+		balance := paymentOrderHTTP(t, server, cookie, http.MethodGet, fundsBalanceTestPath, "", "", http.StatusOK)
+		return balance["posted_cents"] == "300"
+	})
+	queuedPath := paymentOrdersTestPath + "/" + queued["id"].(string)
+	retained := paymentOrderHTTP(t, server, cookie, http.MethodGet, queuedPath, "", "", http.StatusOK)
+	paymentOrderHTTP(t, server, cookie, http.MethodGet, queuedPath+"/checkout", "", "", http.StatusNotFound)
+	if retained["state"] != fundingOrderCreated || fixture.processor.creates.Load() != 1 {
+		t.Fatalf("closed checkout dispatched queued order: order=%v creates=%d", retained, fixture.processor.creates.Load())
 	}
 }
 
@@ -177,10 +209,26 @@ func TestHostedPaymentsRuntimeFinancialFailureStopsHTTPAndRecovers(t *testing.T)
 }
 
 func TestHostedPaymentsRuntimeRejectsInvalidConfigurationBeforeOpeningDatabase(t *testing.T) {
-	for _, scenario := range []string{"secret", "secret-whitespace", "api-key", "api-key-whitespace", "client-token", "client-environment", "client-whitespace", "environment", "minimum", "price", "plaintext-remote"} {
+	for _, scenario := range []string{"secret", "secret-whitespace", "api-key", "api-key-whitespace", "client-token", "client-environment", "client-whitespace", "environment", "minimum", "price", "plaintext-remote", "checkout-missing", "checkout-http", "checkout-relative", "checkout-user", "checkout-query", "checkout-fragment", "checkout-empty-fragment", "checkout-escape"} {
 		t.Run(scenario, func(t *testing.T) {
-			input := &PaymentConfiguration{Environment: "sandbox", ClientToken: "test_browserfixture", ProcessorAccountID: "processor", SupplierID: "supplier", APIKey: "fixture-key", WebhookSecret: "fixture-secret", Offers: []PaymentOfferConfiguration{{Code: "five", PriceID: "pri_01hv8x2axb33yr5y238zfwcn5p", FundingCents: 500}}}
+			input := &PaymentConfiguration{Environment: "sandbox", CheckoutURL: "https://checkout.example/app/", ClientToken: "test_browserfixture", ProcessorAccountID: "processor", SupplierID: "supplier", APIKey: "fixture-key", WebhookSecret: "fixture-secret", Offers: []PaymentOfferConfiguration{{Code: "five", PriceID: "pri_01hv8x2axb33yr5y238zfwcn5p", FundingCents: 500}}}
 			switch scenario {
+			case "checkout-missing":
+				input.CheckoutURL = ""
+			case "checkout-http":
+				input.CheckoutURL = "http://checkout.example/app/"
+			case "checkout-relative":
+				input.CheckoutURL = "/app/"
+			case "checkout-user":
+				input.CheckoutURL = "https://user:secret@checkout.example/app/"
+			case "checkout-query":
+				input.CheckoutURL = "https://checkout.example/app/?funding_order_id=untrusted"
+			case "checkout-fragment":
+				input.CheckoutURL = "https://checkout.example/app/#fragment"
+			case "checkout-empty-fragment":
+				input.CheckoutURL = "https://checkout.example/app/#"
+			case "checkout-escape":
+				input.CheckoutURL = "https://%zz.example/app/"
 			case "client-token":
 				input.ClientToken = ""
 			case "client-environment":

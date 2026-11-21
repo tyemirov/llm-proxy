@@ -147,6 +147,9 @@ func hostedTextCredentialFields(t *testing.T, cipher managedProviderKeyCipher, c
 	if provider.identifier == ProviderNameDashScope {
 		fields["base_url"] = "https://test-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
 	}
+	if provider.identifier == "vertex-project" {
+		fields["project_base_url"] = "https://aiplatform.googleapis.com/v1/projects/hosted-fixture/locations/global"
+	}
 	values, err := validatedManagedProviderConnectionValues(provider, fields, managedProviderSettings{}, false)
 	if err != nil {
 		t.Fatal(err)

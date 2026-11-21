@@ -26,8 +26,8 @@ func TestProviderCatalogXA1DActivation(t *testing.T) {
 			t.Fatalf("authorized qualification route unavailable: %v %v", route, err)
 		}
 	}
-	if _, err := service.ResolveOffering("dashscope", "qwen3.8-27b"); err == nil {
-		t.Fatal("Cerebras qualification incorrectly activated Alibaba 27B")
+	if offering, err := service.ResolveOffering("dashscope", "qwen3.8-27b"); err != nil || offering.ProviderModel != "qwen3.8-27b" {
+		t.Fatalf("explicitly enabled Alibaba route: %+v %v", offering, err)
 	}
 	offering, err := service.ResolveOffering("cerebras", "qwen3.8-27b")
 	if err != nil || offering.ProviderModel != "qwen-3.8-27b" || !slices.Contains(offering.DefaultOperations, "text") {

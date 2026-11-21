@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -32,8 +33,13 @@ type qualificationBoundaryHarness struct {
 }
 
 func newQualificationBoundaryHarness(t *testing.T) *qualificationBoundaryHarness {
+	return newQualificationBoundaryOfferingHarness(t, "cerebras", "qwen3.8-27b", CatalogProtocolOpenAIChatCompletions, `{"model":"qwen-3.8-27b","max_completion_tokens":128,"messages":[]}`)
+}
+
+func newQualificationBoundaryOfferingHarness(t *testing.T, provider, model, codec, body string) *qualificationBoundaryHarness {
 	t.Helper()
 	fixture := newQualificationFaultFixture(t)
+	fixture.policy.Offerings = []QualificationBudgetOffering{{Provider: provider, Model: model, MaxOutputTokens: 128}}
 	fixture.initialize(t)
 	harness := &qualificationBoundaryHarness{fixture: fixture}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -45,14 +51,46 @@ func newQualificationBoundaryHarness(t *testing.T) *qualificationBoundaryHarness
 	harness.doer = &qualificationBudgetHTTPDoer{next: server.Client(), qualified: server.Client(), budget: fixture.budget}
 	ctx := qualificationLogicalContext(requestContextWithIdentifier(context.Background(), "origin-fixture"))
 	harness.logical = ctx.Value(qualificationExecutionKey{}).(*qualificationExecution)
-	harness.identity = qualificationTransportIdentity{provider: "cerebras", scope: upstreamRequestScope{tenant: fixture.policy.TenantID, account: "fixture-connection", class: upstreamInteractive}, transport: providerTransportDefinition{responseCodec: CatalogProtocolOpenAIChatCompletions, lifecycle: textExecutionLifecycleSynchronousCompletion, protocolParameters: providerProtocolParameters{TokenField: CatalogProtocolVariationMaxCompletionTokens}}}
+	harness.identity = qualificationTransportIdentity{provider: provider, scope: upstreamRequestScope{tenant: fixture.policy.TenantID, account: "fixture-connection", class: upstreamInteractive}, transport: providerTransportDefinition{responseCodec: codec, lifecycle: textExecutionLifecycleSynchronousCompletion, protocolParameters: providerProtocolParameters{TokenField: CatalogProtocolVariationMaxCompletionTokens}}}
 	ctx = context.WithValue(ctx, qualificationTransportKey{}, harness.identity)
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL+"/chat/completions", strings.NewReader(`{"model":"qwen-3.8-27b","max_completion_tokens":128,"messages":[]}`))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL+"/generation", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
 	harness.request = request
 	return harness
+}
+
+func TestQualificationBudgetBoundaryRequiresSerializedOutputAllowance(t *testing.T) {
+	for _, scenario := range []struct{ name, provider, model, codec, body string }{
+		{"openai-output-absent", "openai", "gpt-6-luna", CatalogProtocolOpenAIResponses, `{"model":"gpt-6-luna"}`},
+		{"gemini-configuration-absent", "gemini", "gemini-3.5-flash-lite", CatalogProtocolGeminiInteractions, `{"model":"gemini-3.5-flash-lite"}`},
+		{"gemini-configuration-null", "gemini", "gemini-3.5-flash-lite", CatalogProtocolGeminiInteractions, `{"model":"gemini-3.5-flash-lite","generation_config":null}`},
+		{"gemini-configuration-malformed", "gemini", "gemini-3.5-flash-lite", CatalogProtocolGeminiInteractions, `{"model":"gemini-3.5-flash-lite","generation_config":"invalid"}`},
+		{"gemini-output-absent", "gemini", "gemini-3.5-flash-lite", CatalogProtocolGeminiInteractions, `{"model":"gemini-3.5-flash-lite","generation_config":{}}`},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			harness := newQualificationBoundaryOfferingHarness(t, scenario.provider, scenario.model, scenario.codec, scenario.body)
+			response, err := harness.doer.Do(harness.request)
+			if response != nil {
+				_ = response.Body.Close()
+			}
+			if !errors.Is(err, errQualificationBudget) {
+				t.Fatalf("missing wire allowance error=%v", err)
+			}
+			var attempts int64
+			if err := harness.fixture.budget.database.Model(&qualificationBudgetAttempt{}).Count(&attempts).Error; err != nil {
+				t.Fatal(err)
+			}
+			var state qualificationBudgetState
+			if err := harness.fixture.budget.database.First(&state, "id = ?", harness.fixture.policy.BudgetID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if harness.calls.Load() != 0 || attempts != 0 || state.Remaining != harness.fixture.policy.RemainingMicroUSD || state.Suspended || harness.fixture.budget.suspended {
+				t.Fatalf("missing wire allowance affected dispatch or funds: calls=%d attempts=%d remaining=%d suspended=%v", harness.calls.Load(), attempts, state.Remaining, state.Suspended)
+			}
+		})
+	}
 }
 
 func TestQualificationBudgetBoundaryDispatchAdmission(t *testing.T) {
@@ -333,7 +371,7 @@ func TestQualificationBudgetMeasurementBoundaryRetainsReservation(t *testing.T) 
 			case "excessive-cache":
 				body = `{"usage":{"input_tokens":2,"output_tokens":3,"cache_read_input_tokens":1000001,"cache_creation_input_tokens":0}}`
 			case "excessive-input":
-				body = `{"usage":{"prompt_tokens":65537,"completion_tokens":0}}`
+				body = fmt.Sprintf(`{"usage":{"prompt_tokens":%d,"completion_tokens":0}}`, offering.InputCeiling+1)
 			case "unpriced-acceptance":
 				attempt.CreatedAt = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 			}

@@ -1,6 +1,6 @@
 // @ts-check
 
-import { ADMIN_USER_MENU_ITEMS, MPR_UI, USER_MENU_ITEMS } from "../constants.js?v=20261117b333";
+import { ADMIN_USER_MENU_ITEMS, MPR_UI, USER_MENU_ITEMS } from "../constants.js?v=20261119paymentfix";
 
 // The parser-loaded application imports this module before DOMContentLoaded.
 // Capture that event before asynchronous configuration reads can finish.

@@ -2,10 +2,12 @@
 
 F050 adds five models to the Singapore DashScope provider.
 Qwen 3.8 Flash passed live qualification on November 13, 2026 and is enabled in the source catalog.
-The other four DashScope offerings remain disabled pending their model grants and qualification.
-The shared `qwen3.8-27b` model is enabled for [Cerebras](cerebras.md).
-That activation does not enable its DashScope offering. Discovery and acceptance
-checks use the exact provider/model pair.
+The exact `dashscope/qwen3.8-27b` offering is enabled for its declared text and image input.
+Its strict JSON Schema capability remains unqualified and absent from the catalog.
+Its declared image input has local protocol coverage; live image qualification remains pending.
+The other three DashScope offerings remain disabled pending their model grants and qualification.
+The shared `qwen3.8-27b` model is also enabled for [Cerebras](cerebras.md).
+Discovery and acceptance checks use the exact provider/model pair.
 Release, deployment, and tenant acceptance are tracked in the [production runbook](qwen-flash-production.md).
 The current `qwen-plus` default remains unchanged.
 The catalog creation date for these records is September 5, 2026.
@@ -43,7 +45,14 @@ Alibaba maps those other names to existing levels.
 F050 exposes only the distinct values.
 
 Public `max_tokens` maps to `max_output_tokens`.
-The accepted range is 16 through 131,072 tokens.
+When the caller omits `max_tokens`, the proxy sends the catalog maximum for the selected offering.
+
+| DashScope offering | Accepted `max_tokens` range | `max_output_tokens` on omission |
+|---|---:|---:|
+| `qwen3.8-flash` | 16–65,536 | 65,536 |
+| `qwen3.8-27b` | 16–131,072 | 131,072 |
+
+The three disabled candidate offerings also declare a 131,072-token maximum.
 For Qwen 3.8, this limit includes reasoning and visible output together.
 The context window is 1,000,000 tokens.
 That is the nominal model window. Alibaba's Responses reference states that effective input context is approximately 80% of the model window and excess input is automatically truncated.
@@ -103,7 +112,59 @@ All six generation requests returned HTTP 200, valid request IDs, positive measu
 Observed request times ranged from 809 to 2,593 milliseconds. This sample establishes the qualification cases, not sustained load capacity.
 Public HTTP tests cover Flash discovery, explicit dispatch, retained `qwen-plus` defaults, 250/251-image admission, and complete Data URI bounds.
 An automated Chromium test verifies explicit Flash selection and persistence after page reload.
-The other four candidates require model grants and their complete live qualification.
+Qwen 3.8 27B source activation is separate from its pending live qualification.
+The other three candidates require model grants and their complete live qualification.
+
+On November 18, 2026, a disposable managed Proxy tenant sent one text-only
+strict-schema probe for `qwen3.8-27b` through the released Go SDK v1.12.14.
+The request used effort `none`, a 1,024-token output limit, and a schema constant
+that contradicted the requested answer. Alibaba returned HTTP 403; the SDK
+received HTTP 502 with `provider_error`. The test observed exactly one provider
+request and a 414-byte serialized payload. No output or measured usage was
+returned, so the charge remains unknown. An explicitly authorized second probe
+observed the same response through the Proxy test transport without changing
+provider behavior. Its native error was `PERMISSION_DENIED` with type
+`invalid_request_error` and message `Access denied by API-Key restrictions.`
+It also returned no usage. Each probe made exactly one provider request.
+The first probe did not retain the native error body; its charge remains unknown.
+After the user approved the exact model grant, the next identical probe reached
+Alibaba and returned HTTP 200, while the SDK still received HTTP 502. The test
+observer did not retain that successful native response body or usage; its charge
+remains unknown.
+
+An authorized diagnostic replay then captured a completed native response with
+the normal assistant-message and `output_text` envelope. The request still sent
+`text.format.type: json_schema` and `strict: true`, but the returned JSON contained
+`PROMPT_WRONG` instead of the schema constant `SCHEMA_OK`. The Proxy rejected the
+schema violation with HTTP 502. Measured usage was 122 input tokens and 11 output
+tokens, totaling 133; the catalog list-price cost was USD 0.000094.
+Each post-grant probe made exactly one provider request with the same 414-byte
+payload and 1,024-token output limit. This evidence establishes failure to enforce
+the tested `const` constraint for the exact offering.
+
+One separately authorized discriminator changed only `const: SCHEMA_OK` to
+`enum: [SCHEMA_OK]`. A check before dispatch verified that the native request had
+no other semantic change. Its 415-byte request returned a completed assistant
+result containing `SCHEMA_OK`, and the Proxy and released SDK accepted it.
+Measured usage was again 122 input tokens and 11 output tokens, with catalog
+list-price cost USD 0.000094. This proves the tested singleton-enum constraint
+only. The current Story schema projector does not convert `const` to `enum`, and
+the five current planning/body contracts contain no `const` keyword.
+
+A candidate policy limited to those five projected contracts passed local
+qualification through the released SDK, disposable managed Proxy, and a local
+provider implementation. Each result also passed its original application schema.
+The candidate admits ten schema keywords, excludes `const`, and keeps structured
+requests text-only while preserving ordinary image input.
+
+The subsequent live `plot-spines` representative used the exact projected schema,
+effort `medium`, and an 8,192-token output limit. One 1,919-byte provider request
+returned a completed native HTTP 200 response with 22 visible output bytes; the
+Proxy rejected the result with HTTP 502. Measured usage was 69 input tokens and
+349 output tokens, totaling 418, with catalog list-price cost USD 0.0010815.
+Qualification stopped before the body request. The candidate policy remains
+outside the source catalog. Strict capability remains absent, and existing
+TellTale tenant acceptance remains separate.
 
 The [Flash execution record](../.mprlab/evidence/F050-flash-20261113.json) retains safe qualification evidence.
 The earlier [inventory record](../.mprlab/evidence/F064-inventory-20261113.json) retains the account and workspace milestone.

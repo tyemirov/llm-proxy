@@ -12,11 +12,13 @@ import {
 
 const CHECK_ARGUMENT = "--check";
 const PUBLIC_ORIGIN = "https://llm-proxy.mprlab.com";
-const EFFECTIVE_DATE = "2026-08-08";
-const EFFECTIVE_DATE_TEXT = "August 8, 2026";
+const EFFECTIVE_DATE = "2026-11-19";
+const EFFECTIVE_DATE_TEXT = "November 19, 2026";
+const LAST_UPDATED_DATE = "2026-11-19";
+const LAST_UPDATED_DATE_TEXT = "November 19, 2026";
 const PRODUCT_NAME = "LLM Proxy";
 const SERVICE_DESCRIPTION = "LLM Proxy provides authenticated model routing, provider credential management, tenant configuration, and usage visibility.";
-const SERVICE_DATA_DESCRIPTION = "account identity, tenant configuration, encrypted provider credentials, client-secret digests, routing settings, request content processed in transit, and content-free usage records";
+const SERVICE_DATA_DESCRIPTION = "account identity, tenant configuration, encrypted provider credentials, client-secret digests, routing settings, request content processed in transit, content-free usage records, and payment and financial records";
 
 const LEGAL_PAGES = Object.freeze([
   Object.freeze({
@@ -76,6 +78,10 @@ const LEGAL_PAGES = Object.freeze([
       legalSection("contact", "12. Contact", [
         "For privacy questions or data requests, email support@mprlab.com. For legal notices, email legal@mprlab.com. Marco Polo Research Lab LLC can also be reached through https://mprlab.com.",
       ]),
+      legalSection("payments", "Payments and Financial Records", [
+        "Paddle processes checkout payment details as merchant of record under its own privacy policy. LLM Proxy does not collect full card numbers or card security codes.",
+        "LLM Proxy retains account-linked funding orders, processor customer and transaction references, verified payment events, receipts, usage charges, and adjustments to provide balances, reconcile payments, and meet applicable financial and legal obligations. These financial records are separate from content-free operational usage records.",
+      ]),
     ]),
   }),
   Object.freeze({
@@ -99,7 +105,7 @@ const LEGAL_PAGES = Object.freeze([
         "Provider availability, model behavior, response quality, limits, and latency depend in part on third-party services and the configuration selected for the tenant.",
       ]),
       legalSection("credentials", "3. Credentials and Third-Party Services", [
-        "You are responsible for supplying authorized provider credentials, protecting generated client secrets, and complying with the terms of each selected model provider. LLM Proxy may transmit requests and credentials to those providers only as needed to perform the requested operation.",
+        "For customer-owned provider routes, you are responsible for supplying authorized provider credentials. For all routes, you are responsible for protecting generated client secrets and complying with the terms of each selected model provider. LLM Proxy may transmit requests and the applicable provider credentials only as needed to perform the requested operation.",
       ]),
       legalSection("acceptable-use", "4. Acceptable Use", [], [
         "Use LLM Proxy only for lawful purposes.",
@@ -133,6 +139,10 @@ const LEGAL_PAGES = Object.freeze([
       ]),
       legalSection("contact", "13. Contact", [
         "For support, email support@mprlab.com. For legal notices or questions about these Terms, email legal@mprlab.com. Marco Polo Research Lab LLC can also be reached through https://mprlab.com.",
+      ]),
+      legalSection("paid-usage", "Paid Usage and Payments", [
+        "Any authenticated billing-account owner can purchase a prepaid LLM Proxy balance. Access to hosted model routes requires separate authorization. The purchase amount, usage balance, applicable tax, and available routes are described in the pricing page and authenticated app.",
+        "Paddle is the merchant of record for checkout purchases. Its Buyer Terms and Refund Policy apply to those purchases together with applicable law. Refund eligibility and payment support are described at /refunds/.",
       ]),
     ]),
   }),
@@ -221,13 +231,14 @@ ${renderPublicHeader()}
         service-data-description="${escapeHTMLAttribute(SERVICE_DATA_DESCRIPTION)}"
         effective-date="${EFFECTIVE_DATE}"
         effective-date-text="${EFFECTIVE_DATE_TEXT}"
-        last-updated-date="${EFFECTIVE_DATE}"
+        last-updated-date="${LAST_UPDATED_DATE}"
         privacy-path="/privacy/"
         terms-path="/terms/"
         sections='${escapeHTMLAttribute(sections)}'
       >
 ${renderStaticLegalDocument(page)}
       </mpr-legal-document>
+      <p class="mpr-legal-document__paragraph"><a href="/pricing/">Pilot pricing</a> · <a href="/refunds/">Refunds and payment support</a></p>
     </main>
 ${renderPublicFooter()}
   </body>
@@ -290,7 +301,7 @@ function validateRenderedLegalPage(document, page) {
     `<meta property="og:url" content="${PUBLIC_ORIGIN}${page.path}">`,
     `<mpr-legal-document\n        type="${page.type}"`,
     `effective-date="${EFFECTIVE_DATE}"`,
-    `last-updated-date="${EFFECTIVE_DATE}"`,
+    `last-updated-date="${LAST_UPDATED_DATE}"`,
     `<h1 class="mpr-legal-document__title">${escapeHTML(page.title)}</h1>`,
     'href="/privacy/"',
     'href="/terms/"',
@@ -324,7 +335,7 @@ ${paragraphs}${list}
   }).join("\n");
   return `        <article class="mpr-legal-document__card">
           <h1 class="mpr-legal-document__title">${escapeHTML(page.title)}</h1>
-          <p class="mpr-legal-document__meta"><strong>Effective Date:</strong> <time datetime="${EFFECTIVE_DATE}">${EFFECTIVE_DATE_TEXT}</time> · <strong>Last Updated:</strong> <time datetime="${EFFECTIVE_DATE}">${EFFECTIVE_DATE_TEXT}</time></p>
+          <p class="mpr-legal-document__meta"><strong>Effective Date:</strong> <time datetime="${EFFECTIVE_DATE}">${EFFECTIVE_DATE_TEXT}</time> · <strong>Last Updated:</strong> <time datetime="${LAST_UPDATED_DATE}">${LAST_UPDATED_DATE_TEXT}</time></p>
 ${introduction}
 ${sections}
         </article>`;

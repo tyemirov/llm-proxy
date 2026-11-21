@@ -1416,7 +1416,9 @@ The snapshot fixture verifies restoration and replay of orders, customer associa
 
 ### Checkout Delivery
 
-The delivery worker uses the shared Paddle commerce client from `utils/billing` v0.19.0.
+The delivery worker uses the shared Paddle commerce client from `utils/billing`.
+F102 uses the native per-transaction checkout URL in published `utils/billing` v0.20.0.
+The application resolves that release through its normal Go module dependency.
 Before transaction creation or uncertain recovery, it reads the retained price through that client.
 The price must match the order identity and amount and have no recurring billing cycle.
 A failed price read remains retryable without a new transaction dispatch intent.
@@ -1467,6 +1469,7 @@ The observation, order state, and event state commit together under the account 
 Funding credits and adjustments use the same observation check within their financial transaction.
 An older processor snapshot cannot replace a newer retained observation.
 Different evidence at the same processor timestamp requires reconciliation.
+A corrupt retained observation at the same processor timestamp defers the affected event with `transaction_observation_integrity` and leaves its financial state intact. The worker continues processing other events.
 The processor snapshot must not precede the signed event that requires its verification.
 The observation boundary owns transaction revision checks before any refund effect.
 The adjustment boundary separately rejects missing records, older adjustment revisions, and conflicting data at the same adjustment timestamp.
@@ -1551,17 +1554,22 @@ Actual Paddle connectivity remains a separate qualification step.
 
 ### Payment Runtime Configuration
 
-The optional `payments` object in the server configuration enables payment processing.
-Omit this object to disable checkout creation, portal sessions, and the webhook route.
+The optional `payments` object in the server configuration enables the signed webhook, event processing, and portal sessions.
+Set `payments.checkout_enabled` to `true` to expose funding offers and accept and deliver new checkouts. Omit the field or set it to `false` to keep funding closed while the webhook operates.
+Omit the `payments` object to disable payment processing and the webhook route.
 An explicit empty object is invalid. The CLI retains it for payment validation before service startup or database access.
 Owned historical records remain readable when payment processing is disabled.
-The tracked server configuration omits this object. Production payments remain disabled.
+The tracked server configuration selects the dedicated production pilot account and price with checkout closed. Follow the live activation record to verify the destination before enabling funding.
+Production activation, exact checkout-domain approval, and actual live payment acceptance remain pending in F101.
+See the [live preparation record](evidence/paddle-live-2026-11-19.md).
 
 The following configuration shows the field contract. It does not authorize live payment qualification.
 
 ```yaml
 payments:
   environment: sandbox
+  checkout_enabled: true
+  checkout_url: https://llm-proxy.mprlab.com/app/
   client_token: "${PADDLE_CLIENT_TOKEN}"
   processor_account_id: selected-paddle-account
   supplier_id: selected-platform-supplier
@@ -1578,8 +1586,14 @@ The required public client token starts with `test_` for sandbox or `live_` for 
 The server rejects a token from the wrong environment before database access.
 Create this token in the selected Paddle account under Developer tools, Authentication.
 The [Paddle.js initialization contract](https://developer.paddle.com/paddle-js/methods/paddle-initialize/) uses this token instead of the API key.
-Configure the default payment link before actual Paddle qualification.
-Sandbox permits a test domain or localhost. Production requires Paddle domain verification.
+Configure an approved account default payment link before actual Paddle qualification.
+Keep the shared account default when it serves another application.
+The required `checkout_url` supplies this application's HTTPS checkout page for each transaction.
+It must have no credentials, query, or fragment. The server adds the funding order identifier.
+The browser entry documents strip the order and `_ptxn` query candidates inline before loading external scripts.
+Authenticated continuation verifies the owned order and its exact retained transaction through the normal APIs before opening checkout.
+Customers can select another known order from funding history or a checkout link. An unresolved creation request retains its original idempotency key. Transient continuation failures remain recoverable. Actual live acceptance remains F101 work.
+Use an HTTPS test host for the sandbox default payment link. The November 19 dashboard rejected localhost. Production requires Paddle domain verification.
 See the [default payment link contract](https://developer.paddle.com/build/transactions/default-payment-link/).
 The [transaction checkout prerequisites](https://developer.paddle.com/build/transactions/pass-transaction-checkout/) define this processor setup requirement.
 The shared client selects the Paddle API origin for the configured environment.
@@ -1587,7 +1601,7 @@ The shared client selects the Paddle API origin for the configured environment.
 Offer amounts must be at least 500 cents. The server rejects incomplete processor identities and secrets at startup.
 The selected price must satisfy the retained funding amount and currency before the service credits funds.
 
-The normal service runs checkout delivery and event processing before HTTP startup and once per second during operation.
+The normal service runs event processing before HTTP startup and once per second during operation. It runs checkout delivery on the same schedule when checkout is enabled. Queued checkout delivery waits while checkout is closed.
 The worker retains uncertain processor outcomes with a reason and retry time.
 A financial database failure stops HTTP admission. A restart retries retained work without another funding effect.
 Shutdown cancels active processor requests through the shared client.
@@ -1595,7 +1609,7 @@ The payment database binds to one environment. A different environment requires 
 
 ### Payment Adjustments
 
-F069 reads current transaction totals and all transaction adjustments through the shared Paddle client in utils v0.19.0.
+F069 reads current transaction totals and all transaction adjustments through the shared Paddle client in utils v0.20.0.
 Each adjustment must match the retained transaction, customer, currency, and funding item.
 The worker checks approved amounts against the current adjusted totals before a financial change.
 Separate [Paddle adjustment records](https://developer.paddle.com/api-reference/adjustments/list-adjustments/) retain refund status, tax, fees, and payout evidence.
@@ -1839,8 +1853,8 @@ Read-only product and notification requests succeeded with the sandbox API key f
 
 The file contains `PADDLE_API_KEY_SANDBOX`, `PADDLE_CLIENT_TOKEN_SANDBOX`, and `PADDLE_WEBHOOK_SECRET_SANDBOX`.
 Only the API key was verified against Paddle. No credential values were copied or disclosed.
-The account has active PoodleScanner, Hecate, and Crossword products, but no active LLM Proxy product or USD 5 funding price.
-No listed notification destination targets LLM Proxy.
+At that inspection, the account had active PoodleScanner, Hecate, and Crossword products, but no active LLM Proxy product or USD 5 funding price.
+No listed notification destination targeted LLM Proxy.
 These API results do not establish the platform supplier or the canonical Paddle account identity.
 
 F087 must configure a distinct product, a one-time USD 5 price, the checkout origin, and the LLM Proxy notification destination.
@@ -1855,10 +1869,20 @@ Obtain the operator authorization required by the development acceptance contrac
 The native target verifies financial checkpoints. F087 owns actual sandbox scenario receipts.
 Sandbox setup and actual qualification do not block F069 or F070 development completion.
 
+On November 19, 2026, F087 verified the existing Marco Polo Research Lab sandbox account and created dedicated LLM Proxy product, price, and notification resources.
+The authenticated dashboard confirmed the supplier and saved the LLM Proxy default payment link.
+A new unpaid order opened actual Paddle Checkout with the correct USD 5 item.
+Actual checkout, delayed confirmation, signed delivery, replay, partial and full refunds, isolation, two-order native reconciliation, and financial backup restoration passed after B334 through B337 corrections.
+Final local `make ci` passed all 15 gates with exact 100.0% Go coverage, 188 frontend browser cases, and all 13 authenticated browser cases.
+The temporary qualification runtime is stopped and its dedicated notification destination is paused; a continuing pilot needs a durable checkout host and webhook origin.
+Generated checkout URLs depend on account settings and can change without a transaction revision.
+Revision comparisons exclude only that URL and computed refund aggregates; original transaction evidence and independent adjustment history remain authoritative.
+See the [dated sandbox qualification record](evidence/paddle-sandbox-2026-11-19.md) for results and the private resume location.
+
 #### Required Inputs
 
 Record the source commit, authorization reference, sandbox supplier, processor account, and qualification run identifier.
-Use the normal server configuration with `payments.environment: sandbox` and a separate managed database.
+Use the normal server configuration with `payments.environment: sandbox`, `payments.checkout_enabled: true`, and a separate managed database.
 Omit `payments.api_base_url` so the shared client selects the actual Paddle sandbox API.
 Use sandbox credentials and a `test_` client token from the same processor account.
 Keep credentials in the existing private environment input. Do not copy credentials into qualification reports.
@@ -2138,6 +2162,7 @@ Record the source revision, configuration identity, date, and result for each ch
 - [ ] Configure [financial signals](#operational-financial-signals) and assign an operator for unresolved attempts, settlement delays, and reconciliation differences.
 - [ ] Examine explicit platform credentials, tenant grants, and provider assignments. Keep customer-owned provider access separate.
 - [ ] Record explicit operator authorization before deployment, hosted activation, or actual payment acceptance.
+- [ ] Verify signed delivery on the active Paddle destination with checkout closed before enabling live funding.
 - [ ] At authorized activation, test funding, exact usage charges, receipts, idempotent replay, account isolation, and financial recovery through public interfaces.
 - [ ] Use [audited financial resolution](#audited-financial-resolution) for uncertain outcomes. Keep their reservations until the recorded decision permits settlement or release.
 

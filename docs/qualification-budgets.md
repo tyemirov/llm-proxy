@@ -24,6 +24,8 @@ rates. A registry in the management database prevents allowance resets after
 receipt loss, policy changes, removal, or reuse of a closed budget ID. One
 process holds the journal's lifetime lock. Startup validates existing receipts.
 
+The router selects an omitted output allowance from the exact catalog offering before serialization. That selected value remains subject to the private qualification maximum; use an explicit caller allowance when the catalog ceiling exceeds it. Qualification validates the serialized positive integer and rejects missing or malformed limits before reservation or dispatch. Gemini requires a `generation_config` object with `max_output_tokens`. Qualification does not replace a missing limit with its private maximum.
+
 Before each paid upstream POST, the Proxy atomically reserves the catalog-priced
 input ceiling plus the enforced output maximum and persists dispatch intent.
 Retries and continuations share the logical request's attempt limit. Selected

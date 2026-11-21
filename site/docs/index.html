@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="356196b1500e4144dd45a947f45372ba187f8fdce304321a66c21bb635716603">
+    <meta name="openapi-source-sha256" content="925616f812baa62e2e2270c20da09b651df080e3f8d90f0eeee4dcaefcff4596">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="356196b1500e4144dd45a947f45372ba187f8fdce304321a66c21bb635716603">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="925616f812baa62e2e2270c20da09b651df080e3f8d90f0eeee4dcaefcff4596">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>356196b1500e4144dd45a947f45372ba187f8fdce304321a66c21bb635716603</code></span>
+          <span>Source SHA-256 <code>925616f812baa62e2e2270c20da09b651df080e3f8d90f0eeee4dcaefcff4596</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -2532,6 +2532,7 @@ paths:
     get:
       operationId: listFundingOffers
       summary: List server funding offers
+      description: Returns 503 while funding checkout is disabled.
       tags: [Management]
       security:
         - TAuthSession: []
@@ -2603,6 +2604,7 @@ paths:
         The account and creation key identify one order. A repeated key returns
         that order. A changed offer or processor identity returns 409.
         Order creation does not grant funds or confirm payment.
+        The service returns 503 while funding checkout is disabled.
       x-llm-proxy-required-request-content-type: application/json
       parameters:
         - $ref: &#39;#/components/parameters/BillingAccountID&#39;
@@ -5185,7 +5187,7 @@ components:
       name: max_tokens
       in: query
       required: false
-      description: Initial per-attempt output budget. A transport that declares continuation actions reuses this budget for a missing suffix.
+      description: Optional output allowance. Omission selects the catalog output ceiling when known and otherwise preserves the upstream default. Explicit values must fit the selected offering.
       schema:
         type: integer
         minimum: 1
@@ -11100,7 +11102,7 @@ components:
         max_tokens:
           type: integer
           minimum: 1
-          description: Initial output budget. A transport that declares continuation actions reuses it for missing-suffix attempts.
+          description: Optional output allowance. Omission selects the catalog output ceiling when known and otherwise preserves the upstream default. Explicit values must fit the selected offering.
         reasoning_effort:
           type: string
           minLength: 1
@@ -11144,7 +11146,7 @@ components:
         max_tokens:
           type: integer
           minimum: 1
-          description: Initial output budget. A transport that declares continuation actions reuses it for missing-suffix attempts.
+          description: Optional output allowance. Omission selects the catalog output ceiling when known and otherwise preserves the upstream default. Explicit values must fit the selected offering.
         reasoning_effort:
           type: string
           minLength: 1
@@ -13374,7 +13376,7 @@ components:
 <tr><td><code>model</code></td><td>query</td><td>No</td><td>string</td><td>Model identifier. Omission uses the resolved provider default.</td></tr>
 <tr><td><code>web_search</code></td><td>query</td><td>No</td><td>boolean</td><td>Exact boolean query parameter. Use true or false; omission disables web search. Any other supplied spelling is invalid and returns HTTP 400.</td></tr>
 <tr><td><code>system_prompt</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
-<tr><td><code>max_tokens</code></td><td>query</td><td>No</td><td>integer</td><td>Initial per-attempt output budget. A transport that declares continuation actions reuses this budget for a missing suffix.</td></tr>
+<tr><td><code>max_tokens</code></td><td>query</td><td>No</td><td>integer</td><td>Optional output allowance. Omission selects the catalog output ceiling when known and otherwise preserves the upstream default. Explicit values must fit the selected offering.</td></tr>
 <tr><td><code>reasoning_effort</code></td><td>query</td><td>No</td><td>string</td><td>Non-blank effort supported by the resolved route. Omission selects the tenant or route default.</td></tr>
 <tr><td><code>format</code></td><td>query</td><td>No</td><td>string</td><td>Preferred response media type. Unknown values select text/plain.</td></tr>
 <tr><td><code>Accept</code></td><td>header</td><td>No</td><td>string</td><td>Response media preference used when format is omitted.</td></tr>
@@ -13446,7 +13448,7 @@ components:
 <tr><td><code>speech_provider</code></td><td>No</td><td>string</td><td>Selected speech provider. An empty value clears the selection.</td></tr>
 <tr><td><code>speech_model</code></td><td>No</td><td>string</td><td>Selected speech model. An empty value clears the selection.</td></tr>
 <tr><td><code>system_prompt</code></td><td>No</td><td>string</td><td></td></tr>
-<tr><td><code>max_tokens</code></td><td>No</td><td>integer</td><td>Initial output budget. A transport that declares continuation actions reuses it for missing-suffix attempts.</td></tr>
+<tr><td><code>max_tokens</code></td><td>No</td><td>integer</td><td>Optional output allowance. Omission selects the catalog output ceiling when known and otherwise preserves the upstream default. Explicit values must fit the selected offering.</td></tr>
 <tr><td><code>reasoning_effort</code></td><td>No</td><td>string</td><td>Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route.</td></tr>
               </tbody>
             </table>
@@ -13794,6 +13796,7 @@ components:
           <span class="api-operation-id">listFundingOffers</span>
         </header>
         <h2>List server funding offers</h2>
+        <p>Returns 503 while funding checkout is disabled.</p>
         <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
         <div class="api-contract-block">
           <h3>Parameters</h3>
@@ -13870,7 +13873,7 @@ components:
           <span class="api-operation-id">createFundingOrder</span>
         </header>
         <h2>Create an owned funding order</h2>
-        <p>Select one server offer. Commit its immutable price, USD funding amount, processor identity, and checkout delivery intent in one transaction. The account and creation key identify one order. A repeated key returns that order. A changed offer or processor identity returns 409. Order creation does not grant funds or confirm payment.</p>
+        <p>Select one server offer. Commit its immutable price, USD funding amount, processor identity, and checkout delivery intent in one transaction. The account and creation key identify one order. A repeated key returns that order. A changed offer or processor identity returns 409. Order creation does not grant funds or confirm payment. The service returns 503 while funding checkout is disabled.</p>
         <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
         <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
         <div class="api-contract-block">
@@ -17431,7 +17434,7 @@ components:
 <tr><td><code>messages</code></td><td>Yes</td><td>array&lt;V2ChatMessage&gt;</td><td>Each message must have an allowed role and non-blank content. The request must include at least one user message. All messages must omit order, or all must have unique non-negative order values. Only user messages can have attachments. Message and attachment order are preserved. Each Gemini Interactions route rejects assistant history.</td></tr>
 <tr><td><code>model</code></td><td>No</td><td>string</td><td>Omission selects the resolved provider default.</td></tr>
 <tr><td><code>web_search</code></td><td>No</td><td>boolean</td><td>The resolved route must declare web-search capability when true.</td></tr>
-<tr><td><code>max_tokens</code></td><td>No</td><td>integer</td><td>Initial output budget. A transport that declares continuation actions reuses it for missing-suffix attempts.</td></tr>
+<tr><td><code>max_tokens</code></td><td>No</td><td>integer</td><td>Optional output allowance. Omission selects the catalog output ceiling when known and otherwise preserves the upstream default. Explicit values must fit the selected offering.</td></tr>
 <tr><td><code>reasoning_effort</code></td><td>No</td><td>string</td><td>Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route. Kimi K3 accepts low, high, or max.</td></tr>
 <tr><td><code>structured_output</code></td><td>No</td><td>object</td><td></td></tr>
               </tbody>

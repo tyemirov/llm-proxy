@@ -158,6 +158,10 @@ local_orchestration_prepare_environment() {
   local scoped_api_environment_path="$3"
   local scoped_tauth_environment_path="$4"
 
+  python3 "${LOCAL_ORCHESTRATION_SCRIPT_DIRECTORY}/render_nonpayment_config.py" \
+    --source "${LOCAL_ORCHESTRATION_REPOSITORY_ROOT}/configs/config.yml" \
+    --output "${LOCAL_ORCHESTRATION_REPOSITORY_ROOT}/configs/config.local.yml" || return $?
+
   chmod 600 "${source_environment_path}"
   local_orchestration_ensure_generated_value "${source_environment_path}" "LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY" "__GENERATE_ON_FIRST_MAKE_UP__" "48"
   local_orchestration_ensure_generated_value "${source_environment_path}" "LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY" "__GENERATE_ON_FIRST_MAKE_UP__" "32"

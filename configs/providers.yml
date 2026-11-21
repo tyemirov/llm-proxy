@@ -406,6 +406,51 @@ models:
         - text
       media_inputs:
         - image
+    - id: gpt-6.2-sol
+      enabled: true
+      publisher: openai
+      family: gpt-6
+      version: gpt-6.2-sol
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-6-sol
+      enabled: true
+      publisher: openai
+      family: gpt-6
+      version: gpt-6-sol
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-6.1-sol
+      enabled: true
+      publisher: openai
+      family: gpt-6
+      version: gpt-6.1-sol
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-6.1-terra
+      enabled: true
+      publisher: openai
+      family: gpt-6
+      version: gpt-6.1-terra
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-6.2-astra
+      enabled: true
+      publisher: openai
+      family: gpt-6
+      version: gpt-6.2-astra
+      operations:
+        - text
+      media_inputs:
+        - image
     - id: ernie-5.0
       enabled: true
       publisher: baidu
@@ -829,6 +874,26 @@ models:
       publisher: google
       family: gemini
       version: gemini-3.1-pro-preview
+      operations:
+        - text
+      media_inputs:
+        - image
+        - audio
+    - id: gemini-4-neon
+      enabled: true
+      publisher: google
+      family: gemini
+      version: gemini-4-neon
+      operations:
+        - text
+      media_inputs:
+        - image
+        - audio
+    - id: gemini-4-hydrogen
+      enabled: true
+      publisher: google
+      family: gemini
+      version: gemini-4-hydrogen
       operations:
         - text
       media_inputs:
@@ -1482,6 +1547,654 @@ providers:
                     effective_from: 2026-09-07T00:00:00Z
               source: https://developers.openai.com/api/docs/pricing
               last_verified: '2026-09-07'
+          output_token_limit: 128000
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 128000
+          limits:
+            - id: context_tokens
+              value: 1050000
+              unit: tokens
+            - id: input_tokens
+              value: 922000
+              unit: tokens
+            - id: output_tokens
+              value: 128000
+              unit: tokens
+        - model: gpt-6.2-sol
+          created: 1795249193
+          upstream_model: gpt-6.2-sol
+          transport: text
+          structured_output: *openai_schema
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          caller_tools: true
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: '2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '10'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.1'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: input_tokens
+                  currency: USD
+                  rate: '4'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '15'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+              source: https://developers.openai.com/api/docs/pricing
+              last_verified: '2026-11-21'
+          output_token_limit: 128000
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 128000
+          limits:
+            - id: context_tokens
+              value: 1050000
+              unit: tokens
+            - id: input_tokens
+              value: 922000
+              unit: tokens
+            - id: output_tokens
+              value: 128000
+              unit: tokens
+        - model: gpt-6-sol
+          created: 1795249193
+          upstream_model: gpt-6-sol
+          transport: text
+          structured_output: *openai_schema
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          caller_tools: true
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+              - none
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: '2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '10'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: input_tokens
+                  currency: USD
+                  rate: '4'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '15'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.4'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+              source: https://developers.openai.com/api/docs/models/gpt-6-sol
+              last_verified: '2026-11-21'
+          output_token_limit: 128000
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 128000
+          limits:
+            - id: context_tokens
+              value: 1050000
+              unit: tokens
+            - id: output_tokens
+              value: 128000
+              unit: tokens
+        - model: gpt-6.1-sol
+          created: 1795249193
+          upstream_model: gpt-6.1-sol
+          transport: text
+          structured_output: *openai_schema
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          caller_tools: true
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: '2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '10'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.1'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: input_tokens
+                  currency: USD
+                  rate: '4'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '15'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+              source: https://developers.openai.com/api/docs/models/gpt-6.1-sol
+              last_verified: '2026-11-21'
+          output_token_limit: 128000
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 128000
+          limits:
+            - id: context_tokens
+              value: 1050000
+              unit: tokens
+            - id: output_tokens
+              value: 128000
+              unit: tokens
+        - model: gpt-6.1-terra
+          created: 1795249193
+          upstream_model: gpt-6.1-terra
+          transport: text
+          structured_output: *openai_schema
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          caller_tools: true
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+              - none
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: '1'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '5'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.05'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: input_tokens
+                  currency: USD
+                  rate: '2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '7.5'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.1'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+              source: https://developers.openai.com/api/docs/models/gpt-6.1-terra
+              last_verified: '2026-11-21'
+          output_token_limit: 128000
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 128000
+          limits:
+            - id: context_tokens
+              value: 1050000
+              unit: tokens
+            - id: output_tokens
+              value: 128000
+              unit: tokens
+        - model: gpt-6.2-astra
+          created: 1795249193
+          upstream_model: gpt-6.2-astra
+          transport: text
+          structured_output: *openai_schema
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          caller_tools: true
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: '2026-11-21'
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: '8'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '40'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.4'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      maximum_exclusive: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: input_tokens
+                  currency: USD
+                  rate: '16'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '60'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.8'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    input_tokens:
+                      minimum: 272001
+                    service_tier: standard
+                    cache_class: read
+                    effective_from: 2026-11-21T00:00:00Z
+              source: https://developers.openai.com/api/docs/models/gpt-6.2-astra
+              last_verified: '2026-11-21'
           output_token_limit: 128000
           controls:
             - id: max_tokens
@@ -2907,12 +3620,12 @@ providers:
           transport: text
           operations:
             - text
-          output_token_limit: 131072
+          output_token_limit: 65536
           controls:
             - id: max_tokens
               kind: integer
               minimum: 16
-              maximum: 131072
+              maximum: 65536
           limits:
             - id: context_tokens
               value: 1000000
@@ -3029,7 +3742,7 @@ providers:
                     region: singapore
                     effective_from: 2026-09-05T00:00:00Z
         - model: qwen3.8-27b
-          enabled: false
+          enabled: true
           created: 1788566400
           upstream_model: qwen3.8-27b
           transport: text
@@ -4360,6 +5073,11 @@ providers:
           operations:
             - text
           output_token_limit: 65536
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 65536
           reasoning_effort:
             adapter: gemini_interactions
             efforts:
@@ -6889,6 +7607,265 @@ providers:
               unavailable_reason: Exact Vertex prices require import for this offering.
               source: https://cloud.google.com/vertex-ai/generative-ai/pricing
               last_verified: '2026-09-07'
+    - id: vertex-project
+      verification:
+        transport: project_generate_content
+        model: gemini-4-hydrogen
+      connection_ownership: tenant
+      enabled: true
+      label: Vertex AI Project
+      api_service_label: Google Cloud Vertex AI Project
+      key_acquisition_url: https://console.cloud.google.com/agent-platform/studio/settings/api-keys
+      fields:
+        - id: api_key
+          label: API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ''
+          secret: true
+          validation:
+            minimum_length: 1
+        - id: project_base_url
+          label: Project URL
+          kind: setting
+          type: url
+          required: true
+          default: ''
+          secret: false
+          validation:
+            allowed_schemes:
+              - https
+            pattern: '^https://aiplatform\.googleapis\.com/v1/projects/([a-z][a-z0-9-]{4,28}[a-z0-9]|[1-9][0-9]{0,18})/locations/global$'
+      transports:
+        - id: project_generate_content
+          endpoint:
+            protocol: http
+            method: POST
+            setting_field: project_base_url
+            path: /publishers/google/models
+          components:
+            request_codec:
+              id: vertex_generate_content
+            response_codec:
+              id: vertex_generate_content
+            authentication:
+              kind: header
+              field: api_key
+              header: x-goog-api-key
+              prefix: ''
+            execution:
+              id: synchronous_completion
+      offerings:
+        - model: gemini-4-neon
+          enabled: true
+          created: 1794960000
+          upstream_model: gemini-4-neon
+          transport: project_generate_content
+          structured_output: *gemini_schema
+          operations:
+            - text
+          output_token_limit: 65536
+          reasoning_effort:
+            adapter: vertex_generate_content
+            efforts:
+              - low
+              - medium
+              - high
+              - xhigh
+          limits:
+            - id: context_tokens
+              value: 1048576
+              unit: tokens
+          media_inputs:
+            - image
+            - audio
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-neon
+              last_verified: '2026-11-19'
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 3000
+              unit: files
+              scope: request
+              source: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-neon
+              last_verified: '2026-11-19'
+            - id: audio_count
+              media_type: audio
+              transport: any
+              status: bounded
+              value: 1
+              unit: files
+              scope: request
+              source: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-neon
+              last_verified: '2026-11-19'
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 7000000
+              unit: bytes
+              scope: attachment
+              source: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-neon
+              last_verified: '2026-11-19'
+            - id: audio_inline_bytes
+              media_type: audio
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: attachment
+              source: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-neon
+              last_verified: '2026-11-19'
+          prices:
+            - operation: text
+              available: true
+              source: https://cloud.google.com/model-garden/pricing
+              last_verified: '2026-11-19'
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: '3'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    region: global
+                    service_tier: standard
+                    effective_from: 2026-11-19T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '15'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    region: global
+                    service_tier: standard
+                    effective_from: 2026-11-19T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.15'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    region: global
+                    service_tier: standard
+                    effective_from: 2026-11-19T00:00:00Z
+                    cache_class: read
+        - model: gemini-4-hydrogen
+          enabled: true
+          created: 1794441600
+          upstream_model: gemini-4-hydrogen
+          transport: project_generate_content
+          structured_output: *gemini_schema
+          operations:
+            - text
+          default_operations:
+            - text
+          output_token_limit: 65536
+          reasoning_effort:
+            adapter: vertex_generate_content
+            efforts:
+              - low
+              - medium
+              - high
+              - xhigh
+          limits:
+            - id: context_tokens
+              value: 1048576
+              unit: tokens
+          media_inputs:
+            - image
+            - audio
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-hydrogen
+              last_verified: '2026-11-19'
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 3000
+              unit: files
+              scope: request
+              source: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-hydrogen
+              last_verified: '2026-11-19'
+            - id: audio_count
+              media_type: audio
+              transport: any
+              status: bounded
+              value: 1
+              unit: files
+              scope: request
+              source: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-hydrogen
+              last_verified: '2026-11-19'
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 7000000
+              unit: bytes
+              scope: attachment
+              source: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-hydrogen
+              last_verified: '2026-11-19'
+            - id: audio_inline_bytes
+              media_type: audio
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: attachment
+              source: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-hydrogen
+              last_verified: '2026-11-19'
+          prices:
+            - operation: text
+              available: true
+              source: https://cloud.google.com/model-garden/pricing
+              last_verified: '2026-11-19'
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: '1.5'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    region: global
+                    service_tier: standard
+                    effective_from: 2026-11-19T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '7.5'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    region: global
+                    service_tier: standard
+                    effective_from: 2026-11-19T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.075'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    region: global
+                    service_tier: standard
+                    effective_from: 2026-11-19T00:00:00Z
+                    cache_class: read
+
     - id: dictator
       verification:
         transport: speech

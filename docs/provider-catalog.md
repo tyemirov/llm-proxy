@@ -14,6 +14,7 @@ The catalog defines provider declarations, exact models, offerings, prices, and 
 Read the YAML for the complete inventory. Use public capability discovery for enabled routes.
 Disabled entries remain validated source declarations. They do not establish runtime availability.
 
+The [current OpenAI GPT-6 routes](gpt62-sol.md) cover the seven general-purpose text/image models through GPT-6.2. Their curated source update, production activation and live qualification have separate validation records.
 The two [GLM 5.3 candidates](zai-current-models.md) remain disabled during provider qualification.
 [Qwen 3.8 Flash](qwen-current-models.md) is enabled after live text, reasoning, image, and usage qualification.
 The other four Alibaba Qwen 3.8 offerings remain disabled. The separate

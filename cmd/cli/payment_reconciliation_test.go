@@ -18,6 +18,7 @@ func TestHostedPaymentsCLIRecordsAndReplaysReconciliationRun(t *testing.T) {
 	configurationText := strings.ReplaceAll(completeManagementYAML(), "/tmp/llm-proxy-test.sqlite", filepath.Join(directory, "audit.sqlite")) + `
 payments:
   environment: sandbox
+  checkout_url: https://checkout.example/app/
   client_token: test_fixture
   processor_account_id: processor-fixture
   supplier_id: supplier-fixture

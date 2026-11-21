@@ -1,6 +1,6 @@
 // @ts-check
 
-import { renderBrandIcon } from "./brandIcons.js?v=20261117b333";
+import { renderBrandIcon } from "./brandIcons.js?v=20261119paymentfix";
 
 /** Present a catalog logo when Alpine supplies its identity. */
 class BrandIconElement extends HTMLElement {

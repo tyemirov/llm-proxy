@@ -14,7 +14,7 @@ incomplete result and never continues partial JSON.
 Its execution remains synchronous. Requests use `store:false` and omit `background`.
 Local protocol tests establish code behavior. The live acceptance requirements below remain separate.
 
-All five active Qwen offerings in the source catalog use `dashscope_responses` with
+All six active Qwen offerings in the source catalog use `dashscope_responses` with
 `synchronous_completion`. The default remains `qwen-plus`.
 
 | Model | Input |
@@ -24,8 +24,9 @@ All five active Qwen offerings in the source catalog use `dashscope_responses` w
 | `qwen3.7-plus` | Text and images |
 | `qwen3.6-flash` | Text and images |
 | `qwen3.8-flash` | Text and images |
+| `qwen3.8-27b` | Text and images |
 
-The private catalog also contains four disabled [Qwen 3.8 candidates](qwen-current-models.md).
+The private catalog also contains three disabled [Qwen 3.8 candidates](qwen-current-models.md).
 Those models add explicit reasoning control through the same Responses codec.
 
 The tenant assigns an Alibaba Cloud connection with a Singapore workspace URL and the matching regional API key.
@@ -47,7 +48,7 @@ Each complete image Data URI can contain at most 20,000,000 bytes.
 The `attachment_data_uri_bytes` scope includes the MIME type, URI prefix, and Base64 content.
 This encoded limit also keeps each raw image below the provider's 20 MB raw limit.
 The total request bound remains unknown in the catalog.
-B195 applies these limits to all three active DashScope image offerings.
+B195 applies these limits to all four active DashScope image offerings.
 
 The codec reads assistant `output_text` content and native usage totals.
 It retains the optional `usage.output_tokens_details.reasoning_tokens` count;

@@ -39,6 +39,7 @@ They identify the installed artwork. The collection is not an official asset pac
 | `xai` | xAI API | xAI symbol | `xai.svg` |
 | `baidu` | Qianfan API | Baidu Cloud symbol | `baiducloud-color.svg` |
 | `vertex` | Google Cloud Vertex AI | Vertex AI product symbol | `vertexai-color.svg` |
+| `vertex-project` | Google Cloud Vertex AI Project | Vertex AI product symbol | `vertexai-color.svg` |
 | `dictator` | Dictator API | Explicit text-only presentation | No verified small logo |
 | `fal` | FAL API | Explicit text-only presentation | No reviewed logo asset |
 | `elevenlabs` | ElevenLabs API | Explicit text-only presentation | No reviewed logo asset |

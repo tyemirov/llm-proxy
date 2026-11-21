@@ -48,7 +48,7 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20261117b333";
+const applicationModuleRevision = "20261119paymentfix";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
@@ -58,6 +58,9 @@ const applicationModuleFiles = Object.freeze([
   "constants.js",
   "startupGuard.js",
   "core/backendClient.js",
+  "core/paymentContinuation.js",
+  "core/paddleCheckout.js",
+  "ui/fundingCheckout.js",
   "core/automaticUpdates.js",
   "core/managementProfile.js",
   "core/mprShell.js",
@@ -811,6 +814,11 @@ test("rendered application module entries and their complete internal graph shar
   const response = await request.get(`${baseURL}${applicationPath}`);
   expect(response.status()).toBe(httpOK);
   const html = await response.text();
+  const firstScript = /<script\b[^>]*>[\s\S]*?<\/script>/u;
+  const bootstrap = firstScript.exec(html)?.[0];
+  expect(bootstrap).toMatch(/^<script id="llm-proxy-payment-continuation">/u);
+  const landing = await (await request.get(baseURL)).text();
+  expect(firstScript.exec(landing)?.[0]).toBe(bootstrap);
   const entries = [...html.matchAll(/<script\b[^>]*type="module"[^>]*src="([^"]+)"/gu)]
     .map(match => new URL(match[1], `${baseURL}${applicationPath}`));
   expect(entries.map(url => url.pathname).sort()).toEqual([
@@ -1475,6 +1483,38 @@ test("the public resource generator rejects incomplete or unsafe shell documents
   }
 });
 
+test("paid pilot pages explain funding and link payment support at narrow width", async ({ page }) => {
+  await installAssetRoutes(page,{initialAuthStatus:"unauthenticated"});
+  await page.setViewportSize({width:390,height:844});
+  await page.goto(baseURL);
+  await expect(page.getByRole("link",{name:"Paid pilot pricing",exact:true})).toHaveAttribute("href","/pricing/");
+  await page.getByRole("link",{name:"Paid pilot pricing",exact:true}).click();
+  await expect(page.getByRole("button",{name:"Log In",exact:true})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"LLM Proxy paid pilot",exact:true})).toBeVisible();
+  await expect(page.locator("main")).toContainText("USD 5");
+  await expect(page.locator("main")).toContainText("one-time");
+  await expect(page.locator("main")).toContainText("tax");
+  await expect(page.getByRole("link",{name:"Refunds and payment support",exact:true})).toHaveAttribute("href","/refunds/");
+  await page.getByRole("link",{name:"Refunds and payment support",exact:true}).click();
+  await expect(page.getByRole("button",{name:"Log In",exact:true})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Refunds and payment support",exact:true})).toBeVisible();
+  await expect(page.locator("main").getByRole("link",{name:"Paddle Refund Policy",exact:true})).toHaveAttribute("href","https://www.paddle.com/legal/refund-policy");
+  await expect(page.locator("main").getByRole("link",{name:"Request payment help",exact:true})).toHaveAttribute("href","https://paddle.net/");
+  await expect(page.locator("main").getByRole("link",{name:"support@mprlab.com",exact:true})).toHaveAttribute("href","mailto:support@mprlab.com");
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+});
+
+test("static purchase and legal pages fit narrow screens without shared scripts",async({page})=>{
+  await page.route("https://**",route=>route.abort());
+  await page.setViewportSize({width:390,height:844});
+  for(const publicPath of ["/pricing/","/refunds/",privacyPath,termsPath]){
+    await page.goto(`${baseURL}${publicPath}`);
+    await expect(page.locator("main h1")).toBeVisible();
+    await expect(page.locator(".public-site-footer-fallback")).toBeVisible();
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),publicPath).toBe(true);
+  }
+});
+
 test("legal pages publish one repo-grounded source with static and MPR-rendered semantics", async ({ request }) => {
   const legalPages = [
     {
@@ -1499,8 +1539,8 @@ test("legal pages publish one repo-grounded source with static and MPR-rendered 
     expect(html, legalPage.path).toContain(`<mpr-legal-document\n        type="${legalPage.type}"`);
     expect(html, legalPage.path).toContain(`<h1 class="mpr-legal-document__title">${legalPage.title}</h1>`);
     expect(html, legalPage.path).toContain(legalPage.requiredCopy);
-    expect(html, legalPage.path).toContain('effective-date="2026-08-08"');
-    expect(html, legalPage.path).toContain('last-updated-date="2026-08-08"');
+    expect(html, legalPage.path).toContain('effective-date="2026-11-19"');
+    expect(html, legalPage.path).toContain('last-updated-date="2026-11-19"');
   }
 });
 
@@ -1523,7 +1563,7 @@ test("the published site uses only app, login, account, and tenant terminology",
 
 test("public route families hydrate the shared MPR shell at desktop and mobile widths", async ({ page }) => {
   await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
-  const representativePublicPaths = ["/", apiDocumentationPath, resourcesPath, representativeResourcePath, privacyPath, termsPath];
+  const representativePublicPaths = ["/", apiDocumentationPath, resourcesPath, representativeResourcePath, privacyPath, termsPath,"/pricing/","/refunds/"];
 
   for (const viewport of [
     { width: 1280, height: 800 },
@@ -3182,7 +3222,7 @@ test("application startup waits for shared UI orchestration before DOMContentLoa
     await page.goto(baseURL + applicationPath, { waitUntil: "commit" });
     await expect(page.locator("html")).toHaveAttribute("data-llm-proxy-application", "ready");
     await page.evaluate(async () => {
-      const client = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261117b333");
+      const client = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261119paymentfix");
       await client.loadFrontendRuntimeConfig();
       await new Promise(requestAnimationFrame);
     });
@@ -3214,21 +3254,36 @@ test("image generation discovery reuses the OpenAI connection and catalog fields
   await expect(dialog.getByLabel("OpenAI API key", { exact: true })).toHaveAttribute("type", "password");
 });
 
-test("Vertex connection setup opens the catalog API Keys page", async ({ page }) => {
+test("Vertex connection setup exposes the project-scoped BYOK fields", async ({ page }) => {
   const catalog = loadYAML(await readFile(path.join(repoRoot, "configs/providers.yml"), "utf8"));
-  const vertex = catalog.providers.find((provider) => provider.id === "vertex");
   const profile = managementProfile();
   const gemini = profile.providers.find((provider) => provider.id === "gemini");
-  profile.providers.push({
-    ...gemini,
-    id: vertex.id,
-    label: vertex.label,
-    api_service_label: vertex.api_service_label,
-    key_acquisition_url: vertex.key_acquisition_url,
-    fields: vertex.fields.map((field) => ({ ...field, configured: false })),
-  });
+  for (const id of ["vertex", "vertex-project"]) {
+    const vertex = catalog.providers.find((provider) => provider.id === id);
+    profile.providers.push({
+      ...gemini,
+      id: vertex.id,
+      label: vertex.label,
+      api_service_label: vertex.api_service_label,
+      key_acquisition_url: vertex.key_acquisition_url,
+      fields: vertex.fields.map((field) => ({
+        ...field,
+        configured: false,
+        ...(field.secret ? {} : { value: field.default }),
+      })),
+    });
+  }
   await installAssetRoutes(page);
   await installManagementRoutes(page, { profile });
+  const submitted = [];
+  await page.route(`${baseURL}/api/management/connections`, async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    submitted.push(route.request().postDataJSON());
+    await route.fulfill({ status: 422, body: "provider_key_rejected" });
+  });
   await page.goto(baseURL + applicationPath);
   await page.locator("connection-dashboard").getByRole("button", { name: "Create connection", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Create connection" });
@@ -3237,6 +3292,24 @@ test("Vertex connection setup opens the catalog API Keys page", async ({ page })
   await expect(link).toHaveAttribute("href", "https://console.cloud.google.com/agent-platform/studio/settings/api-keys");
   await expect(link).toHaveAttribute("target", "_blank");
   await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  await expect(dialog.getByLabel("Project URL", { exact: true })).toHaveCount(0);
+  await dialog.getByRole("combobox", { name: "Provider", exact: true }).selectOption("vertex-project");
+  const key = dialog.getByLabel("API key", { exact: true });
+  const projectURL = dialog.getByLabel("Project URL", { exact: true });
+  await expect(key).toHaveAttribute("type", "password");
+  await expect(projectURL).toHaveAttribute("type", "url");
+  await expect(projectURL).toHaveAttribute("required", "");
+  await expect(projectURL).toHaveValue("");
+  const url = fixtureProviderSettingValue("vertex-project", { id: "project_base_url" });
+  await dialog.getByRole("textbox", { name: "Connection name" }).fill("Customer project");
+  await key.fill("fixture-project-api-key");
+  await projectURL.fill(url);
+  await dialog.getByRole("button", { name: "Create connection", exact: true }).click();
+  await expect.poll(() => submitted).toMatchObject([{
+    provider: "vertex-project",
+    fields: { api_key: "fixture-project-api-key", project_base_url: url },
+  }]);
+
 });
 
 test("connection setup uses each provider's required catalog fields", async ({ page }) => {
@@ -3336,7 +3409,10 @@ test("Qwen 3.8 Flash selection persists after reload and preserves defaults unti
   await page.reload();
   await dashboard.getByRole("button", {name:"Default Alibaba Cloud", exact:true}).click();
   await expect(dashboard.locator('[data-model="qwen3.8-flash"]')).toContainText("Default model");
-  for (const model of ["qwen3.8-max", "qwen3.8-max-0902", "qwen3.8-2.4t-a95b", "qwen3.8-27b"]) {
+  const active27B = dashboard.locator('[data-model="qwen3.8-27b"]');
+  await expect(active27B).toHaveCount(1);
+  await expect(active27B).not.toContainText("Default model");
+  for (const model of ["qwen3.8-max", "qwen3.8-max-0902", "qwen3.8-2.4t-a95b"]) {
     await expect(dashboard.locator(`[data-model="${model}"]`)).toHaveCount(0);
   }
 });
@@ -3724,7 +3800,7 @@ test("dashboard recovers its rate-limited bootstrap after shared authentication 
     window.dispatchEvent(new Event("online"));
   });
   expect(await page.evaluate(async () => {
-    const backend = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261117b333");
+    const backend = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261119paymentfix");
     try { await backend.loadFrontendRuntimeConfig(); return 200; }
     catch (error) { return error.status; }
   })).toBe(429);
@@ -5184,6 +5260,9 @@ function fixtureProviderSettingValue(providerID, field) {
   }
   if (providerID === "dashscope" && field.id === "base_url") {
     return "https://fixture.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1";
+  }
+  if (providerID === "vertex-project" && field.id === "project_base_url") {
+    return "https://aiplatform.googleapis.com/v1/projects/customer-fixture/locations/global";
   }
   if (field.default) {
     return field.default;

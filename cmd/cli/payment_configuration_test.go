@@ -18,6 +18,7 @@ func TestRootCommandPaymentConfigurationPresence(t *testing.T) {
 		{name: "omitted"},
 		{name: "empty", payments: "\npayments: {}\n", reason: "client_token must match the payment environment"},
 		{name: "incomplete", payments: "\npayments:\n  environment: sandbox\n", reason: "client_token must match the payment environment"},
+		{name: "nonboolean-checkout-gate", payments: "\npayments:\n  checkout_enabled: \"true\"\n", reason: "payments.checkout_enabled must be a boolean"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			directory := t.TempDir()

@@ -1,0 +1,156 @@
+--- a/configs/providers.yml
++++ b/configs/providers.yml
+@@ -406,6 +406,15 @@
+         - text
+       media_inputs:
+         - image
++    - id: gpt-6.2-sol
++      enabled: true
++      publisher: openai
++      family: gpt-6
++      version: gpt-6.2-sol
++      operations:
++        - text
++      media_inputs:
++        - image
+     - id: ernie-5.0
+       enabled: true
+       publisher: baidu
+@@ -1502,6 +1511,137 @@
+                     effective_from: 2026-09-07T00:00:00Z
+               source: https://developers.openai.com/api/docs/pricing
+               last_verified: '2026-09-07'
++          output_token_limit: 128000
++          controls:
++            - id: max_tokens
++              kind: integer
++              minimum: 1
++              maximum: 128000
++          limits:
++            - id: context_tokens
++              value: 1050000
++              unit: tokens
++            - id: input_tokens
++              value: 922000
++              unit: tokens
++            - id: output_tokens
++              value: 128000
++              unit: tokens
++        - model: gpt-6.2-sol
++          created: 1795249193
++          upstream_model: gpt-6.2-sol
++          transport: text
++          structured_output: *openai_schema
++          operations:
++            - text
++          request_profile: openai_responses_reasoning_tools
++          caller_tools: true
++          web_search: true
++          reasoning_effort:
++            adapter: openai_responses
++            efforts:
++              - low
++              - medium
++              - high
++              - xhigh
++              - max
++          media_inputs:
++            - image
++          media_limits:
++            - id: inline_request_bytes
++              media_type: all
++              transport: inline
++              status: bounded
++              value: 512000000
++              unit: bytes
++              scope: request_encoded_bytes
++              source: https://developers.openai.com/api/docs/guides/images-vision
++              last_verified: '2026-11-21'
++            - id: image_count
++              media_type: image
++              transport: any
++              status: bounded
++              value: 1500
++              unit: files
++              scope: request
++              source: https://developers.openai.com/api/docs/guides/images-vision
++              last_verified: '2026-11-21'
++            - id: image_inline_bytes
++              media_type: image
++              transport: inline
++              status: unknown
++              unit: bytes
++              scope: attachment
++              source: https://developers.openai.com/api/docs/guides/images-vision
++              last_verified: '2026-11-21'
++          prices:
++            - operation: text
++              available: true
++              rates:
++                - component: input_tokens
++                  currency: USD
++                  rate: '2'
++                  unit: USD/1M_tokens
++                  conditions:
++                    billing_mode: standard
++                    input_tokens:
++                      maximum_exclusive: 272001
++                    service_tier: standard
++                    effective_from: 2026-11-21T00:00:00Z
++                - component: output_tokens
++                  currency: USD
++                  rate: '10'
++                  unit: USD/1M_tokens
++                  conditions:
++                    billing_mode: standard
++                    input_tokens:
++                      maximum_exclusive: 272001
++                    service_tier: standard
++                    effective_from: 2026-11-21T00:00:00Z
++                - component: prompt_cache_read_tokens
++                  currency: USD
++                  rate: '0.1'
++                  unit: USD/1M_tokens
++                  conditions:
++                    billing_mode: standard
++                    input_tokens:
++                      maximum_exclusive: 272001
++                    service_tier: standard
++                    cache_class: read
++                    effective_from: 2026-11-21T00:00:00Z
++                - component: input_tokens
++                  currency: USD
++                  rate: '4'
++                  unit: USD/1M_tokens
++                  conditions:
++                    billing_mode: standard
++                    input_tokens:
++                      minimum: 272001
++                    service_tier: standard
++                    effective_from: 2026-11-21T00:00:00Z
++                - component: output_tokens
++                  currency: USD
++                  rate: '15'
++                  unit: USD/1M_tokens
++                  conditions:
++                    billing_mode: standard
++                    input_tokens:
++                      minimum: 272001
++                    service_tier: standard
++                    effective_from: 2026-11-21T00:00:00Z
++                - component: prompt_cache_read_tokens
++                  currency: USD
++                  rate: '0.2'
++                  unit: USD/1M_tokens
++                  conditions:
++                    billing_mode: standard
++                    input_tokens:
++                      minimum: 272001
++                    service_tier: standard
++                    cache_class: read
++                    effective_from: 2026-11-21T00:00:00Z
++              source: https://developers.openai.com/api/docs/pricing
++              last_verified: '2026-11-21'
+           output_token_limit: 128000
+           controls:
+             - id: max_tokens

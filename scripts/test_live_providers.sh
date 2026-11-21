@@ -423,14 +423,9 @@ redact_log() {
 }
 
 write_managed_live_config() {
-  awk -v port="${PORT}" '
-    /^  port: / && replaced == 0 {
-      print "  port: " port
-      replaced = 1
-      next
-    }
-    { print }
-  ' "${ROOT_DIR}/configs/config.yml" >"${CONFIG_PATH}"
+  python3 "${ROOT_DIR}/scripts/render_nonpayment_config.py" \
+    --source "${ROOT_DIR}/configs/config.yml" \
+    --output "${CONFIG_PATH}" --port "${PORT}" || return $?
   cp "${ROOT_DIR}/configs/providers.yml" "${PROVIDER_CATALOG_PATH}"
   if [[ -n "${CANDIDATE_ROUTE}" ]]; then
     python3 -c '
