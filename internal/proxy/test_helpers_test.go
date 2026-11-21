@@ -69,6 +69,28 @@ func NewTestRouter(t *testing.T, serverURL string) *gin.Engine {
 	return router
 }
 
+func catalogWithOpenAIDefaultFixture(t *testing.T, configure func(*proxy.ProviderCatalogOffering)) *proxy.ProviderCatalog {
+	t.Helper()
+	schema := testfixtures.ProviderCatalog(t).Schema()
+	for _, provider := range schema.Providers {
+		if provider.ID != proxy.ProviderNameOpenAI {
+			continue
+		}
+		for index, offering := range provider.Offerings {
+			if offering.Model == proxy.DefaultModel {
+				configure(&provider.Offerings[index])
+				catalog, err := proxy.NewProviderCatalog(schema)
+				if err != nil {
+					t.Fatalf("compile controlled OpenAI test catalog: %v", err)
+				}
+				return catalog
+			}
+		}
+	}
+	t.Fatalf("OpenAI default offering %s is absent", proxy.DefaultModel)
+	return nil
+}
+
 func buildRouterWithCatalogs(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger) (*gin.Engine, error) {
 	testingInstance.Helper()
 	configuration, catalogError := configurationWithCatalogs(testingInstance, configuration)

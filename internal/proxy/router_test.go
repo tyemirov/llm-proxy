@@ -259,7 +259,21 @@ func TestChatHandlersRejectInvalidPublicReasoningEffortBeforeUpstreamRequest(tes
 		responseWriter.WriteHeader(http.StatusInternalServerError)
 	}))
 	testingInstance.Cleanup(mockServer.Close)
-	router := NewTestRouter(testingInstance, mockServer.URL)
+	endpoints := proxy.NewEndpoints()
+	endpoints.SetResponsesURL(mockServer.URL)
+	catalog := catalogWithOpenAIDefaultFixture(testingInstance, func(offering *proxy.ProviderCatalogOffering) {
+		offering.ReasoningEffort = nil
+	})
+	router, err := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
+		ProviderCatalog:       catalog,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
+		RequestTimeoutSeconds: TestTimeout,
+		Endpoints:             endpoints,
+	}, zap.NewNop().Sugar())
+	if err != nil {
+		testingInstance.Fatalf(messageBuildRouterError, err)
+	}
+	withoutReasoning := proxy.DefaultModel
 
 	testCases := []struct {
 		name            string
@@ -268,10 +282,10 @@ func TestChatHandlersRejectInvalidPublicReasoningEffortBeforeUpstreamRequest(tes
 		body            string
 		expectedMessage string
 	}{
-		{name: "GET query", method: http.MethodGet, path: "/?key=" + TestSecret + "&prompt=review&model=" + "gpt-6.2-sol" + "&reasoning_effort=high"},
-		{name: "root JSON", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","model":"` + "gpt-6.2-sol" + `","reasoning_effort":"high"}`},
-		{name: "v2 JSON", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"` + "gpt-6.2-sol" + `","reasoning_effort":"high"}`},
-		{name: "supported route with unsupported effort", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"` + "gpt-6-sol" + `","reasoning_effort":"max"}`},
+		{name: "GET query", method: http.MethodGet, path: "/?key=" + TestSecret + "&prompt=review&model=" + withoutReasoning + "&reasoning_effort=high"},
+		{name: "root JSON", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","model":"` + withoutReasoning + `","reasoning_effort":"high"}`},
+		{name: "v2 JSON", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"` + withoutReasoning + `","reasoning_effort":"high"}`},
+		{name: "supported route with unsupported effort", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"gpt-6.1-sol","reasoning_effort":"none"}`},
 		{name: "GET blank effort", method: http.MethodGet, path: "/?key=" + TestSecret + "&prompt=review&model=" + "gpt-6-sol" + "&reasoning_effort="},
 		{name: "root JSON blank effort", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","model":"` + "gpt-6-sol" + `","reasoning_effort":""}`},
 		{name: "v2 JSON blank effort", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"` + "gpt-6-sol" + `","reasoning_effort":""}`},
