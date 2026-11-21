@@ -2469,6 +2469,7 @@ paths:
     get:
       operationId: listFundingOffers
       summary: List server funding offers
+      description: Returns 503 while funding checkout is disabled.
       tags: [Management]
       security:
         - TAuthSession: []
@@ -2540,6 +2541,7 @@ paths:
         The account and creation key identify one order. A repeated key returns
         that order. A changed offer or processor identity returns 409.
         Order creation does not grant funds or confirm payment.
+        The service returns 503 while funding checkout is disabled.
       x-llm-proxy-required-request-content-type: application/json
       parameters:
         - $ref: '#/components/parameters/BillingAccountID'

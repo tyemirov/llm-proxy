@@ -45,8 +45,14 @@ Alibaba maps those other names to existing levels.
 F050 exposes only the distinct values.
 
 Public `max_tokens` maps to `max_output_tokens`.
-The configured range is 16 through 65,536 tokens for Flash and 27B.
-The three disabled candidate offerings retain their 131,072-token maximum.
+When the caller omits `max_tokens`, the proxy sends the catalog maximum for the selected offering.
+
+| DashScope offering | Accepted `max_tokens` range | `max_output_tokens` on omission |
+|---|---:|---:|
+| `qwen3.8-flash` | 16–65,536 | 65,536 |
+| `qwen3.8-27b` | 16–131,072 | 131,072 |
+
+The three disabled candidate offerings also declare a 131,072-token maximum.
 For Qwen 3.8, this limit includes reasoning and visible output together.
 The context window is 1,000,000 tokens.
 That is the nominal model window. Alibaba's Responses reference states that effective input context is approximately 80% of the model window and excess input is automatically truncated.

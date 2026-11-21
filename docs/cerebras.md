@@ -18,15 +18,17 @@ This is a different model from Alibaba's hosted `qwen3.8-flash`.
 
 Requests use `https://api.cerebras.ai/v1/chat/completions`.
 `max_tokens` maps to `max_completion_tokens`, including reasoning and visible output.
-The current paid-account catalog profile declares 131,072 context tokens and the
-[documented 40,960-token output ceiling](https://inference-docs.cerebras.ai/models/qwen-3.8-27b.md).
-An omitted caller cap uses that catalog ceiling automatically. The user identified
-the selected account as Pay-As-You-Go.
+The shared offering accepts keys without tier classification. It declares the
+Free Trial limits of 65,536 context tokens and 32,768 output tokens. When the
+caller omits `max_tokens`, the proxy sends 32,768 as `max_completion_tokens`.
+Cerebras includes that allowance in its quota check before generation. Callers
+can set a smaller cap when required by their project quota.
 
-Earlier qualification accepted a requested 65,536-token parameter, but one HIGH
-run stopped at 40,960 completion tokens with reasoning only. Parameter acceptance
-did not establish a larger native capacity. The current catalog uses the native
-output ceiling rather than that earlier request setting.
+Cerebras documents 131,072 context tokens and 40,960 output tokens for eligible
+higher tiers. The user identified the qualification account as Pay-As-You-Go.
+That account accepted a requested 65,536-token parameter during qualification.
+One `high` run stopped at 40,960 completion tokens with reasoning only, which
+established no capacity beyond the documented paid ceiling.
 
 The accepted reasoning efforts are `none`, `low`, `medium`, and `high`, transmitted
 unchanged. Cerebras maps `high` to Qwen-native `xhigh`; effort labels do not establish
@@ -119,6 +121,7 @@ Source catalog enablement, publication, and production routing remain separate.
 ## Sources
 
 - [Model limits and prices](https://inference-docs.cerebras.ai/models/qwen-3.8-27b)
+- [Token quota checks](https://inference-docs.cerebras.ai/support/rate-limits.md)
 - [Reasoning controls](https://inference-docs.cerebras.ai/capabilities/reasoning)
 - [Structured output subset](https://inference-docs.cerebras.ai/capabilities/structured-outputs)
 - [Chat Completions API](https://inference-docs.cerebras.ai/api-reference/chat-completions)
