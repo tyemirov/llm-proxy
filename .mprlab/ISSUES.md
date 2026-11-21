@@ -44,6 +44,56 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
 
 ## BugFixes
 
+- [x] [B344] (P1) Keep live funding closed until the Paddle destination is verified.
+  Evidence: With payment processing configured, the live runtime exposes funding offers before the Paddle destination is active. The controlled runtime reproduced HTTP 200 where the closed checkout requires 503.
+  Resolution: The production config leaves `payments.checkout_enabled` false. The signed webhook and event worker run independently of checkout admission and delivery. The activation handoff requires positive signed delivery before opt-in.
+  Validation: The normal service returns 503 for offers and creation, leaves a queued order undispatched, rejects an unsigned event, and settles a signed refund while checkout is closed. The opt-in service still creates and fulfills a funding order. The CLI rejects a nonboolean gate. CI found a checkout cancellation fixture that reported `runtime did not start its financial read`. The shared full-payment fixture now opts in explicitly so cancellation and recovery still exercise checkout delivery.
+  Final validation: Local `CI=1 make ci` passed all 15 gates for B344 through B351 in 881 seconds, with 100.0% Go statement coverage, 190 frontend browser cases, and 21 authenticated browser cases.
+  Files: Payment runtime, funding-order handlers, router, CLI config, production config, Paddle test fixture, OpenAPI reference, and activation and billing guides.
+
+- [x] [B345] (P2) Defer events with corrupt retained payment observations.
+  Evidence: Equal-revision payment events with a digest mismatch or undecodable retained evidence aborted the ordered inbox batch.
+  Resolution: Defer the affected event with `transaction_observation_integrity`. Its regular retry schedule and retained reason allow reconciliation while later events continue.
+  Validation: Signed lifecycle and refund events leave the affected account unchanged, a later completion credits another account, and the deferred event applies after evidence repair at its scheduled retry time.
+  Files: Payment state and processing code, payment protocol fixtures, inbox regression, and billing guide.
+
+- [x] [B346] (P2) Allow switching between known funding orders.
+  Evidence: After an overlay closed, selecting another known pending order left the browser on the first order.
+  Resolution: History and checkout links can select another known order. An unresolved order creation retains its original idempotency key.
+  Validation: The browser switches between retained orders without another order creation and preserves the original key for an ambiguous creation.
+  Files: Browser funding checkout module, application module revisions, and payment browser tests.
+
+- [x] [B347] (P2) Remove payment link identifiers before analytics scripts run.
+  Evidence: With the external continuation bootstrap blocked, Google Analytics and LoopAware saw `funding_order_id` and `_ptxn` in the current URL.
+  Resolution: Both browser entry documents capture and strip the parameters inline before loading external scripts.
+  Validation: The rendered-page check verifies matching inline capture, and controlled Google Analytics and LoopAware scripts observe clean URLs with the former bootstrap URL blocked. Initial CI reported `paymentContinuationBootstrap.js: No such file or directory` when the fixture copied the deleted source from the index. The installed Gateway check passes with the obsolete bootstrap removed from the working tree.
+  Files: Browser entry HTML, application module revisions, static-page and browser tests, and the installed Gateway fixture that copies tracked working-tree files.
+
+- [x] [B348] (P2) Run local startup preparation on Python 3.9.
+  Evidence: Python 3.9.6 raises `TypeError: unsupported operand type(s) for |` while importing the non-payment configuration renderer, before `make up` starts Compose.
+  Resolution: Postpone annotation evaluation in the renderer.
+  Validation: The renderer and controlled `make up` and `make down` contracts pass with Python 3.9.6 selected as the host `python3`.
+  Files: `scripts/render_nonpayment_config.py`.
+
+- [x] [B349] (P2) Use portable Cerebras limits for unclassified connections.
+  Evidence: The router dispatched an omitted output cap as 40,960 tokens, above the 32,768-token Free Trial ceiling. The shared connection accepts keys without tier classification.
+  Resolution: Declare 32,768 output tokens and 65,536 context tokens for the shared offering. The explicit paid qualification harness retains its separate scope.
+  Validation: Discovery and explicit and omitted cap tests verify the portable limits. Qualification budget tests use the current catalog and still enforce admission and settlement.
+  Files: Provider catalog, Cerebras guide, router and protocol tests, and qualification budget tests.
+
+- [x] [B350] Document the actual DashScope 27B output limit.
+  Evidence: The model guide described a 65,536-token ceiling for 27B. The active catalog and router use 131,072.
+  Resolution: Document Flash and 27B independently with their accepted ranges and exact caps on omission.
+  Validation: Router tests verify 65,536 for Flash and 131,072 for 27B on omission.
+  Files: Qwen model guide and output ceiling tests.
+
+- [x] [B351] (P2) Preserve paid checkout confirmation during dashboard startup.
+  Evidence: Final CI reached the authenticated browser suite and received HTTP 200 for the paid order and its matching checkout. A subsequent startup render replaced the funding widget. The browser expected `Payment verified: paid` and found `Choose funding amount` instead. Twenty other authenticated cases passed.
+  Requirements: Keep the owned payment link available until the dashboard's initial funding widget can show the verified status. Preserve checkout ownership and duplicate-order protection.
+  Resolution: Preserve the initial disabled routing controls and mount billing widgets on the completed dashboard render.
+  Validation: Holding the real initial assignments response reproduced an early checkout mount. The regression now keeps checkout unmounted until startup completes and verifies the paid confirmation. An initial fix delayed all controls and failed the existing held tenant profile test with `element(s) not found`. After narrowing the startup change to billing widgets, all 21 authenticated browser cases and seven related management browser cases passed.
+  Files: `site/assets/llm-proxy/js/ui/connectionDashboard.js` and `tests/blackbox/hosted-payments.spec.js`.
+
 - [x] [B343] Isolate non-payment runtimes from production Paddle configuration.
   Evidence: F101 final CI reproduces provider-harness generated configuration retaining `api_key:` and all three production payment placeholders. Local Compose also mounts that production configuration while its scoped environment excludes payment inputs; the tagged recovery fixture copies the same block.
   Requirements: Explicitly disable payments in provider qualification, local Compose, and non-payment recovery fixtures. Keep production payment configuration and the explicit local payment protocol scenarios intact. Preserve all other service configuration.
@@ -4618,6 +4668,12 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
 
 ## Features
 
+- [-] [F103] (P1) Add current general-purpose OpenAI routes through GPT-6.2.
+  Goal: Make the current GPT-6, GPT-6.1 and GPT-6.2 text/image models explicitly selectable, including GPT-6.2 Sol for the authorized iRoom comparison.
+  Requirements: Add gpt-6-sol, gpt-6.1-sol, gpt-6.1-terra, gpt-6.2-astra and gpt-6.2-sol. Audit existing gpt-6-astra and gpt-6-luna. Reuse the existing Responses transport, image inputs and strict schema policy. Preserve saved provider defaults, credentials and unrelated catalogue entries. Declare exact documented reasoning efforts, context/output limits and Standard input/output/cache-read price tiers. Separate published input caps from retained conservative proxy caps; keep unrepresented cache-retention prices unavailable on new routes.
+  Deliverables: Catalogue declarations, table-driven public HTTP/discovery/rejection/price-boundary tests, and the current-route guide.
+  Validation: Failure-first public discovery and HTTP tests reproduced the four additional absent routes before expansion. Focused local protocol and catalogue checks verify exact route selection, every documented effort, strict image/schema output, usage headers, request rejection, source dates and price tiers. Independent final review, whole-task final CI and the authorized curated release/publish/deploy sequence remain primary-owned. Provider-account qualification remains separate from local protocol evidence.
+
 - [x] [F102] Add owned-order continuation for Paddle checkout links.
   Goal: Open the existing customer transaction through an application-specific checkout page.
   Requirements: Require an HTTPS `payments.checkout_url`; send native `checkout.url` with the server funding order; capture and remove query candidates before external scripts; preserve the candidate through sign-in; verify order ownership, exact retained transaction, and eligible state through existing APIs; preserve single-attempt creation and server-only funds verification.
@@ -4631,6 +4687,7 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
   Requirements: Verify current account/domain approval and supplier identity; configure a dedicated live product, one-time USD 5 funding price, client token, server credential, notification destination and secret; preserve other applications; wire production inputs through the selected manifest; use durable checkout and webhook hosts; validate signed fulfillment and exact financial conservation.
   Progress: Authenticated live UI/API confirm MPR Lab seller 287367, account `slr_01kgtaq3a0qyht2skncvt4hkem`, with all onboarding steps completed. Created product `pro_01m7tvgx960ptsks35fjqcws1e` and one-time USD 5 external-tax price `pri_01m7tvjahkr1qcax59g9cn2e7j`. After action-time approval, created the dedicated API key (expires 2027-02-17), public client token and 12-event webhook `ntfset_01m7tw0kqx1ehna0eg98b6fj7q`. All three credentials are in the canonical private input; destination is inactive until deployment. The exact checkout subdomain needs review. F102 owns authenticated continuation; utils F105 is published as v0.20.0 and adopted through normal dependency resolution. Production config, manifest wiring, and public purchase disclosures are prepared. The operator selected unrestricted authenticated funding. Independent review has no remaining actionable findings; focused payment, browser, lint, lifecycle and Governor checks pass. Final application CI passed all 15 gates in 958 seconds with 100.0% Go coverage, 190 frontend and 19 authenticated browser cases; code content was unchanged during the run. F102, B342 and B343 are complete. No production rollout or real live charge has occurred.
   Validation: Start with relevant public-entrypoint checks, complete independent review before financial-boundary changes, validate actual live checkout/fulfillment/replay/reconciliation/isolation/backup, and run required final CI at the selected checkpoint. Preserve source publication and production rollout gates.
+  Review follow-up: B344 through B351 passed final application CI. The tracked production configuration keeps checkout closed. The activation record requires verified signed platform delivery before the operator enables checkout.
   Blocked: Application source delivery/publication and operator-owned production rollout remain pending. The exact checkout domain needs Paddle approval; afterward the payer must approve and complete a real charge, followed by signed fulfillment, replay, isolation, reconciliation and backup validation. The dedicated destination remains inactive until deployment.
 
 
