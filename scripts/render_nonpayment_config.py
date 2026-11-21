@@ -4,6 +4,8 @@ This is a narrow transformation of the canonical layout, not a YAML parser.
 Unsupported root syntax is rejected instead of interpreting another layout.
 """
 
+from __future__ import annotations
+
 import argparse
 from pathlib import Path
 import re
