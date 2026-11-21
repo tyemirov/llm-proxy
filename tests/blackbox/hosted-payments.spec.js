@@ -308,8 +308,25 @@ test('checkout link resumes the owned transaction after sign-in without creating
  // Verified completed orders show their server status and never reopen checkout.
  await processor.event(stack.llmProxyOrigin,'transaction.completed',processor.complete(order.id));
  await expect.poll(async()=>(await (await context.request.get(root+`/funding-orders/${order.id}`,{headers})).json()).state).toBe('paid');
- await page.goto(`${stack.frontendOrigin}/app/?funding_order_id=${order.id}&_ptxn=${transaction.id}`);
- await expect(page.getByRole('region',{name:'Add funds',exact:true})).toContainText('Payment verified: paid');
+ const assignmentsURL=`${stack.llmProxyOrigin}/api/management/tenants/*/connections`;
+ const releaseAssignments=Promise.withResolvers();
+ const holdAssignments=async route=>{
+  const response=await route.fetch();
+  await releaseAssignments.promise;
+  return route.fulfill({response});
+ };
+ await page.route(assignmentsURL,holdAssignments);
+ const requestedAssignments=page.waitForRequest(assignmentsURL);
+ const paidFunding=page.getByRole('region',{name:'Add funds',exact:true});
+ try {
+  await page.goto(`${stack.frontendOrigin}/app/?funding_order_id=${order.id}&_ptxn=${transaction.id}`);
+  await requestedAssignments;
+  // The initial tenant load must not mount a checkout that its final render would replace.
+  await expect(page.locator('connection-dashboard')).toHaveAttribute('aria-busy','true');
+  await expect(paidFunding).toHaveCount(0);
+ } finally {releaseAssignments.resolve(undefined);}
+ await expect(paidFunding).toContainText('Payment verified: paid');
+ await page.unroute(assignmentsURL,holdAssignments);
  expect(await page.evaluate(()=>window.paddleFixture?.opened || [])).toEqual([]);
  // A second authenticated account cannot resolve the original account's order.
  await context.clearCookies();
@@ -389,7 +406,52 @@ async function reviewOrder(context,root,headers,key) {
  return {order,transaction,url:`${stack.frontendOrigin}/app/?funding_order_id=${order.id}&_ptxn=${transaction.id}`};
 }
 
-test('checkout review blocks query auto-open when the early bootstrap cannot load',async({page,context})=>{
+test('checkout review hides payment identifiers from analytics without a bootstrap download',async({page,context})=>{
+ await prepareManagementPage(page,context,stack);
+ await page.route('**/paymentContinuationBootstrap.js?*',route=>route.abort('failed'));
+ for(const [name,pattern] of [
+  ['google','https://www.googletagmanager.com/gtag/js?*'],
+  ['loopaware','https://loopaware.mprlab.com/pixel.js?*'],
+ ]) {
+  await page.route(pattern,route=>route.fulfill({contentType:'application/javascript',
+   body:`(window.analyticsURLs ||= {})[${JSON.stringify(name)}] = location.href;`}));
+ }
+ for(const path of ['/','/app/']) {
+  if(path==='/app/') {
+   await page.getByRole('button',{name:'Sign in with Google',exact:true}).click();
+   await expect(page).toHaveURL(/\/app\//);
+  }
+  const cleanURL=`${stack.frontendOrigin}${path}?source=return#funding`;
+  await page.goto(`${stack.frontendOrigin}${path}?source=return&funding_order_id=funding-${'1'.repeat(32)}&_ptxn=txn_${'2'.repeat(26)}#funding`);
+  await expect.poll(()=>page.evaluate(()=>window.analyticsURLs)).toEqual({google:cleanURL,loopaware:cleanURL});
+  await expect(page).toHaveURL(cleanURL);
+ }
+});
+
+test('checkout review switches between known pending orders through history and a payment link',async({page,context})=>{
+ const {headers,root,funding}=await checkoutReviewPage(page,context);
+ const first=await reviewOrder(context,root,headers,'switch-pending-first');
+ const second=await reviewOrder(context,root,headers,'switch-pending-second');
+ const orderIDs=(await allFundingOrders(context,root,headers)).map(order=>order.id).sort();
+ await page.goto(stack.frontendOrigin+'/app/');
+ const checkout=page.getByRole('dialog',{name:'Controlled Paddle checkout'});
+ for(const retained of [first,second]) {
+  const row=await revealPaymentHistoryOrder(page,retained.order.id);
+  await row.getByRole('button',{name:'Continue payment',exact:true}).click();
+  await expect(checkout).toBeVisible();
+  expect(await page.evaluate(()=>window.paddleFixture.opened.at(-1).transactionId)).toBe(retained.transaction.id);
+  await page.getByRole('button',{name:'Close controlled checkout',exact:true}).click();
+ }
+ await page.goto(first.url);
+ await expect(checkout).toBeVisible();
+ expect(await page.evaluate(()=>window.paddleFixture.opened.at(-1).transactionId)).toBe(first.transaction.id);
+ const orders=await allFundingOrders(context,root,headers);
+ expect(orders.map(order=>order.id).sort()).toEqual(orderIDs);
+ expect(orders.filter(order=>[first.order.id,second.order.id].includes(order.id)).map(order=>order.state)).toEqual(['pending','pending']);
+ await expect(funding.getByRole('button',{name:'Retry payment link',exact:true})).toHaveCount(0);
+});
+
+test('checkout review blocks query auto-open if identifiers are present at the SDK boundary',async({page,context})=>{
  const {headers,root,funding}=await checkoutReviewPage(page,context);
  const candidates=[await reviewOrder(context,root,headers,'bootstrap-load-failure'),await reviewOrder(context,root,headers,'bootstrap-history-before-target')].sort((left,right)=>left.order.id.localeCompare(right.order.id));
  const retained=candidates[1];
@@ -401,9 +463,8 @@ test('checkout review blocks query auto-open when the early bootstrap cannot loa
   const response=await route.fetch({url:url.href});await historyGate;return route.fulfill({response});
  };
  await page.route(root+'/funding-orders?*',delayedFirstPage);
- const foreign='txn_'+'z'.repeat(26);
- await page.route('**/paymentContinuationBootstrap.js?*',route=>route.abort('failed'));
- await page.goto(`${stack.frontendOrigin}/app/?funding_order_id=${retained.order.id}&_ptxn=${foreign}`);
+ await page.route('https://www.googletagmanager.com/**',route=>route.abort('failed'));
+ await page.goto(stack.frontendOrigin+'/app/');
  await expect(funding).toBeVisible();
  const revealing=revealPaymentHistoryOrder(page,retained.order.id);
  try {
@@ -412,6 +473,8 @@ test('checkout review blocks query auto-open when the early bootstrap cannot loa
  } finally {releaseHistory();}
  const row=await revealing;
  await page.unroute(root+'/funding-orders?*',delayedFirstPage);
+ const foreign='txn_'+'z'.repeat(26);
+ await page.evaluate(url=>history.replaceState(history.state,'',url),`?funding_order_id=${retained.order.id}&_ptxn=${foreign}`);
  await row.getByRole('button',{name:'Continue payment',exact:true}).click();
  await expect(funding).toHaveAttribute('aria-busy','false');
  await expect(page.getByRole('dialog',{name:'Controlled Paddle checkout'})).toHaveCount(0);
@@ -512,9 +575,13 @@ test('checkout review terminal link leaves an unrelated active checkout and its 
  const original=await page.evaluate(id=>JSON.parse(sessionStorage.getItem('llm-proxy:funding-intent:'+id)),accountID);
  await page.getByRole('button',{name:'Close controlled checkout',exact:true}).click();
  const other=await reviewOrder(context,root,headers,'active-checkout-terminal-link');
+ const checkoutURL=root+`/funding-orders/${other.order.id}/checkout`;
+ const unavailable=route=>route.fulfill({status:503,json:{error:{code:'funding_unavailable',detail:'controlled failure'}}});
+ await page.route(checkoutURL,unavailable);
  await page.goto(other.url);
  await expect(funding.getByRole('button',{name:'Retry payment link',exact:true})).toBeVisible();
  await expect(funding).toHaveAttribute('aria-busy','false');
+ await page.unroute(checkoutURL,unavailable);
  await funding.getByRole('button',{name:'Resume checkout',exact:true}).click();
  await expect(page.getByRole('dialog',{name:'Controlled Paddle checkout'})).toBeVisible();
  const active=await page.evaluate(()=>window.paddleFixture.opened.at(-1).transactionId);

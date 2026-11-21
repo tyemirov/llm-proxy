@@ -51,7 +51,7 @@ export async function startPaddleProtocolFixture() {
   const origin=`http://127.0.0.1:${server.address().port}`;
   const totals=(principal)=>({subtotal:String(principal),tax:String(principal/10),total:String(principal*1.1),grand_total:String(principal*1.1),grand_total_tax:String(principal/10),fee:'30',retained_fee:'0',earnings:String(principal-30),currency_code:'USD'});
   return {
-    config:{checkout_url:'https://checkout.example/app/',environment:'sandbox',client_token:'test_browserfixture',processor_account_id:'browser-processor',supplier_id:'browser-supplier',api_key:apiKey,api_base_url:origin,webhook_secret:webhookSecret,offers:[{code:'five',price_id:priceID,funding_cents:500}]},
+    config:{checkout_enabled:true,checkout_url:'https://checkout.example/app/',environment:'sandbox',client_token:'test_browserfixture',processor_account_id:'browser-processor',supplier_id:'browser-supplier',api_key:apiKey,api_base_url:origin,webhook_secret:webhookSecret,offers:[{code:'five',price_id:priceID,funding_cents:500}]},
     transactions,failures,
     get portalCalls(){return portalCalls;},
     cancel(orderID) {

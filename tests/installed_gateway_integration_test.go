@@ -29,8 +29,13 @@ fixture_root="$(cd "$fixture_root" && pwd -P)"
 application_root="$fixture_root/application"
 mkdir -p "$application_root"
 while IFS= read -r -d '' relative_path; do
+  source_path="$repository_root/$relative_path"
+  # A tracked deletion can still appear in the index before staging.
+  if [[ ! -e "$source_path" && ! -L "$source_path" ]]; then
+    continue
+  fi
   mkdir -p "$application_root/$(dirname "$relative_path")"
-  cp -P "$repository_root/$relative_path" "$application_root/$relative_path"
+  cp -P "$source_path" "$application_root/$relative_path"
 done < <(git -C "$repository_root" ls-files -z)
 git -C "$application_root" init --quiet --initial-branch=master
 unset LLM_PROXY_MANAGEMENT_ADMIN_EMAILS LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID \

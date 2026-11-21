@@ -383,7 +383,7 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 	}
 	expectedOfferingCounts := map[string]int{
 		proxy.ProviderNameTypeSafe:  1,
-		proxy.ProviderNameOpenAI:    13,
+		proxy.ProviderNameOpenAI:    18,
 		"vertex":                    4,
 		"vertex-project":            2,
 		proxy.ProviderNameDashScope: 4,
@@ -420,7 +420,9 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 			if offering.Provider == proxy.ProviderNameTypeSafe {
 				expectedVerificationDate = "2026-11-11"
 			}
-			if offering.Provider == "vertex-project" {
+			if offering.Provider == proxy.ProviderNameOpenAI && slices.Contains([]string{"gpt-6-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6.2-astra", "gpt-6.2-sol"}, offering.Model) {
+				expectedVerificationDate = "2026-11-21"
+			} else if offering.Provider == "vertex-project" {
 				expectedVerificationDate = "2026-11-19"
 			} else if offering.Provider == "vertex" || (offering.Provider == proxy.ProviderNameOpenAI && offering.Model == "gpt-6-astra") {
 				expectedVerificationDate = "2026-09-07"

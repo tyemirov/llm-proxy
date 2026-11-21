@@ -48,7 +48,7 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20261119f102";
+const applicationModuleRevision = "20261119paymentfix";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
@@ -60,7 +60,6 @@ const applicationModuleFiles = Object.freeze([
   "core/backendClient.js",
   "core/paymentContinuation.js",
   "core/paddleCheckout.js",
-  "paymentContinuationBootstrap.js",
   "ui/fundingCheckout.js",
   "core/automaticUpdates.js",
   "core/managementProfile.js",
@@ -815,14 +814,11 @@ test("rendered application module entries and their complete internal graph shar
   const response = await request.get(`${baseURL}${applicationPath}`);
   expect(response.status()).toBe(httpOK);
   const html = await response.text();
-  for (const route of ["/", applicationPath]) {
-    const document=await (await request.get(`${baseURL}${route}`)).text();
-    const firstScript=/<script\b[^>]*src="([^"]+)"[^>]*>/.exec(document);
-    const bootstrap=`/assets/llm-proxy/js/paymentContinuationBootstrap.js?v=${applicationModuleRevision}`;
-    expect(firstScript?.[1]).toBe(bootstrap);
-    expect(firstScript?.[0]).toBe(`<script src="${bootstrap}">`);
-    expect((await request.get(`${baseURL}${bootstrap}`)).status()).toBe(httpOK);
-  }
+  const firstScript = /<script\b[^>]*>[\s\S]*?<\/script>/u;
+  const bootstrap = firstScript.exec(html)?.[0];
+  expect(bootstrap).toMatch(/^<script id="llm-proxy-payment-continuation">/u);
+  const landing = await (await request.get(baseURL)).text();
+  expect(firstScript.exec(landing)?.[0]).toBe(bootstrap);
   const entries = [...html.matchAll(/<script\b[^>]*type="module"[^>]*src="([^"]+)"/gu)]
     .map(match => new URL(match[1], `${baseURL}${applicationPath}`));
   expect(entries.map(url => url.pathname).sort()).toEqual([
@@ -3226,7 +3222,7 @@ test("application startup waits for shared UI orchestration before DOMContentLoa
     await page.goto(baseURL + applicationPath, { waitUntil: "commit" });
     await expect(page.locator("html")).toHaveAttribute("data-llm-proxy-application", "ready");
     await page.evaluate(async () => {
-      const client = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261119f102");
+      const client = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261119paymentfix");
       await client.loadFrontendRuntimeConfig();
       await new Promise(requestAnimationFrame);
     });
@@ -3804,7 +3800,7 @@ test("dashboard recovers its rate-limited bootstrap after shared authentication 
     window.dispatchEvent(new Event("online"));
   });
   expect(await page.evaluate(async () => {
-    const backend = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261119f102");
+    const backend = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261119paymentfix");
     try { await backend.loadFrontendRuntimeConfig(); return 200; }
     catch (error) { return error.status; }
   })).toBe(429);
