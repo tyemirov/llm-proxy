@@ -63,6 +63,7 @@ management:
   proxy_origin: "https://llm-proxy-api.example"
 payments:
   environment: sandbox
+  checkout_enabled: true
   checkout_url: https://checkout.example/app/
   client_token: "${PAYMENT_TEST_CLIENT_TOKEN}"
   processor_account_id: processor-fixture
@@ -97,7 +98,7 @@ PAYMENT_TEST_WEBHOOK_SECRET=paddle-webhook-fixture
 	if executeError != nil {
 		t.Fatalf("ExecuteC error: %v", executeError)
 	}
-	if capturedConfiguration.Payments == nil || capturedConfiguration.Payments.Environment != "sandbox" || capturedConfiguration.Payments.CheckoutURL != "https://checkout.example/app/" || capturedConfiguration.Payments.ClientToken != "test_browserfixture" || capturedConfiguration.Payments.APIKey != "paddle-api-fixture" || capturedConfiguration.Payments.WebhookSecret != "paddle-webhook-fixture" || len(capturedConfiguration.Payments.Offers) != 1 || capturedConfiguration.Payments.Offers[0].FundingCents != 500 {
+	if capturedConfiguration.Payments == nil || !capturedConfiguration.Payments.CheckoutEnabled || capturedConfiguration.Payments.Environment != "sandbox" || capturedConfiguration.Payments.CheckoutURL != "https://checkout.example/app/" || capturedConfiguration.Payments.ClientToken != "test_browserfixture" || capturedConfiguration.Payments.APIKey != "paddle-api-fixture" || capturedConfiguration.Payments.WebhookSecret != "paddle-webhook-fixture" || len(capturedConfiguration.Payments.Offers) != 1 || capturedConfiguration.Payments.Offers[0].FundingCents != 500 {
 		t.Fatal("CLI did not retain payment configuration")
 	}
 	if capturedConfiguration.ProviderCatalog == nil || capturedConfiguration.ProviderCatalog.SchemaVersion() != proxy.ProviderCatalogSchemaVersion {
@@ -450,6 +451,7 @@ PADDLE_WEBHOOK_SECRET=packaged-paddle-webhook-fixture
 	}
 	if capturedConfiguration.Payments == nil ||
 		capturedConfiguration.Payments.Environment != "production" ||
+		capturedConfiguration.Payments.CheckoutEnabled ||
 		capturedConfiguration.Payments.CheckoutURL != "https://llm-proxy.mprlab.com/app/" ||
 		capturedConfiguration.Payments.ClientToken != "live_PackagedConfigFixture" ||
 		capturedConfiguration.Payments.APIKey != "packaged-paddle-api-fixture" ||
