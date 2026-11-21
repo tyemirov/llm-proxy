@@ -1,8 +1,8 @@
 // @ts-check
 
-import {assertManagementAccount, assertManagementTenantProfile, assertProviderCatalog, assertProviderField} from "./managementProfile.js?v=20261119paymentfix";
+import {assertManagementAccount, assertManagementTenantProfile, assertProviderCatalog, assertProviderField} from "./managementProfile.js?v=20261121payment";
 
-import { APP_INTEGRITY_ERROR, MPR_UI, CAPABILITY_DOMAINS } from "../constants.js?v=20261119paymentfix";
+import { APP_INTEGRITY_ERROR, MPR_UI, CAPABILITY_DOMAINS } from "../constants.js?v=20261121payment";
 
 const MANAGEMENT_BASE_PATH = "/api/management";
 const HEADER_CONTENT_TYPE = "Content-Type";

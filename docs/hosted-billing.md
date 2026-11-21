@@ -1532,8 +1532,10 @@ The customer selects a server offer. The browser sends its code with a creation 
 The browser retains the creation key and order reference in account-specific session storage.
 A lost response retains the same key for retry after reload.
 After order creation, the browser reads that order until checkout delivery finishes.
-The browser can also resume a retained order from funding history.
-These reads do not create another processor transaction.
+New orders, saved intents, history actions, and payment links use the same owned-order checkout resolver.
+Each checkout opening reads current funding offers and matches their environment to the retained order and checkout.
+A closed funding gate leaves order and receipt status readable.
+Invalid saved intent stops checkout actions for that account and preserves the stored intent and payment link.
 
 The adapter loads Paddle.js from its official CDN and initializes it once per page.
 A token or environment change requires a page reload.
@@ -1590,14 +1592,19 @@ Configure an approved account default payment link before actual Paddle qualific
 Keep the shared account default when it serves another application.
 The required `checkout_url` supplies this application's HTTPS checkout page for each transaction.
 It must have no credentials, query, or fragment. The server adds the funding order identifier.
-The browser entry documents strip the order and `_ptxn` query candidates inline before loading external scripts.
+The public shell generator emits one synchronous inline capture in both browser entry pages.
+The capture removes order and `_ptxn` query parameters before external scripts run.
 Authenticated continuation verifies the owned order and its exact retained transaction through the normal APIs before opening checkout.
+The Paddle.js adapter requires a clean current URL both before it requests the SDK and before it initializes the SDK.
 Customers can select another known order from funding history or a checkout link. An unresolved creation request retains its original idempotency key. Transient continuation failures remain recoverable. Actual live acceptance remains F101 work.
 Use an HTTPS test host for the sandbox default payment link. The November 19 dashboard rejected localhost. Production requires Paddle domain verification.
 See the [default payment link contract](https://developer.paddle.com/build/transactions/default-payment-link/).
 The [transaction checkout prerequisites](https://developer.paddle.com/build/transactions/pass-transaction-checkout/) define this processor setup requirement.
-The shared client selects the Paddle API origin for the configured environment.
-`api_base_url` can select an explicit HTTPS origin. A sandbox loopback protocol can use HTTP.
+The same Paddle client, checkout delivery, and signed event processor run in both environments.
+`payments.environment` selects `https://sandbox-api.paddle.com` for sandbox or `https://api.paddle.com` for production.
+Controlled sandbox tests can set `api_base_url` to a loopback IP over HTTP, such as `http://127.0.0.1:18080`.
+The test origin contains no path, credentials, query, or fragment. Real Paddle configurations use the origin selected by the environment.
+The client treats redirects as failed requests. A redirected transaction creation retains its dispatch intent for reconciliation.
 Offer amounts must be at least 500 cents. The server rejects incomplete processor identities and secrets at startup.
 The selected price must satisfy the retained funding amount and currency before the service credits funds.
 

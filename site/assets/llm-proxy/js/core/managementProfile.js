@@ -6,7 +6,7 @@ import {
   PROVIDER_CAPABILITY_LABELS,
   PROVIDER_RESOURCE_LABELS,
   ROUTING_DEFAULTS_INVALID_ERROR,
-} from "../constants.js?v=20261119paymentfix";
+} from "../constants.js?v=20261121payment";
 
 const EMPTY_STRING = "";
 const TENANT_NAME_MAXIMUM_CHARACTERS = 80;

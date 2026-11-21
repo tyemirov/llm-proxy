@@ -1,17 +1,17 @@
 // @ts-check
 
-import * as backend from '../core/backendClient.js?v=20261119paymentfix';
-import {profileFailureMessage} from '../core/managementProfile.js?v=20261119paymentfix';
-import './usageJournal.js?v=20261119paymentfix';
-import './prepaidBalance.js?v=20261119paymentfix';
-import './paymentHistory.js?v=20261119paymentfix';
-import './fundingCheckout.js?v=20261119paymentfix';
+import * as backend from '../core/backendClient.js?v=20261121payment';
+import {profileFailureMessage} from '../core/managementProfile.js?v=20261121payment';
+import './usageJournal.js?v=20261121payment';
+import './prepaidBalance.js?v=20261121payment';
+import './paymentHistory.js?v=20261121payment';
+import './fundingCheckout.js?v=20261121payment';
 
-import {COPY, PROVIDER_CAPABILITY_LABELS, PROVIDER_RESOURCE_LABELS, CAPABILITY_DOMAINS} from '../constants.js?v=20261119paymentfix';
+import {COPY, PROVIDER_CAPABILITY_LABELS, PROVIDER_RESOURCE_LABELS, CAPABILITY_DOMAINS} from '../constants.js?v=20261121payment';
 
-import {MODEL_TASKS, tasksForOffering, offeringMatchesTasks, reconcileSelectedTasks, toggleSelectedTask, renderTaskIcon, renderTaskDetails, renderTaskPicker} from '../modelTasks.js?v=20261119paymentfix';
+import {MODEL_TASKS, tasksForOffering, offeringMatchesTasks, reconcileSelectedTasks, toggleSelectedTask, renderTaskIcon, renderTaskDetails, renderTaskPicker} from '../modelTasks.js?v=20261121payment';
 
-import {startAutomaticUpdates, updateManagementData} from '../core/automaticUpdates.js?v=20261119paymentfix';
+import {startAutomaticUpdates, updateManagementData} from '../core/automaticUpdates.js?v=20261121payment';
 
 const MCP_PATH = '/mcp';
 

@@ -1,8 +1,8 @@
 // @ts-check
-import {startAutomaticUpdates, updateManagementData, reloadVisibleCollection} from '../core/automaticUpdates.js?v=20261119paymentfix';
-import * as backend from '../core/backendClient.js?v=20261119paymentfix';
-import {profileFailureMessage} from '../core/managementProfile.js?v=20261119paymentfix';
-import {formatExactUSD} from '../core/exactMoney.js?v=20261119paymentfix';
+import {startAutomaticUpdates, updateManagementData, reloadVisibleCollection} from '../core/automaticUpdates.js?v=20261121payment';
+import * as backend from '../core/backendClient.js?v=20261121payment';
+import {profileFailureMessage} from '../core/managementProfile.js?v=20261121payment';
+import {formatExactUSD} from '../core/exactMoney.js?v=20261121payment';
 
 /** @param {unknown} value */
 function escapeHTML(value) { return String(value).replace(/[&<>"']/g, character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character] || character)); }

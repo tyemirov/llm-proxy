@@ -5,7 +5,7 @@ The source review date is September 7, 2026.
 
 ## Scope and placement
 
-The provider catalog defines 19 API providers and 37 model families, including disabled candidates.
+The provider catalog defines 20 API providers and 36 model families, including disabled candidates.
 I237 separates API connection identities from model family identities.
 The icons keep that separation.
 

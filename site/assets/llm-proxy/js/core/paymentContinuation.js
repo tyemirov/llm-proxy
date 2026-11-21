@@ -1,12 +1,11 @@
 // @ts-check
-import {APP_INTEGRITY_ERROR} from '../constants.js?v=20261119paymentfix';
-const KEY='llm-proxy:payment-continuation';
+import {APP_INTEGRITY_ERROR,PAYMENT_CONTINUATION_STORAGE_KEY} from '../constants.js?v=20261121payment';
 /** @typedef {{order_id:string,transaction_id:string}} PaymentContinuation */
 /** Read an untrusted continuation after the account is authenticated.
  * @returns {PaymentContinuation|null}
  */
 export function readPaymentContinuation() {
-  const encoded=sessionStorage.getItem(KEY);
+  const encoded=sessionStorage.getItem(PAYMENT_CONTINUATION_STORAGE_KEY);
   if(encoded===null)return null;
   const value=JSON.parse(encoded);
   if(!value || typeof value.order_id!=='string' || !/^funding-[a-f0-9]{32}$/.test(value.order_id) ||
@@ -18,6 +17,6 @@ export function readPaymentContinuation() {
  * @param {PaymentContinuation} [candidate]
  */
 export function clearPaymentContinuation(candidate) {
-  if(candidate && sessionStorage.getItem(KEY)!==JSON.stringify(candidate))return;
-  sessionStorage.removeItem(KEY);
+  if(candidate && sessionStorage.getItem(PAYMENT_CONTINUATION_STORAGE_KEY)!==JSON.stringify(candidate))return;
+  sessionStorage.removeItem(PAYMENT_CONTINUATION_STORAGE_KEY);
 }

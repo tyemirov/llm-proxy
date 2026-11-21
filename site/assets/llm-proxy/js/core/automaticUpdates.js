@@ -1,5 +1,5 @@
 // @ts-check
-import {MANAGEMENT_AUTO_REFRESH_INTERVAL_MILLISECONDS} from '../constants.js?v=20261119paymentfix';
+import {MANAGEMENT_AUTO_REFRESH_INTERVAL_MILLISECONDS} from '../constants.js?v=20261121payment';
 
 /** @param {HTMLElement} host */
 function isEditing(host) {

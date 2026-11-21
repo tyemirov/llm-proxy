@@ -350,7 +350,7 @@ func TestQualificationBudgetXA1DContinuationAttempts(t *testing.T) {
 }
 
 func TestQualificationBudgetXA1DExpiredMissingAndCorruptJournal(t *testing.T) {
-	for _, scenario := range []string{"expired", "missing", "corrupt", "wrong-owner", "unpriced"} {
+	for _, scenario := range []string{"expired", "missing", "corrupt", "wrong-owner", "unpriced", "changed-offering"} {
 		t.Run(scenario, func(t *testing.T) {
 			if scenario == "expired" {
 				fixture := newXA1DBudgetProviderFixture(t, 1000000, "cerebras", "qwen3.8-27b", xa1dBudgetAnswer, func(policy *proxy.QualificationBudgetConfiguration) {
@@ -415,6 +415,10 @@ func TestQualificationBudgetXA1DExpiredMissingAndCorruptJournal(t *testing.T) {
 				// A fresh policy reaches price admission instead of immutable-policy rejection.
 				changed.BudgetID = "unpriced-price-admission-budget"
 				changed.ReceiptDatabasePath = filepath.Join(filepath.Dir(changed.ReceiptDatabasePath), "qualification-unpriced.sqlite")
+				changed.Offerings = []proxy.QualificationBudgetOffering{{Provider: "openai", Model: "gpt-6.2-sol", MaxOutputTokens: 128}}
+				fixture.configuration.QualificationBudget = &changed
+			case "changed-offering":
+				changed := *fixture.policy
 				changed.Offerings = []proxy.QualificationBudgetOffering{{Provider: "openai", Model: "gpt-6.2-sol", MaxOutputTokens: 128}}
 				fixture.configuration.QualificationBudget = &changed
 			}

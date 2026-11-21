@@ -11,6 +11,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func TestManagedTenantGORMInitializationEdges(t *testing.T) {
@@ -55,6 +56,14 @@ func TestManagedTenantGORMInitializationEdges(t *testing.T) {
 	}
 	if initializeError := initializeManagedTenantSchema(versionErrorDatabase, cipher, providers); !errors.Is(initializeError, errInternalTestDatabase) {
 		t.Fatalf("version create error=%v", initializeError)
+	}
+	versionReadError := errors.New("injected predecessor version read failure")
+	registerManagedGORMQueryError(t, versionErrorDatabase, "predecessor_version_read", managedSchemaMigrationTable, versionReadError, func(statement *gorm.Statement) bool {
+		ordering, _ := statement.Clauses[(clause.OrderBy{}).Name()].Expression.(clause.OrderBy)
+		return len(ordering.Columns) > 0 && ordering.Columns[0].Column.Name == managedSchemaVersionColumn && ordering.Columns[0].Desc
+	})
+	if initializeError := initializeManagedTenantSchema(versionErrorDatabase, cipher, providers); !errors.Is(initializeError, versionReadError) {
+		t.Fatalf("predecessor version read error=%v", initializeError)
 	}
 
 	malformedDatabase, openError := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "malformed.db")), &gorm.Config{})
@@ -391,6 +400,26 @@ func registerManagedGORMError(t *testing.T, database *gorm.DB, callbackName stri
 	if registrationError != nil {
 		t.Fatalf("register %s callback: %v", callbackName, registrationError)
 	}
+}
+
+func registerManagedGORMQueryError(t *testing.T, database *gorm.DB, callbackName, tableName string, callbackError error, matches func(*gorm.Statement) bool) {
+	t.Helper()
+	err := database.Callback().Query().Before("gorm:query").Register(callbackName, func(query *gorm.DB) {
+		if query.Statement.Table == tableName && matches(query.Statement) {
+			query.AddError(callbackError)
+		}
+	})
+	if err != nil {
+		t.Fatalf("register %s callback: %v", callbackName, err)
+	}
+}
+
+func registerManagedTenantPreloadError(t *testing.T, database *gorm.DB, association string) {
+	t.Helper()
+	registerManagedGORMQueryError(t, database, "tenant_preload_"+association, managedTenantTable, errInternalTestDatabase, func(statement *gorm.Statement) bool {
+		_, present := statement.Preloads[association]
+		return present
+	})
 }
 
 type failingManagedAutoMigrateDialector struct {

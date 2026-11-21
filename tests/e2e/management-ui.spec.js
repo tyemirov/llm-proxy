@@ -48,7 +48,7 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20261119paymentfix";
+const applicationModuleRevision = "20261121payment";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
@@ -3222,7 +3222,7 @@ test("application startup waits for shared UI orchestration before DOMContentLoa
     await page.goto(baseURL + applicationPath, { waitUntil: "commit" });
     await expect(page.locator("html")).toHaveAttribute("data-llm-proxy-application", "ready");
     await page.evaluate(async () => {
-      const client = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261119paymentfix");
+      const client = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261121payment");
       await client.loadFrontendRuntimeConfig();
       await new Promise(requestAnimationFrame);
     });
@@ -3551,11 +3551,9 @@ test("reasoning effort follows exact models and persists only after an explicit 
     ["Gemini","gemini-3.7-flash",["low","medium","high"]],
     ["Moonshot","kimi-k2.6",[]],
     ["Moonshot","kimi-k3",["low","high","max"]],
-    ["OpenAI","gpt-6.2-sol",["low","medium","high","xhigh","max"]],
-    ["OpenAI","gpt-6-luna",["none","low","medium","high","xhigh","max"]],
-    ["OpenAI","gpt-6-sol",["none","low","medium","high","xhigh","max"]],
-    ["OpenAI","gpt-6-astra",["low","medium","high","xhigh","max"]],
-    ["OpenAI","gpt-5.6",["none","low","medium","high","xhigh","max"]],
+    ...publicCapabilities.offerings
+      .filter(offering => offering.provider === "openai" && offering.capabilities.includes("text"))
+      .map(offering => ["OpenAI",offering.model,offering.reasoning_efforts]),
     ["Meta","muse-spark-1.3",["minimal","low","medium","high","xhigh","max"]],
     ["DeepSeek","deepseek-v4-flash",["none","low","high","max"]],
     ["Anthropic","claude-sonnet-4-6",[]],
@@ -3800,7 +3798,7 @@ test("dashboard recovers its rate-limited bootstrap after shared authentication 
     window.dispatchEvent(new Event("online"));
   });
   expect(await page.evaluate(async () => {
-    const backend = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261119paymentfix");
+    const backend = await import("/assets/llm-proxy/js/core/backendClient.js?v=20261121payment");
     try { await backend.loadFrontendRuntimeConfig(); return 200; }
     catch (error) { return error.status; }
   })).toBe(429);
@@ -5359,7 +5357,9 @@ function managementProfile(isAdmin = false, hasSecret = true) {
           .filter(offering => offering.provider === "openai" && offering.capabilities.includes("text"))
           .map(offering => ({
             id: offering.model,
-            reasoning_effort: { adapter: "openai_responses", efforts: [...offering.reasoning_efforts] },
+            ...(offering.reasoning_efforts.length ? {
+              reasoning_effort: { adapter: offering.wire_contract, efforts: [...offering.reasoning_efforts] },
+            } : {}),
           })),
         supports_dictation: true,
         transcription_default_model: "gpt-transcribe",

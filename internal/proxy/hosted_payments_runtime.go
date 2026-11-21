@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"strings"
@@ -26,6 +27,7 @@ type PaymentConfiguration struct {
 	APIBaseURL         string                      `mapstructure:"api_base_url"`
 	WebhookSecret      string                      `mapstructure:"webhook_secret"`
 	Offers             []PaymentOfferConfiguration `mapstructure:"offers"`
+	transport          http.RoundTripper
 }
 
 // PaymentOfferConfiguration binds a server offer to an immutable funding amount.
@@ -63,12 +65,12 @@ func newPaymentSettings(input *PaymentConfiguration) (*paymentSettings, error) {
 	}
 	if input.APIBaseURL != "" {
 		parsed, err := url.Parse(input.APIBaseURL)
-		if err != nil || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		if err != nil || parsed.Hostname() == "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.ForceQuery || strings.Contains(input.APIBaseURL, "#") {
 			return nil, fmt.Errorf("configure payments: invalid api_base_url")
 		}
-		loopback := parsed.Hostname() == "127.0.0.1" || parsed.Hostname() == "localhost" || parsed.Hostname() == "::1"
-		if parsed.Scheme != "https" && !(input.Environment == paymentEnvironmentSandbox && parsed.Scheme == "http" && loopback) {
-			return nil, fmt.Errorf("configure payments: api_base_url requires HTTPS except for a sandbox loopback protocol")
+		address, err := netip.ParseAddr(parsed.Hostname())
+		if err != nil || !address.IsLoopback() || address.Zone() != "" || parsed.Scheme != "http" || input.Environment != paymentEnvironmentSandbox {
+			return nil, fmt.Errorf("configure payments: api_base_url is only available for a sandbox loopback HTTP origin")
 		}
 	}
 	offers := make([]fundingOfferInput, len(input.Offers))
@@ -79,7 +81,12 @@ func newPaymentSettings(input *PaymentConfiguration) (*paymentSettings, error) {
 	if err != nil {
 		return nil, err
 	}
-	client, err := billing.NewPaddleCommerceClient(catalog.environment, input.APIKey, input.APIBaseURL, &http.Client{Timeout: paymentCheckoutRetry})
+	client, err := billing.NewPaddleCommerceClient(catalog.environment, input.APIKey, input.APIBaseURL, &http.Client{
+		Timeout:   paymentCheckoutRetry,
+		Transport: input.transport,
+		// Keep credentials and transaction dispatch on the selected origin.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	})
 	if err != nil {
 		return nil, fmt.Errorf("configure payments client: %w", err)
 	}
