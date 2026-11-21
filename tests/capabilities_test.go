@@ -26,9 +26,8 @@ func providerEndpoints(rawBaseURL string, providers ...string) *proxy.Endpoints 
 
 // Constants used in tests.
 const (
-	modelIDGPT4o                   = proxy.ModelNameGPT4o
-	modelIDGPT4oMini               = proxy.ModelNameGPT4oMini
-	modelIDGPT5Mini                = proxy.ModelNameGPT5Mini
+	modelIDGPT6Luna                = "gpt-6-luna"
+	modelIDGPT62Sol                = "gpt-6.2-sol"
 	serviceSecret                  = "sekret"
 	openAIKey                      = "sk-test"
 	logLevel                       = "debug"
@@ -49,14 +48,14 @@ func TestIntegration_OmitsDisallowedParameters(testingInstance *testing.T) {
 	}{
 		{
 			testName:         "temperature omitted",
-			modelIdentifier:  modelIDGPT5Mini,
+			modelIdentifier:  modelIDGPT62Sol,
 			additionalQuery:  "",
 			expectedResponse: responseTextWithoutTemperature,
 			disallowedFields: []string{"temperature"},
 		},
 		{
 			testName:         "tools omitted",
-			modelIdentifier:  modelIDGPT4oMini,
+			modelIdentifier:  modelIDGPT6Luna,
 			additionalQuery:  "",
 			expectedResponse: responseTextWithoutTools,
 			disallowedFields: []string{"tools", "tool_choice"},
@@ -378,7 +377,7 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 	}
 	expectedOfferingCounts := map[string]int{
 		proxy.ProviderNameTypeSafe:  1,
-		proxy.ProviderNameOpenAI:    13,
+		proxy.ProviderNameOpenAI:    11,
 		"vertex":                    4,
 		proxy.ProviderNameDashScope: 3,
 		proxy.ProviderNameGemini:    5,
@@ -413,7 +412,9 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 			if offering.Provider == proxy.ProviderNameTypeSafe {
 				expectedVerificationDate = "2026-11-11"
 			}
-			if offering.Provider == "vertex" || (offering.Provider == proxy.ProviderNameOpenAI && offering.Model == "gpt-6-astra") {
+			if offering.Provider == proxy.ProviderNameOpenAI && slices.Contains([]string{"gpt-6-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6.2-astra", "gpt-6.2-sol"}, offering.Model) {
+				expectedVerificationDate = "2026-11-21"
+			} else if offering.Provider == "vertex" || (offering.Provider == proxy.ProviderNameOpenAI && offering.Model == "gpt-6-astra") {
 				expectedVerificationDate = "2026-09-07"
 			} else if offering.Provider == proxy.ProviderNameMoonshot {
 				expectedVerificationDate = "2026-08-13"

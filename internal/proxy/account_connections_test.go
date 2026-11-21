@@ -181,8 +181,8 @@ func TestAccountConnectionSharedRoutingAndTenantUsage(t *testing.T) {
 	for _, tenantID := range []string{first, second} {
 		exchange(http.MethodPut, "/tenants/"+tenantID+"/connections/openai", map[string]string{"kind": "account_connection", "resource_id": id}, http.StatusOK)
 	}
-	saveManagementDefaults(t, router, owner, first, proxy.ModelNameGPT41, "First tenant prompt")
-	saveManagementDefaults(t, router, owner, second, proxy.ModelNameGPT55, "Second tenant prompt")
+	saveManagementDefaults(t, router, owner, first, "gpt-6.2-sol", "First tenant prompt")
+	saveManagementDefaults(t, router, owner, second, "gpt-6-sol", "Second tenant prompt")
 	secrets := []string{generateManagementTenantSecret(t, router, owner, first), generateManagementTenantSecret(t, router, owner, second)}
 	for _, credential := range []string{"shared-original-key", "shared-rotated-key"} {
 		current := exchange(http.MethodGet, "/connections/"+id, nil, http.StatusOK)
@@ -198,7 +198,7 @@ func TestAccountConnectionSharedRoutingAndTenantUsage(t *testing.T) {
 	mutex.Lock()
 	observedCalls := append([]upstreamCall(nil), calls...)
 	mutex.Unlock()
-	expected := []upstreamCall{{"Bearer shared-original-key", proxy.ModelNameGPT41}, {"Bearer shared-original-key", proxy.ModelNameGPT55}, {"Bearer shared-rotated-key", proxy.ModelNameGPT41}, {"Bearer shared-rotated-key", proxy.ModelNameGPT55}}
+	expected := []upstreamCall{{"Bearer shared-original-key", "gpt-6.2-sol"}, {"Bearer shared-original-key", "gpt-6-sol"}, {"Bearer shared-rotated-key", "gpt-6.2-sol"}, {"Bearer shared-rotated-key", "gpt-6-sol"}}
 	if fmt.Sprint(observedCalls) != fmt.Sprint(expected) {
 		t.Fatalf("shared credential routing=%v want=%v", observedCalls, expected)
 	}

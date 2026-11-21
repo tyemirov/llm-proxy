@@ -15,10 +15,10 @@ import (
 
 func TestHostedTextPriceAdmissionRejectsInvalidOutputLimitsAtHTTPBoundary(t *testing.T) {
 	for _, protocol := range []struct{ name, path, body string }{
-		{"native", "/?provider=openai&model=gpt-4.1", `{"prompt":"funded prompt","max_tokens":%d}`},
-		{"messages", v2Path + "?provider=openai&model=gpt-4.1", `{"messages":[{"role":"user","content":"funded prompt"}],"max_tokens":%d}`},
-		{"chat-completions", chatCompletionsPath, `{"model":"openai/gpt-4.1","messages":[{"role":"user","content":"funded prompt"}],"max_completion_tokens":%d}`},
-		{"responses", responsesPath, `{"model":"openai/gpt-4.1","input":"funded prompt","max_output_tokens":%d}`},
+		{"native", "/?provider=openai&model=gpt-6.2-sol", `{"prompt":"funded prompt","max_tokens":%d}`},
+		{"messages", v2Path + "?provider=openai&model=gpt-6.2-sol", `{"messages":[{"role":"user","content":"funded prompt"}],"max_tokens":%d}`},
+		{"chat-completions", chatCompletionsPath, `{"model":"openai/gpt-6.2-sol","messages":[{"role":"user","content":"funded prompt"}],"max_completion_tokens":%d}`},
+		{"responses", responsesPath, `{"model":"openai/gpt-6.2-sol","input":"funded prompt","max_output_tokens":%d}`},
 	} {
 		t.Run(protocol.name, func(t *testing.T) {
 			runtime := newHostedRuntimeTextFixture(t)
@@ -95,7 +95,7 @@ func TestHostedTextPriceAdmissionRejectsUnqualifiedCatalogAndRecovers(t *testing
 					catalog.Offerings[0].Limits = append(catalog.Offerings[0].Limits, CatalogLimit{ID: "web_search_calls", Value: &maximum, Unit: "calls"})
 					catalog.Prices[0].Rates = append(catalog.Prices[0].Rates, CatalogPriceRate{Component: "web_search_calls", Currency: "USD", Rate: "0.01", Unit: "USD/call", Conditions: conditions})
 				}
-				return catalog, &HostedConfiguration{Offerings: []HostedOfferingConfiguration{{Provider: "openai", Model: "gpt-4.1", Operation: ModelOperationText, MaximumAttempts: 1, Conditions: categoricalPriceConditions(conditions)}}}
+				return catalog, &HostedConfiguration{Offerings: []HostedOfferingConfiguration{{Provider: "openai", Model: "gpt-6.2-sol", Operation: ModelOperationText, MaximumAttempts: 1, Conditions: categoricalPriceConditions(conditions)}}}
 			}
 			upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 				if request.Method == http.MethodDelete {
@@ -118,7 +118,7 @@ func TestHostedTextPriceAdmissionRejectsUnqualifiedCatalogAndRecovers(t *testing
 				})
 			}
 			request := func(server *httptest.Server, status int) string {
-				message, err := http.NewRequest(http.MethodPost, server.URL+"/?provider=openai&model=gpt-4.1", strings.NewReader(fmt.Sprintf(`{"prompt":"funded prompt","web_search":%t}`, scenario.search)))
+				message, err := http.NewRequest(http.MethodPost, server.URL+"/?provider=openai&model=gpt-6.2-sol", strings.NewReader(fmt.Sprintf(`{"prompt":"funded prompt","web_search":%t}`, scenario.search)))
 				if err != nil {
 					t.Fatal(err)
 				}

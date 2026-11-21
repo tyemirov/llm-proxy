@@ -197,7 +197,7 @@ func TestHostedDictationUsageEvidence(t *testing.T) {
 
 func grantHostedDictation(t *testing.T, database *gormManagedTenantDatabase) {
 	t.Helper()
-	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", hostedJournalFixtureGrantID).Update("offerings", []byte(`[{"model":"gpt-4.1","operations":["text"]},{"model":"gpt-transcribe","operations":["dictation"]}]`)).Error; err != nil {
+	if err := database.database.Model(&managedHostedGrantRecord{}).Where(clause.Eq{Column: "id", Value: hostedJournalFixtureGrantID}).Update("offerings", []byte(`[{"model":"gpt-6.2-sol","operations":["text"]},{"model":"gpt-transcribe","operations":["dictation"]}]`)).Error; err != nil {
 		t.Fatal(err)
 	}
 }

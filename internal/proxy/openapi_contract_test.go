@@ -751,16 +751,16 @@ func TestImageGenerationResponsesOpenAPIMatchesSurfaceAndChainContract(t *testin
 		count      int
 		valid      bool
 	}{
-		{"generation", "responses", "gpt-5", "image.generate", `{"prompt":"Generate"}`, 1, true},
-		{"ordered editing", "responses", "gpt-5", "image.edit", `{"prompt":"Edit","image_asset_ids":["ast_0123456789abcdef0123456789abcdef"]}`, 1, true},
-		{"chain edit", "responses", "gpt-5", "image.edit", `{"prompt":"Edit","previous_operation_id":"mop_0123456789abcdef0123456789abcdef"}`, 1, true},
+		{"generation", "responses", "gpt-6.2-sol", "image.generate", `{"prompt":"Generate"}`, 1, true},
+		{"ordered editing", "responses", "gpt-6.2-sol", "image.edit", `{"prompt":"Edit","image_asset_ids":["ast_0123456789abcdef0123456789abcdef"]}`, 1, true},
+		{"chain edit", "responses", "gpt-6.2-sol", "image.edit", `{"prompt":"Edit","previous_operation_id":"mop_0123456789abcdef0123456789abcdef"}`, 1, true},
 		{"missing text model", "responses", "", "image.generate", `{"prompt":"Generate"}`, 1, false},
 		{"missing surface", "", "", "image.generate", `{"prompt":"Generate"}`, 1, false},
-		{"Images text model", "images", "gpt-5", "image.generate", `{"prompt":"Generate"}`, 1, false},
-		{"Responses mask", "responses", "gpt-5", "image.edit", `{"prompt":"Edit","image_asset_ids":["ast_0123456789abcdef0123456789abcdef"],"mask_asset_id":"ast_0123456789abcdef0123456789abcdef"}`, 1, false},
-		{"native chain", "responses", "gpt-5", "image.edit", `{"prompt":"Edit","previous_operation_id":"resp_native"}`, 1, false},
+		{"Images text model", "images", "gpt-6.2-sol", "image.generate", `{"prompt":"Generate"}`, 1, false},
+		{"Responses mask", "responses", "gpt-6.2-sol", "image.edit", `{"prompt":"Edit","image_asset_ids":["ast_0123456789abcdef0123456789abcdef"],"mask_asset_id":"ast_0123456789abcdef0123456789abcdef"}`, 1, false},
+		{"native chain", "responses", "gpt-6.2-sol", "image.edit", `{"prompt":"Edit","previous_operation_id":"resp_native"}`, 1, false},
 		{"Images chain", "images", "", "image.edit", `{"prompt":"Edit","previous_operation_id":"mop_0123456789abcdef0123456789abcdef"}`, 1, false},
-		{"multiple Responses outputs", "responses", "gpt-5", "image.generate", `{"prompt":"Generate"}`, 2, false},
+		{"multiple Responses outputs", "responses", "gpt-6.2-sol", "image.generate", `{"prompt":"Generate"}`, 2, false},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			controls := map[string]any{"quality": "low", "size": "auto", "background": "opaque", "output_format": "png", "output_count": scenario.count}

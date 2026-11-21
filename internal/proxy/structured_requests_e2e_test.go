@@ -46,7 +46,7 @@ func TestStructuredRequestConvergesAcrossSubmitReplayAndReconciliation(testingIn
 	endpoints.SetProviderBaseURL(proxy.ProviderNameDeepSeek, upstream.URL)
 	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
 	tenantConfiguration.ID = "structured"
-	tenantConfiguration.Defaults.Model = proxy.ModelNameGPT55
+	tenantConfiguration.Defaults.Model = "gpt-6-sol"
 	router, buildError := buildRouterWithManagedTenant(testingInstance, proxy.Configuration{
 		UpstreamCapacity: testfixtures.UpstreamCapacity(1, 2), RequestTimeoutSeconds: TestTimeout,
 		Endpoints: endpoints, AssetStorePath: testingInstance.TempDir(), AssetRetentionSeconds: 3600,
@@ -54,7 +54,7 @@ func TestStructuredRequestConvergesAcrossSubmitReplayAndReconciliation(testingIn
 	if buildError != nil {
 		testingInstance.Fatalf(messageBuildRouterError, buildError)
 	}
-	body := structuredV2Body("review", false, proxy.ModelNameGPT55)
+	body := structuredV2Body("review", false, "gpt-6-sol")
 
 	first := performStructuredRequest(testingInstance, router, body, "review:one")
 	if first.Code != http.StatusOK || first.Body.String() != `{"decision":"pass"}` || first.Header().Get(llmproxycontract.HeaderStructuredRequestState) != "succeeded" {
@@ -73,7 +73,7 @@ func TestStructuredRequestConvergesAcrossSubmitReplayAndReconciliation(testingIn
 		testingInstance.Fatalf("status=%d body=%s provider_calls=%d", status.Code, status.Body.String(), providerCalls.Load())
 	}
 
-	conflict := performStructuredRequest(testingInstance, router, structuredV2Body("different", false, proxy.ModelNameGPT55), "review:one")
+	conflict := performStructuredRequest(testingInstance, router, structuredV2Body("different", false, "gpt-6-sol"), "review:one")
 	if conflict.Code != http.StatusConflict || !strings.Contains(conflict.Body.String(), "structured_request_intent_conflict") || providerCalls.Load() != 1 {
 		testingInstance.Fatalf("conflict status=%d body=%s provider_calls=%d", conflict.Code, conflict.Body.String(), providerCalls.Load())
 	}
@@ -110,9 +110,9 @@ func TestStructuredRequestRejectsInvalidContractsBeforeProviderDispatch(testingI
 		{name: "invalid schema", body: `{"messages":[{"role":"user","content":"review"}],"structured_output":{"schema":{"type":"missing"}}}`, key: "review:invalid", want: "invalid structured_output"},
 		{name: "missing key", body: structuredV2Body("review", false, "deepseek-v4-flash"), want: "invalid Idempotency-Key"},
 		{name: "key without schema", body: `{"messages":[{"role":"user","content":"review"}]}`, key: "review:extra", want: "invalid Idempotency-Key"},
-		{name: "web search", body: structuredV2Body("review", true, proxy.ModelNameGPT55), key: "review:web", want: "structured_output does not support web_search", provider: proxy.ProviderNameOpenAI},
-		{name: "OpenAI open object", body: `{"messages":[{"role":"user","content":"review"}],"model":"gpt-5.5","structured_output":{"schema":{"type":"object","properties":{"decision":{"type":"string"}},"required":["decision"]}}}`, key: "review:open-object", want: "structured_output is unsupported", provider: proxy.ProviderNameOpenAI},
-		{name: "OpenAI optional property", body: `{"messages":[{"role":"user","content":"review"}],"model":"gpt-5.5","structured_output":{"schema":{"type":"object","additionalProperties":false,"properties":{"decision":{"type":"string"}}}}}`, key: "review:optional", want: "structured_output is unsupported", provider: proxy.ProviderNameOpenAI},
+		{name: "web search", body: structuredV2Body("review", true, "gpt-6-sol"), key: "review:web", want: "structured_output does not support web_search", provider: proxy.ProviderNameOpenAI},
+		{name: "OpenAI open object", body: `{"messages":[{"role":"user","content":"review"}],"model":"gpt-6-sol","structured_output":{"schema":{"type":"object","properties":{"decision":{"type":"string"}},"required":["decision"]}}}`, key: "review:open-object", want: "structured_output is unsupported", provider: proxy.ProviderNameOpenAI},
+		{name: "OpenAI optional property", body: `{"messages":[{"role":"user","content":"review"}],"model":"gpt-6-sol","structured_output":{"schema":{"type":"object","additionalProperties":false,"properties":{"decision":{"type":"string"}}}}}`, key: "review:optional", want: "structured_output is unsupported", provider: proxy.ProviderNameOpenAI},
 		{name: "unsupported wire", body: structuredV2Body("review", false, "deepseek-v4-flash"), key: "review:chat", want: "structured_output is unsupported"},
 	}
 	for _, testCase := range testCases {
@@ -140,7 +140,7 @@ func TestStructuredRequestPersistsProviderSchemaFailure(testingInstance *testing
 	endpoints.SetResponsesURL(upstream.URL)
 	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
 	tenantConfiguration.ID = "structured-failure"
-	tenantConfiguration.Defaults.Model = proxy.ModelNameGPT55
+	tenantConfiguration.Defaults.Model = "gpt-6-sol"
 	router, buildError := buildRouterWithManagedTenant(testingInstance, proxy.Configuration{
 		UpstreamCapacity: testfixtures.UpstreamCapacity(1, 2), RequestTimeoutSeconds: TestTimeout,
 		Endpoints: endpoints, AssetStorePath: testingInstance.TempDir(), AssetRetentionSeconds: 3600,
@@ -148,7 +148,7 @@ func TestStructuredRequestPersistsProviderSchemaFailure(testingInstance *testing
 	if buildError != nil {
 		testingInstance.Fatalf(messageBuildRouterError, buildError)
 	}
-	body := structuredV2Body("review", false, proxy.ModelNameGPT55)
+	body := structuredV2Body("review", false, "gpt-6-sol")
 	first := performStructuredRequest(testingInstance, router, body, "review:failure")
 	if first.Code != http.StatusBadGateway || providerCalls.Load() != 1 {
 		testingInstance.Fatalf("first status=%d body=%s calls=%d", first.Code, first.Body.String(), providerCalls.Load())

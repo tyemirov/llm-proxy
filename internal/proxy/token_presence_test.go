@@ -67,10 +67,10 @@ func TestManagementTokenMeasurementPresence(t *testing.T) {
 			router := newTokenPresenceRouter(t, configuration, databasePath)
 			cookie := managementSessionCookie(t, "presence-owner")
 			tenantID := requestManagementAccount(t, router, cookie).Tenants[0].ID
-			saveManagementProviderKey(t, router, cookie, tenantID, "dummy-provider-key", proxy.ModelNameGPT41, "")
+			saveManagementProviderKey(t, router, cookie, tenantID, "dummy-provider-key", "gpt-6.2-sol", "")
 			secret := generateManagementTenantSecret(t, router, cookie, tenantID)
 			server := httptest.NewServer(router)
-			request, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/responses", strings.NewReader(`{"model":"openai/gpt-4.1","input":"text","stream":false}`))
+			request, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/responses", strings.NewReader(`{"model":"openai/gpt-6.2-sol","input":"text","stream":false}`))
 			request.Header.Set("Authorization", "Bearer "+secret)
 			request.Header.Set("Content-Type", "application/json")
 			response, err := server.Client().Do(request)
@@ -260,11 +260,11 @@ func TestTokenPresenceCompatibilityJSON(t *testing.T) {
 			router := newTokenPresenceRouter(t, proxy.Configuration{Endpoints: providerEndpoints(upstream.URL, proxy.ProviderNameOpenAI)}, filepath.Join(t.TempDir(), "usage.sqlite"))
 			owner := managementSessionCookie(t, "compatibility-owner")
 			tenantID := requestManagementAccount(t, router, owner).Tenants[0].ID
-			saveManagementProviderKey(t, router, owner, tenantID, "dummy-provider-key", proxy.ModelNameGPT41, "")
+			saveManagementProviderKey(t, router, owner, tenantID, "dummy-provider-key", "gpt-6.2-sol", "")
 			secret := generateManagementTenantSecret(t, router, owner, tenantID)
 			server := httptest.NewServer(router)
 			defer server.Close()
-			response, err := server.Client().Post(server.URL+"/v2?key="+secret+"&provider=openai&format=application/json", "application/json", strings.NewReader(`{"model":"gpt-4.1","messages":[{"role":"user","content":"text"}],"tools":[{"name":"read","parameters":{"type":"object"}}]}`))
+			response, err := server.Client().Post(server.URL+"/v2?key="+secret+"&provider=openai&format=application/json", "application/json", strings.NewReader(`{"model":"gpt-6.2-sol","messages":[{"role":"user","content":"text"}],"tools":[{"name":"read","parameters":{"type":"object"}}]}`))
 			if err != nil {
 				t.Fatal(err)
 			}

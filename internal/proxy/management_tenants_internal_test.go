@@ -632,7 +632,7 @@ func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *te
 	if buildError != nil {
 		t.Fatalf("build migrated router: %v", buildError)
 	}
-	request := httptest.NewRequest(http.MethodGet, "/?key="+qwenOnlySecret+"&provider=openai&model="+ModelNameGPT41+"&prompt=hello", nil)
+	request := httptest.NewRequest(http.MethodGet, "/?key="+qwenOnlySecret+"&provider=openai&model=gpt-6.2-sol&prompt=hello", nil)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusConflict || upstreamRequestCount != 0 || strings.TrimSpace(response.Body.String()) != string(managedUsageOutcomeProviderNotConfigured) {

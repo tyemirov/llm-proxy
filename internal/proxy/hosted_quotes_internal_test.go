@@ -64,7 +64,7 @@ func newQuotedFixture(t *testing.T) quotedFixture {
 	return quotedFixture{server: server, database: database, calls: calls, runtime: runtime, output: output, providerURL: provider.URL, root: root, prices: prices}
 }
 func quoteNativeInput() map[string]any {
-	return map[string]any{"processing_digest": strings.Repeat("a", 64), "intent": map[string]any{"kind": "native_v2", "provider": "openai", "request": map[string]any{"model": "gpt-4.1", "messages": []map[string]string{{"role": "user", "content": "quoted private input"}}, "structured_output": map[string]any{"schema": map[string]any{"type": "object", "properties": map[string]any{"answer": map[string]any{"type": "string"}}, "required": []string{"answer"}, "additionalProperties": false}}}}}
+	return map[string]any{"processing_digest": strings.Repeat("a", 64), "intent": map[string]any{"kind": "native_v2", "provider": "openai", "request": map[string]any{"model": "gpt-6.2-sol", "messages": []map[string]string{{"role": "user", "content": "quoted private input"}}, "structured_output": map[string]any{"schema": map[string]any{"type": "object", "properties": map[string]any{"answer": map[string]any{"type": "string"}}, "required": []string{"answer"}, "additionalProperties": false}}}}}
 }
 func (fixture quotedFixture) exchange(t *testing.T, method, path, key string, body any, want int) map[string]any {
 	t.Helper()
@@ -445,7 +445,7 @@ func TestHostedQuoteOfficialSDKNativeRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request, err := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{Model: "gpt-4.1", Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "Answer the fictional question"}}, StructuredOutput: &llmproxyclient.StructuredOutputInput{JSONSchema: []byte(`{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}`)}, IdempotencyKey: "constructor-only-unused"})
+	request, err := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{Model: "gpt-6.2-sol", Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "Answer the fictional question"}}, StructuredOutput: &llmproxyclient.StructuredOutputInput{JSONSchema: []byte(`{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}`)}, IdempotencyKey: "constructor-only-unused"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -489,7 +489,7 @@ func TestHostedQuoteOfficialSDKNativeRoundTrip(t *testing.T) {
 	script := `import sys
 from llm_proxy_client import Client, ClientConfig, ClientMessage, ClientMessagesRequest, ClientStructuredOutput, QuotedClient, FinancialQuoteInput
 client=QuotedClient(Client(ClientConfig(base_url=sys.argv[1],secret=sys.argv[2],provider="openai")))
-request=ClientMessagesRequest(messages=(ClientMessage(role='user',content='Answer the fictional question'),),model='gpt-4.1',structured_output=ClientStructuredOutput(schema={'type':'object','properties':{'answer':{'type':'string'}},'required':['answer'],'additionalProperties':False}),idempotency_key='constructor-only-unused')
+request=ClientMessagesRequest(messages=(ClientMessage(role='user',content='Answer the fictional question'),),model='gpt-6.2-sol',structured_output=ClientStructuredOutput(schema={'type':'object','properties':{'answer':{'type':'string'}},'required':['answer'],'additionalProperties':False}),idempotency_key='constructor-only-unused')
 intent=FinancialQuoteInput.native('a'*64,'openai',request)
 quote=client.create_financial_quote('python-native-quote',intent)
 assert client.get_financial_quote('python-native-quote').id==quote.id

@@ -35,7 +35,7 @@ func TestAccountConnectionDefaultSaveUsesCurrentAssignment(t *testing.T) {
 		t.Fatal(err)
 	}
 	record.ConnectionAssignments = []managedTenantConnectionRecord{{TenantID: record.TenantID, ProviderID: ProviderNameOpenAI, ConnectionID: "test-connection", Connection: managedAccountConnectionRecord{ID: "test-connection", OwnerUserID: principal.userID, ProviderID: ProviderNameOpenAI, Fields: []managedConnectionFieldRecord{{ConnectionID: "test-connection", FieldID: CatalogCredentialAPIKey, Value: ciphertext}}}}}
-	record.ProviderProfiles = []managedProviderProfileRecord{{TenantID: record.TenantID, ProviderID: ProviderNameOpenAI, TextModel: ModelNameGPT41}}
+	record.ProviderProfiles = []managedProviderProfileRecord{{TenantID: record.TenantID, ProviderID: ProviderNameOpenAI, TextModel: "gpt-6.2-sol"}}
 	database.tenantsByID[record.TenantID] = record
 	service.store.database = &detachingDefaultsDatabase{fakeManagedTenantDatabase: database}
 	router := gin.New()
@@ -43,7 +43,7 @@ func TestAccountConnectionDefaultSaveUsesCurrentAssignment(t *testing.T) {
 	router.PUT("/api/management/tenants/:tenant_id/defaults", service.updateDefaultsHandler())
 	server := httptest.NewServer(router)
 	t.Cleanup(server.Close)
-	request, err := http.NewRequest(http.MethodPut, server.URL+"/api/management/tenants/managed-default/defaults", strings.NewReader(managementDefaultsBody(ProviderNameOpenAI, ModelNameGPT41)))
+	request, err := http.NewRequest(http.MethodPut, server.URL+"/api/management/tenants/managed-default/defaults", strings.NewReader(managementDefaultsBody(ProviderNameOpenAI, "gpt-6.2-sol")))
 	if err != nil {
 		t.Fatal(err)
 	}

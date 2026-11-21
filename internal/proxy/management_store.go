@@ -58,7 +58,7 @@ const (
 	managedDeepSeekRetirementSchemaVersion  = 14
 	managedClaudeRetirementSchemaVersion    = 15
 	managedOpenAITranscriptionSchemaVersion = 16
-	managedTenantSchemaVersion              = managedAccountConnectionsSchemaVersion
+	managedTenantSchemaVersion              = managedOpenAIGPT56CutoverVersion
 	retiredQwenCloudProviderIdentifier      = "qwencloud"
 	retiredGrokProviderIdentifier           = "grok"
 	retiredZhipuProviderIdentifier          = "zhipu"
@@ -727,6 +727,10 @@ func initializeManagedConnectionSchema(database *gorm.DB, providerKeyCipher mana
 		if err != nil {
 			return fmt.Errorf("%w: operation=inspect_schema: %w", errManagedTenantSchemaMigration, err)
 		}
+		cutover, cutoverError := preflightOpenAICutover(transaction, providers)
+		if cutoverError != nil {
+			return cutoverError
+		}
 		if len(tables) == 0 {
 			if err := transaction.AutoMigrate(
 				&managedUserRecord{}, &managedTenantRecord{}, &managedProviderProfileRecord{},
@@ -744,11 +748,14 @@ func initializeManagedConnectionSchema(database *gorm.DB, providerKeyCipher mana
 			}
 		}
 		if transaction.Migrator().HasTable(&managedAccountConnectionRecord{}) {
+			if err := applyOpenAICutover(transaction, cutover); err != nil {
+				return err
+			}
 			return validateAccountConnectionSchema(transaction, providerKeyCipher, providers)
 		}
 		var version managedSchemaMigrationRecord
 		if transaction.Migrator().HasTable(&managedSchemaMigrationRecord{}) {
-			err := transaction.Order("version DESC").First(&version).Error
+			err := transaction.Order(clause.OrderBy{Columns: []clause.OrderByColumn{{Column: clause.Column{Name: managedSchemaVersionColumn}, Desc: true}}}).First(&version).Error
 			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 				return err
 			}
@@ -763,6 +770,9 @@ func initializeManagedConnectionSchema(database *gorm.DB, providerKeyCipher mana
 			if err := migrateAccountConnections(transaction, providerKeyCipher, providers); err != nil {
 				return err
 			}
+		}
+		if err := applyOpenAICutover(transaction, cutover); err != nil {
+			return err
 		}
 		if err := validateAccountConnectionSchema(transaction, providerKeyCipher, providers); err != nil {
 			return err
@@ -1377,7 +1387,11 @@ func migrateManagedProviderConnectionDataWithReader(database *gorm.DB, providerK
 			connections = append(connections, settingRecord)
 			expectedValues[managedProviderConnectionIdentity(settingRecord)] = value
 		}
-		if _, _, modelError := providers.resolveTextModel(predecessor.ProviderID, predecessor.TextModel, predecessor.ProviderID, predecessor.TextModel, false); modelError != nil {
+		validationModel := predecessor.TextModel
+		if target, changed := openAICutoverTarget(providers, predecessor.ProviderID, validationModel); changed {
+			validationModel = target
+		}
+		if _, _, modelError := providers.resolveTextModel(predecessor.ProviderID, validationModel, predecessor.ProviderID, validationModel, false); modelError != nil {
 			return fmt.Errorf("%w: operation=preflight table=%s tenant=%s provider=%s model=%s: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, predecessor.TenantID, predecessor.ProviderID, predecessor.TextModel, modelError)
 		}
 		profile := managedProviderProfileRecord{
@@ -1530,7 +1544,7 @@ func migrateManagedKeyedRoutingDefaults(database *gorm.DB, providerKeyCipher man
 			return fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, record.OwnerUserID, record.TenantID, providerSettingsError)
 		}
 		projectedDefaults, _ := canonicalManagedPredecessorDefaults(providers, record.defaults())
-		currentDefaults, defaultsError := validateCanonicalManagedRoutingDefaults(providers, projectedDefaults)
+		currentDefaults, defaultsError := validateCanonicalManagedRoutingDefaults(providers, projectOpenAIPredecessorDefaults(providers, projectedDefaults))
 		if defaultsError != nil {
 			return fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, defaultsError)
 		}
@@ -1657,7 +1671,7 @@ func preflightManagedQwenCloudRetirement(database *gorm.DB, providerKeyCipher ma
 			return managedQwenCloudRetirementDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, defaultsError)
 		}
 		if strings.TrimSpace(record.DefaultProvider) != retiredQwenCloudProviderIdentifier {
-			if _, validationError := validatePersistedManagedRoutingDefaults(providers, providerSettings, currentDefaults.value()); validationError != nil {
+			if _, validationError := validateOpenAIPredecessorRoutingDefaults(providers, providerSettings, currentDefaults.value()); validationError != nil {
 				return managedQwenCloudRetirementDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, validationError)
 			}
 			continue
@@ -1693,7 +1707,7 @@ func managedRetiredModelIdentifier(providers *providerRegistry, schemaVersion in
 func validateManagedQwenCloudRetirementDefaults(providers *providerRegistry, retiredModel string, rawDefaults TenantDefaults) (managedRoutingDefaults, error) {
 	if strings.TrimSpace(rawDefaults.Provider) != retiredQwenCloudProviderIdentifier {
 		projectedDefaults, _ := canonicalManagedPredecessorDefaults(providers, rawDefaults)
-		return validateCanonicalManagedRoutingDefaults(providers, projectedDefaults)
+		return validateCanonicalManagedRoutingDefaults(providers, projectOpenAIPredecessorDefaults(providers, projectedDefaults))
 	}
 	if rawDefaults.Provider != retiredQwenCloudProviderIdentifier || strings.TrimSpace(rawDefaults.Model) != retiredModel || rawDefaults.Model != retiredModel {
 		return managedRoutingDefaults{}, managedRoutingDefaultsCanonicalError(endpointKindText, rawDefaults.Provider, rawDefaults.Model)
@@ -1703,7 +1717,7 @@ func validateManagedQwenCloudRetirementDefaults(providers *providerRegistry, ret
 	currentWithoutRetiredTextRoute.Model = constants.EmptyString
 	currentWithoutRetiredTextRoute.ReasoningEffort = constants.EmptyString
 	projectedDefaults, _ := canonicalManagedPredecessorDefaults(providers, currentWithoutRetiredTextRoute)
-	validatedCurrent, validationError := validateCanonicalManagedRoutingDefaults(providers, projectedDefaults)
+	validatedCurrent, validationError := validateCanonicalManagedRoutingDefaults(providers, projectOpenAIPredecessorDefaults(providers, projectedDefaults))
 	if validationError != nil {
 		return managedRoutingDefaults{}, validationError
 	}
@@ -1837,7 +1851,7 @@ func preflightManagedModelIdentity(database *gorm.DB, providerKeyCipher managedP
 		}
 		modelIdentityDefaults, defaultsChanged := canonicalManagedTenantDefaults(providers, record.defaults())
 		projectedDefaults, _ := canonicalManagedPredecessorDefaults(providers, modelIdentityDefaults)
-		_, defaultsError := validatePersistedManagedRoutingDefaults(providers, providerSettings, projectedDefaults)
+		_, defaultsError := validateOpenAIPredecessorRoutingDefaults(providers, providerSettings, projectedDefaults)
 		if defaultsError != nil {
 			return managedModelIdentityDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, defaultsError)
 		}
@@ -2026,7 +2040,7 @@ func preflightManagedXAIProviderWithReader(database *gorm.DB, providerKeyCipher 
 		}
 		defaults, defaultsChanged := canonicalManagedXAIProviderDefaults(record.defaults())
 		projectedDefaults, _ := canonicalManagedZAIProviderDefaults(defaults)
-		_, defaultsError := validatePersistedManagedRoutingDefaults(providers, providerSettings, projectedDefaults)
+		_, defaultsError := validateOpenAIPredecessorRoutingDefaults(providers, providerSettings, projectedDefaults)
 		if defaultsError != nil {
 			return managedXAIProviderDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, defaultsError)
 		}
@@ -2170,12 +2184,12 @@ func preflightManagedDashScopeSettings(database *gorm.DB, providerKeyCipher mana
 			return managedDashScopeSettingsMigrationDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, record.OwnerUserID, record.TenantID, providerSettingsError)
 		}
 		projectedDefaults, _ := canonicalManagedZAIProviderDefaults(record.defaults())
-		currentDefaults, defaultsError := validateCanonicalManagedRoutingDefaults(providers, projectedDefaults)
+		currentDefaults, defaultsError := validateCanonicalManagedRoutingDefaults(providers, projectOpenAIPredecessorDefaults(providers, projectedDefaults))
 		if defaultsError != nil {
 			return managedDashScopeSettingsMigrationDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, defaultsError)
 		}
 		if strings.TrimSpace(record.DefaultProvider) != ProviderNameDashScope {
-			if _, validationError := validatePersistedManagedRoutingDefaults(providers, providerSettings, currentDefaults.value()); validationError != nil {
+			if _, validationError := validateOpenAIPredecessorRoutingDefaults(providers, providerSettings, currentDefaults.value()); validationError != nil {
 				return managedDashScopeSettingsMigrationDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, validationError)
 			}
 			continue
@@ -2337,7 +2351,7 @@ func preflightManagedZAIProviderWithReader(database *gorm.DB, providerKeyCipher 
 			return managedZAIProviderDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, record.OwnerUserID, record.TenantID, providerSettingsError)
 		}
 		defaults, defaultsChanged := canonicalManagedZAIProviderDefaults(record.defaults())
-		validatedDefaults, defaultsError := validatePersistedManagedRoutingDefaults(providers, providerSettings, defaults)
+		validatedDefaults, defaultsError := validateOpenAIPredecessorRoutingDefaults(providers, providerSettings, defaults)
 		if defaultsError != nil {
 			return managedZAIProviderDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, defaultsError)
 		}
@@ -2450,17 +2464,17 @@ func validateManagedConnectionRoutingDefaults(database *gorm.DB, providerKeyCiph
 	if queryError := database.
 		Preload("ProviderConnections").
 		Preload("ProviderProfiles").
-		Order("tenant_id").
+		Order(clause.OrderByColumn{Column: clause.Column{Name: "tenant_id"}}).
 		Find(&records).
 		Error; queryError != nil {
 		return fmt.Errorf("%w: operation=read table=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, queryError)
 	}
 	for _, record := range records {
-		providerSettings, settingsError := managedProviderSettingsFromConnectionRecords(providerKeyCipher, providers, record.ProviderConnections, record.ProviderProfiles)
+		providerSettings, settingsError := managedProviderSettingsFromConnectionRecords(providerKeyCipher, providers, record.ProviderConnections, projectOpenAIPredecessorProfiles(providers, record.ProviderProfiles))
 		if settingsError != nil {
 			return fmt.Errorf("%w: operation=validate table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedProviderConnectionTable, record.OwnerUserID, record.TenantID, settingsError)
 		}
-		if _, defaultsError := validatePersistedManagedRoutingDefaults(providers, providerSettings, record.defaults()); defaultsError != nil {
+		if _, defaultsError := validatePersistedManagedRoutingDefaults(providers, providerSettings, projectOpenAIPredecessorDefaults(providers, record.defaults())); defaultsError != nil {
 			return fmt.Errorf("%w: operation=validate table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, defaultsError)
 		}
 	}
@@ -2481,7 +2495,7 @@ func validateManagedRoutingDefaults(database *gorm.DB, providerKeyCipher managed
 		if providerSettingsError != nil {
 			return fmt.Errorf("%w: operation=validate table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, record.OwnerUserID, record.TenantID, providerSettingsError)
 		}
-		if _, defaultsError := validatePersistedManagedRoutingDefaults(providers, providerSettings, defaultsProjection(record.defaults())); defaultsError != nil {
+		if _, defaultsError := validateOpenAIPredecessorRoutingDefaults(providers, providerSettings, defaultsProjection(record.defaults())); defaultsError != nil {
 			return fmt.Errorf("%w: operation=validate table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, defaultsError)
 		}
 	}
@@ -2747,6 +2761,7 @@ func preflightLegacyManagedTenantSchema(database *gorm.DB, providerKeyCipher man
 		}
 		canonicalDefaults, _ := canonicalManagedPredecessorDefaults(providers, legacyTenant.defaults())
 		canonicalDefaults, _ = canonicalManagedPendingModelDefaults(providers, canonicalDefaults)
+		canonicalDefaults = projectOpenAIPredecessorDefaults(providers, canonicalDefaults)
 		validatedDefaults, defaultsError := validateCanonicalManagedRoutingDefaults(providers, canonicalDefaults)
 		if defaultsError != nil {
 			return managedTenantMigrationDataset{}, fmt.Errorf("%w: operation=preflight table=%s user=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, legacyTenant.UserID, legacyTenant.TenantID, defaultsError)
@@ -2812,6 +2827,9 @@ func preflightLegacyManagedTenantSchema(database *gorm.DB, providerKeyCipher man
 		seenCanonicalProviderKeys[canonicalProviderKey] = struct{}{}
 		textModel, _ := canonicalManagedTextModel(providers, providerIdentifier, legacyProviderKey.TextModel)
 		textModel, _ = canonicalManagedPendingTextModel(providers, providerIdentifier, textModel)
+		if target, changed := openAICutoverTarget(providers, providerIdentifier, textModel); changed {
+			textModel = target
+		}
 		providerDefinition, textModelDefinition, modelError := providers.resolveTextModel(
 			providerIdentifier,
 			textModel,
@@ -3876,6 +3894,9 @@ func managedProviderSettingsFromPredecessorRecords(providerKeyCipher managedProv
 			providerIdentifier = ProviderNameZAI
 		}
 		textModel, _ := canonicalManagedTextModel(providers, providerIdentifier, settings.textModel)
+		if target, changed := openAICutoverTarget(providers, providerIdentifier, textModel); changed {
+			textModel = target
+		}
 		canonicalProviderIdentifier := newProviderID(providerIdentifier)
 		if _, duplicate := providerSettings[canonicalProviderIdentifier]; duplicate {
 			return nil, fmt.Errorf("%w: provider_conflict=%s", errManagedRoutingDefaultsInvalid, canonicalProviderIdentifier.string())

@@ -127,7 +127,7 @@ func TestProxyGPT5SavedReasoningEffortFollowsTheResolvedRoute(testingInstance *t
 			subTest.Cleanup(openAIServer.Close)
 			applicationServer := newIntegrationServerWithDefaults(subTest, openAIServer, proxy.TenantDefaults{
 				Provider:              proxy.ProviderNameOpenAI,
-				Model:                 proxy.ModelNameGPT5,
+				Model:                 "gpt-6.2-sol",
 				TranscriptionProvider: proxy.ProviderNameOpenAI,
 				TranscriptionModel:    proxy.DefaultTranscriptionModel,
 				ReasoningEffort:       reasoningEffortHighValue,
@@ -136,7 +136,7 @@ func TestProxyGPT5SavedReasoningEffortFollowsTheResolvedRoute(testingInstance *t
 			queryValues := requestURL.Query()
 			queryValues.Set(promptQueryParameter, promptValue)
 			queryValues.Set(keyQueryParameter, integrationServiceSecret)
-			queryValues.Set(adaptiveModelQueryParameter, proxy.ModelNameGPT5)
+			queryValues.Set(adaptiveModelQueryParameter, "gpt-6.2-sol")
 			if webSearchEnabled {
 				queryValues.Set(webSearchQueryParameter, "true")
 			}
@@ -186,7 +186,7 @@ func TestProxyGPT5MiniSavedReasoningEffortFollowsTheResolvedRoute(testingInstanc
 	testingInstance.Cleanup(openAIServer.Close)
 	applicationServer := newIntegrationServerWithDefaults(testingInstance, openAIServer, proxy.TenantDefaults{
 		Provider:              proxy.ProviderNameOpenAI,
-		Model:                 proxy.ModelNameGPT5Mini,
+		Model:                 "gpt-6-luna",
 		TranscriptionProvider: proxy.ProviderNameOpenAI,
 		TranscriptionModel:    proxy.DefaultTranscriptionModel,
 		ReasoningEffort:       reasoningEffortHighValue,
@@ -203,11 +203,11 @@ func TestProxyGPT5MiniSavedReasoningEffortFollowsTheResolvedRoute(testingInstanc
 	}
 	_, _ = io.ReadAll(httpResponse.Body)
 	payloadMap, _ := capturedPayload.(map[string]any)
-	if payloadMap["model"] != proxy.ModelNameGPT5Mini {
-		testingInstance.Fatalf("model=%v want=%s", payloadMap["model"], proxy.ModelNameGPT5Mini)
+	if payloadMap["model"] != "gpt-6-luna" {
+		testingInstance.Fatalf("model=%v want=%s", payloadMap["model"], "gpt-6-luna")
 	}
 	if _, hasTemperature := payloadMap["temperature"]; hasTemperature {
-		testingInstance.Fatalf(temperatureOmittedFormat, proxy.ModelNameGPT5Mini, payloadMap["temperature"])
+		testingInstance.Fatalf(temperatureOmittedFormat, "gpt-6-luna", payloadMap["temperature"])
 	}
 	if _, hasTools := payloadMap[toolsField]; hasTools {
 		testingInstance.Fatalf("unexpected tools in GPT-5 mini payload: %v", payloadMap)
@@ -259,7 +259,7 @@ func TestProxyTenantReasoningEffortDoesNotLeakToUnsupportedResolvedRoute(testing
 	testingInstance.Cleanup(openAIServer.Close)
 	applicationServer := newIntegrationServerWithDefaults(testingInstance, openAIServer, proxy.TenantDefaults{
 		Provider:              proxy.ProviderNameOpenAI,
-		Model:                 proxy.ModelNameGPT5,
+		Model:                 "gpt-6.2-sol",
 		TranscriptionProvider: proxy.ProviderNameOpenAI,
 		TranscriptionModel:    proxy.DefaultTranscriptionModel,
 		ReasoningEffort:       reasoningEffortHighValue,
@@ -269,7 +269,7 @@ func TestProxyTenantReasoningEffortDoesNotLeakToUnsupportedResolvedRoute(testing
 	queryValues := requestURL.Query()
 	queryValues.Set(promptQueryParameter, promptValue)
 	queryValues.Set(keyQueryParameter, integrationServiceSecret)
-	queryValues.Set(adaptiveModelQueryParameter, proxy.ModelNameGPT41)
+	queryValues.Set(adaptiveModelQueryParameter, "gpt-6.2-sol")
 	requestURL.RawQuery = queryValues.Encode()
 	httpResponse, requestError := http.Get(requestURL.String())
 	if requestError != nil {

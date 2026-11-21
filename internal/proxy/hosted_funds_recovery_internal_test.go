@@ -133,7 +133,7 @@ func TestHostedFundsRecoveryFencesExpiredUndispatchedWorker(t *testing.T) {
 	root := t.TempDir()
 	first := newHostedIdentityHTTPServer(t, database, upstream.URL, root, fundsDependencies(prices))
 	t.Cleanup(unblock)
-	request, err := http.NewRequest(http.MethodPost, first.URL+"/?provider=openai&model=gpt-4.1", strings.NewReader(`{"prompt":"funded prompt"}`))
+	request, err := http.NewRequest(http.MethodPost, first.URL+"/?provider=openai&model=gpt-6.2-sol", strings.NewReader(`{"prompt":"funded prompt"}`))
 	if err != nil {
 		t.Fatal(err)
 	}

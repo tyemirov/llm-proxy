@@ -39,7 +39,7 @@ func TestMediaOperationWorkerReportsPersistenceFailures(t *testing.T) {
 			configuration, err := testfixtures.ProvisionManagedRouter(t, proxy.Configuration{
 				ProviderCatalog: testfixtures.ProviderCatalog(t), AssetStorePath: t.TempDir(), Endpoints: endpoints,
 			}, zap.NewNop().Sugar(), testfixtures.ManagedTenant{
-				Secret: "worker-report-tenant", Defaults: proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.ModelNameGPT41},
+				Secret: "worker-report-tenant", Defaults: proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: "gpt-6.2-sol"},
 				ProviderKeys: map[string]string{proxy.ProviderNameOpenAI: "private-report-provider-key"},
 			})
 			if err != nil {

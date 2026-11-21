@@ -14,7 +14,7 @@ import (
 
 func TestHostedRuntimeCLIRejectsInvalidScopesBeforeServiceStartup(t *testing.T) {
 	const offering = `    - provider: openai
-      model: gpt-4.1
+      model: gpt-6.2-sol
       operation: text
       maximum_attempts: 1
       conditions: {}
@@ -29,7 +29,7 @@ func TestHostedRuntimeCLIRejectsInvalidScopesBeforeServiceStartup(t *testing.T) 
 		{"null-entry", prefix + "    - null\n", "hosted.offerings[0] must be an object"},
 		{"duplicate", prefix + offering + offering, "duplicate offering scope"},
 		{"duplicate-with-other-conditions", prefix + offering + strings.Replace(offering, "conditions: {}", "conditions: {service_tier: priority}", 1), "duplicate offering scope"},
-		{"unknown-service", prefix + strings.Replace(offering, "model: gpt-4.1", "model: ''", 1), "configure hosted service scope"},
+		{"unknown-service", prefix + strings.Replace(offering, "model: gpt-6.2-sol", "model: ''", 1), "configure hosted service scope"},
 		{"cache-condition", prefix + strings.Replace(offering, "conditions: {}", "conditions: {cache_class: read}", 1), "categorical service conditions"},
 		{"token-range", prefix + strings.Replace(offering, "conditions: {}", "conditions: {input_tokens: {maximum_exclusive: '1000'}}", 1), "categorical service conditions"},
 		{"invalid-region", prefix + strings.Replace(offering, "conditions: {}", "conditions: {region: 'US West'}", 1), "invalid price region"},
@@ -61,7 +61,7 @@ func TestHostedRuntimeConfigurationSelectsExactOfferingScopes(t *testing.T) {
 hosted:
   offerings:
     - provider: openai
-      model: gpt-4.1
+      model: gpt-6.2-sol
       operation: text
       maximum_attempts: 1
       conditions: {}
@@ -82,8 +82,8 @@ hosted:
 		{"provider: openai", "provider: unknown"},
 		{"provider: openai", "provider: ' openai '"},
 		{"operation: text", "operation: unknown"},
-		{"model: gpt-4.1", "model: unknown"},
-		{"model: gpt-4.1", "model: ' gpt-4.1 '"},
+		{"model: gpt-6.2-sol", "model: unknown"},
+		{"model: gpt-6.2-sol", "model: ' gpt-6.2-sol '"},
 		{"conditions: {}", "conditions: {service_tier: unknown}"},
 		{"conditions: {}", "conditions: {effective_from: '2026-01-01T00:00:00Z'}"},
 	} {

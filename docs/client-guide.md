@@ -61,7 +61,7 @@ one request with `--reasoning-effort`:
 llm-proxy-client \
   --base-url "http://localhost:8080/?provider=openai" \
   --secret "$LLM_PROXY_DEFAULT_TENANT_KEY" \
-  --model gpt-5.5 \
+  --model gpt-6.2-sol \
   --reasoning-effort high \
   --request-timeout-seconds 900 \
   --prompt "Summarize this"
@@ -534,7 +534,7 @@ configuration. The JSON body is capped by `server.max_prompt_bytes`.
 ```shell
 curl -X POST \
   -H "Content-Type: application/json" \
-  --data '{"prompt":"large text...","model":"gpt-5.5","web_search":false,"system_prompt":"optional","max_tokens":4096,"reasoning_effort":"high"}' \
+  --data '{"prompt":"large text...","model":"gpt-6.2-sol","web_search":false,"system_prompt":"optional","max_tokens":4096,"reasoning_effort":"high"}' \
   "http://localhost:8080/?key=mysecret"
 ```
 
@@ -636,7 +636,7 @@ default store retains an available asset for 48 hours.
 curl --get \
   --data-urlencode "prompt=Summarize quantum error correction" \
   --data-urlencode "key=mysecret" \
-  --data-urlencode "model=gpt-4o" \
+  --data-urlencode "model=gpt-6.2-sol" \
   "http://localhost:8080/"
 ```
 
@@ -650,13 +650,13 @@ curl --get \
   "http://localhost:8080/"
 ```
 
-You can enable web search with GPT-5 by specifying the model:
+You can enable web search with GPT-6.2 Sol by specifying the model:
 
 ```shell
 curl --get \
   --data-urlencode "prompt=Latest research on quantum gravity" \
   --data-urlencode "key=mysecret" \
-  --data-urlencode "model=gpt-5" \
+  --data-urlencode "model=gpt-6.2-sol" \
   --data-urlencode "web_search=true" \
   "http://localhost:8080/"
 ```
@@ -714,7 +714,7 @@ JSON-format LLM responses include the same normalized counts:
   "request": "Hello",
   "response": "Hi",
   "object": "chat.completion",
-  "model": "gpt-4.1",
+  "model": "gpt-6.2-sol",
   "choices": [
     {
       "index": 0,

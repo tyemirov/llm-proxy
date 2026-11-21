@@ -213,7 +213,7 @@ func TestMCPTenantDiscoveryAndGeneration(t *testing.T) {
 		}
 	}
 	for _, tenant := range []struct{ id, key, answer string }{{first, "first-fixture-key", "first-response"}, {second, "second-fixture-key", "second-response"}} {
-		saveManagementProviderKey(t, fixture.router, owner, tenant.id, tenant.key, proxy.ModelNameGPT41, "")
+		saveManagementProviderKey(t, fixture.router, owner, tenant.id, tenant.key, "gpt-6.2-sol", "")
 		result := mcpCall(t, client, "llm_proxy.generate_text", map[string]any{"tenant_id": tenant.id, "messages": []map[string]string{{"role": "user", "content": "hello"}}, "request_timeout_seconds": 10})
 		if result.IsError {
 			t.Fatalf("generation=%+v", result)
@@ -230,7 +230,7 @@ func TestMCPTenantDiscoveryAndGeneration(t *testing.T) {
 		if err := json.Unmarshal(data, &output); err != nil {
 			t.Fatal(err)
 		}
-		if output.Text != tenant.answer || output.Provider != "openai" || output.Model != proxy.ModelNameGPT41 || output.RequestID == "" || output.Timeout != 10 || output.Usage.Total != 5 {
+		if output.Text != tenant.answer || output.Provider != "openai" || output.Model != "gpt-6.2-sol" || output.RequestID == "" || output.Timeout != 10 || output.Usage.Total != 5 {
 			t.Fatalf("output=%s", data)
 		}
 		resource, err := client.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "llm-proxy://tenants/" + tenant.id + "/routes"})
@@ -409,7 +409,7 @@ func TestMCPGenerationFailuresAndUsage(t *testing.T) {
 	if !result.IsError {
 		t.Fatal("unconfigured route succeeded")
 	}
-	saveManagementProviderKey(t, fixture.router, owner, tenant, "private-fixture-key", proxy.ModelNameGPT41, "")
+	saveManagementProviderKey(t, fixture.router, owner, tenant, "private-fixture-key", "gpt-6.2-sol", "")
 	for _, change := range []map[string]any{{"request_timeout_seconds": 0}, {"max_tokens": 0}, {"messages": []any{}}, {"provider": "unknown"}, {"reasoning_effort": "invalid"}, {}} {
 		arguments := map[string]any{}
 		for k, v := range input {
@@ -453,7 +453,7 @@ func TestMCPCancellationAndTimeout(t *testing.T) {
 			}), proxy.Configuration{RequestTimeoutSeconds: 1, MaxRequestTimeoutSeconds: 2})
 			owner := managementSessionCookie(t, "timeout-owner")
 			tenant := requestManagementAccount(t, fixture.router, owner).Tenants[0].ID
-			saveManagementProviderKey(t, fixture.router, owner, tenant, "timeout-key", proxy.ModelNameGPT41, "")
+			saveManagementProviderKey(t, fixture.router, owner, tenant, "timeout-key", "gpt-6.2-sol", "")
 			client := fixture.client(t, "timeout-owner")
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
@@ -512,8 +512,8 @@ func TestMCPCapacityAndConcurrentTenants(t *testing.T) {
 	owner := managementSessionCookie(t, "concurrent-owner")
 	first := requestManagementAccount(t, fixture.router, owner).Tenants[0].ID
 	second := createManagementTenant(t, fixture.router, owner, "Second").Tenant.ID
-	saveManagementProviderKey(t, fixture.router, owner, first, "first-key", proxy.ModelNameGPT41, "")
-	saveManagementProviderKey(t, fixture.router, owner, second, "second-key", proxy.ModelNameGPT41, "")
+	saveManagementProviderKey(t, fixture.router, owner, first, "first-key", "gpt-6.2-sol", "")
+	saveManagementProviderKey(t, fixture.router, owner, second, "second-key", "gpt-6.2-sol", "")
 	client := fixture.client(t, "concurrent-owner")
 	type answer struct {
 		tenant string
@@ -567,10 +567,10 @@ func TestMCPMediaAndSchemaPrivacy(t *testing.T) {
 	}))
 	owner := managementSessionCookie(t, "media-owner")
 	tenant := requestManagementAccount(t, fixture.router, owner).Tenants[0].ID
-	saveManagementProviderKey(t, fixture.router, owner, tenant, "private-media-key", proxy.ModelNameGPT41, "")
+	saveManagementProviderKey(t, fixture.router, owner, tenant, "private-media-key", "gpt-6.2-sol", "")
 	client := fixture.client(t, "media-owner")
 	image := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII="
-	input := map[string]any{"tenant_id": tenant, "messages": []any{map[string]any{"role": "user", "content": "private media prompt", "order": 0, "attachments": []map[string]string{{"type": "image", "mime_type": "image/png", "data": image}}}}, "provider": "openai", "model": proxy.ModelNameGPT41, "max_tokens": 100}
+	input := map[string]any{"tenant_id": tenant, "messages": []any{map[string]any{"role": "user", "content": "private media prompt", "order": 0, "attachments": []map[string]string{{"type": "image", "mime_type": "image/png", "data": image}}}}, "provider": "openai", "model": "gpt-6.2-sol", "max_tokens": 100}
 	result := mcpCall(t, client, "llm_proxy.generate_text", input)
 	if result.IsError || !strings.Contains(received, image) {
 		t.Fatalf("media result=%+v received media=%t", result, strings.Contains(received, image))
@@ -678,7 +678,7 @@ func TestMCPOrderedImageAndAudio(t *testing.T) {
 	}
 	assertGeminiInteractionMediaContent(t, content[1], "image", "image/png", image)
 	assertGeminiInteractionMediaContent(t, content[2], "audio", "audio/m4a", audio)
-	saveManagementProviderKey(t, fixture.router, owner, tenant, "openai-fixture-key", proxy.ModelNameGPT41, "")
+	saveManagementProviderKey(t, fixture.router, owner, tenant, "openai-fixture-key", "gpt-6.2-sol", "")
 	routes, err := fixture.client(t, "audio-owner").ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "llm-proxy://tenants/" + tenant + "/routes"})
 	if err != nil || !strings.Contains(routes.Contents[0].Text, `"provider":"gemini"`) || !strings.Contains(routes.Contents[0].Text, `"provider":"openai"`) {
 		t.Fatalf("configured routes=%+v err=%v", routes, err)
@@ -691,7 +691,7 @@ func TestMCPAssetStoreFailure(t *testing.T) {
 	fixture := newMCPFixtureWithConfig(t, nil, proxy.Configuration{AssetStorePath: root})
 	owner := managementSessionCookie(t, "asset-owner")
 	tenant := requestManagementAccount(t, fixture.router, owner).Tenants[0].ID
-	saveManagementProviderKey(t, fixture.router, owner, tenant, "asset-fixture-key", proxy.ModelNameGPT41, "")
+	saveManagementProviderKey(t, fixture.router, owner, tenant, "asset-fixture-key", "gpt-6.2-sol", "")
 	secret := generateManagementTenantSecret(t, fixture.router, owner, tenant)
 	asset := uploadTestAsset(t, fixture.router, secret, "image/png", []byte("image"))
 	corrupted, err := os.Create(filepath.Join(root, asset.AssetID+".json"))
@@ -887,7 +887,7 @@ func TestMCPUploadDeadlineClearedBeforeGeneration(t *testing.T) {
 	}), proxy.Configuration{RequestTimeoutSeconds: 1, MaxRequestTimeoutSeconds: 3})
 	owner := managementSessionCookie(t, "upload-owner")
 	tenant := requestManagementAccount(t, fixture.router, owner).Tenants[0].ID
-	saveManagementProviderKey(t, fixture.router, owner, tenant, "upload-key", proxy.ModelNameGPT41, "")
+	saveManagementProviderKey(t, fixture.router, owner, tenant, "upload-key", "gpt-6.2-sol", "")
 	client := fixture.client(t, "upload-owner")
 	result := mcpCall(t, client, "llm_proxy.generate_text", map[string]any{"tenant_id": tenant, "messages": []map[string]string{{"role": "user", "content": "hi"}}, "request_timeout_seconds": 3})
 	if result.IsError {

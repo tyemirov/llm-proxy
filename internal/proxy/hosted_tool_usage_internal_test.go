@@ -257,7 +257,7 @@ func TestHostedToolUsagePollingAndContinuations(t *testing.T) {
 
 func hostedSearchHTTP(t *testing.T, server *httptest.Server, key string, want int) {
 	t.Helper()
-	request, err := http.NewRequest(http.MethodPost, server.URL+"/?provider=openai&model=gpt-4.1", strings.NewReader(`{"prompt":"private prompt","web_search":true}`))
+	request, err := http.NewRequest(http.MethodPost, server.URL+"/?provider=openai&model=gpt-6.2-sol", strings.NewReader(`{"prompt":"private prompt","web_search":true}`))
 	if err != nil {
 		t.Fatal(err)
 	}

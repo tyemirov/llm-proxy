@@ -72,7 +72,7 @@ func TestHostedFundsResponsesImageAdvertisedCombinedPrice(t *testing.T) {
 						t.Error(err)
 						return
 					}
-					if payload["model"] != "gpt-5" || payload["max_tool_calls"] != float64(1) {
+					if payload["model"] != "gpt-6.2-sol" || payload["max_tool_calls"] != float64(1) {
 						t.Errorf("unbounded or wrong response model: %v", payload)
 					}
 					w.Header().Set("Content-Type", "application/json")
@@ -114,7 +114,7 @@ func TestHostedFundsResponsesImageAdvertisedCombinedPrice(t *testing.T) {
 					t.Fatal(err)
 				}
 				worker.adapters[mediaOperationAdapterKey(capability, "openai", "gpt-image-2")] = newImageGenerationAdapter(offering, worker.providers.definitions[providerID("openai")], adapter.tenants, worker.store, worker.assets, settings.catalog)
-				intent := fmt.Sprintf(`{"capability":%q,"provider":"openai","model":"gpt-image-2","input":%s,"controls":{"surface":"responses","responses_model":"gpt-5","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1}}`, capability, input)
+				intent := fmt.Sprintf(`{"capability":%q,"provider":"openai","model":"gpt-image-2","input":%s,"controls":{"surface":"responses","responses_model":"gpt-6.2-sol","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1}}`, capability, input)
 				if mode == "stream" {
 					intent = strings.Replace(intent, `"output_count":1`, `"output_count":1,"stream":true`, 1)
 				}
@@ -185,7 +185,7 @@ func TestHostedFundsResponsesImageAdvertisedCombinedPrice(t *testing.T) {
 						t.Fatalf("lost source: %v", origin)
 					}
 				}
-				if models["gpt-image-2"] != 3 || models["gpt-5"] != 3 {
+				if models["gpt-image-2"] != 3 || models["gpt-6.2-sol"] != 3 {
 					t.Fatalf("price owners=%v", models)
 				}
 				var observation managedJournalObservationRecord
@@ -214,7 +214,7 @@ func TestHostedFundsResponsesImageAdvertisedCombinedPrice(t *testing.T) {
 					server.Close()
 					changed := hostedResponsesAdvertisedCatalog(operation)
 					for i := range changed.Prices {
-						if changed.Prices[i].Provider == "openai" && (changed.Prices[i].Model == "gpt-5" || changed.Prices[i].Model == "gpt-image-2") {
+						if changed.Prices[i].Provider == "openai" && (changed.Prices[i].Model == "gpt-6.2-sol" || changed.Prices[i].Model == "gpt-image-2") {
 							for j := range changed.Prices[i].Rates {
 								changed.Prices[i].Rates[j].Rate = "99"
 							}
@@ -270,7 +270,7 @@ func hostedResponsesAdvertisedCatalog(operation string) ModelCatalog {
 				}
 			}
 		}
-		if offering.Model == "gpt-5" {
+		if offering.Model == "gpt-6.2-sol" {
 			v := 1000
 			offering.OutputTokenLimit = 1000
 			offering.Limits = []CatalogLimit{{ID: "context_tokens", Value: &v, Unit: "tokens"}}
@@ -292,7 +292,7 @@ func hostedResponsesAdvertisedCatalog(operation string) ModelCatalog {
 				{Component: "output_image", Currency: "USD", Rate: "15", Unit: "USD/1M_tokens", Conditions: imageConditions},
 			}
 		}
-		if price.Model == "gpt-5" && price.Operation == ModelOperationText {
+		if price.Model == "gpt-6.2-sol" && price.Operation == ModelOperationText {
 			price.Available = true
 			price.UnavailableReason = ""
 			price.Rates = []CatalogPriceRate{
@@ -342,7 +342,7 @@ func TestHostedFundsResponsesImageRejectsIncompletePrice(t *testing.T) {
 				if price.Model == "gpt-image-2" && price.Operation == ModelOperationImageGeneration {
 					target = "image"
 				}
-				if price.Model == "gpt-5" && price.Operation == ModelOperationText {
+				if price.Model == "gpt-6.2-sol" && price.Operation == ModelOperationText {
 					target = "response"
 				}
 				if target == "" {
@@ -365,7 +365,7 @@ func TestHostedFundsResponsesImageRejectsIncompletePrice(t *testing.T) {
 				if offering.Provider != "openai" {
 					continue
 				}
-				if offering.Model == "gpt-5" {
+				if offering.Model == "gpt-6.2-sol" {
 					if scenario == "response_input" {
 						offering.Limits = nil
 					}
@@ -384,7 +384,7 @@ func TestHostedFundsResponsesImageRejectsIncompletePrice(t *testing.T) {
 			}
 			settings := hostedResponsesSettingsForCatalog(t, ModelOperationImageGeneration, catalog)
 			worker.catalog, worker.hostedAdmission = settings.catalog, settings.mediaAdmission(worker.providers)
-			intent := `{"capability":"image.generate","provider":"openai","model":"gpt-image-2","input":{"prompt":"advertised image"},"controls":{"surface":"responses","responses_model":"gpt-5","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1}}`
+			intent := `{"capability":"image.generate","provider":"openai","model":"gpt-image-2","input":{"prompt":"advertised image"},"controls":{"surface":"responses","responses_model":"gpt-6.2-sol","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1}}`
 			financial := fundsStartupFixture{database: database, management: management, calls: &calls}
 			before := financial.state(t)
 			for range 2 {

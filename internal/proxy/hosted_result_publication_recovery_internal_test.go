@@ -49,7 +49,7 @@ func TestHostedResultPublicationReplaysToolCallsWithoutText(t *testing.T) {
 			server.Close()
 			server = newHostedIdentityHTTPServer(t, openJournalTransactionInstance(t, database), upstream.URL, root, fundsDependencies(prices))
 		}
-		request, err := http.NewRequest(http.MethodPost, server.URL+responsesPath, strings.NewReader(`{"model":"openai/gpt-4.1","input":"read","tools":[{"type":"function","name":"read","parameters":{"type":"object","properties":{},"additionalProperties":false},"strict":true}]}`))
+		request, err := http.NewRequest(http.MethodPost, server.URL+responsesPath, strings.NewReader(`{"model":"openai/gpt-6.2-sol","input":"read","tools":[{"type":"function","name":"read","parameters":{"type":"object","properties":{},"additionalProperties":false},"strict":true}]}`))
 		if err != nil {
 			t.Fatal(err)
 		}

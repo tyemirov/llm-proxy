@@ -40,13 +40,13 @@ const (
 	// integrationResponsesPath is the path for the responses endpoint.
 	integrationResponsesPath = "/v1/responses"
 	// integrationModelListBody is the JSON body returned for model listing.
-	integrationModelListBody = `{"object":"list","data":[{"id":"` + proxy.ModelNameGPT41 + `","object":"model"}]}`
+	integrationModelListBody = `{"object":"list","data":[{"id":"` + "gpt-6.2-sol" + `","object":"model"}]}`
 	// integrationOKBody is the plain response used in tests.
 	integrationOKBody = "INTEGRATION_OK"
 	// integrationSearchBody is the web search response used in tests.
 	integrationSearchBody = "SEARCH_OK"
 	// availableModelsBody is the JSON body returned by the stubbed models endpoint in HTTP client tests.
-	availableModelsBody = `{"data":[{"id":"` + proxy.ModelNameGPT41 + `"},{"id":"` + proxy.ModelNameGPT5Mini + `"},{"id":"` + proxy.ModelNameGPT5 + `"}]}`
+	availableModelsBody = `{"data":[{"id":"` + "gpt-6.2-sol" + `"},{"id":"` + "gpt-6-luna" + `"},{"id":"` + "gpt-6.2-sol" + `"}]}`
 	// contentTypeJSON is the HTTP header value for JSON payloads.
 	contentTypeJSON = "application/json"
 	// buildRouterErrorFormat is the format string used when BuildRouter returns an error.
@@ -196,7 +196,7 @@ func makeHTTPClient(testingInstance *testing.T, wantWebSearch bool, endpoints *p
 			case strings.HasPrefix(httpRequest.URL.String(), endpoints.GetModelsURL()+"/"):
 				modelID := strings.TrimPrefix(httpRequest.URL.Path, integrationModelsPath+"/")
 				metadata := metadataEmpty
-				if modelID == proxy.ModelNameGPT41 {
+				if modelID == "gpt-6.2-sol" {
 					metadata = metadataTemperatureTools
 				}
 				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(metadata)), Header: make(http.Header)}, nil

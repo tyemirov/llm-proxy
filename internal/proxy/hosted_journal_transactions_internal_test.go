@@ -34,10 +34,10 @@ func newJournalTransactionHTTPFixture(t *testing.T) (*gormManagedTenantDatabase,
 		&managedBillingAccountRecord{ID: "billing-journal", OwnerUserID: "owner", Currency: "USD", CreationKeyDigest: strings.Repeat("a", 64), CreatedAt: now},
 		&managedPlatformConnectionRecord{ID: "platform-journal", Provider: "openai", Name: "Journal", Version: 1, CreatedAt: now, UpdatedAt: now},
 		&managedPlatformCredentialRecord{ConnectionID: "platform-journal", Version: 1, Fields: []byte(`{}`), QualifiedAt: now, CreatedAt: now},
-		&managedHostedGrantRecord{ID: hostedJournalFixtureGrantID, BillingAccountID: "billing-journal", TenantID: "managed-first", PlatformConnectionID: "platform-journal", Provider: "openai", CatalogRevision: "journal-catalog", Offerings: []byte(`[{"model":"gpt-4.1","operations":["text"]}]`), State: hostedGrantActive, Revision: 1, CreatedAt: now, UpdatedAt: now},
+		&managedHostedGrantRecord{ID: hostedJournalFixtureGrantID, BillingAccountID: "billing-journal", TenantID: "managed-first", PlatformConnectionID: "platform-journal", Provider: "openai", CatalogRevision: "journal-catalog", Offerings: []byte(`[{"model":"gpt-6.2-sol","operations":["text"]}]`), State: hostedGrantActive, Revision: 1, CreatedAt: now, UpdatedAt: now},
 		&managedHostedGrantRevisionRecord{GrantID: hostedJournalFixtureGrantID, Revision: 1, State: hostedGrantActive, ActorUserID: "operator", Reason: "Journal fixture", CreatedAt: now},
 		&managedHostedTenantAssignmentRecord{TenantID: "managed-first", ProviderID: "openai", GrantID: hostedJournalFixtureGrantID, CreatedAt: now},
-		&managedProviderProfileRecord{TenantID: "managed-first", ProviderID: "openai", TextModel: "gpt-4.1", CreatedAt: now, UpdatedAt: now},
+		&managedProviderProfileRecord{TenantID: "managed-first", ProviderID: "openai", TextModel: "gpt-6.2-sol", CreatedAt: now, UpdatedAt: now},
 	} {
 		if err := database.database.Omit(clause.Associations).Create(record).Error; err != nil {
 			t.Fatal(err)
@@ -49,7 +49,7 @@ func newJournalTransactionHTTPFixture(t *testing.T) (*gormManagedTenantDatabase,
 	router.GET(managementAPIPath+managementJournalCasesPath, service.listJournalCasesHandler())
 	intent := func(key string) journalAdmissionIntent {
 		t.Helper()
-		value, err := newJournalAdmissionIntent(journalAdmissionInput{OwnerUserID: "owner", TenantID: "managed-first", Provider: "openai", Model: "gpt-4.1", Operation: "text", CatalogRevision: "journal-catalog", IdempotencyKey: key, CanonicalIntent: []byte(`{"messages":[{"role":"user","content":"private prompt"}]}`), ExecutionKind: journalExecutionText, ExecutionID: "execution-" + key, OwnerToken: "worker-" + key, Now: now, ClaimExpiresAt: now.Add(time.Minute)}, rand.Reader)
+		value, err := newJournalAdmissionIntent(journalAdmissionInput{OwnerUserID: "owner", TenantID: "managed-first", Provider: "openai", Model: "gpt-6.2-sol", Operation: "text", CatalogRevision: "journal-catalog", IdempotencyKey: key, CanonicalIntent: []byte(`{"messages":[{"role":"user","content":"private prompt"}]}`), ExecutionKind: journalExecutionText, ExecutionID: "execution-" + key, OwnerToken: "worker-" + key, Now: now, ClaimExpiresAt: now.Add(time.Minute)}, rand.Reader)
 		if err != nil {
 			t.Fatal(err)
 		}

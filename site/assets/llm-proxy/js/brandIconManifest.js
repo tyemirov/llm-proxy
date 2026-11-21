@@ -143,7 +143,6 @@ export const brandIconManifest = {
     "reve": null,
     "gpt-image": "openai",
     "gpt-6": "openai",
-    "gpt-4": "openai",
     "gpt-5": "openai",
     "gpt-transcribe": "openai",
     "ernie-5": "baidu-color",

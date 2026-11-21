@@ -101,17 +101,17 @@ func TestChatHandlerValidatesModel(testingInstance *testing.T) {
 		},
 		{
 			scenarioName:       "known model returns ok",
-			modelIdentifier:    proxy.ModelNameGPT4o,
+			modelIdentifier:    "gpt-6-sol",
 			expectedStatusCode: http.StatusOK,
 		},
 		{
 			scenarioName:       "GPT-5.5 returns ok",
-			modelIdentifier:    proxy.ModelNameGPT55,
+			modelIdentifier:    "gpt-6-sol",
 			expectedStatusCode: http.StatusOK,
 		},
 		{
 			scenarioName:       "GPT-5.5 pro returns ok",
-			modelIdentifier:    proxy.ModelNameGPT55Pro,
+			modelIdentifier:    "gpt-6.2-astra",
 			expectedStatusCode: http.StatusOK,
 		},
 	}
@@ -164,7 +164,7 @@ func TestChatHandlerAcceptsJSONBody(testingInstance *testing.T) {
 	defer mockServer.Close()
 
 	router := NewTestRouter(testingInstance, mockServer.URL)
-	requestBody := bytes.NewBufferString(`{"prompt":"` + russianPrompt + `","model":"` + proxy.ModelNameGPT55 + `","web_search":false,"system_prompt":"` + systemPrompt + `"}`)
+	requestBody := bytes.NewBufferString(`{"prompt":"` + russianPrompt + `","model":"` + "gpt-6-sol" + `","web_search":false,"system_prompt":"` + systemPrompt + `"}`)
 	request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret, requestBody)
 	request.Header.Set("Content-Type", "application/json")
 	responseRecorder := httptest.NewRecorder()
@@ -174,8 +174,8 @@ func TestChatHandlerAcceptsJSONBody(testingInstance *testing.T) {
 	if responseRecorder.Code != http.StatusOK {
 		testingInstance.Fatalf("status=%d want=%d", responseRecorder.Code, http.StatusOK)
 	}
-	if capturedPayload["model"] != proxy.ModelNameGPT55 {
-		testingInstance.Fatalf("model=%v want=%s", capturedPayload["model"], proxy.ModelNameGPT55)
+	if capturedPayload["model"] != "gpt-6-sol" {
+		testingInstance.Fatalf("model=%v want=%s", capturedPayload["model"], "gpt-6-sol")
 	}
 	if capturedPayload["input"] != systemPrompt+"\n\n"+russianPrompt {
 		testingInstance.Fatalf("input=%q", capturedPayload["input"])
@@ -205,7 +205,7 @@ func TestChatHandlersApplyPublicReasoningEffortOverTenantDefault(testingInstance
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetResponsesURL(mockServer.URL)
 	defaults := proxy.DefaultTenantDefaults()
-	defaults.Model = proxy.ModelNameGPT55
+	defaults.Model = "gpt-6-sol"
 	defaults.ReasoningEffort = "xhigh"
 	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
 	tenantConfiguration.Defaults = defaults
@@ -268,16 +268,16 @@ func TestChatHandlersRejectInvalidPublicReasoningEffortBeforeUpstreamRequest(tes
 		body            string
 		expectedMessage string
 	}{
-		{name: "GET query", method: http.MethodGet, path: "/?key=" + TestSecret + "&prompt=review&model=" + proxy.ModelNameGPT41 + "&reasoning_effort=high"},
-		{name: "root JSON", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","model":"` + proxy.ModelNameGPT41 + `","reasoning_effort":"high"}`},
-		{name: "v2 JSON", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"` + proxy.ModelNameGPT41 + `","reasoning_effort":"high"}`},
-		{name: "supported route with unsupported effort", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"` + proxy.ModelNameGPT55 + `","reasoning_effort":"max"}`},
-		{name: "GET blank effort", method: http.MethodGet, path: "/?key=" + TestSecret + "&prompt=review&model=" + proxy.ModelNameGPT55 + "&reasoning_effort="},
-		{name: "root JSON blank effort", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","model":"` + proxy.ModelNameGPT55 + `","reasoning_effort":""}`},
-		{name: "v2 JSON blank effort", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"` + proxy.ModelNameGPT55 + `","reasoning_effort":""}`},
-		{name: "root JSON null effort", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","model":"` + proxy.ModelNameGPT41 + `","reasoning_effort":null}`},
-		{name: "v2 JSON null effort", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"` + proxy.ModelNameGPT41 + `","reasoning_effort":null}`},
-		{name: "root JSON nonstring effort", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","model":"` + proxy.ModelNameGPT41 + `","reasoning_effort":1}`, expectedMessage: "invalid JSON request"},
+		{name: "GET query", method: http.MethodGet, path: "/?key=" + TestSecret + "&prompt=review&model=" + "gpt-6.2-sol" + "&reasoning_effort=high"},
+		{name: "root JSON", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","model":"` + "gpt-6.2-sol" + `","reasoning_effort":"high"}`},
+		{name: "v2 JSON", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"` + "gpt-6.2-sol" + `","reasoning_effort":"high"}`},
+		{name: "supported route with unsupported effort", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"` + "gpt-6-sol" + `","reasoning_effort":"max"}`},
+		{name: "GET blank effort", method: http.MethodGet, path: "/?key=" + TestSecret + "&prompt=review&model=" + "gpt-6-sol" + "&reasoning_effort="},
+		{name: "root JSON blank effort", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","model":"` + "gpt-6-sol" + `","reasoning_effort":""}`},
+		{name: "v2 JSON blank effort", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"` + "gpt-6-sol" + `","reasoning_effort":""}`},
+		{name: "root JSON null effort", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","model":"` + "gpt-6.2-sol" + `","reasoning_effort":null}`},
+		{name: "v2 JSON null effort", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"` + "gpt-6.2-sol" + `","reasoning_effort":null}`},
+		{name: "root JSON nonstring effort", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","model":"` + "gpt-6.2-sol" + `","reasoning_effort":1}`, expectedMessage: "invalid JSON request"},
 	}
 	for _, testCase := range testCases {
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
@@ -330,7 +330,7 @@ func TestChatHandlerAcceptsMessagesJSONBodyForOpenAIResponses(testingInstance *t
 	defer mockServer.Close()
 
 	router := NewTestRouter(testingInstance, mockServer.URL)
-	requestBody := bytes.NewBufferString(`{"messages":[{"role":"user","content":"Continue.","order":3},{"role":"assistant","content":"Hi.","order":2},{"role":"system","content":"Follow the contract.","order":0},{"role":"user","content":"Hello.","order":1}],"model":"` + proxy.ModelNameGPT55 + `"}`)
+	requestBody := bytes.NewBufferString(`{"messages":[{"role":"user","content":"Continue.","order":3},{"role":"assistant","content":"Hi.","order":2},{"role":"system","content":"Follow the contract.","order":0},{"role":"user","content":"Hello.","order":1}],"model":"` + "gpt-6-sol" + `"}`)
 	request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&format=application/json", requestBody)
 	request.Header.Set("Content-Type", "application/json")
 	responseRecorder := httptest.NewRecorder()
@@ -390,7 +390,7 @@ func TestChatHandlerCompletesIncompleteGPT55JSONBody(testingInstance *testing.T)
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetResponsesURL(mockServer.URL)
 	defaults := proxy.DefaultTenantDefaults()
-	defaults.Model = proxy.ModelNameGPT55
+	defaults.Model = "gpt-6-sol"
 	defaults.ReasoningEffort = "high"
 	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
 	tenantConfiguration.Defaults = defaults
@@ -403,7 +403,7 @@ func TestChatHandlerCompletesIncompleteGPT55JSONBody(testingInstance *testing.T)
 	if buildRouterError != nil {
 		testingInstance.Fatalf(messageBuildRouterError, buildRouterError)
 	}
-	requestBody := bytes.NewBufferString(`{"prompt":"search current model facts","model":"` + proxy.ModelNameGPT55 + `","web_search":true}`)
+	requestBody := bytes.NewBufferString(`{"prompt":"search current model facts","model":"` + "gpt-6-sol" + `","web_search":true}`)
 	request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret, requestBody)
 	request.Header.Set("Content-Type", "application/json")
 	responseRecorder := httptest.NewRecorder()
@@ -416,8 +416,8 @@ func TestChatHandlerCompletesIncompleteGPT55JSONBody(testingInstance *testing.T)
 	if len(capturedPayloads) != 2 {
 		testingInstance.Fatalf("payloads=%d want=2", len(capturedPayloads))
 	}
-	if capturedPayloads[0]["model"] != proxy.ModelNameGPT55 {
-		testingInstance.Fatalf("initial model=%v want=%s", capturedPayloads[0]["model"], proxy.ModelNameGPT55)
+	if capturedPayloads[0]["model"] != "gpt-6-sol" {
+		testingInstance.Fatalf("initial model=%v want=%s", capturedPayloads[0]["model"], "gpt-6-sol")
 	}
 	continuationInput, continuationInputOK := capturedPayloads[1]["input"].(string)
 	if !continuationInputOK ||

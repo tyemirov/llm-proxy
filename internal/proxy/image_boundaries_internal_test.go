@@ -56,8 +56,8 @@ func imageBoundaryFixture(t *testing.T) (mediaOperationInternalFixture, *imageGe
 	}
 	f.service.assets.maxAssetBytes = 1 << 20
 	adapter := newImageGenerationAdapter(offering, f.service.providers.definitions[providerID("openai")], store, f.service.store, f.service.assets, catalog)
-	request := MediaOperationExecutionRequest{TenantID: f.tenant.identifier.string(), CredentialReference: "connection-internal:v3", Capability: llmproxycontract.MediaCapabilityImageGenerate, Provider: "openai", Model: "gpt-image-2", Input: json.RawMessage(`{"prompt":"boundary test"}`), Controls: json.RawMessage(`{"surface":"responses","responses_model":"gpt-5","quality":"low","size":"auto","background":"opaque","output_format":"png","output_count":1}`), ProviderHandle: "resp_boundary", PersistProviderReceipt: func(MediaOperationProviderReceipt) error { return nil }, PublishPartial: func(MediaOperationPartialOutput) error { return nil }}
-	request.ExecutionBinding = adapter.responsesExecutionBinding("gpt-5")
+	request := MediaOperationExecutionRequest{TenantID: f.tenant.identifier.string(), CredentialReference: "connection-internal:v3", Capability: llmproxycontract.MediaCapabilityImageGenerate, Provider: "openai", Model: "gpt-image-2", Input: json.RawMessage(`{"prompt":"boundary test"}`), Controls: json.RawMessage(`{"surface":"responses","responses_model":"gpt-6.2-sol","quality":"low","size":"auto","background":"opaque","output_format":"png","output_count":1}`), ProviderHandle: "resp_boundary", PersistProviderReceipt: func(MediaOperationProviderReceipt) error { return nil }, PublishPartial: func(MediaOperationPartialOutput) error { return nil }}
+	request.ExecutionBinding = adapter.responsesExecutionBinding("gpt-6.2-sol")
 	return f, adapter, request
 }
 
@@ -240,7 +240,7 @@ func TestImageGenerationEditingAssetFileFailuresAndPaletteMasks(t *testing.T) {
 		return err
 	}
 	// Use Images for its mask contract.
-	validation.Controls = bytes.Replace(bytes.Replace(request.Controls, []byte(`"surface":"responses"`), []byte(`"surface":"images"`), 1), []byte(`,"responses_model":"gpt-5"`), nil, 1)
+	validation.Controls = bytes.Replace(bytes.Replace(request.Controls, []byte(`"surface":"responses"`), []byte(`"surface":"images"`), 1), []byte(`,"responses_model":"gpt-6.2-sol"`), nil, 1)
 	for _, transparent := range []bool{false, true} {
 		palette := color.Palette{color.NRGBA{R: 255, A: 255}, color.NRGBA{G: 255, A: 255}}
 		if transparent {

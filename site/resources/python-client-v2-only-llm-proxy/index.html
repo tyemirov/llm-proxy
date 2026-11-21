@@ -166,7 +166,7 @@
 
                     <section class="resource-card">
                       <h3>Reasoning route</h3>
-                      <p>The client targets provider=openai with gpt-5.5 and reasoning_effort=high for one supported request.</p>
+                      <p>The client selects gpt-6.2-sol with reasoning_effort=high.</p>
                     </section>
 
             </div>
@@ -195,7 +195,7 @@ client = Client(
 text = client.post_messages(
     ClientMessagesRequest(
         messages=(ClientMessage(role=&quot;user&quot;, content=&quot;Summarize this&quot;),),
-        model=&quot;gpt-5.5&quot;,
+        model=&quot;gpt-6.2-sol&quot;,
         max_tokens=512,
         reasoning_effort=&quot;high&quot;,
         request_timeout_seconds=900,

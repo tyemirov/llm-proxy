@@ -35,10 +35,10 @@ func TestHostedFailedCompletionReplayContract(t *testing.T) {
 				server := newHostedIdentityHTTPServer(t, database, upstream.URL, t.TempDir())
 				hostedIdentityHTTP(t, server, "failed-replay", "private prompt", http.StatusBadGateway)
 				for _, scenario := range []struct{ path, body string }{
-					{"/?provider=openai&model=gpt-4.1", `{"prompt":"private prompt"}`},
-					{v2Path + "?provider=openai&model=gpt-4.1", `{"messages":[{"role":"user","content":"private prompt"}]}`},
-					{chatCompletionsPath, `{"model":"openai/gpt-4.1","messages":[{"role":"user","content":"private prompt"}]}`},
-					{responsesPath, `{"model":"openai/gpt-4.1","input":"private prompt"}`},
+					{"/?provider=openai&model=gpt-6.2-sol", `{"prompt":"private prompt"}`},
+					{v2Path + "?provider=openai&model=gpt-6.2-sol", `{"messages":[{"role":"user","content":"private prompt"}]}`},
+					{chatCompletionsPath, `{"model":"openai/gpt-6.2-sol","messages":[{"role":"user","content":"private prompt"}]}`},
+					{responsesPath, `{"model":"openai/gpt-6.2-sol","input":"private prompt"}`},
 				} {
 					request, err := http.NewRequest(http.MethodPost, server.URL+scenario.path, strings.NewReader(scenario.body))
 					if err != nil {

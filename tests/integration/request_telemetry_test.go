@@ -89,7 +89,7 @@ func TestIntegrationRequestTelemetryCorrelatesOpenAIPollingAndTerminalPhases(tes
 	}
 	for entryIndex, expected := range expectedProgress {
 		fields := progressEntries[entryIndex].ContextMap()
-		if fields["request_id"] != requestID || fields["provider"] != proxy.ProviderNameOpenAI || fields["model"] != proxy.ModelNameGPT41 || fields["progress_kind"] != expected.kind || fields["completion_signal"] != expected.signal {
+		if fields["request_id"] != requestID || fields["provider"] != proxy.ProviderNameOpenAI || fields["model"] != "gpt-6.2-sol" || fields["progress_kind"] != expected.kind || fields["completion_signal"] != expected.signal {
 			testingInstance.Fatalf("progress[%d]=%v", entryIndex, fields)
 		}
 		if expected.state != "" && fields["provider_state"] != expected.state {
@@ -103,7 +103,7 @@ func TestIntegrationRequestTelemetryCorrelatesOpenAIPollingAndTerminalPhases(tes
 		}
 	}
 	summary := telemetrySummaryForRequest(testingInstance, observedLogs, requestID)
-	assertTelemetrySummaryIdentity(testingInstance, summary, "/", proxy.ProviderNameOpenAI, proxy.ModelNameGPT41, 2, http.StatusOK, "success")
+	assertTelemetrySummaryIdentity(testingInstance, summary, "/", proxy.ProviderNameOpenAI, "gpt-6.2-sol", 2, http.StatusOK, "success")
 	assertTelemetrySummaryPhases(testingInstance, summary)
 	if telemetryNumericField(summary, "provider_http_ms") < (3*telemetryProviderDelay).Milliseconds()-15 || telemetryNumericField(summary, "provider_poll_wait_ms") < telemetryPollTolerance.Milliseconds() {
 		testingInstance.Fatalf("polling phase summary=%v", summary)
@@ -195,7 +195,7 @@ func TestIntegrationRequestTelemetryMarksOnlyRetriedVisibilityErrorPending(testi
 				}
 			}
 			summary := telemetrySummaryForRequest(subTest, observedLogs, requestID)
-			assertTelemetrySummaryIdentity(subTest, summary, "/", proxy.ProviderNameOpenAI, proxy.ModelNameGPT41, 5, http.StatusBadGateway, "provider_failure")
+			assertTelemetrySummaryIdentity(subTest, summary, "/", proxy.ProviderNameOpenAI, "gpt-6.2-sol", 5, http.StatusBadGateway, "provider_failure")
 			assertTelemetryLogsExcludeContent(subTest, observedLogs, telemetryUnsafePrompt, telemetryUnsafeProviderBody, telemetryUnsafeUpstreamID, serviceSecretValue, openAIKeyValue)
 		})
 	}
@@ -334,7 +334,7 @@ func TestIntegrationRequestTelemetryClassifiesFailureCancellationAndBudgetExpiry
 			if testCase.requestBudget != "" {
 				expectedBudget = 1
 			}
-			assertTelemetrySummaryIdentity(subTest, summary, "/", proxy.ProviderNameOpenAI, proxy.ModelNameGPT41, expectedBudget, int64(testCase.expectedStatus), testCase.expectedOutcome)
+			assertTelemetrySummaryIdentity(subTest, summary, "/", proxy.ProviderNameOpenAI, "gpt-6.2-sol", expectedBudget, int64(testCase.expectedStatus), testCase.expectedOutcome)
 			assertTelemetrySummaryPhases(subTest, summary)
 			createProgress := telemetryProgressForKind(subTest, observedLogs, requestID, telemetryOpenAICreateProgress)
 			if createProgress["completion_signal"] != testCase.expectedSignal {
@@ -381,7 +381,7 @@ func TestIntegrationRequestTelemetryClassifiesCanceledOpenAIPoll(testingInstance
 		testingInstance.Fatalf("continuation completion signal=%v", continuationProgress)
 	}
 	summary := telemetrySummaryForRequest(testingInstance, observedLogs, requestID)
-	assertTelemetrySummaryIdentity(testingInstance, summary, "/", proxy.ProviderNameOpenAI, proxy.ModelNameGPT41, 2, 499, "caller_cancelled")
+	assertTelemetrySummaryIdentity(testingInstance, summary, "/", proxy.ProviderNameOpenAI, "gpt-6.2-sol", 2, 499, "caller_cancelled")
 	assertTelemetrySummaryPhases(testingInstance, summary)
 	assertTelemetryLogsExcludeContent(testingInstance, observedLogs, telemetryUnsafePrompt, telemetryUnsafeUpstreamID, serviceSecretValue, openAIKeyValue)
 }

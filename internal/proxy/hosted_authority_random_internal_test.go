@@ -61,7 +61,7 @@ func TestHostedAuthorityRandomSourceFailureRetainsAcceptedState(t *testing.T) {
 			status := http.StatusInternalServerError
 			if scenario == "grant-id" {
 				path = managementHostedGrantsPath
-				body = fmt.Sprintf(`{"billing_account_id":"billing-journal","tenant_id":"managed-first","platform_connection_id":"platform-journal","catalog_revision":%q,"offerings":[{"model":"gpt-4.1","operations":["text"]}],"reason":"Entropy test"}`, service.providers.catalog.modelCatalog.Revision)
+				body = fmt.Sprintf(`{"billing_account_id":"billing-journal","tenant_id":"managed-first","platform_connection_id":"platform-journal","catalog_revision":%q,"offerings":[{"model":"gpt-6.2-sol","operations":["text"]}],"reason":"Entropy test"}`, service.providers.catalog.modelCatalog.Revision)
 			}
 			before := exchange(http.MethodGet, path, "", "", http.StatusOK)
 			beforeCounts := counts()

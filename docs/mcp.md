@@ -163,7 +163,7 @@ A concurrent duplicate returns a successful tool result with this structured sha
   "state": "dispatched",
   "request_id": "original-execution-identifier",
   "provider": "openai",
-  "model": "gpt-4.1",
+  "model": "gpt-6.2-sol",
   "request_timeout_seconds": 60
 }
 ```

@@ -104,10 +104,10 @@ test('hosted onboarding creates tenant access without provider credentials at de
     };
     const platform=await provision('/platform-connections',{name:'Browser hosted',provider:'openai',fields:{api_key:'sk-private-platform-browser'}});
     const catalog=await (await context.request.get(`${stack.llmProxyOrigin}/api/public/capabilities`)).json();
-    const grant=await provision('/hosted-access-grants',{billing_account_id:billing.billing_accounts[0].id,tenant_id:tenant,platform_connection_id:platform.id,catalog_revision:catalog.revision,offerings:[{model:'gpt-4.1',operations:['text']}],reason:'Browser acceptance'});
+    const grant=await provision('/hosted-access-grants',{billing_account_id:billing.billing_accounts[0].id,tenant_id:tenant,platform_connection_id:platform.id,catalog_revision:catalog.revision,offerings:[{model:'gpt-6.2-sol',operations:['text']}],reason:'Browser acceptance'});
     await page.clock.fastForward(30_001);
     const card=hosted.locator(`[data-hosted-grant="${grant.id}"]`);
-    await expect(card).toContainText('gpt-4.1');
+    await expect(card).toContainText('gpt-6.2-sol');
     await card.getByRole('button',{name:'Use provider access'}).click();
     await expect(card).toContainText('Assigned');
     await expect(hosted).toContainText('with your prepaid balance.');

@@ -503,7 +503,7 @@ test("brand icons identify connection providers and available model families", a
   const openAI = dashboard.locator('[data-connection-node]').filter({ hasText: "Default OpenAI" });
   await expect(openAI.locator('img.brand-icon')).toHaveAttribute('src', /\/openai\.svg\?v=/u);
   await expect(openAI).toContainText("OpenAI API");
-  await expect(dashboard.locator('[data-model="gpt-4.1"] img')).toHaveAttribute('src', /\/openai\.svg\?v=/u);
+  await expect(dashboard.locator('[data-model="gpt-6.2-sol"] img')).toHaveAttribute('src', /\/openai\.svg\?v=/u);
   const siliconFlow = dashboard.locator('[data-connection-node]').filter({ hasText: "Default SiliconFlow" });
   await expect(siliconFlow.locator('img.brand-icon')).toHaveAttribute('src', /\/siliconcloud-color\.svg\?v=/u);
   await siliconFlow.getByRole("button", { name: "Default SiliconFlow", exact: true }).click();
@@ -578,7 +578,7 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('data-catalog-sort-header="model"');
   expect(html).toContain('data-catalog-sort-header="capabilities"');
   expect(html).not.toContain('<th scope="col">Dictation models</th>');
-  expect(html).toMatch(/<code\b[^>]*\bdata-catalog-model-id><img\b[^>]*\bdata-brand-id="gpt-4"[^>]*>gpt-4\.1<\/code>/u);
+  expect(html).toMatch(/<code\b[^>]*\bdata-catalog-model-id><img\b[^>]*\bdata-brand-id="gpt-6"[^>]*>gpt-6\.2-sol<\/code>/u);
   expect(html).toMatch(/<code\b[^>]*\bdata-catalog-model-id><img\b[^>]*\bdata-brand-id="gpt-transcribe"[^>]*>gpt-transcribe<\/code>/u);
   expect(html).toContain('data-publisher="openai" data-provider="openai" data-model="gpt-transcribe"');
   expect(html).not.toContain("catalog-model__default");
@@ -887,7 +887,7 @@ test("the routing tree and capability catalog remain complete without JavaScript
     elements => elements.map(element => element.getAttribute("data-model")).sort(),
   )).toEqual(publicCapabilities.models.map(model => model.identifier).sort());
   await expect(catalog.locator('[data-model="gpt-transcribe"]')).toContainText("Dictation");
-  await expect(catalog.locator('[data-model="gpt-4o-mini"]')).toContainText("Image input");
+  await expect(catalog.locator('[data-model="gpt-6-luna"]')).toContainText("Image input");
   await expect(catalog.locator('[data-model="claude-fable-5"]')).toContainText("Image input");
   await expect(catalog.locator('[data-model="grok-4.5"]')).toContainText("Image input");
   await expect(catalog.locator('[data-model="gemini-3.5-flash"]')).toContainText("Image input");
@@ -1159,13 +1159,13 @@ for (const scenario of [
     // Supply the audio-capable offering at the catalog boundary; keep the real dashboard and renderer.
     if (scenario.task === 'audio_understanding') {
       const catalog = structuredClone(publicCapabilities);
-      catalog.offerings.find(offering => offering.provider === 'openai' && offering.model === 'gpt-4.1').capabilities.push(scenario.capability);
+      catalog.offerings.find(offering => offering.provider === 'openai' && offering.model === 'gpt-6.2-sol').capabilities.push(scenario.capability);
       await page.route(`${baseURL}${publicCapabilitiesPath}`, route => route.fulfill({json:catalog}));
     }
     await page.goto(baseURL + applicationPath);
     const dashboard = page.locator('connection-dashboard');
     await selectModelTask(dashboard, scenario.task);
-    await dashboard.locator('[data-model="gpt-4.1"]').click();
+    await dashboard.locator('[data-model="gpt-6.2-sol"]').click();
     const task = dashboard.locator('[data-model-tasks] li').filter({has:page.getByText(scenario.description, {exact:true})});
     await expect(task.locator('small')).toHaveText(`Required input: Text, ${scenario.modality}. Output: Text.`);
     await expect(task.getByRole('img', {name:'Text input', exact:true})).toBeVisible();
@@ -1255,9 +1255,9 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   await expect(resultCount).toHaveText(publicCatalogResultCount(1));
   await expect(visibleRows).toHaveAttribute("data-model", "gpt-6-astra");
 
-  await searchInput.fill("gpt-5.5-pro openai_responses xhigh");
+  await searchInput.fill("gpt-6.2-astra openai_responses xhigh");
   await expect(resultCount).toHaveText(publicCatalogResultCount(1));
-  await expect(visibleRows).toHaveAttribute("data-model", "gpt-5.5-pro");
+  await expect(visibleRows).toHaveAttribute("data-model", "gpt-6.2-astra");
 
   await searchInput.fill("claude-opus-4-1");
   await expect(resultCount).toHaveText(publicCatalogResultCount(0));
@@ -2289,12 +2289,12 @@ test("tenant selection clears unsaved model and prompt previews", async ({ page 
   await installMultiTenantRoutes(page);
   await page.goto(baseURL + applicationPath);
   const dashboard = page.locator("connection-dashboard");
-  await dashboard.locator('[data-model="gpt-4.1"]').click();
+  await dashboard.locator('[data-model="gpt-6.2-sol"]').click();
   await dashboard.locator('summary').filter({hasText:'Tenant system prompt'}).click();
   await dashboard.getByRole("textbox", {name:"Tenant system prompt",exact:true}).fill("Unsaved draft for Default");
   await dashboard.locator('[data-tenant="tenant_2"]').click();
   await expect(dashboard.locator("[data-default-form]")).toHaveCount(0);
-  await dashboard.locator('[data-model="gpt-4.1"]').click();
+  await dashboard.locator('[data-model="gpt-6.2-sol"]').click();
   await expect(dashboard.getByLabel("Tenant system prompt", {exact:true})).toBeHidden();
   await dashboard.locator('summary').filter({hasText:'Tenant system prompt'}).click();
   await expect(dashboard.getByRole("textbox", {name:"Tenant system prompt",exact:true})).toHaveValue("");
@@ -2333,11 +2333,11 @@ test("compact dashboard redraws connectors when keyboard task captions expand", 
   await page.setViewportSize({width:320,height:900});
   await page.goto(baseURL + applicationPath);
   const dashboard=page.locator('connection-dashboard');
-  await expect(dashboard.locator('[data-model="gpt-4.1"]')).toBeVisible();
+  await expect(dashboard.locator('[data-model="gpt-6.2-sol"]')).toBeVisible();
   await expect.poll(() => pathEndpointError(dashboard,'[data-model]')).toBeLessThanOrEqual(2);
   await page.keyboard.press('Tab');
-  await dashboard.locator('[data-model="gpt-4.1"]').focus();
-  await expect(dashboard.locator('[data-model="gpt-4.1"] .model-task-caption').first()).toBeVisible();
+  await dashboard.locator('[data-model="gpt-6.2-sol"]').focus();
+  await expect(dashboard.locator('[data-model="gpt-6.2-sol"] .model-task-caption').first()).toBeVisible();
   await expect.poll(() => pathEndpointError(dashboard,'[data-model]')).toBeLessThanOrEqual(2);
 });
 
@@ -2346,7 +2346,7 @@ test("compact dashboard preserves connected routes and editing at every viewport
   await installManagementRoutes(page, { savedProviderIDs: ["openai", "siliconflow"] });
   await page.goto(baseURL + applicationPath);
   const dashboard = page.locator("connection-dashboard");
-  const selectedModel = dashboard.locator('[data-model="gpt-4o-mini"]');
+  const selectedModel = dashboard.locator('[data-model="gpt-6-luna"]');
   await expect(selectedModel).toBeVisible();
   await expect(page.locator('usage-chart-panel .eyebrow')).toHaveCount(0);
   await expect(page.locator('usage-chart-panel').nth(1).locator(':scope > p').filter({hasText:'12,345'})).toHaveCount(0);
@@ -2369,7 +2369,7 @@ test("compact dashboard preserves connected routes and editing at every viewport
     await expect(dashboard.locator('.cw-wires path.preview')).toHaveCount(1);
     const endpointError = await dashboard.evaluate(element => {
       const path = element.querySelector('.cw-wires path.preview');
-      const model = element.querySelector('[data-model="gpt-4o-mini"]');
+      const model = element.querySelector('[data-model="gpt-6-luna"]');
       const map = element.querySelector('[data-map]');
       if (!(path instanceof SVGPathElement) || !model || !map) throw new Error('compact_dashboard_preview_missing');
       const point=path.getPointAtLength(path.getTotalLength());
@@ -2384,7 +2384,7 @@ test("compact dashboard preserves connected routes and editing at every viewport
     await dashboard.getByLabel('Tenant system prompt',{exact:true}).fill('Compact dashboard prompt.');
     await expect(dashboard.getByLabel('Tenant system prompt',{exact:true})).toHaveValue('Compact dashboard prompt.');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await dashboard.locator('[data-model="gpt-4.1"]').click();
+    await dashboard.locator('[data-model="gpt-6.2-sol"]').click();
     await expect(dashboard.getByLabel('Tenant system prompt',{exact:true})).toBeHidden();
   }
   await selectedModel.click();
@@ -3353,7 +3353,7 @@ test("Gemini dictation default preserves the text default after reload", async (
   await dashboard.locator(`[data-model="${model}"]`).click();
   await dashboard.getByRole("button",{name:"Save transcription default"}).click();
   await expect(dashboard.locator(`[data-model="${model}"]`)).toContainText("Default model");
-  expect(profile.tenant.defaults).toMatchObject({provider:"openai",model:"gpt-4.1",transcription_provider:"gemini",transcription_model:model});
+  expect(profile.tenant.defaults).toMatchObject({provider:"openai",model:"gpt-6.2-sol",transcription_provider:"gemini",transcription_model:model});
   await page.reload();
   await dashboard.getByRole("button",{name:"Default Gemini",exact:true}).click();
   await selectModelTask(dashboard, 'transcription');
@@ -3396,7 +3396,7 @@ test("pending default saves retain tenant context and reject duplicate submissio
   });
   await page.goto(baseURL+applicationPath);
   const dashboard=page.locator("connection-dashboard");
-  await dashboard.locator('[data-model="gpt-5.5"]').click();
+  await dashboard.locator('[data-model="gpt-6-sol"]').click();
   await dashboard.getByRole("button",{name:"Save text default"}).click();
   await started;
   await expect(dashboard).toHaveAttribute("aria-busy","true");
@@ -3405,7 +3405,7 @@ test("pending default saves retain tenant context and reject duplicate submissio
   await expect(dashboard.locator('[data-tenant="tenant_1"]')).toHaveAttribute("aria-pressed","true");
   expect(attempts).toBe(1);
   releaseSave();
-  await expect(dashboard.locator('[data-model="gpt-5.5"]')).toContainText("Default model");
+  await expect(dashboard.locator('[data-model="gpt-6-sol"]')).toContainText("Default model");
   await expect(dashboard).toHaveAttribute("aria-busy","false");
 });
 
@@ -3421,7 +3421,7 @@ test("failed model default saves preserve the draft and saved route for retry", 
   });
   await page.goto(baseURL + applicationPath);
   const dashboard=page.locator("connection-dashboard");
-  await dashboard.locator('[data-model="gpt-5.5"]').click();
+  await dashboard.locator('[data-model="gpt-6-sol"]').click();
   await dashboard.locator('summary').filter({hasText:'Tenant system prompt'}).click();
   await dashboard.getByRole("textbox",{name:"Tenant system prompt",exact:true}).fill("Keep my draft after a failed save.");
   await dashboard.getByRole("combobox",{name:"Reasoning effort"}).selectOption("high");
@@ -3429,9 +3429,9 @@ test("failed model default saves preserve the draft and saved route for retry", 
   await expect(dashboard.getByRole("alert")).toBeVisible();
   await expect(dashboard.getByRole("textbox",{name:"Tenant system prompt",exact:true})).toHaveValue("Keep my draft after a failed save.");
   await expect(dashboard.getByRole("combobox",{name:"Reasoning effort"})).toHaveValue("high");
-  await expect(dashboard.locator('[data-model="gpt-4.1"]')).toContainText("Default model");
+  await expect(dashboard.locator('[data-model="gpt-6.2-sol"]')).toContainText("Default model");
   await dashboard.getByRole("button",{name:"Save text default"}).click();
-  await expect(dashboard.locator('[data-model="gpt-5.5"]')).toContainText("Default model");
+  await expect(dashboard.locator('[data-model="gpt-6-sol"]')).toContainText("Default model");
   expect(attempts).toBe(2);
 });
 
@@ -3447,7 +3447,7 @@ test("session cleanup cancels a pending explicit default save", async ({ page })
   });
   await page.goto(baseURL+applicationPath);
   const dashboard=page.locator("connection-dashboard");
-  await dashboard.locator('[data-model="gpt-5.5"]').click();
+  await dashboard.locator('[data-model="gpt-6-sol"]').click();
   await dashboard.getByRole("button",{name:"Save text default"}).click();
   await started;
   const cancelled=page.waitForEvent("requestfailed",request=>request.url().endsWith("/defaults"));
@@ -3475,9 +3475,9 @@ test("reasoning effort follows exact models and persists only after an explicit 
     ["Gemini","gemini-3.7-flash",["low","medium","high"]],
     ["Moonshot","kimi-k2.6",[]],
     ["Moonshot","kimi-k3",["low","high","max"]],
-    ["OpenAI","gpt-4.1",[]],
-    ["OpenAI","gpt-5-mini",["minimal","low","medium","high"]],
-    ["OpenAI","gpt-5",["minimal","low","medium","high"]],
+    ["OpenAI","gpt-6.2-sol",["low","medium","high","xhigh","max"]],
+    ["OpenAI","gpt-6-luna",["none","low","medium","high","xhigh","max"]],
+    ["OpenAI","gpt-6-sol",["none","low","medium","high","xhigh","max"]],
     ["OpenAI","gpt-6-astra",["low","medium","high","xhigh","max"]],
     ["OpenAI","gpt-5.6",["none","low","medium","high","xhigh","max"]],
     ["Meta","muse-spark-1.3",["minimal","low","medium","high","xhigh","max"]],
@@ -5238,7 +5238,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
       updated_at: "2026-07-01T00:00:00Z",
       defaults: {
         provider: "openai",
-        model: "gpt-4.1",
+        model: "gpt-6.2-sol",
         transcription_provider: "openai",
         transcription_model: "gpt-transcribe",
         speech_provider: "",
@@ -5273,55 +5273,15 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         aliases: [],
         configured: true,
         fields: [providerAPIKeyField("OpenAI API key", true, "sk-...1234")],
-        text_model: "gpt-4.1",
+        text_model: "gpt-6.2-sol",
         system_prompt: "Use concise answers.",
-        text_default_model: "gpt-4.1",
-        text_models: [
-          { id: "gpt-4.1" },
-          { id: "gpt-4o-mini" },
-          {
-            id: "gpt-5-mini",
-            reasoning_effort: {
-              adapter: "openai_responses",
-              efforts: ["minimal", "low", "medium", "high"],
-            },
-          },
-          {
-            id: "gpt-5",
-            reasoning_effort: {
-              adapter: "openai_responses",
-              efforts: ["minimal", "low", "medium", "high"],
-            },
-          },
-          {
-            id: "gpt-5.5",
-            reasoning_effort: {
-              adapter: "openai_responses",
-              efforts: ["none", "low", "medium", "high", "xhigh"],
-            },
-          },
-          {
-            id: "gpt-5.5-pro",
-            reasoning_effort: {
-              adapter: "openai_responses",
-              efforts: ["medium", "high", "xhigh"],
-            },
-          },
-          {
-            id: "gpt-6-astra",
-            reasoning_effort: {
-              adapter: "openai_responses",
-              efforts: ["low", "medium", "high", "xhigh", "max"],
-            },
-          },
-          {
-            id: "gpt-5.6",
-            reasoning_effort: {
-              adapter: "openai_responses",
-              efforts: ["none", "low", "medium", "high", "xhigh", "max"],
-            },
-          },
-        ],
+        text_default_model: "gpt-6.2-sol",
+        text_models: publicCapabilities.offerings
+          .filter(offering => offering.provider === "openai" && offering.capabilities.includes("text"))
+          .map(offering => ({
+            id: offering.model,
+            reasoning_effort: { adapter: "openai_responses", efforts: [...offering.reasoning_efforts] },
+          })),
         supports_dictation: true,
         transcription_default_model: "gpt-transcribe",
         transcription_models: ["gpt-transcribe"],
@@ -5507,7 +5467,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     openai: {
       api_service_label: "OpenAI API",
       model_families: [
-        { id: "gpt-4", label: "GPT-4" },
+        { id: "gpt-6", label: "GPT-6" },
         { id: "gpt-5", label: "GPT-5" },
         { id: "gpt-transcribe", label: "GPT Transcribe" },
       ],
@@ -6422,18 +6382,18 @@ test("F085 shows all connection models until task filters are selected", async (
   await expect(selected).toHaveCount(0);
   const openaiModels = publicCapabilities.offerings.filter(offering => offering.provider === 'openai').map(offering => offering.model).sort();
   expect(await models.evaluateAll(cards => cards.map(card => card.getAttribute('data-model')).sort())).toEqual(openaiModels);
-  await expect(dashboard.locator('[data-model="gpt-4.1"]')).toContainText('Default model');
+  await expect(dashboard.locator('[data-model="gpt-6.2-sol"]')).toContainText('Default model');
   await expect(dashboard.locator('[data-model="gpt-transcribe"]')).toContainText('Default model');
   await dashboard.locator('[data-model="gpt-transcribe"]').click();
   await expect(dashboard.getByRole('button', {name:'Save transcription default'})).toBeVisible();
   await expect(dashboard.getByRole('button', {name:'Save text default'})).toHaveCount(0);
   await dashboard.locator('[data-model="gpt-image-2"]').click();
   await expect(dashboard.locator('[data-default-form]')).toHaveCount(0);
-  await dashboard.locator('[data-model="gpt-4.1"]').click();
+  await dashboard.locator('[data-model="gpt-6.2-sol"]').click();
   await expect(dashboard.getByRole('button', {name:'Save text default'})).toBeVisible();
   const tasks = await dashboard.locator('[data-task]').evaluateAll(buttons => buttons.map(button => button.getAttribute('data-task')));
   expect(tasks).toEqual(['text', 'vision', 'image_generation', 'image_editing', 'transcription']);
-  await dashboard.getByRole('searchbox').fill('gpt-4.1');
+  await dashboard.getByRole('searchbox').fill('gpt-6.2-sol');
   await expect(models).toHaveCount(1);
   expect(await dashboard.locator('[data-task]').evaluateAll(buttons => buttons.map(button => button.getAttribute('data-task')))).toEqual(tasks);
   await dashboard.getByRole('searchbox').fill('');

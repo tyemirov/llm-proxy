@@ -94,7 +94,7 @@ test('account connection dashboard links Social Threader explicitly and preserve
  await search.fill('no matching connection');
  await expect(dashboard.locator('[data-connection-node]')).toHaveCount(0);
  await search.fill('');
- await dashboard.locator('[data-model="gpt-4.1"]').click();
+ await dashboard.locator('[data-model="gpt-6.2-sol"]').click();
  for (const width of [1440,899,803,390,320]) {
   await page.setViewportSize({width,height:1050});
   await expect(dashboard.getByRole('button',{name:'Copy MCP URL',exact:true})).toBeVisible();
@@ -123,8 +123,8 @@ test('account connection dashboard links Social Threader explicitly and preserve
  await expect(production).toContainText('Connected');
  await expect(production).toContainText('Used by 2 tenants');
  await expect(dashboard.getByText('Default model',{exact:false})).toHaveCount(0);
- await expect(dashboard.locator('[data-model="gpt-4.1"] img[data-brand-id="gpt-4"]')).toBeVisible();
- await dashboard.locator('[data-model="gpt-4.1"]').click();
+ await expect(dashboard.locator('[data-model="gpt-6.2-sol"] img[data-brand-id="gpt-6"]')).toBeVisible();
+ await dashboard.locator('[data-model="gpt-6.2-sol"]').click();
  await expect(dashboard.locator('.cw-wires path.preview')).toHaveCount(1);
  await expect(dashboard.getByLabel('Tenant system prompt')).toBeHidden();
  await expect(dashboard.getByLabel('Provider system prompt for Social Threader')).toBeHidden();
@@ -158,15 +158,15 @@ test('account connection dashboard links Social Threader explicitly and preserve
  await expect(dashboard.getByLabel('Tenant system prompt')).toHaveValue('Keep answers concise.');
  await page.unroute(defaultRoute);
  await dashboard.getByRole('button',{name:'Save text default'}).click();
- await expect(dashboard.locator('[data-model="gpt-4.1"]')).toContainText('Default model');
- await dashboard.locator('[data-model="gpt-4.1"]').click();
+ await expect(dashboard.locator('[data-model="gpt-6.2-sol"]')).toContainText('Default model');
+ await dashboard.locator('[data-model="gpt-6.2-sol"]').click();
  await expect(dashboard.locator('.cw-wires path.preview')).toHaveCount(0);
- await expect(dashboard.locator('[data-model="gpt-4.1"]')).not.toHaveClass(/preview/);
+ await expect(dashboard.locator('[data-model="gpt-6.2-sol"]')).not.toHaveClass(/preview/);
  await expect(page.locator('[x-ref="usageTenantSelector"] option:checked')).toHaveText('Social Threader');
- await dashboard.locator('[data-model="gpt-4o"]').click();
+ await dashboard.locator('[data-model="gpt-6-sol"]').click();
  await expect(dashboard.getByLabel('Tenant system prompt')).toBeHidden();
  await expect(providerPrompt).toBeHidden();
- await dashboard.locator('[data-model="gpt-4.1"]').click();
+ await dashboard.locator('[data-model="gpt-6.2-sol"]').click();
  await dashboard.locator('summary').filter({hasText:'Tenant system prompt'}).click();
  await expect(dashboard.getByLabel('Tenant system prompt')).toHaveValue('Keep answers concise.');
  await dashboard.locator('summary').filter({hasText:'Provider system prompt for Social Threader'}).click();
@@ -179,7 +179,7 @@ test('account connection dashboard links Social Threader explicitly and preserve
  await expect(providerPrompt).toBeHidden();
  await page.reload();
  await dashboard.locator('[data-tenant]').filter({hasText:'Social Threader'}).click();
- await dashboard.locator('[data-model="gpt-4.1"]').click();
+ await dashboard.locator('[data-model="gpt-6.2-sol"]').click();
  await expect(dashboard.getByLabel('Tenant system prompt')).toBeHidden();
  await expect(providerPrompt).toBeHidden();
  await dashboard.locator('summary').filter({hasText:'Tenant system prompt'}).click();

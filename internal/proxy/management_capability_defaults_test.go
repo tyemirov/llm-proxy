@@ -97,7 +97,7 @@ func TestManagementCapabilityDefaultsSurviveRestartAndConnectionRemoval(t *testi
 			owner := managementSessionCookie(t, "capability-default-owner")
 			tenantID := managementDefaultTenantTestID(t, router, owner)
 			tenantPath := "/api/management/tenants/" + tenantID
-			keyResponse := putManagementProviderKey(t, router, owner, tenantID, proxy.ProviderNameOpenAI, testManagementOpenAIKey, proxy.ModelNameGPT41, "", context.Background())
+			keyResponse := putManagementProviderKey(t, router, owner, tenantID, proxy.ProviderNameOpenAI, testManagementOpenAIKey, "gpt-6.2-sol", "", context.Background())
 			if keyResponse.Code != http.StatusOK {
 				t.Fatalf("save text connection: status=%d body=%s", keyResponse.Code, keyResponse.Body.String())
 			}
@@ -141,7 +141,7 @@ func TestManagementCapabilityDefaultsSurviveRestartAndConnectionRemoval(t *testi
 			exchange(http.MethodPut, tenantPath+"/connections/dictator", map[string]any{"kind": "account_connection", "resource_id": connection["id"]}, "", http.StatusOK)
 			exchange(http.MethodPut, tenantPath+"/defaults", map[string]string{"speech_provider": "dictator", "speech_model": "whisper-base", "reasoning_effort": ""}, "", http.StatusBadRequest)
 			defaults := map[string]string{
-				"provider": proxy.ProviderNameOpenAI, "model": proxy.ModelNameGPT41,
+				"provider": proxy.ProviderNameOpenAI, "model": "gpt-6.2-sol",
 				"transcription_provider": proxy.ProviderNameDictator, "transcription_model": "whisper-base",
 				"speech_provider": proxy.ProviderNameDictator, "speech_model": "silero-ru",
 				"system_prompt": "Keep the project prompt.", "reasoning_effort": "",
@@ -172,7 +172,7 @@ func TestManagementCapabilityDefaultsSurviveRestartAndConnectionRemoval(t *testi
 				}
 			}
 			assertDefaults()
-			defaults["model"] = proxy.ModelNameGPT4oMini
+			defaults["model"] = "gpt-6-luna"
 			exchange(http.MethodPut, tenantPath+"/defaults", defaults, "", http.StatusOK)
 			assertDefaults()
 			server.Close()
@@ -227,7 +227,7 @@ func TestManagementCapabilityDefaultsRejectInvalidSpeechPairs(t *testing.T) {
 	tenantID := managementDefaultTenantTestID(t, router, owner)
 	for _, pair := range []struct{ provider, model string }{
 		{"dictator", ""}, {"", "silero-ru"}, {"unknown-provider", "silero-ru"},
-		{"openai", proxy.ModelNameGPT41}, {"dictator", "unknown-model"},
+		{"openai", "gpt-6.2-sol"}, {"dictator", "unknown-model"},
 		{"dictator", "whisper-base"},
 	} {
 		t.Run(pair.provider+"/"+pair.model, func(t *testing.T) {

@@ -57,7 +57,7 @@ Versions, reasoning levels, and capabilities do not receive separate brand artwo
 
 | Catalog families | Logo | Local SVG |
 | --- | --- | --- |
-| `gpt-6`, `gpt-4`, `gpt-5`, `gpt-transcribe`, `whisper` | OpenAI Blossom | `openai.svg` |
+| `gpt-6`, `gpt-5`, `gpt-transcribe`, `whisper` | OpenAI Blossom | `openai.svg` |
 | `ernie-5` | Baidu paw | `baidu-color.svg` |
 | `deepseek-v3`, `deepseek-v4`, `deepseek-r1` | DeepSeek whale | `deepseek-color.svg` |
 | `qwen`, `qwen3-8`, `qwen3` | Qwen symbol | `qwen-color.svg` |

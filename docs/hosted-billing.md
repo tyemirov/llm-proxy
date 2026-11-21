@@ -447,7 +447,7 @@ The following shape selects the controlled text fixture. It does not qualify a p
 hosted:
   offerings:
     - provider: openai
-      model: gpt-4.1
+      model: gpt-6.2-sol
       operation: text
       maximum_attempts: 1
       conditions:

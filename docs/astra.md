@@ -3,7 +3,7 @@
 F061 adds the enabled `openai/gpt-6-astra` offering.
 Select this exact model in a tenant profile or a public request.
 The existing OpenAI key and Responses transport apply to this model.
-The OpenAI provider default remains `gpt-4.1`.
+The OpenAI provider default is `gpt-6.2-sol`.
 
 ## Request contract
 

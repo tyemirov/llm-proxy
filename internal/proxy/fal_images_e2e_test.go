@@ -477,7 +477,7 @@ func falImagesDurableClient(t *testing.T, upstream *httptest.Server, changes ...
 	for _, change := range changes {
 		change(&base)
 	}
-	configuration, err := testfixtures.ProvisionManagedRouter(t, base, zap.NewNop().Sugar(), testfixtures.ManagedTenant{Secret: "queue-owner", Defaults: proxy.TenantDefaults{Provider: "openai", Model: proxy.ModelNameGPT41}, ProviderKeys: map[string]string{"openai": "queue-provider", "fal": "queue-provider"}})
+	configuration, err := testfixtures.ProvisionManagedRouter(t, base, zap.NewNop().Sugar(), testfixtures.ManagedTenant{Secret: "queue-owner", Defaults: proxy.TenantDefaults{Provider: "openai", Model: "gpt-6.2-sol"}, ProviderKeys: map[string]string{"openai": "queue-provider", "fal": "queue-provider"}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -125,7 +125,7 @@ func TestAccountConnectionMigration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if tenant.DefaultModel != ModelNameGPT41 || tenant.DefaultSystemPrompt != "Tenant prompt" || tenant.ProviderProfiles[0].SystemPrompt != "Provider prompt" {
+		if tenant.DefaultModel != "gpt-6.2-sol" || tenant.DefaultSystemPrompt != "Tenant prompt" || tenant.ProviderProfiles[0].SystemPrompt != "Provider prompt" {
 			t.Fatal("tenant defaults or prompts changed")
 		}
 		if tenant.SecretDigest == nil || *tenant.SecretDigest != secrets[tenant.TenantID] || !tenant.CreatedAt.Equal(now) || !tenant.UpdatedAt.Equal(now) || !connection.CreatedAt.Equal(now) || !connection.UpdatedAt.Equal(now) {

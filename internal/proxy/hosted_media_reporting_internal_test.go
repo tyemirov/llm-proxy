@@ -54,7 +54,7 @@ func TestHostedMediaWorkerReportsAdapterPersistenceFailures(t *testing.T) {
 			var trigger string
 			switch phase {
 			case "persist_provider_handle", "bind_provider_request":
-				controls = json.RawMessage(`{"surface":"responses","responses_model":"gpt-5","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1}`)
+				controls = json.RawMessage(`{"surface":"responses","responses_model":"gpt-6.2-sol","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1}`)
 				trigger = "BEFORE UPDATE OF provider_handle ON media_operation_records WHEN NEW.provider_handle != '' AND NEW.public_state = 'running'"
 				if phase == "bind_provider_request" {
 					trigger = "BEFORE UPDATE OF provider_request_id ON managed_journal_attempt_records WHEN NEW.provider_request_id != ''"

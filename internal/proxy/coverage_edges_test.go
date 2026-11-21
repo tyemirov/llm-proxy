@@ -279,7 +279,7 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 	t.Run("json body validates malformed and invalid prompt message requests", func(subTest *testing.T) {
 		for _, requestBody := range []string{
 			`{`,
-			`{"model":"` + proxy.ModelNameGPT41 + `"}`,
+			`{"model":"` + "gpt-6.2-sol" + `"}`,
 			`{"prompt":"hello","messages":[{"role":"user","content":"hello"}]}`,
 			`{"messages":[]}`,
 			`{"messages":[{"role":"tool","content":"tool result"}]}`,
@@ -303,7 +303,7 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 			`{"prompt":null,"messages":[{"role":"user","content":"hello"}]}`,
 			`{"system_prompt":"outer","messages":[{"role":"user","content":"hello"}]}`,
 			`{"system_prompt":null,"messages":[{"role":"user","content":"hello"}]}`,
-			`{"model":"` + proxy.ModelNameGPT41 + `"}`,
+			`{"model":"` + "gpt-6.2-sol" + `"}`,
 			`{"messages":[]}`,
 			`{"messages":[{"role":"tool","content":"tool result"}]}`,
 			`{"messages":[{"role":"user","content":"   "}]}`,
@@ -329,8 +329,8 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 			body string
 		}{
 			{
-				path: "/v2?key=" + TestSecret + "&model=" + proxy.ModelNameGPT41,
-				body: `{"model":"` + proxy.ModelNameGPT55 + `","messages":[{"role":"user","content":"hello"}]}`,
+				path: "/v2?key=" + TestSecret + "&model=" + "gpt-6.2-sol",
+				body: `{"model":"` + "gpt-6-sol" + `","messages":[{"role":"user","content":"hello"}]}`,
 			},
 			{
 				path: "/v2?key=" + TestSecret,
@@ -391,7 +391,7 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 	})
 
 	t.Run("json body accepts query model override and default system prompt", func(subTest *testing.T) {
-		request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&model="+proxy.ModelNameGPT41, strings.NewReader(`{"prompt":"hello json"}`))
+		request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&model="+"gpt-6.2-sol", strings.NewReader(`{"prompt":"hello json"}`))
 		request.Header.Set("Content-Type", "application/json")
 		responseRecorder := httptest.NewRecorder()
 		router.ServeHTTP(responseRecorder, request)
@@ -401,7 +401,7 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 	})
 
 	t.Run("json body messages accept request system prompt", func(subTest *testing.T) {
-		request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&model="+proxy.ModelNameGPT41, strings.NewReader(`{"system_prompt":"outer","messages":[{"role":"user","content":"hello json"}]}`))
+		request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&model="+"gpt-6.2-sol", strings.NewReader(`{"system_prompt":"outer","messages":[{"role":"user","content":"hello json"}]}`))
 		request.Header.Set("Content-Type", "application/json")
 		responseRecorder := httptest.NewRecorder()
 		router.ServeHTTP(responseRecorder, request)
@@ -734,7 +734,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 	t.Run("completed without final message starts synthesis continuation", func(subTest *testing.T) {
 		var synthesisPayload map[string]any
 		defaults := proxy.DefaultTenantDefaults()
-		defaults.Model = proxy.ModelNameGPT5
+		defaults.Model = "gpt-6.2-sol"
 		defaults.ReasoningEffort = "high"
 		router := textRouterWithResponsesHandlerAndDefaults(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")

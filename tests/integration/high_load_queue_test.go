@@ -38,7 +38,7 @@ func makeBlockingHTTPClient(testingInstance *testing.T, endpoints *proxy.Endpoin
 		case strings.HasPrefix(httpRequest.URL.String(), endpoints.GetModelsURL()+"/"):
 			modelIdentifier := strings.TrimPrefix(httpRequest.URL.Path, integrationModelsPath+"/")
 			metadata := metadataEmpty
-			if modelIdentifier == proxy.ModelNameGPT41 {
+			if modelIdentifier == "gpt-6.2-sol" {
 				metadata = metadataTemperatureTools
 			}
 			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(metadata)), Header: make(http.Header)}, nil

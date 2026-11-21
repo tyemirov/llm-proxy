@@ -25,7 +25,7 @@ func TestClientProtocolsTenantDiscoveryAndAccounting(t *testing.T) {
 	account := requestManagementAccount(t, router, owner)
 	first := account.Tenants[0].ID
 	second := createManagementTenant(t, router, owner, "No provider").Tenant.ID
-	saveManagementProviderKey(t, router, owner, first, "provider-fixture", proxy.ModelNameGPT41, "")
+	saveManagementProviderKey(t, router, owner, first, "provider-fixture", "gpt-6.2-sol", "")
 	key := generateManagementTenantSecret(t, router, owner, first)
 	emptyKey := generateManagementTenantSecret(t, router, owner, second)
 	server := httptest.NewServer(router)
@@ -67,9 +67,9 @@ func TestClientProtocolsTenantDiscoveryAndAccounting(t *testing.T) {
 		}
 	}
 	for _, path := range []string{"/v1/chat/completions", "/v1/responses"} {
-		body := `{"model":"openai/gpt-4.1","messages":[{"role":"user","content":"read twice"}],"tools":[{"type":"function","function":{"name":"read","parameters":{"type":"object"}}}],"stream":true,"parallel_tool_calls":true,"stream_options":{"include_usage":true}}`
+		body := `{"model":"openai/gpt-6.2-sol","messages":[{"role":"user","content":"read twice"}],"tools":[{"type":"function","function":{"name":"read","parameters":{"type":"object"}}}],"stream":true,"parallel_tool_calls":true,"stream_options":{"include_usage":true}}`
 		if path == "/v1/responses" {
-			body = `{"model":"openai/gpt-4.1","input":"read twice","tools":[{"type":"function","name":"read","parameters":{"type":"object"}}],"stream":true,"parallel_tool_calls":true}`
+			body = `{"model":"openai/gpt-6.2-sol","input":"read twice","tools":[{"type":"function","name":"read","parameters":{"type":"object"}}],"stream":true,"parallel_tool_calls":true}`
 		}
 		req, _ := http.NewRequest("POST", server.URL+path, strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+key)

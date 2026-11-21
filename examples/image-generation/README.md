@@ -19,7 +19,7 @@ Use one explicit surface in the input.
 ```
 
 For Responses generation, set `surface` to `responses` and add `responses_model` with a value from capability discovery.
-The current OpenAI catalog selects `gpt-5` for that control.
+The current OpenAI catalog selects `gpt-6.2-sol` for that control.
 Responses accepts one output image.
 Set `stream` to `true` and `partial_images` to a value from zero through three to request progressive output.
 Read `MediaOperation.PartialOutputs` through `GetMediaOperation` and download each new asset through the authenticated asset methods.
@@ -31,7 +31,7 @@ Use the same client for a follow-up edit:
 followUp := llmproxyclient.ImageEditingInput{
     ImageGenerationInput: llmproxyclient.ImageGenerationInput{
         Provider: "openai", Model: "gpt-image-2",
-        Surface: "responses", ResponsesModel: "gpt-5",
+        Surface: "responses", ResponsesModel: "gpt-6.2-sol",
         PreviousOperationID: completed.OperationID,
         Prompt: "Change the scene to sunset",
         Quality: "low", Size: "1024x1024", Background: "opaque",

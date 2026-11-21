@@ -1127,7 +1127,7 @@ func TestProviderRoutingAppliesModelSpecificReasoningEffortCapability(t *testing
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetResponsesURL(upstreamServer.URL)
 	defaults := proxy.DefaultTenantDefaults()
-	defaults.Model = proxy.ModelNameGPT5
+	defaults.Model = "gpt-6.2-sol"
 	defaults.ReasoningEffort = "high"
 	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
 	tenantConfiguration.Defaults = defaults
@@ -1155,7 +1155,9 @@ func TestProviderRoutingAppliesModelSpecificReasoningEffortCapability(t *testing
 
 func TestProviderRoutingRejectsModelReasoningEffortCapabilityOnUnsupportedRoute(t *testing.T) {
 	catalogs := testfixtures.ModelCatalog(t)
-	catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.ModelNameGPT4oMini)].ReasoningEffort = openAIResponsesReasoningEffortCapability()
+	index := catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, "gpt-6-luna")
+	catalogs.Offerings[index].RequestProfile = "openai_responses_temperature_tools"
+	catalogs.Offerings[index].ReasoningEffort = openAIResponsesReasoningEffortCapability()
 
 	_, configurationError := newConfigurationWithCatalogs(t, proxy.Configuration{
 		ModelCatalog: catalogs,
@@ -1175,7 +1177,7 @@ func TestProviderRoutingRejectsInvalidReasoningEffortCatalogCapabilities(t *test
 			configure: func(catalogs proxy.ModelCatalog) {
 				capability := openAIResponsesReasoningEffortCapability()
 				capability.Adapter = ""
-				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.ModelNameGPT5)].ReasoningEffort = capability
+				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, "gpt-6.2-sol")].ReasoningEffort = capability
 			},
 		},
 		{
@@ -1183,7 +1185,7 @@ func TestProviderRoutingRejectsInvalidReasoningEffortCatalogCapabilities(t *test
 			configure: func(catalogs proxy.ModelCatalog) {
 				capability := openAIResponsesReasoningEffortCapability()
 				capability.Adapter = "unsupported_adapter"
-				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.ModelNameGPT5)].ReasoningEffort = capability
+				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, "gpt-6.2-sol")].ReasoningEffort = capability
 			},
 		},
 		{
@@ -1191,7 +1193,7 @@ func TestProviderRoutingRejectsInvalidReasoningEffortCatalogCapabilities(t *test
 			configure: func(catalogs proxy.ModelCatalog) {
 				capability := openAIResponsesReasoningEffortCapability()
 				capability.Efforts = []string{}
-				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.ModelNameGPT5)].ReasoningEffort = capability
+				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, "gpt-6.2-sol")].ReasoningEffort = capability
 			},
 		},
 		{
@@ -1199,7 +1201,7 @@ func TestProviderRoutingRejectsInvalidReasoningEffortCatalogCapabilities(t *test
 			configure: func(catalogs proxy.ModelCatalog) {
 				capability := openAIResponsesReasoningEffortCapability()
 				capability.Efforts = []string{"minimal", "low", "low"}
-				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.ModelNameGPT5)].ReasoningEffort = capability
+				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, "gpt-6.2-sol")].ReasoningEffort = capability
 			},
 		},
 		{
@@ -1207,7 +1209,7 @@ func TestProviderRoutingRejectsInvalidReasoningEffortCatalogCapabilities(t *test
 			configure: func(catalogs proxy.ModelCatalog) {
 				capability := openAIResponsesReasoningEffortCapability()
 				capability.Efforts = []string{"warp"}
-				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.ModelNameGPT5)].ReasoningEffort = capability
+				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, "gpt-6.2-sol")].ReasoningEffort = capability
 			},
 		},
 		{
@@ -1805,7 +1807,7 @@ func TestProviderRoutingSelectsDefaultsByTenantSecret(t *testing.T) {
 	overrideQuery.Set("key", geminiTenantSecret)
 	overrideQuery.Set("prompt", "hello override")
 	overrideQuery.Set("provider", proxy.ProviderNameOpenAI)
-	overrideQuery.Set("model", proxy.ModelNameGPT41)
+	overrideQuery.Set("model", "gpt-6.2-sol")
 	overrideResponse := httptest.NewRecorder()
 	router.ServeHTTP(overrideResponse, httptest.NewRequest(http.MethodGet, "/?"+overrideQuery.Encode(), nil))
 	if overrideResponse.Code != http.StatusOK {
@@ -1815,7 +1817,7 @@ func TestProviderRoutingSelectsDefaultsByTenantSecret(t *testing.T) {
 	if len(openAIModels) != 2 {
 		t.Fatalf("openAIModels=%v want two OpenAI calls", openAIModels)
 	}
-	if openAIModels[0] != proxy.ModelNameGPT41 || openAIModels[1] != proxy.ModelNameGPT41 {
+	if openAIModels[0] != "gpt-6.2-sol" || openAIModels[1] != "gpt-6.2-sol" {
 		t.Fatalf("openAIModels=%v", openAIModels)
 	}
 	if openAIInputs[0] != "openai tenant system\n\nhello openai default" {
@@ -2772,8 +2774,8 @@ func TestProviderRoutingRejectsConflictingJSONModelParameters(t *testing.T) {
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
 
-	requestBody := bytes.NewBufferString(`{"prompt":"hello","model":"` + proxy.ModelNameGPT4o + `"}`)
-	request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&model="+proxy.ModelNameGPT41, requestBody)
+	requestBody := bytes.NewBufferString(`{"prompt":"hello","model":"` + "gpt-6-sol" + `"}`)
+	request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&model="+"gpt-6.2-sol", requestBody)
 	request.Header.Set("Content-Type", "application/json")
 	responseRecorder := httptest.NewRecorder()
 

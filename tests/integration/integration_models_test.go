@@ -20,7 +20,7 @@ func TestIntegrationModelSpecSuppression(testingInstance *testing.T) {
 	testCases := []struct {
 		name  string
 		model string
-	}{{name: "gpt_5_mini", model: proxy.ModelNameGPT5Mini}}
+	}{{name: "gpt_5_mini", model: "gpt-6-luna"}}
 	for _, testCase := range testCases {
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
 			endpoints := proxy.NewEndpoints()
@@ -75,9 +75,30 @@ func TestIntegrationModelSpecSuppression(testingInstance *testing.T) {
 // TestIntegrationModelCatalogRejectsUnsupportedWebSearch verifies configured model capability validation.
 func TestIntegrationModelCatalogRejectsUnsupportedWebSearch(testingInstance *testing.T) {
 	gin.SetMode(gin.TestMode)
+	endpoints := proxy.NewEndpoints()
+	configureProxy(testingInstance, &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		testingInstance.Error("unsupported web search dispatched upstream")
+		return &http.Response{StatusCode: http.StatusTeapot, Body: io.NopCloser(strings.NewReader("unexpected upstream")), Header: make(http.Header)}, nil
+	})}, endpoints)
+	schema := testfixtures.ProviderCatalog(testingInstance).Schema()
+	for providerIndex := range schema.Providers {
+		for index := range schema.Providers[providerIndex].Offerings {
+			offering := &schema.Providers[providerIndex].Offerings[index]
+			if schema.Providers[providerIndex].ID == "openai" && offering.Model == "gpt-6-luna" {
+				// Exercise an explicitly unsupported capability independently of current supplier features.
+				offering.WebSearch = false
+			}
+		}
+	}
+	catalog, err := proxy.NewProviderCatalog(schema)
+	if err != nil {
+		testingInstance.Fatal(err)
+	}
 	router, buildRouterError := buildIntegrationRouter(testingInstance, proxy.Configuration{
 		LogLevel:         logLevelDebug,
 		UpstreamCapacity: testfixtures.UpstreamCapacity(1, 8),
+		ProviderCatalog:  catalog,
+		Endpoints:        endpoints,
 	}, newLogger(testingInstance))
 	if buildRouterError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildRouterError)
@@ -89,7 +110,7 @@ func TestIntegrationModelCatalogRejectsUnsupportedWebSearch(testingInstance *tes
 	queryValues.Set(promptQueryParameter, promptValue)
 	queryValues.Set(keyQueryParameter, serviceSecretValue)
 	queryValues.Set(webSearchQueryParameter, "true")
-	queryValues.Set(adaptiveModelQueryParameter, proxy.ModelNameGPT5Mini)
+	queryValues.Set(adaptiveModelQueryParameter, "gpt-6-luna")
 	requestURL.RawQuery = queryValues.Encode()
 	httpResponse, requestError := http.Get(requestURL.String())
 	if requestError != nil {

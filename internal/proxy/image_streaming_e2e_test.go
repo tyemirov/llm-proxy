@@ -315,7 +315,7 @@ func TestImageGenerationStreamingPreviewIsolationRestartAndRetention(t *testing.
 				ProviderCatalog: testfixtures.ProviderCatalog(t), AssetStorePath: t.TempDir(), Endpoints: endpoints,
 				Management:                 proxy.ManagementConfiguration{DatabasePath: filepath.Join(t.TempDir(), "preview.sqlite")},
 				MediaOperationClaimSeconds: 7200, MediaOperationClaimRenewalSeconds: 3600,
-			}, zap.NewNop().Sugar(), testfixtures.ManagedTenant{Secret: "preview-owner", Defaults: proxy.TenantDefaults{Provider: "openai", Model: proxy.ModelNameGPT41}, ProviderKeys: map[string]string{"openai": "preview-provider"}})
+			}, zap.NewNop().Sugar(), testfixtures.ManagedTenant{Secret: "preview-owner", Defaults: proxy.TenantDefaults{Provider: "openai", Model: "gpt-6.2-sol"}, ProviderKeys: map[string]string{"openai": "preview-provider"}})
 			if err != nil {
 				t.Fatal(err)
 			}

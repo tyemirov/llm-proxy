@@ -37,7 +37,7 @@ func TestHostedMCPIdentitySharesNativeExecution(t *testing.T) {
 	var responses *structuredRequestStore
 	server, clientFor := newHostedMCPIdentityServer(t, database, upstream.URL, t.TempDir(), func(dependencies *hostedTextRequestDependencies) { responses = dependencies.responses })
 	owner := clientFor("owner")
-	input := map[string]any{"tenant_id": "managed-first", "idempotency_key": "shared-mcp", "provider": "openai", "model": "gpt-4.1", "messages": []map[string]string{{"role": "user", "content": "shared prompt"}}}
+	input := map[string]any{"tenant_id": "managed-first", "idempotency_key": "shared-mcp", "provider": "openai", "model": "gpt-6.2-sol", "messages": []map[string]string{{"role": "user", "content": "shared prompt"}}}
 	first := hostedMCPCall(t, owner, input, false)
 	if first["text"] != "shared result" || first["request_id"] == "" {
 		t.Fatalf("MCP result: %v", first)
@@ -85,7 +85,7 @@ func TestHostedMCPIdentityRejectsMissingOrInvalidKeys(t *testing.T) {
 	t.Cleanup(upstream.Close)
 	_, clientFor := newHostedMCPIdentityServer(t, database, upstream.URL, t.TempDir())
 	client := clientFor("owner")
-	input := map[string]any{"tenant_id": "managed-first", "provider": "openai", "model": "gpt-4.1", "messages": []map[string]string{{"role": "user", "content": "invalid key"}}}
+	input := map[string]any{"tenant_id": "managed-first", "provider": "openai", "model": "gpt-6.2-sol", "messages": []map[string]string{{"role": "user", "content": "invalid key"}}}
 	for _, key := range []any{"missing", nil, "", " ", strings.Repeat("k", 129), 123} {
 		if key != "missing" {
 			input["idempotency_key"] = key
@@ -117,7 +117,7 @@ func TestHostedMCPIdentityConcurrentNativeRequest(t *testing.T) {
 	server, clientFor := newHostedMCPIdentityServer(t, database, upstream.URL, t.TempDir())
 	client := clientFor("owner")
 	t.Cleanup(unblock)
-	input := map[string]any{"tenant_id": "managed-first", "idempotency_key": "concurrent-mcp", "provider": "openai", "model": "gpt-4.1", "messages": []map[string]string{{"role": "user", "content": "concurrent prompt"}}}
+	input := map[string]any{"tenant_id": "managed-first", "idempotency_key": "concurrent-mcp", "provider": "openai", "model": "gpt-6.2-sol", "messages": []map[string]string{{"role": "user", "content": "concurrent prompt"}}}
 	type outcome struct {
 		result *mcp.CallToolResult
 		err    error
@@ -171,7 +171,7 @@ func TestHostedMCPIdentityRetainsUnknownOutcome(t *testing.T) {
 	t.Cleanup(upstream.Close)
 	server, clientFor := newHostedMCPIdentityServer(t, database, upstream.URL, t.TempDir())
 	client := clientFor("owner")
-	input := map[string]any{"tenant_id": "managed-first", "idempotency_key": "unknown-mcp", "provider": "openai", "model": "gpt-4.1", "messages": []map[string]string{{"role": "user", "content": "uncertain prompt"}}}
+	input := map[string]any{"tenant_id": "managed-first", "idempotency_key": "unknown-mcp", "provider": "openai", "model": "gpt-6.2-sol", "messages": []map[string]string{{"role": "user", "content": "uncertain prompt"}}}
 	hostedMCPCall(t, client, input, true)
 	result := hostedMCPCall(t, client, input, true)
 	journal := read("")["requests"].([]any)[0].(map[string]any)

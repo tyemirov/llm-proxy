@@ -286,6 +286,15 @@ func TestAccountConnectionDisabledVerificationModelDoesNotSelectAnotherModel(t *
 	schema.ModelMigrations = nil
 	provider := &schema.Providers[0]
 	selected := provider.Verification.Model
+	// Keep unrelated image parent controls valid while disabling the selected verifier.
+	for index := range provider.Offerings {
+		for controlIndex := range provider.Offerings[index].Controls {
+			control := &provider.Offerings[index].Controls[controlIndex]
+			if control.ID == "responses_model" {
+				control.Values = []string{"gpt-6-sol"}
+			}
+		}
+	}
 	for index := range provider.Offerings {
 		offering := &provider.Offerings[index]
 		if offering.Model == selected {

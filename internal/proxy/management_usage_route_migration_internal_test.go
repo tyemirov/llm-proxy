@@ -163,7 +163,7 @@ func TestManagedResolvedUsageRouteSchemaElevenRejectsInvalidStoreShapes(t *testi
 		database, providerKeyCipher, providers, _ := newManagedResolvedUsageRouteMigrationFixture(t)
 		registerManagedGORMError(t, database, "resolved_usage_route_connection_validation", "query", managedTenantTable, errInternalTestDatabase)
 		migrationError := initializeManagedTenantSchema(database, providerKeyCipher, providers)
-		if !errors.Is(migrationError, errManagedTenantSchemaMigration) || !strings.Contains(migrationError.Error(), "operation=read") {
+		if !errors.Is(migrationError, errManagedTenantSchemaMigration) || !strings.Contains(migrationError.Error(), "operation=preflight_openai_cutover tenants") {
 			t.Fatalf("connection validation error=%v", migrationError)
 		}
 	})

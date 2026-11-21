@@ -75,7 +75,7 @@ func TestIntegrationCanonicalOpenAIUpstreamCapacityStructuredBackground(t *testi
 	}
 	results := make(chan result, 32)
 	submit := func(index int) result {
-		payload := `{"model":"gpt-4.1","messages":[{"role":"user","content":"capacity"}],"structured_output":{"schema":{"type":"object","additionalProperties":false,"required":["decision"],"properties":{"decision":{"type":"string","enum":["pass"]}}}}}`
+		payload := `{"model":"gpt-6.2-sol","messages":[{"role":"user","content":"capacity"}],"structured_output":{"schema":{"type":"object","additionalProperties":false,"required":["decision"],"properties":{"decision":{"type":"string","enum":["pass"]}}}}}`
 		request, err := http.NewRequest(http.MethodPost, application.URL+"/v2?provider=openai&key="+serviceSecretValue, bytes.NewBufferString(payload))
 		if err != nil {
 			return result{err: err}

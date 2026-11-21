@@ -16,7 +16,7 @@ const (
 	TestSecret  = "sekret"
 	TestAPIKey  = "sk-test"
 	TestPrompt  = "hello"
-	TestModel   = proxy.ModelNameGPT4o
+	TestModel   = "gpt-6-sol"
 	TestTimeout = 5
 )
 

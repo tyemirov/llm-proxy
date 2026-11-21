@@ -97,7 +97,7 @@ func TestOpenAIResponsesCompleteTruncatedOutputAndRecordOneSuccessAtPublicV2Boun
 	router := newManagementRouterWithDatabasePath(testingInstance, proxy.Configuration{Endpoints: providerEndpoints(upstreamServer.URL, proxy.ProviderNameOpenAI)}, databasePath)
 	ownerCookie := managementSessionCookie(testingInstance, "openai-terminal-owner")
 	tenantIdentifier := managementDefaultTenantTestID(testingInstance, router, ownerCookie)
-	saveManagementProviderKey(testingInstance, router, ownerCookie, tenantIdentifier, testManagementOpenAIKey, proxy.ModelNameGPT41, "")
+	saveManagementProviderKey(testingInstance, router, ownerCookie, tenantIdentifier, testManagementOpenAIKey, "gpt-6.2-sol", "")
 	secret := generateManagementTenantSecret(testingInstance, router, ownerCookie, tenantIdentifier)
 
 	requestV2 := func(prompt string, maxTokens int) *httptest.ResponseRecorder {
@@ -165,8 +165,8 @@ func TestOpenAIResponsesCompleteTruncatedOutputAndRecordOneSuccessAtPublicV2Boun
 		testingInstance.Fatalf("load OpenAI usage events: %v", queryError)
 	}
 	expectedUsageEvents := []persistedOpenAIUsageEvent{
-		{Endpoint: "v2", Provider: proxy.ProviderNameOpenAI, Model: proxy.ModelNameGPT41, StatusCode: http.StatusOK, Disposition: "succeeded", OutcomeCode: "success", RequestTokens: 1604, ResponseTokens: 2055, TotalTokens: 3659},
-		{Endpoint: "v2", Provider: proxy.ProviderNameOpenAI, Model: proxy.ModelNameGPT41, StatusCode: http.StatusOK, Disposition: "succeeded", OutcomeCode: "success", RequestTokens: 7, ResponseTokens: 11, TotalTokens: 18},
+		{Endpoint: "v2", Provider: proxy.ProviderNameOpenAI, Model: "gpt-6.2-sol", StatusCode: http.StatusOK, Disposition: "succeeded", OutcomeCode: "success", RequestTokens: 1604, ResponseTokens: 2055, TotalTokens: 3659},
+		{Endpoint: "v2", Provider: proxy.ProviderNameOpenAI, Model: "gpt-6.2-sol", StatusCode: http.StatusOK, Disposition: "succeeded", OutcomeCode: "success", RequestTokens: 7, ResponseTokens: 11, TotalTokens: 18},
 	}
 	if !reflect.DeepEqual(usageEvents, expectedUsageEvents) {
 		testingInstance.Fatalf("usage events=%+v want=%+v", usageEvents, expectedUsageEvents)
@@ -203,7 +203,7 @@ func TestOpenAIPolledIncompleteUsesLatestSnapshotThenCompletesAtPublicV2Boundary
 	router := newManagementRouterWithDatabasePath(testingInstance, proxy.Configuration{Endpoints: providerEndpoints(upstreamServer.URL, proxy.ProviderNameOpenAI)}, databasePath)
 	ownerCookie := managementSessionCookie(testingInstance, "openai-polled-usage-owner")
 	tenantIdentifier := managementDefaultTenantTestID(testingInstance, router, ownerCookie)
-	saveManagementProviderKey(testingInstance, router, ownerCookie, tenantIdentifier, testManagementOpenAIKey, proxy.ModelNameGPT41, "")
+	saveManagementProviderKey(testingInstance, router, ownerCookie, tenantIdentifier, testManagementOpenAIKey, "gpt-6.2-sol", "")
 	secret := generateManagementTenantSecret(testingInstance, router, ownerCookie, tenantIdentifier)
 
 	requestBody := bytes.NewBufferString(`{"messages":[{"role":"user","content":"poll this response"}],"max_tokens":2048}`)
@@ -405,7 +405,7 @@ func TestV2AssetStoreFailureAppearsOnlyInTheFailureReport(t *testing.T) {
 	ownerCookie := managementSessionCookie(t, "asset-store-failure-owner")
 	tenantIdentifier := managementDefaultTenantTestID(t, router, ownerCookie)
 	tenantPath := managementTenantTestPath(tenantIdentifier, "")
-	saveManagementProviderKey(t, router, ownerCookie, tenantIdentifier, testManagementOpenAIKey, proxy.ModelNameGPT41, "")
+	saveManagementProviderKey(t, router, ownerCookie, tenantIdentifier, testManagementOpenAIKey, "gpt-6.2-sol", "")
 	secret := generateManagementTenantSecret(t, router, ownerCookie, tenantIdentifier)
 	asset := uploadTestAsset(t, router, secret, "image/png", []byte("valid image bytes"))
 	if truncateError := os.Truncate(filepath.Join(assetRoot, asset.AssetID+".data"), 1); truncateError != nil {
@@ -434,7 +434,7 @@ func TestV2AssetStoreFailureAppearsOnlyInTheFailureReport(t *testing.T) {
 	})
 	failures := requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 25, "")
 	if failure := failures.Failures[0]; failure.Endpoint != "v2" || failure.Provider != proxy.ProviderNameOpenAI ||
-		failure.Model != proxy.ModelNameGPT41 || failure.StatusCode != http.StatusInternalServerError || failure.OutcomeCode != "proxy_error" {
+		failure.Model != "gpt-6.2-sol" || failure.StatusCode != http.StatusInternalServerError || failure.OutcomeCode != "proxy_error" {
 		t.Fatalf("asset-store failure=%+v", failure)
 	}
 	rejections := requestManagementUsageRejections(t, router, ownerCookie, tenantPath, "30d", 25, "")
@@ -884,7 +884,7 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 	if saveKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save key status=%d body=%q", saveKeyResponse.Code, saveKeyResponse.Body.String())
 	}
-	saveDictationKeyResponse := putManagementProviderKey(t, router, ownerCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, proxy.ModelNameGPT41, "", context.Background())
+	saveDictationKeyResponse := putManagementProviderKey(t, router, ownerCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, "gpt-6.2-sol", "", context.Background())
 	if saveDictationKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save dictation key status=%d body=%q", saveDictationKeyResponse.Code, saveDictationKeyResponse.Body.String())
 	}

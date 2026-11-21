@@ -377,8 +377,8 @@ func TestManagementRejectsInvalidSessionsAndRequests(t *testing.T) {
 		{method: http.MethodPut, path: tenantPath + "/provider-profiles/openai", body: `{"text_model":"missing-model","system_prompt":""}`, status: http.StatusBadRequest},
 		{method: http.MethodDelete, path: tenantPath + "/connections/unknown", body: `{}`, status: http.StatusBadRequest},
 		{method: http.MethodPut, path: tenantPath + "/defaults", body: managementDefaultsRequestBody(t, "qwencloud", "qwen3.8-max-preview", "", "", ""), status: http.StatusBadRequest},
-		{method: http.MethodPut, path: tenantPath + "/defaults", body: `{"provider":"openai","model":"gpt-4.1","extra":true}`, status: http.StatusBadRequest},
-		{method: http.MethodPut, path: tenantPath + "/defaults", body: `{"provider":"openai","model":"gpt-4.1","transcription_provider":"","transcription_model":"","system_prompt":"","reasoning_effort":""}`, status: http.StatusBadRequest},
+		{method: http.MethodPut, path: tenantPath + "/defaults", body: `{"provider":"openai","model":"gpt-6.2-sol","extra":true}`, status: http.StatusBadRequest},
+		{method: http.MethodPut, path: tenantPath + "/defaults", body: `{"provider":"openai","model":"gpt-6.2-sol","transcription_provider":"","transcription_model":"","system_prompt":"","reasoning_effort":""}`, status: http.StatusBadRequest},
 	}
 	for _, badRequest := range badRequests {
 		request := authenticatedJSONRequest(badRequest.method, badRequest.path, badRequest.body, sessionCookie)
@@ -389,12 +389,12 @@ func TestManagementRejectsInvalidSessionsAndRequests(t *testing.T) {
 		}
 	}
 
-	saveResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "openai", "skhort", proxy.ModelNameGPT41, "", context.Background())
+	saveResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "openai", "skhort", "gpt-6.2-sol", "", context.Background())
 	if saveResponse.Code != http.StatusOK || !strings.Contains(saveResponse.Body.String(), `"masked_value":"saved"`) {
 		t.Fatalf("save short key status=%d body=%s", saveResponse.Code, saveResponse.Body.String())
 	}
 
-	dictationDefaults := `{"provider":"openai","model":"gpt-4.1","transcription_provider":"deepseek","transcription_model":"deepseek-v4-flash","system_prompt":"","reasoning_effort":""}`
+	dictationDefaults := `{"provider":"openai","model":"gpt-6.2-sol","transcription_provider":"deepseek","transcription_model":"deepseek-v4-flash","system_prompt":"","reasoning_effort":""}`
 	dictationDefaultsRequest := authenticatedJSONRequest(http.MethodPut, tenantPath+"/defaults", dictationDefaults, sessionCookie)
 	dictationDefaultsResponse := httptest.NewRecorder()
 	router.ServeHTTP(dictationDefaultsResponse, dictationDefaultsRequest)
@@ -563,11 +563,11 @@ func TestManagementTranscriptionSpeechDefaults(t *testing.T) {
 	sessionCookie := managementSessionCookie(t, "tauth-transcription-speech-user")
 	tenantPath := managementDefaultTenantTestPath(t, router, sessionCookie, "")
 	tenantID := strings.TrimPrefix(tenantPath, "/api/management/tenants/")
-	keyResponse := putManagementProviderKey(t, router, sessionCookie, tenantID, proxy.ProviderNameOpenAI, testManagementOpenAIKey, proxy.ModelNameGPT41, "", context.Background())
+	keyResponse := putManagementProviderKey(t, router, sessionCookie, tenantID, proxy.ProviderNameOpenAI, testManagementOpenAIKey, "gpt-6.2-sol", "", context.Background())
 	if keyResponse.Code != http.StatusOK {
 		t.Fatalf("save openai key status=%d body=%s", keyResponse.Code, keyResponse.Body.String())
 	}
-	defaultsBody := `{"provider":"openai","model":"gpt-4.1","transcription_provider":"openai","transcription_model":"gpt-transcribe","speech_provider":"","speech_model":"","system_prompt":"","reasoning_effort":""}`
+	defaultsBody := `{"provider":"openai","model":"gpt-6.2-sol","transcription_provider":"openai","transcription_model":"gpt-transcribe","speech_provider":"","speech_model":"","system_prompt":"","reasoning_effort":""}`
 	saveResponse := httptest.NewRecorder()
 	router.ServeHTTP(saveResponse, authenticatedJSONRequest(http.MethodPut, tenantPath+"/defaults", defaultsBody, sessionCookie))
 	if saveResponse.Code != http.StatusOK {
@@ -623,7 +623,7 @@ func TestManagementRoutingDefaultsRequireCompleteCanonicalPairs(t *testing.T) {
 		model    string
 	}{
 		{provider: proxy.ProviderNameDeepSeek, apiKey: testManagementDeepSeekKey, model: proxy.ModelNameDeepSeekV4Flash},
-		{provider: proxy.ProviderNameOpenAI, apiKey: testManagementOpenAIKey, model: proxy.ModelNameGPT41},
+		{provider: proxy.ProviderNameOpenAI, apiKey: testManagementOpenAIKey, model: "gpt-6.2-sol"},
 	}
 	for _, providerKeyRequest := range providerKeyRequests {
 		response := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), providerKeyRequest.provider, providerKeyRequest.apiKey, providerKeyRequest.model, "", context.Background())
@@ -660,10 +660,10 @@ func TestManagementRoutingDefaultsRequireCompleteCanonicalPairs(t *testing.T) {
 		{
 			name:              "text model belongs to another provider",
 			provider:          proxy.ProviderNameDeepSeek,
-			model:             proxy.ModelNameGPT41,
+			model:             "gpt-6.2-sol",
 			dictationProvider: proxy.ProviderNameOpenAI,
 			dictationModel:    proxy.DefaultTranscriptionModel,
-			expectedPair:      "endpoint=text provider=deepseek model=gpt-4.1",
+			expectedPair:      "endpoint=text provider=deepseek model=gpt-6.2-sol",
 		},
 		{
 			name:              "blank text model",
@@ -739,7 +739,7 @@ func TestManagementRoutingDefaultsRequireExplicitConnectionChoices(t *testing.T)
 	unkeyedDefaultsRequest := authenticatedJSONRequest(
 		http.MethodPut,
 		tenantPath+"/defaults",
-		managementDefaultsRequestBody(t, proxy.ProviderNameOpenAI, proxy.ModelNameGPT41, "", "", ""),
+		managementDefaultsRequestBody(t, proxy.ProviderNameOpenAI, "gpt-6.2-sol", "", "", ""),
 		sessionCookie,
 	)
 	unkeyedDefaultsResponse := httptest.NewRecorder()
@@ -786,11 +786,11 @@ func TestManagementRoutingDefaultsRequireExplicitConnectionChoices(t *testing.T)
 		t.Fatalf("disabled dictation status=%d body=%s", dictationResponse.Code, dictationResponse.Body.String())
 	}
 
-	if response := saveProviderKey(proxy.ProviderNameOpenAI, testManagementOpenAIKey, proxy.ModelNameGPT55); response.Code != http.StatusOK {
+	if response := saveProviderKey(proxy.ProviderNameOpenAI, testManagementOpenAIKey, "gpt-6-sol"); response.Code != http.StatusOK {
 		t.Fatalf("save dictation provider status=%d body=%s", response.Code, response.Body.String())
 	}
 	assertManagementProfileDefaults(t, router, sessionCookie, textOnlyDefaults)
-	if response := saveProviderKey(proxy.ProviderNameOpenAI, "", proxy.ModelNameGPT4oMini); response.Code != http.StatusOK {
+	if response := saveProviderKey(proxy.ProviderNameOpenAI, "", "gpt-6-luna"); response.Code != http.StatusOK {
 		t.Fatalf("update inactive provider model status=%d body=%s", response.Code, response.Body.String())
 	}
 	assertManagementProfileDefaults(t, router, sessionCookie, textOnlyDefaults)
@@ -798,7 +798,7 @@ func TestManagementRoutingDefaultsRequireExplicitConnectionChoices(t *testing.T)
 	openAIDefaultsRequest := authenticatedJSONRequest(
 		http.MethodPut,
 		tenantPath+"/defaults",
-		managementDefaultsRequestBody(t, proxy.ProviderNameOpenAI, proxy.ModelNameGPT41, proxy.ProviderNameOpenAI, proxy.DefaultTranscriptionModel, ""),
+		managementDefaultsRequestBody(t, proxy.ProviderNameOpenAI, "gpt-6.2-sol", proxy.ProviderNameOpenAI, proxy.DefaultTranscriptionModel, ""),
 		sessionCookie,
 	)
 	openAIDefaultsResponse := httptest.NewRecorder()
@@ -806,19 +806,19 @@ func TestManagementRoutingDefaultsRequireExplicitConnectionChoices(t *testing.T)
 	if openAIDefaultsResponse.Code != http.StatusOK {
 		t.Fatalf("select OpenAI defaults status=%d body=%s", openAIDefaultsResponse.Code, openAIDefaultsResponse.Body.String())
 	}
-	if response := saveProviderKey(proxy.ProviderNameOpenAI, "", proxy.ModelNameGPT55); response.Code != http.StatusOK {
+	if response := saveProviderKey(proxy.ProviderNameOpenAI, "", "gpt-6-sol"); response.Code != http.StatusOK {
 		t.Fatalf("update active provider model status=%d body=%s", response.Code, response.Body.String())
 	}
 	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
 		Provider:              proxy.ProviderNameOpenAI,
-		Model:                 proxy.ModelNameGPT41,
+		Model:                 "gpt-6.2-sol",
 		TranscriptionProvider: proxy.ProviderNameOpenAI,
 		TranscriptionModel:    proxy.DefaultTranscriptionModel,
 	})
 	reasoningDefaultsRequest := authenticatedJSONRequest(
 		http.MethodPut,
 		tenantPath+"/defaults",
-		managementDefaultsRequestBodyWithReasoningEffort(t, proxy.ProviderNameOpenAI, proxy.ModelNameGPT5, proxy.ProviderNameOpenAI, proxy.DefaultTranscriptionModel, "", "high"),
+		managementDefaultsRequestBodyWithReasoningEffort(t, proxy.ProviderNameOpenAI, "gpt-6.1-sol", proxy.ProviderNameOpenAI, proxy.DefaultTranscriptionModel, "", "high"),
 		sessionCookie,
 	)
 	reasoningDefaultsResponse := httptest.NewRecorder()
@@ -826,22 +826,22 @@ func TestManagementRoutingDefaultsRequireExplicitConnectionChoices(t *testing.T)
 	if reasoningDefaultsResponse.Code != http.StatusOK {
 		t.Fatalf("select reasoning defaults status=%d body=%s", reasoningDefaultsResponse.Code, reasoningDefaultsResponse.Body.String())
 	}
-	if response := saveProviderKey(proxy.ProviderNameOpenAI, "", proxy.ModelNameGPT5Mini); response.Code != http.StatusOK {
+	if response := saveProviderKey(proxy.ProviderNameOpenAI, "", "gpt-6.1-terra"); response.Code != http.StatusOK {
 		t.Fatalf("update active provider to reasoning-compatible model status=%d body=%s", response.Code, response.Body.String())
 	}
 	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
 		Provider:              proxy.ProviderNameOpenAI,
-		Model:                 proxy.ModelNameGPT5,
+		Model:                 "gpt-6.1-sol",
 		TranscriptionProvider: proxy.ProviderNameOpenAI,
 		TranscriptionModel:    proxy.DefaultTranscriptionModel,
 		ReasoningEffort:       "high",
 	})
-	if response := saveProviderKey(proxy.ProviderNameOpenAI, "", proxy.ModelNameGPT41); response.Code != http.StatusOK {
+	if response := saveProviderKey(proxy.ProviderNameOpenAI, "", "gpt-6.2-sol"); response.Code != http.StatusOK {
 		t.Fatalf("update active provider to model without reasoning status=%d body=%s", response.Code, response.Body.String())
 	}
 	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
 		Provider:              proxy.ProviderNameOpenAI,
-		Model:                 proxy.ModelNameGPT5,
+		Model:                 "gpt-6.1-sol",
 		TranscriptionProvider: proxy.ProviderNameOpenAI,
 		TranscriptionModel:    proxy.DefaultTranscriptionModel,
 		ReasoningEffort:       "high",
@@ -849,7 +849,7 @@ func TestManagementRoutingDefaultsRequireExplicitConnectionChoices(t *testing.T)
 	overriddenDefaultsRequest := authenticatedJSONRequest(
 		http.MethodPut,
 		tenantPath+"/defaults",
-		managementDefaultsRequestBody(t, proxy.ProviderNameOpenAI, proxy.ModelNameGPT4oMini, proxy.ProviderNameOpenAI, proxy.DefaultTranscriptionModel, ""),
+		managementDefaultsRequestBody(t, proxy.ProviderNameOpenAI, "gpt-6-luna", proxy.ProviderNameOpenAI, proxy.DefaultTranscriptionModel, ""),
 		sessionCookie,
 	)
 	overriddenDefaultsResponse := httptest.NewRecorder()
@@ -857,13 +857,13 @@ func TestManagementRoutingDefaultsRequireExplicitConnectionChoices(t *testing.T)
 	if overriddenDefaultsResponse.Code != http.StatusOK {
 		t.Fatalf("override synchronized routing model status=%d body=%s", overriddenDefaultsResponse.Code, overriddenDefaultsResponse.Body.String())
 	}
-	unchangedProviderModelResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), proxy.ProviderNameOpenAI, "", proxy.ModelNameGPT41, "Use provider guidance.", context.Background())
+	unchangedProviderModelResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), proxy.ProviderNameOpenAI, "", "gpt-6.2-sol", "Use provider guidance.", context.Background())
 	if unchangedProviderModelResponse.Code != http.StatusOK {
 		t.Fatalf("save provider prompt with unchanged model status=%d body=%s", unchangedProviderModelResponse.Code, unchangedProviderModelResponse.Body.String())
 	}
 	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
 		Provider:              proxy.ProviderNameOpenAI,
-		Model:                 proxy.ModelNameGPT4oMini,
+		Model:                 "gpt-6-luna",
 		TranscriptionProvider: proxy.ProviderNameOpenAI,
 		TranscriptionModel:    proxy.DefaultTranscriptionModel,
 	})
@@ -894,7 +894,7 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 		apiKey   string
 		model    string
 	}{
-		{provider: proxy.ProviderNameOpenAI, apiKey: testManagementOpenAIKey, model: proxy.ModelNameGPT5},
+		{provider: proxy.ProviderNameOpenAI, apiKey: testManagementOpenAIKey, model: "gpt-6.1-sol"},
 		{provider: proxy.ProviderNameDeepSeek, apiKey: testManagementDeepSeekKey, model: proxy.ModelNameDeepSeekV4Flash},
 		{provider: proxy.ProviderNameMoonshot, apiKey: "sk-moonshot", model: proxy.ModelNameMoonshotKimiK3},
 	} {
@@ -916,11 +916,11 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 		return response
 	}
 
-	gpt5Response := saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT5, "high")
+	gpt5Response := saveReasoningDefault(proxy.ProviderNameOpenAI, "gpt-6.1-sol", "high")
 	if gpt5Response.Code != http.StatusOK {
 		t.Fatalf("save GPT-5 reasoning defaults status=%d body=%s", gpt5Response.Code, gpt5Response.Body.String())
 	}
-	gpt5MiniResponse := saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT5Mini, "high")
+	gpt5MiniResponse := saveReasoningDefault(proxy.ProviderNameOpenAI, "gpt-6.1-terra", "high")
 	if gpt5MiniResponse.Code != http.StatusOK {
 		t.Fatalf("save GPT-5 mini reasoning defaults status=%d body=%s", gpt5MiniResponse.Code, gpt5MiniResponse.Body.String())
 	}
@@ -973,11 +973,11 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 		t.Fatalf("profile defaults=%+v", profile.Tenant.Defaults)
 	}
 	expectedModelEfforts := map[string][]string{
-		proxy.ModelNameGPT5Mini: {"minimal", "low", "medium", "high"},
-		proxy.ModelNameGPT5:     {"minimal", "low", "medium", "high"},
-		proxy.ModelNameGPT55:    {"none", "low", "medium", "high", "xhigh"},
-		proxy.ModelNameGPT56:    {"none", "low", "medium", "high", "xhigh", "max"},
-		proxy.ModelNameGPT55Pro: {"medium", "high", "xhigh"},
+		"gpt-6.1-terra":      {"none", "low", "medium", "high", "xhigh", "max"},
+		"gpt-6.1-sol":        {"low", "medium", "high", "xhigh", "max"},
+		"gpt-6-sol":          {"none", "low", "medium", "high", "xhigh", "max"},
+		proxy.ModelNameGPT56: {"none", "low", "medium", "high", "xhigh", "max"},
+		"gpt-6.2-astra":      {"low", "medium", "high", "xhigh", "max"},
 	}
 	matchedModelEfforts := map[string]bool{}
 	matchedKimiK3 := false
@@ -1011,7 +1011,7 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 		t.Fatalf("profile model capabilities=%v Kimi K3=%t", matchedModelEfforts, matchedKimiK3)
 	}
 
-	incompatibleResponse := saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT5, "max")
+	incompatibleResponse := saveReasoningDefault(proxy.ProviderNameOpenAI, "gpt-6.1-sol", "none")
 	if incompatibleResponse.Code != http.StatusBadRequest || !strings.Contains(incompatibleResponse.Body.String(), "managed_routing_defaults_invalid") {
 		t.Fatalf("incompatible GPT-5 reasoning effort status=%d body=%s", incompatibleResponse.Code, incompatibleResponse.Body.String())
 	}
@@ -1039,7 +1039,7 @@ func TestManagementRoutingDefaultsRequireExplicitReasoningEffort(t *testing.T) {
 	request := authenticatedJSONRequest(
 		http.MethodPut,
 		tenantPath+"/defaults",
-		`{"provider":"openai","model":"gpt-4.1","transcription_provider":"openai","transcription_model":"gpt-transcribe","system_prompt":""}`,
+		`{"provider":"openai","model":"gpt-6.2-sol","transcription_provider":"openai","transcription_model":"gpt-transcribe","system_prompt":""}`,
 		sessionCookie,
 	)
 	response := httptest.NewRecorder()
@@ -1087,7 +1087,7 @@ func TestManagementRoutingDefaultsRequireSavedProviderKeys(t *testing.T) {
 	router := newManagementRouter(t, proxy.Configuration{})
 	noKeyCookie := managementSessionCookie(t, "tauth-routing-defaults-no-key")
 	noKeyTenantPath := managementDefaultTenantTestPath(t, router, noKeyCookie, "")
-	noKeyRequest := authenticatedJSONRequest(http.MethodPut, noKeyTenantPath+"/defaults", managementDefaultsRequestBody(t, proxy.ProviderNameOpenAI, proxy.ModelNameGPT41, proxy.ProviderNameOpenAI, proxy.DefaultTranscriptionModel, ""), noKeyCookie)
+	noKeyRequest := authenticatedJSONRequest(http.MethodPut, noKeyTenantPath+"/defaults", managementDefaultsRequestBody(t, proxy.ProviderNameOpenAI, "gpt-6.2-sol", proxy.ProviderNameOpenAI, proxy.DefaultTranscriptionModel, ""), noKeyCookie)
 	noKeyResponse := httptest.NewRecorder()
 	router.ServeHTTP(noKeyResponse, noKeyRequest)
 	if noKeyResponse.Code != http.StatusBadRequest || !strings.Contains(noKeyResponse.Body.String(), "management_defaults_invalid") {
@@ -1116,7 +1116,7 @@ func TestManagementRoutingDefaultsDoNotRequireConfiguredStaticDefault(t *testing
 			continue
 		}
 		offering.DefaultOperations = nil
-		if offering.Model == proxy.ModelNameGPT4oMini {
+		if offering.Model == "gpt-6-luna" {
 			offering.DefaultOperations = []string{proxy.ModelOperationText}
 		}
 	}
@@ -1148,7 +1148,7 @@ func TestManagementDatabasePersistenceAndOpenFailures(t *testing.T) {
 	if saveKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save key status=%d body=%s", saveKeyResponse.Code, saveKeyResponse.Body.String())
 	}
-	saveOpenAIKeyResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, proxy.ModelNameGPT41, "", context.Background())
+	saveOpenAIKeyResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, "gpt-6.2-sol", "", context.Background())
 	if saveOpenAIKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save openai key status=%d body=%s", saveOpenAIKeyResponse.Code, saveOpenAIKeyResponse.Body.String())
 	}
@@ -1201,7 +1201,7 @@ func TestManagementStartupRejectsInvalidPersistedRoutingDefaults(t *testing.T) {
 	router := newManagementRouterWithDatabasePath(t, proxy.Configuration{}, databasePath)
 	sessionCookie := managementSessionCookie(t, "tauth-invalid-persisted-defaults")
 	tenantID := managementDefaultTenantTestID(t, router, sessionCookie)
-	saveKeyResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix("/api/management/tenants/"+url.PathEscape(tenantID), "/api/management/tenants/"), "openai", testManagementOpenAIKey, proxy.ModelNameGPT41, "", context.Background())
+	saveKeyResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix("/api/management/tenants/"+url.PathEscape(tenantID), "/api/management/tenants/"), "openai", testManagementOpenAIKey, "gpt-6.2-sol", "", context.Background())
 	if saveKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save provider key status=%d body=%s", saveKeyResponse.Code, saveKeyResponse.Body.String())
 	}
@@ -1379,8 +1379,8 @@ func TestManagedAuthenticationReadsThroughConcurrentSQLiteWriter(t *testing.T) {
 	sessionCookie := managementSessionCookie(t, ownerID)
 	account := requestManagementAccount(t, router, sessionCookie)
 	tenantID := account.Tenants[0].ID
-	saveManagementProviderKey(t, router, sessionCookie, tenantID, testManagementOpenAIKey, proxy.ModelNameGPT41, "")
-	saveManagementDefaults(t, router, sessionCookie, tenantID, proxy.ModelNameGPT41, "")
+	saveManagementProviderKey(t, router, sessionCookie, tenantID, testManagementOpenAIKey, "gpt-6.2-sol", "")
+	saveManagementDefaults(t, router, sessionCookie, tenantID, "gpt-6.2-sol", "")
 	secret := generateManagementTenantSecret(t, router, sessionCookie, tenantID)
 
 	writerDatabase, writerOpenError := gorm.Open(
@@ -1490,7 +1490,7 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 		}
 	}
 	expectedModels := map[string][]string{
-		proxy.ProviderNameOpenAI:    {"gpt-6-astra", "gpt-6-luna", "gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
+		proxy.ProviderNameOpenAI:    {"gpt-6.2-sol", "gpt-6.2-astra", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-sol", "gpt-6-astra", "gpt-6-luna", "gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
 		proxy.ProviderNameDashScope: {proxy.ModelNameDashScopeQwenPlus, proxy.ModelNameDashScopeQwen36Flash, proxy.ModelNameDashScopeQwen37Max, proxy.ModelNameDashScopeQwen37Plus, "qwen3.8-flash"},
 		proxy.ProviderNameMoonshot:  {proxy.ModelNameMoonshotKimiK26, proxy.ModelNameMoonshotKimiK27Code, proxy.ModelNameMoonshotKimiK27CodeHighSpeed, proxy.ModelNameMoonshotKimiK3},
 		proxy.ProviderNameMiniMax: {
@@ -1568,12 +1568,12 @@ func TestManagementGeneratedSecretSupportsDictationAndRejectsMultipartProviderKe
 	})
 	sessionCookie := managementSessionCookie(t, "tauth-dictation-user")
 	tenantPath := managementDefaultTenantTestPath(t, router, sessionCookie, "")
-	saveKeyResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "openai", "sk-user-openai", proxy.ModelNameGPT41, "", context.Background())
+	saveKeyResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "openai", "sk-user-openai", "gpt-6.2-sol", "", context.Background())
 	if saveKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save key status=%d body=%s", saveKeyResponse.Code, saveKeyResponse.Body.String())
 	}
 	defaultsResponse := httptest.NewRecorder()
-	router.ServeHTTP(defaultsResponse, authenticatedJSONRequest(http.MethodPut, tenantPath+"/defaults", managementDefaultsRequestBody(t, proxy.ProviderNameOpenAI, proxy.ModelNameGPT41, proxy.ProviderNameOpenAI, proxy.DefaultTranscriptionModel, ""), sessionCookie))
+	router.ServeHTTP(defaultsResponse, authenticatedJSONRequest(http.MethodPut, tenantPath+"/defaults", managementDefaultsRequestBody(t, proxy.ProviderNameOpenAI, "gpt-6.2-sol", proxy.ProviderNameOpenAI, proxy.DefaultTranscriptionModel, ""), sessionCookie))
 	if defaultsResponse.Code != http.StatusOK {
 		t.Fatalf("save dictation default status=%d body=%s", defaultsResponse.Code, defaultsResponse.Body.String())
 	}
@@ -1663,7 +1663,7 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 	if saveDeepSeekKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save deepseek key status=%d body=%s", saveDeepSeekKeyResponse.Code, saveDeepSeekKeyResponse.Body.String())
 	}
-	saveOpenAIKeyResponse := putManagementProviderKey(t, router, userOneCookie, strings.TrimPrefix(userOneTenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, proxy.ModelNameGPT41, "", context.Background())
+	saveOpenAIKeyResponse := putManagementProviderKey(t, router, userOneCookie, strings.TrimPrefix(userOneTenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, "gpt-6.2-sol", "", context.Background())
 	if saveOpenAIKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save openai key status=%d body=%s", saveOpenAIKeyResponse.Code, saveOpenAIKeyResponse.Body.String())
 	}
@@ -1877,7 +1877,7 @@ func TestManagementUnconfiguredProviderRequestsAreRejectedWithCanonicalRoutes(t 
 	sessionCookie := managementSessionCookie(t, "usage-catalog-default-user")
 	tenantPath := managementDefaultTenantTestPath(t, router, sessionCookie, "")
 
-	providerResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), proxy.ProviderNameOpenAI, testManagementOpenAIKey, proxy.ModelNameGPT41, "", context.Background())
+	providerResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), proxy.ProviderNameOpenAI, testManagementOpenAIKey, "gpt-6.2-sol", "", context.Background())
 	if providerResponse.Code != http.StatusOK {
 		t.Fatalf("save provider status=%d body=%s", providerResponse.Code, providerResponse.Body.String())
 	}
@@ -1972,7 +1972,7 @@ func TestManagementAdminUsersDashboard(t *testing.T) {
 	if saveKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save key status=%d body=%s", saveKeyResponse.Code, saveKeyResponse.Body.String())
 	}
-	saveOpenAIKeyResponse := putManagementProviderKey(t, router, userOneCookie, strings.TrimPrefix(userOneTenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, proxy.ModelNameGPT41, "", context.Background())
+	saveOpenAIKeyResponse := putManagementProviderKey(t, router, userOneCookie, strings.TrimPrefix(userOneTenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, "gpt-6.2-sol", "", context.Background())
 	if saveOpenAIKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save openai key status=%d body=%s", saveOpenAIKeyResponse.Code, saveOpenAIKeyResponse.Body.String())
 	}
@@ -2126,7 +2126,7 @@ func TestManagementMetaProviderRoutesWithEncryptedTenantKey(t *testing.T) {
 		}
 	}
 
-	saveOpenAIKeyResponse := putManagementProviderKey(t, router, userOneCookie, strings.TrimPrefix(userOneTenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, proxy.ModelNameGPT41, "", context.Background())
+	saveOpenAIKeyResponse := putManagementProviderKey(t, router, userOneCookie, strings.TrimPrefix(userOneTenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, "gpt-6.2-sol", "", context.Background())
 	if saveOpenAIKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save openai key status=%d body=%s", saveOpenAIKeyResponse.Code, saveOpenAIKeyResponse.Body.String())
 	}
@@ -2250,12 +2250,12 @@ func TestManagementGeneratedSecretOmittedProviderUsesTenantDefaults(t *testing.T
 	})
 	userCookie := managementSessionCookie(t, "tauth-openai-defaults-user")
 	tenantPath := managementDefaultTenantTestPath(t, router, userCookie, "")
-	saveKeyResponse := putManagementProviderKey(t, router, userCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, proxy.ModelNameGPT55, "provider-owned system", context.Background())
+	saveKeyResponse := putManagementProviderKey(t, router, userCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, "gpt-6-sol", "provider-owned system", context.Background())
 	if saveKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save key status=%d body=%s", saveKeyResponse.Code, saveKeyResponse.Body.String())
 	}
 
-	defaultsBody := `{"provider":"openai","model":"` + proxy.ModelNameGPT41 + `","transcription_provider":"openai","transcription_model":"` + proxy.DefaultTranscriptionModel + `","system_prompt":"tenant default system","reasoning_effort":""}`
+	defaultsBody := `{"provider":"openai","model":"` + "gpt-6.2-sol" + `","transcription_provider":"openai","transcription_model":"` + proxy.DefaultTranscriptionModel + `","system_prompt":"tenant default system","reasoning_effort":""}`
 	defaultsRequest := authenticatedJSONRequest(http.MethodPut, tenantPath+"/defaults", defaultsBody, userCookie)
 	defaultsResponse := httptest.NewRecorder()
 	router.ServeHTTP(defaultsResponse, defaultsRequest)
@@ -2298,10 +2298,10 @@ func TestManagementGeneratedSecretOmittedProviderUsesTenantDefaults(t *testing.T
 	if len(capturedModels) != 2 || len(capturedInputs) != 2 {
 		t.Fatalf("captured models=%v inputs=%v", capturedModels, capturedInputs)
 	}
-	if capturedModels[0] != proxy.ModelNameGPT41 || capturedInputs[0] != "tenant default system\n\nhello omitted" {
+	if capturedModels[0] != "gpt-6.2-sol" || capturedInputs[0] != "tenant default system\n\nhello omitted" {
 		t.Fatalf("omitted model/input=%q/%q", capturedModels[0], capturedInputs[0])
 	}
-	if capturedModels[1] != proxy.ModelNameGPT55 || capturedInputs[1] != "provider-owned system\n\nhello explicit" {
+	if capturedModels[1] != "gpt-6-sol" || capturedInputs[1] != "provider-owned system\n\nhello explicit" {
 		t.Fatalf("explicit model/input=%q/%q", capturedModels[1], capturedInputs[1])
 	}
 	waitForManagementRequestCount(t, router, userCookie, 2)

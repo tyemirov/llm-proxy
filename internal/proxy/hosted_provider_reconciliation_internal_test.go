@@ -242,7 +242,7 @@ func TestHostedPaymentsProviderReconciliationScopesModelOperationAndPeriod(t *te
 			input["source_reference"] = "scope-" + scenario
 			switch scenario {
 			case "matching-route":
-				input["model"] = "gpt-4.1"
+				input["model"] = "gpt-6.2-sol"
 				input["operation"] = "text"
 			case "different-model":
 				input["model"] = "different-model"

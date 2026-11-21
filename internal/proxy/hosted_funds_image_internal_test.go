@@ -107,7 +107,7 @@ func TestHostedFundsImageGenerationAndEditing(t *testing.T) {
 				worker.adapters[mediaOperationAdapterKey(capability, "openai", "gpt-image-2")] = newImageGenerationAdapter(offering, worker.providers.definitions[providerID("openai")], adapter.tenants, worker.store, worker.assets, settings.catalog)
 				surface, extra := "images", ""
 				if mode == "responses_unknown_meter" {
-					surface, extra = "responses", `,"responses_model":"gpt-5"`
+					surface, extra = "responses", `,"responses_model":"gpt-6.2-sol"`
 				}
 				intent := fmt.Sprintf(`{"capability":%q,"provider":"openai","model":"gpt-image-2","input":%s,"controls":{"surface":%q%s,"quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1,"stream":%t}}`, capability, input, surface, extra, mode == "stream")
 				if mode == "responses_unknown_meter" {

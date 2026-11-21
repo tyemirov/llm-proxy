@@ -196,7 +196,7 @@ func performConcurrencyPost(applicationURL string, prompt string) (int, error) {
 	requestURL.RawQuery = queryValues.Encode()
 	requestPayload := map[string]any{
 		"prompt": prompt,
-		"model":  proxy.ModelNameGPT41,
+		"model":  "gpt-6.2-sol",
 	}
 	requestBytes, marshalError := json.Marshal(requestPayload)
 	if marshalError != nil {

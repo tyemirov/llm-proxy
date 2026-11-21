@@ -864,7 +864,7 @@ func TestManagedProviderConnectionProjectionRejectsPersistedDrift(t *testing.T) 
 	if encryptionError != nil {
 		t.Fatalf("encrypt persisted connection fixture: %v", encryptionError)
 	}
-	validProfile := managedProviderProfileRecord{TenantID: "tenant", ProviderID: ProviderNameOpenAI, TextModel: ModelNameGPT41, CreatedAt: now, UpdatedAt: now}
+	validProfile := managedProviderProfileRecord{TenantID: "tenant", ProviderID: ProviderNameOpenAI, TextModel: "gpt-6.2-sol", CreatedAt: now, UpdatedAt: now}
 	validConnection := managedProviderConnectionRecord{TenantID: "tenant", ProviderID: ProviderNameOpenAI, FieldID: CatalogCredentialAPIKey, Value: encryptedKey, CreatedAt: now, UpdatedAt: now}
 	testCases := []struct {
 		name        string

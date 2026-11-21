@@ -52,7 +52,7 @@ func TestHostedFundsAdmissionOfficialClientsKeepFundingErrors(t *testing.T) {
 				script := `import sys
 from llm_proxy_client import Client, ClientConfig, ClientMessage, ClientMessagesRequest, LLMProxyHTTPError
 client = Client(ClientConfig(base_url=sys.argv[1], secret=sys.argv[2], provider="openai"))
-request = ClientMessagesRequest(messages=(ClientMessage(role="user", content="client prompt"),), model="gpt-4.1", idempotency_key="client-pending")
+request = ClientMessagesRequest(messages=(ClientMessage(role="user", content="client prompt"),), model="gpt-6.2-sol", idempotency_key="client-pending")
 try:
     client.post_messages(request)
 except LLMProxyHTTPError as error:
@@ -121,7 +121,7 @@ func TestHostedFundsAdmissionSerializesServiceInstances(t *testing.T) {
 		go func() {
 			defer group.Done()
 			<-start
-			request, err := http.NewRequest(http.MethodPost, server.URL+"/?provider=openai&model=gpt-4.1", strings.NewReader(`{"prompt":"funded prompt"}`))
+			request, err := http.NewRequest(http.MethodPost, server.URL+"/?provider=openai&model=gpt-6.2-sol", strings.NewReader(`{"prompt":"funded prompt"}`))
 			if err != nil {
 				t.Error(err)
 				return

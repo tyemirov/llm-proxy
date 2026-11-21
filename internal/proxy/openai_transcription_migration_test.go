@@ -168,6 +168,7 @@ func TestOpenAITranscriptionRetirementStartup(t *testing.T) {
 			for index, expected := range tenants {
 				if scenario == "success" {
 					expected.DefaultTranscriptionModel = "gpt-transcribe"
+					expected.DefaultModel = "gpt-6.2-sol"
 				}
 				var actual managedTenantRecord
 				if err := database.First(&actual, "tenant_id = ?", expected.TenantID).Error; err != nil {
@@ -195,7 +196,11 @@ func TestOpenAITranscriptionRetirementStartup(t *testing.T) {
 				if err := database.First(&event, index+1).Error; err != nil {
 					t.Fatal(err)
 				}
-				if !reflect.DeepEqual(profile, profiles[index]) || !reflect.DeepEqual(event, usage[index]) {
+				expectedProfile := profiles[index]
+				if scenario == "success" {
+					expectedProfile.TextModel = "gpt-6.2-sol"
+				}
+				if !reflect.DeepEqual(profile, expectedProfile) || !reflect.DeepEqual(event, usage[index]) {
 					t.Fatal("migration changed a profile, credential, or historical usage record")
 				}
 				if scenario == "success" {
