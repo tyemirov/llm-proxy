@@ -28,9 +28,10 @@ const (
 	vertexProjectProvider     = "vertex-project"
 	vertexProjectURLField     = "project_base_url"
 	vertexProjectDefaultModel = "gemini-4-hydrogen"
+	vertexProjectCarbonModel  = "gemini-4-carbon"
 )
 
-var vertexGemini4Models = []string{"gemini-4-neon", vertexProjectDefaultModel}
+var vertexGemini4Models = []string{"gemini-4-neon", vertexProjectDefaultModel, vertexProjectCarbonModel}
 
 func createVertexProjectConnection(t *testing.T, router http.Handler, owner *http.Cookie, apiKey, projectURL string) *httptest.ResponseRecorder {
 	t.Helper()
@@ -164,7 +165,7 @@ func TestGeminiCurrentModelsVertexLive(t *testing.T) {
 		if model == "gemini-3.5-flash-lite" {
 			cases = append(cases, "minimal")
 		}
-		if gemini4 {
+		if gemini4 && model != vertexProjectCarbonModel {
 			cases = append(cases, "xhigh")
 		}
 		for _, scenario := range cases {

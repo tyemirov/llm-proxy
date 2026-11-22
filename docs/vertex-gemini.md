@@ -53,8 +53,8 @@ The Developer API identifier `gemini-3.5-transcribe` returned HTTP 404 on Vertex
 ## Gemini 4 project connections
 
 Select **Vertex AI Project** (`vertex-project`) to use Gemini 4 Neon
-(`gemini-4-neon`) or Hydrogen (`gemini-4-hydrogen`). Hydrogen is the
-connection verification model and the provider's text default.
+(`gemini-4-neon`), Carbon (`gemini-4-carbon`), or Hydrogen (`gemini-4-hydrogen`).
+Hydrogen is the connection verification model and the provider's text default.
 
 Enter a Google Cloud API key authorized for Vertex and the global URL for
 your billed Google Cloud project. Use this format with your project ID or number:
@@ -70,20 +70,26 @@ and key. Project-scoped and Express connections use distinct provider IDs and
 tenant assignments. The server loads the project and key from the assigned
 connection. Qualification environment variables are test inputs.
 
-Both offerings support synchronous text generation with structured output
-and inline image and audio input. The declared efforts are `low`, `medium`,
-`high`, and `xhigh`. Omission delegates to Google's `high` default. Google
-specifies a combined input and output limit of 1,048,576 tokens. The proxy
-declares a 65,536-token synchronous output ceiling within that shared budget
-and uses the existing inline media limits.
+All three offerings support synchronous text generation, structured output,
+and inline image and audio input. Each uses a combined input and output budget
+of 1,048,576 tokens and the proxy's existing inline media limits.
+
+| Model | Supported reasoning efforts | Google default | Synchronous output limit |
+| --- | --- | --- | ---: |
+| Gemini 4 Neon | `low`, `medium`, `high`, `xhigh` | `high` | 65,536 |
+| Gemini 4 Carbon | `low`, `medium`, `high` | `medium` | 32,768 |
+| Gemini 4 Hydrogen | `low`, `medium`, `high`, `xhigh` | `high` | 65,536 |
 
 | Model | Input | Output including reasoning | Cached input |
 | --- | ---: | ---: | ---: |
 | Gemini 4 Neon | $3.00 | $15.00 | $0.15 |
+| Gemini 4 Carbon through November 30, 2026 | $2.00 | $10.00 | $0.10 |
+| Gemini 4 Carbon from December 1, 2026 | $4.00 | $20.00 | $0.20 |
 | Gemini 4 Hydrogen | $1.50 | $7.50 | $0.075 |
 
-These are [Google's global Standard PayGo rates](https://cloud.google.com/model-garden/pricing)
-in USD per million tokens, verified November 19, 2026.
+Rates are USD per million tokens. Google's Carbon promotion applies as a
+50% credit on eligible net spend. The catalog changes to list pricing at
+midnight UTC on December 1, 2026. [Google's global Standard PayGo pricing](https://cloud.google.com/model-garden/pricing)
 
 ### November 19 proxy qualification
 
@@ -107,6 +113,17 @@ PNG recognition, and WAV transcription. Every response included a request ID
 and positive input and output usage that summed to the reported total.
 The table describes one sequential qualification run.
 
+### November 21 Carbon qualification
+
+`vertex-project/gemini-4-carbon` passed seven cases through a disposable
+proxy with the existing project connection. The cases covered omitted effort,
+all three supported efforts, structured text, PNG recognition, and WAV
+transcription. The requests took 2.478–5.419 seconds and returned request IDs
+and measured token usage. Local HTTP tests verify the synchronous output cap
+and reject `xhigh` before dispatch.
+
+### Repeat Gemini 4 qualification
+
 For repeat qualification, supply `VERTEX_PROJECT_API_KEY` and
 `VERTEX_PROJECT_BASE_URL` in the test process environment and run:
 
@@ -119,6 +136,7 @@ GOFLAGS=-v make test-gemini-current
 Use the audio phrase specified in [Repeat Acceptance](#repeat-acceptance).
 
 See the [Neon specification](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-neon),
+[Carbon specification](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-carbon),
 [Hydrogen specification](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-hydrogen),
 [Gemini 4 quickstart](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/start/get-started-with-gemini-4), and
 [Express model inventory](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/start/express-mode/overview#available-models-and-rate-limits-in-express-mode).
