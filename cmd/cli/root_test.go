@@ -385,6 +385,14 @@ func TestRootCommandLoadsPackagedConfigWithManagementEnvironment(t *testing.T) {
 	if readError != nil {
 		t.Fatalf("read packaged config: %v", readError)
 	}
+	var packagedSettings struct {
+		Payments struct {
+			CheckoutEnabled bool `yaml:"checkout_enabled"`
+		} `yaml:"payments"`
+	}
+	if decodeError := yaml.Unmarshal(packagedConfig, &packagedSettings); decodeError != nil {
+		t.Fatalf("decode packaged config: %v", decodeError)
+	}
 	configPath := filepath.Join(tempDir, testConfigFileName)
 	if writeError := os.WriteFile(configPath, packagedConfig, 0600); writeError != nil {
 		t.Fatalf("write packaged config copy: %v", writeError)
@@ -457,7 +465,7 @@ PADDLE_WEBHOOK_SECRET=packaged-paddle-webhook-fixture
 	}
 	if capturedConfiguration.Payments == nil ||
 		capturedConfiguration.Payments.Environment != "production" ||
-		capturedConfiguration.Payments.CheckoutEnabled ||
+		capturedConfiguration.Payments.CheckoutEnabled != packagedSettings.Payments.CheckoutEnabled ||
 		capturedConfiguration.Payments.CheckoutURL != "https://llm-proxy.mprlab.com/app/" ||
 		capturedConfiguration.Payments.ClientToken != "live_PackagedConfigFixture" ||
 		capturedConfiguration.Payments.APIKey != "packaged-paddle-api-fixture" ||
