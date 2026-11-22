@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LLM Proxy paid pilot</title>
+    <meta name="description" content="One-time USD 5 prepaid usage for LLM Proxy accounts, with applicable tax at checkout.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/pricing/">
+    <meta property="og:title" content="LLM Proxy paid pilot">
+    <meta property="og:description" content="One-time USD 5 prepaid usage for LLM Proxy accounts, with applicable tax at checkout.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/pricing/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0f1114">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@5.4.1/dist/browser/js-yaml.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      type="application/json"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
+    <link rel="stylesheet" href="/assets/llm-proxy/legal.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
+  </head>
+  <body class="legal-page">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <mpr-header
+      class="public-site-header"
+      data-config-url="https://llm-proxy-api.mprlab.com/config-ui.yaml"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      logout-url="/"
+      settings="false"
+      sign-in-label="Log In"
+      sign-in-redirect-url="/app/"
+      size="small"
+      sticky="true"
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your app."}'
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
+    <main id="main-content" class="legal-main">
+      <article class="mpr-legal-document__card">
+        <h1 class="mpr-legal-document__title">LLM Proxy paid pilot</h1>
+        <p class="mpr-legal-document__intro">Prepaid balance for hosted LLM Proxy usage.</p>
+        <section class="mpr-legal-document__section">
+          <h2 class="mpr-legal-document__heading">USD 5 usage balance</h2>
+          <p class="mpr-legal-document__paragraph">A one-time USD 5 purchase adds USD 5 to your LLM Proxy usage balance after payment is confirmed. Applicable tax is added at checkout. This purchase has no subscription or automatic top-up.</p>
+          <p class="mpr-legal-document__paragraph">Usage is metered against your balance. The authenticated app shows the available routes, usage prices, and charges for your account. The amount of work USD 5 covers depends on the selected model and operation.</p>
+          <p class="mpr-legal-document__paragraph">Any signed-in account can add balance. Hosted model routes are enabled separately for your account. Contact support to confirm available routes before funding.</p>
+          <p class="mpr-legal-document__paragraph"><a href="mailto:support@mprlab.com">support@mprlab.com</a></p>
+        </section>
+        <section class="mpr-legal-document__section">
+          <h2 class="mpr-legal-document__heading">Payments and support</h2>
+          <p class="mpr-legal-document__paragraph">Paddle is the merchant of record for checkout purchases. Review the final amount and applicable tax in Paddle Checkout before paying.</p>
+          <p class="mpr-legal-document__paragraph"><a href="/refunds/">Refunds and payment support</a> · <a href="/terms/">Terms of Service</a> · <a href="/privacy/">Privacy Policy</a></p>
+        </section>
+      </article>
+    </main>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="true"
+      wrapper-class="public-site-footer-layout"
+      prefix-class="public-site-footer-prefix"
+      privacy-link-label="Privacy"
+      privacy-link-href="/privacy/"
+      theme-control='{"kind":"quadrant","choices":{"topLeft":"default-light","topRight":"sunrise-light","bottomLeft":"default-dark","bottomRight":"forest-dark"}}'
+      theme-config='{"storageKey":"llm-proxy:theme","attribute":"data-mpr-theme","targets":["document","body"],"initialMode":"default-dark","modes":[{"value":"default-light","attributeValue":"light","dataset":{"data-llm-proxy-palette":"default"}},{"value":"sunrise-light","attributeValue":"light","dataset":{"data-llm-proxy-palette":"sunrise"}},{"value":"default-dark","attributeValue":"dark","dataset":{"data-llm-proxy-palette":"default"}},{"value":"forest-dark","attributeValue":"dark","dataset":{"data-llm-proxy-palette":"forest"}}]}'
+      horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      menu='{"label":"Built by Marco Polo Research Lab","placement":"top","sections":[{"id":"mpr-projects","label":"Projects","mode":"static","links":[{"label":"Marco Polo Research Lab","href":"https://mprlab.com"},{"label":"Gravity Notes","href":"https://gravity.mprlab.com"},{"label":"LoopAware","href":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","href":"https://allergy.mprlab.com"},{"label":"Social Threader","href":"https://threader.mprlab.com"},{"label":"RSVP","href":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","href":"https://countdown.mprlab.com"},{"label":"LLM Crossword","href":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","href":"https://prompts.mprlab.com"},{"label":"Wallpapers","href":"https://wallpapers.mprlab.com"}]}]}'
+    >
+      <footer class="public-site-footer-fallback" role="contentinfo">
+        <nav class="public-site-footer-fallback__nav" aria-label="Footer">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
+        </nav>
+        <details class="public-site-footer-fallback__projects">
+          <summary>Built by Marco Polo Research Lab</summary>
+          <ul>
+            <li><a href="https://mprlab.com">Marco Polo Research Lab</a></li>
+            <li><a href="https://gravity.mprlab.com">Gravity Notes</a></li>
+            <li><a href="https://loopaware.mprlab.com">LoopAware</a></li>
+            <li><a href="https://allergy.mprlab.com">Allergy Wheel</a></li>
+            <li><a href="https://threader.mprlab.com">Social Threader</a></li>
+            <li><a href="https://rsvp.mprlab.com">RSVP</a></li>
+            <li><a href="https://countdown.mprlab.com">Countdown Calendar</a></li>
+            <li><a href="https://llm-crossword.mprlab.com">LLM Crossword</a></li>
+            <li><a href="https://prompts.mprlab.com">Prompt Bubbles</a></li>
+            <li><a href="https://wallpapers.mprlab.com">Wallpapers</a></li>
+          </ul>
+        </details>
+      </footer>
+    </mpr-footer>
+  </body>
+</html>
