@@ -1561,8 +1561,8 @@ Set `payments.checkout_enabled` to `true` to expose funding offers and accept an
 Omit the `payments` object to disable payment processing and the webhook route.
 An explicit empty object is invalid. The CLI retains it for payment validation before service startup or database access.
 Owned historical records remain readable when payment processing is disabled.
-The tracked server configuration selects the dedicated production pilot account and price with checkout closed. Follow the live activation record to verify the destination before enabling funding.
-Production activation, exact checkout-domain approval, and actual live payment acceptance remain pending in F101.
+The production configuration enables checkout for the dedicated Paddle account and USD 5 funding offer. Paddle approved the checkout domain, and LLM Proxy verified signed delivery from the dedicated live destination before the checkout configuration changed.
+F101 tracks the operator deployment and live purchase validation.
 See the [live preparation record](evidence/paddle-live-2026-11-19.md).
 
 The following configuration shows the field contract. It does not authorize live payment qualification.
