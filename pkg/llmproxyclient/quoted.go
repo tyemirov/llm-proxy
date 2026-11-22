@@ -339,6 +339,7 @@ func (client Client) quotedExecution(ctx context.Context, method string, quote F
 			if err != nil {
 				return QuotedExecution{}, err
 			}
+			native.retryAfter = parseRetryAfter(metadata.header.Get(headerRetryAfter))
 			if snapshot.ExecutionID != "" && native.ProxyRequestID != snapshot.ExecutionID {
 				return QuotedExecution{}, fmt.Errorf("%w: native execution identity differs from quote", ErrClientHTTPFailure)
 			}

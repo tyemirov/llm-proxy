@@ -181,6 +181,38 @@ are never included in or exposed by the returned error. Transport and response
 read failures preserve `ErrClientHTTPFailure` without fabricating a completed
 HTTP status.
 
+For a structured request, retain its original `MessagesRequestInput.IdempotencyKey`
+and tenant configuration. `GetStructuredRequest(ctx, originalKey)` sends one
+`GET /v2/requests` with that exact key. A pending `202` read returns a
+`StructuredRequestResult`; a pending `202` POST returns a
+`StructuredRequestPendingError`, whose `Snapshot()` carries the same metadata.
+
+Both `HTTPFailure.RetryAfter(now)` and `StructuredRequestResult.RetryAfter(now)`
+return a future deadline from the response's `Retry-After` header, or zero when
+no future deadline is available. This includes empty-body HTTP failures such as
+an ingress `429`. The snapshot retains this timing after a response-body read
+failure and when the caller handles a classified error. Delta seconds are
+relative to the supplied `now`. HTTP dates retain their absolute deadline.
+Malformed values, zero seconds and past dates give zero. Delta seconds too
+large for `time.Duration` saturate at its maximum positive value.
+
+Use the scheduling helper when reconciliation remains unresolved.
+
+```go
+result, err := client.GetStructuredRequest(ctx, originalKey)
+nextReadAt := llmproxyclient.StructuredRequestPollAt(time.Now(), attempt, result, err)
+// Persist nextReadAt with the original request identity for the caller's scheduler.
+```
+
+Attempts are 1-based. Zero also selects the first delay. The minimum delays are
+10, 20, 40, then 60 seconds, capped at 60 seconds for subsequent attempts.
+A valid `Retry-After` raises the minimum, including above 60 seconds. Use
+`ResponseRetryAfter(now, err)` to check for an explicit wait after the initial
+POST. It reads wrapped errors and retains the deadline when the POST body is
+truncated or the pending payload is invalid. The caller owns scheduling,
+cancellation, terminal-state handling and settlement. Each structured read
+issues one HTTP request.
+
 ## Media client cutover
 
 This media contract change requires one coordinated server and client update.

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
@@ -75,6 +76,7 @@ type StructuredRequestResult struct {
 	ElapsedSeconds int64  `json:"elapsed_seconds"`
 	FailureCode    string `json:"-"`
 	Output         string `json:"-"`
+	retryAfter     retryAfterAdvice
 }
 
 // StructuredRequestPendingError reports pending hosted or structured text.
@@ -95,6 +97,11 @@ func (pending *StructuredRequestPendingError) Unwrap() error {
 // Snapshot returns the durable request state that the proxy accepted.
 func (pending *StructuredRequestPendingError) Snapshot() StructuredRequestResult {
 	return pending.snapshot
+}
+
+// RetryAfter returns the pending response's future retry deadline, or zero.
+func (pending *StructuredRequestPendingError) RetryAfter(now time.Time) time.Time {
+	return pending.snapshot.RetryAfter(now)
 }
 
 type structuredRequestErrorResponse struct {
@@ -130,28 +137,32 @@ func (client Client) GetStructuredRequest(contextValue context.Context, idempote
 	responseBody, readError := io.ReadAll(httpResponse.Body)
 	_ = httpResponse.Body.Close()
 	if readError != nil {
-		return StructuredRequestResult{}, fmt.Errorf("%w: read structured request response: %v", ErrClientHTTPFailure, readError)
+		result := StructuredRequestResult{retryAfter: parseRetryAfter(httpResponse.Header.Get(headerRetryAfter))}
+		return result, fmt.Errorf("%w: read structured request response: %v", ErrClientHTTPFailure, readError)
 	}
 	if httpResponse.StatusCode == http.StatusOK {
+		result := StructuredRequestResult{retryAfter: parseRetryAfter(httpResponse.Header.Get(headerRetryAfter))}
 		if !json.Valid(responseBody) {
-			return StructuredRequestResult{}, fmt.Errorf("%w: structured request result is invalid JSON", ErrClientHTTPFailure)
+			return result, fmt.Errorf("%w: structured request result is invalid JSON", ErrClientHTTPFailure)
 		}
-		return StructuredRequestResult{
-			State:  strings.TrimSpace(httpResponse.Header.Get(llmproxycontract.HeaderStructuredRequestState)),
-			Output: string(responseBody),
-		}, nil
+		result.State = strings.TrimSpace(httpResponse.Header.Get(llmproxycontract.HeaderStructuredRequestState))
+		result.Output = string(responseBody)
+		return result, nil
 	}
 	if httpResponse.StatusCode == http.StatusAccepted {
-		return decodeStructuredRequestPending(responseBody)
+		pending, err := decodeStructuredRequestPending(responseBody)
+		pending.retryAfter = parseRetryAfter(httpResponse.Header.Get(headerRetryAfter))
+		return pending, err
 	}
-	result := StructuredRequestResult{}
+	failure := newHTTPFailure(httpResponse.StatusCode, responseBody, httpResponse.Header)
+	result := StructuredRequestResult{retryAfter: failure.retryAfter}
 	var errorResponse structuredRequestErrorResponse
 	if json.Unmarshal(responseBody, &errorResponse) == nil {
 		result.State = strings.TrimSpace(errorResponse.Error.State)
 		result.ProxyRequestID = strings.TrimSpace(errorResponse.Error.ProxyRequestID)
 		result.FailureCode = strings.TrimSpace(errorResponse.Error.Cause)
 	}
-	return result, newHTTPFailure(httpResponse.StatusCode, responseBody)
+	return result, failure
 }
 
 func decodeStructuredRequestPending(responseBody []byte) (StructuredRequestResult, error) {

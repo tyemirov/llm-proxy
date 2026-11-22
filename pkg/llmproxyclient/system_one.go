@@ -59,7 +59,7 @@ func (client Client) PostSystemOne(ctx context.Context, body []byte, options Sys
 		return result, fmt.Errorf("%w: read System One response: %w", ErrClientHTTPFailure, err)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return result, newHTTPFailure(response.StatusCode, result.Body)
+		return result, newHTTPFailure(response.StatusCode, result.Body, response.Header)
 	}
 	return result, nil
 }

@@ -167,7 +167,7 @@ func (client Client) GetPublicCapabilities(contextValue context.Context) (Public
 		return PublicCapabilityCatalog{}, fmt.Errorf("%w: read public capabilities response", ErrClientHTTPFailure)
 	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return PublicCapabilityCatalog{}, newHTTPFailure(response.StatusCode, responseBody)
+		return PublicCapabilityCatalog{}, newHTTPFailure(response.StatusCode, responseBody, response.Header)
 	}
 	var catalog PublicCapabilityCatalog
 	decoder := json.NewDecoder(bytes.NewReader(responseBody))

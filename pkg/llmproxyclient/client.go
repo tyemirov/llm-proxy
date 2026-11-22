@@ -549,17 +549,20 @@ func (client Client) readCompletionResponse(httpRequest *http.Request) ([]byte, 
 	responseBody, readError := io.ReadAll(httpResponse.Body)
 	_ = httpResponse.Body.Close()
 	if readError != nil {
-		return nil, fmt.Errorf("%w: read response body: %v", ErrClientHTTPFailure, readError)
+		err := fmt.Errorf("%w: read response body: %v", ErrClientHTTPFailure, readError)
+		return nil, withResponseRetryAfter(err, parseRetryAfter(httpResponse.Header.Get(headerRetryAfter)))
 	}
 	if httpResponse.StatusCode == http.StatusAccepted {
 		pendingResult, pendingError := decodeStructuredRequestPending(responseBody)
+		retryAfter := parseRetryAfter(httpResponse.Header.Get(headerRetryAfter))
 		if pendingError != nil {
-			return nil, pendingError
+			return nil, withResponseRetryAfter(pendingError, retryAfter)
 		}
+		pendingResult.retryAfter = retryAfter
 		return nil, &StructuredRequestPendingError{snapshot: pendingResult}
 	}
 	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
-		return nil, newHTTPFailure(httpResponse.StatusCode, responseBody)
+		return nil, newHTTPFailure(httpResponse.StatusCode, responseBody, httpResponse.Header)
 	}
 	return responseBody, nil
 }

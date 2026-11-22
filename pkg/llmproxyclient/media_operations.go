@@ -381,7 +381,7 @@ func (client Client) DownloadAsset(contextValue context.Context, asset Asset) ([
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(response.Body, 64*1024+1))
-		return nil, newHTTPFailure(response.StatusCode, body)
+		return nil, newHTTPFailure(response.StatusCode, body, response.Header)
 	}
 	data, readError := io.ReadAll(io.LimitReader(response.Body, asset.SizeBytes+1))
 	if readError != nil || int64(len(data)) != asset.SizeBytes || response.Header.Get("Content-Type") != asset.MIMEType {
@@ -439,7 +439,7 @@ func (client Client) doMediaResource(request *http.Request, statuses ...int) ([]
 			return body, nil
 		}
 	}
-	return nil, newHTTPFailure(response.StatusCode, body)
+	return nil, newHTTPFailure(response.StatusCode, body, response.Header)
 }
 
 func (config Config) mediaResourceURL(resourcePath string) url.URL {

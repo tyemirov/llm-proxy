@@ -88,7 +88,7 @@ func (client Client) UploadAsset(contextValue context.Context, input AssetUpload
 		return Asset{}, fmt.Errorf("%w: read asset response", ErrClientHTTPFailure)
 	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return Asset{}, newHTTPFailure(response.StatusCode, responseBody)
+		return Asset{}, newHTTPFailure(response.StatusCode, responseBody, response.Header)
 	}
 	var asset Asset
 	decoder := json.NewDecoder(bytes.NewReader(responseBody))

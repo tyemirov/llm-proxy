@@ -3,16 +3,18 @@ package llmproxyclient
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 )
 
 // HTTPFailure is a completed non-2xx llm-proxy response. It exposes only the
-// safe status and recognized stable proxy error code; the raw response body is
-// deliberately unavailable.
+// safe status, recognized stable proxy error code and parsed retry metadata;
+// the raw response body is deliberately unavailable.
 type HTTPFailure struct {
 	statusCode     int
 	proxyErrorCode string
+	retryAfter     retryAfterAdvice
 }
 
 // Error reports the sanitized completed-response failure.
@@ -44,10 +46,11 @@ func (failure *HTTPFailure) ProxyErrorCode() string {
 	return failure.proxyErrorCode
 }
 
-func newHTTPFailure(statusCode int, responseBody []byte) *HTTPFailure {
+func newHTTPFailure(statusCode int, responseBody []byte, header http.Header) *HTTPFailure {
 	return &HTTPFailure{
 		statusCode:     statusCode,
 		proxyErrorCode: recognizedProxyErrorCode(responseBody),
+		retryAfter:     parseRetryAfter(header.Get(headerRetryAfter)),
 	}
 }
 
