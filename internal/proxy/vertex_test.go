@@ -12,6 +12,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -344,6 +345,12 @@ func TestGeminiCurrentModelsVertexShippedRoute(t *testing.T) {
 func TestGeminiCurrentModelsVertexGemini4(t *testing.T) {
 	catalog := testfixtures.ProviderCatalog(t)
 	for _, model := range vertexGemini4Models {
+		outputLimit := 65536
+		highestEffort, rejectedEffort := "xhigh", "minimal"
+		if model == vertexProjectCarbonModel {
+			outputLimit = 32768
+			highestEffort, rejectedEffort = "high", "xhigh"
+		}
 		for _, scenario := range []struct {
 			name       string
 			parameters string
@@ -351,10 +358,10 @@ func TestGeminiCurrentModelsVertexGemini4(t *testing.T) {
 			effort     string
 			maxOutput  int
 		}{
-			{"omitted", "", http.StatusOK, "", 65536},
-			{"xhigh", "&reasoning_effort=xhigh&max_tokens=128", http.StatusOK, "XHIGH", 128},
-			{"unsupported effort", "&reasoning_effort=minimal", http.StatusBadRequest, "", 0},
-			{"synchronous output limit", "&max_tokens=65537", http.StatusBadRequest, "", 0},
+			{"omitted", "", http.StatusOK, "", outputLimit},
+			{"highest effort", "&reasoning_effort=" + highestEffort + "&max_tokens=128", http.StatusOK, strings.ToUpper(highestEffort), 128},
+			{"unsupported effort", "&reasoning_effort=" + rejectedEffort, http.StatusBadRequest, "", 0},
+			{"synchronous output limit", "&max_tokens=" + strconv.Itoa(outputLimit+1), http.StatusBadRequest, "", 0},
 		} {
 			t.Run(model+"/"+scenario.name, func(t *testing.T) {
 				projectPath := "/v1/projects/test-project/locations/global"
@@ -451,6 +458,33 @@ func TestGeminiCurrentModelsVertexGemini4(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestGeminiCurrentModelsVertexCarbonPriceSchedule(t *testing.T) {
+	service, err := proxy.NewCatalogService(testfixtures.ProviderCatalog(t).ModelCatalog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	listPriceStart := time.Date(2026, time.December, 1, 0, 0, 0, 0, time.UTC)
+	for _, component := range []struct {
+		id          string
+		cacheClass  string
+		promotional proxy.CatalogDecimal
+		list        proxy.CatalogDecimal
+	}{
+		{"input_tokens", "", "2", "4"},
+		{"output_tokens", "", "10", "20"},
+		{"prompt_cache_read_tokens", "read", "0.1", "0.2"},
+	} {
+		t.Run(component.id, func(t *testing.T) {
+			conditions := proxy.CatalogPriceConditions{BillingMode: "standard", Region: "global", ServiceTier: "standard", CacheClass: component.cacheClass}
+			promotional := service.SelectApplicablePrice(vertexProjectProvider, vertexProjectCarbonModel, proxy.ModelOperationText, component.id, conditions, 100, listPriceStart.Add(-time.Second))
+			list := service.SelectApplicablePrice(vertexProjectProvider, vertexProjectCarbonModel, proxy.ModelOperationText, component.id, conditions, 100, listPriceStart)
+			if !promotional.Available || promotional.Rate.Rate != component.promotional || !list.Available || list.Rate.Rate != component.list {
+				t.Fatalf("Carbon %s rate at the promotional boundary: promotional=%+v list=%+v", component.id, promotional, list)
+			}
+		})
 	}
 }
 

@@ -187,7 +187,7 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 		if _, retired := retiredGeminiModels[model.Identifier]; retired {
 			testingInstance.Fatalf("public capability catalog exposed retired Gemini model=%s", model.Identifier)
 		}
-		if model.Publisher == "google" && !strings.HasPrefix(model.Identifier, "gemini-3") && model.Identifier != "gemini-4-neon" && model.Identifier != "gemini-4-hydrogen" {
+		if model.Publisher == "google" && !strings.HasPrefix(model.Identifier, "gemini-3") && !slices.Contains([]string{"gemini-4-neon", "gemini-4-hydrogen", "gemini-4-carbon"}, model.Identifier) {
 			testingInstance.Fatalf("public capability catalog exposed retired Gemini model=%s", model.Identifier)
 		}
 		for _, capability := range model.Capabilities {
@@ -196,7 +196,7 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 			}
 		}
 		switch model.Identifier {
-		case "gemini-4-neon", "gemini-4-hydrogen":
+		case "gemini-4-neon", "gemini-4-hydrogen", "gemini-4-carbon":
 			if !slices.Equal(model.ProviderOfferings, []string{"vertex-project:" + model.Identifier}) ||
 				!slices.Equal(model.Capabilities, []string{proxy.PublicModelCapabilityAudioInput, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityReasoning, proxy.PublicModelCapabilityStructuredOutput, proxy.PublicModelCapabilityText}) {
 				testingInstance.Fatalf("Gemini 4 project capability=%+v", model)
@@ -384,7 +384,7 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 		proxy.ProviderNameTypeSafe:  1,
 		proxy.ProviderNameOpenAI:    11,
 		"vertex":                    4,
-		"vertex-project":            2,
+		"vertex-project":            3,
 		proxy.ProviderNameDashScope: 4,
 		proxy.ProviderNameGemini:    5,
 		proxy.ProviderNameAnthropic: 11,
@@ -420,6 +420,8 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 				expectedVerificationDate = "2026-11-11"
 			}
 			if offering.Provider == proxy.ProviderNameOpenAI && slices.Contains([]string{"gpt-6-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6.2-astra", "gpt-6.2-sol"}, offering.Model) {
+				expectedVerificationDate = "2026-11-21"
+			} else if offering.Provider == "vertex-project" && offering.Model == "gemini-4-carbon" {
 				expectedVerificationDate = "2026-11-21"
 			} else if offering.Provider == "vertex-project" {
 				expectedVerificationDate = "2026-11-19"

@@ -4715,6 +4715,12 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
 
 ## Features
 
+- [-] [F104] {F100} Qualify Gemini 4 Carbon through project-scoped Vertex.
+  Goal: Make `gemini-4-carbon` selectable through a customer's Vertex AI Project connection.
+  Requirements: Use the exact Google global `generateContent` route, the 32,768-token synchronous output limit, the combined 1,048,576-token budget, and the documented `low`, `medium`, and `high` efforts. Publish the global Standard PayGo schedule with its December 1, 2026 price change.
+  Progress: The local HTTP regression returned `unknown model: gemini-4-carbon` before the catalog change. The catalog now exposes the exact project offering. The disposable proxy passed seven live cases, including structured output, PNG and WAV input, and measured token usage. Local checks verify exact dispatch, rejection of unsupported effort and output size, the price boundary, and public discovery. Qualification evidence is in `docs/vertex-gemini.md`.
+  Validation: Complete the applicable final application CI gate.
+
 - [x] [F103] (P1) Add current OpenAI routes and retire general-purpose models before GPT-5.6.
   Goal: Make GPT-6 through GPT-6.2 explicitly selectable, including GPT-6.2 Sol for the authorized iRoom comparison, and apply the approved GPT-5.6 cutoff.
   Requirements: Add gpt-6-sol, gpt-6.1-sol, gpt-6.1-terra, gpt-6.2-astra and gpt-6.2-sol; audit gpt-6-astra and gpt-6-luna. Keep GPT-5.6 and GPT-6 routes. Remove gpt-4o-mini, gpt-4o, gpt-4.1, gpt-5-mini, gpt-5, gpt-5.5 and gpt-5.5-pro. Map mini selections to gpt-6-luna, standard selections to gpt-6.2-sol and pro selections to gpt-6.2-astra in a bounded version-18 ORM startup transaction. Preserve supported explicit efforts and omission; reject incompatible inherited efforts before any write. Update global/provider/new-tenant/verification defaults and the image Responses parent to gpt-6.2-sol. Preserve historical usage, accepted-request identities, credentials, prompts, timestamps and unrelated catalog entries. Declare exact documented efforts, limits and Standard price tiers; retain unknown cache-retention prices on new routes.

@@ -874,6 +874,16 @@ models:
       media_inputs:
         - image
         - audio
+    - id: gemini-4-carbon
+      enabled: true
+      publisher: google
+      family: gemini
+      version: gemini-4-carbon
+      operations:
+        - text
+      media_inputs:
+        - image
+        - audio
     - id: gemini-3.8-flash
       enabled: true
       publisher: google
@@ -7468,6 +7478,140 @@ providers:
                     region: global
                     service_tier: standard
                     effective_from: 2026-11-19T00:00:00Z
+                    cache_class: read
+
+        - model: gemini-4-carbon
+          enabled: true
+          created: 1794268800
+          upstream_model: gemini-4-carbon
+          transport: project_generate_content
+          structured_output: *gemini_schema
+          operations:
+            - text
+          output_token_limit: 32768
+          reasoning_effort:
+            adapter: vertex_generate_content
+            efforts:
+              - low
+              - medium
+              - high
+          limits:
+            - id: context_tokens
+              value: 1048576
+              unit: tokens
+          media_inputs:
+            - image
+            - audio
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-carbon
+              last_verified: '2026-11-21'
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 3000
+              unit: files
+              scope: request
+              source: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-carbon
+              last_verified: '2026-11-21'
+            - id: audio_count
+              media_type: audio
+              transport: any
+              status: bounded
+              value: 1
+              unit: files
+              scope: request
+              source: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-carbon
+              last_verified: '2026-11-21'
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 7000000
+              unit: bytes
+              scope: attachment
+              source: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-carbon
+              last_verified: '2026-11-21'
+            - id: audio_inline_bytes
+              media_type: audio
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: attachment
+              source: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-carbon
+              last_verified: '2026-11-21'
+          prices:
+            - operation: text
+              available: true
+              source: https://cloud.google.com/model-garden/pricing
+              last_verified: '2026-11-21'
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: '2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    region: global
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                    effective_until: 2026-12-01T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '10'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    region: global
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                    effective_until: 2026-12-01T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.1'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    region: global
+                    service_tier: standard
+                    effective_from: 2026-11-21T00:00:00Z
+                    effective_until: 2026-12-01T00:00:00Z
+                    cache_class: read
+                - component: input_tokens
+                  currency: USD
+                  rate: '4'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    region: global
+                    service_tier: standard
+                    effective_from: 2026-12-01T00:00:00Z
+                - component: output_tokens
+                  currency: USD
+                  rate: '20'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    region: global
+                    service_tier: standard
+                    effective_from: 2026-12-01T00:00:00Z
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: '0.2'
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    region: global
+                    service_tier: standard
+                    effective_from: 2026-12-01T00:00:00Z
                     cache_class: read
 
     - id: dictator
