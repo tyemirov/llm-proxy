@@ -4715,11 +4715,12 @@ Keep I038, I226, and F095 live qualification separate from regional implementati
 
 ## Features
 
-- [-] [F104] {F100} Qualify Gemini 4 Carbon through project-scoped Vertex.
+- [x] [F104] {F100} Qualify Gemini 4 Carbon through project-scoped Vertex.
   Goal: Make `gemini-4-carbon` selectable through a customer's Vertex AI Project connection.
   Requirements: Use the exact Google global `generateContent` route, the 32,768-token synchronous output limit, the combined 1,048,576-token budget, and the documented `low`, `medium`, and `high` efforts. Publish the global Standard PayGo schedule with its December 1, 2026 price change.
   Progress: The local HTTP regression returned `unknown model: gemini-4-carbon` before the catalog change. The catalog now exposes the exact project offering. The disposable proxy passed seven live cases, including structured output, PNG and WAV input, and measured token usage. Local checks verify exact dispatch, rejection of unsupported effort and output size, the price boundary, and public discovery. Qualification evidence is in `docs/vertex-gemini.md`.
-  Validation: Complete the applicable final application CI gate.
+  Resolution: The focused protocol, browser, and installed Gateway checks passed. Pull request CI run 44990491143 passed all four jobs for the implementation in `79c3a486`.
+  Implementation files: `configs/providers.yml`, `docs/vertex-gemini.md`, `internal/proxy/vertex_live_test.go`, `internal/proxy/vertex_test.go`, and `tests/capabilities_test.go`.
 
 - [x] [F103] (P1) Add current OpenAI routes and retire general-purpose models before GPT-5.6.
   Goal: Make GPT-6 through GPT-6.2 explicitly selectable, including GPT-6.2 Sol for the authorized iRoom comparison, and apply the approved GPT-5.6 cutoff.
